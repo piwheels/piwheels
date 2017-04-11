@@ -1,66 +1,56 @@
 import pip
 import os
-import xmlrpc.client as xmlrpclib
-import logging
 from time import time
+from glob import glob
+import better_exceptions
 
 from db import PiWheelsDatabase
 from auth import dbname, user, host, password
+from tools import PiWheelsHandler, list_pypi_packages
 
 db = PiWheelsDatabase(dbname, user, host, password)
-
-client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
-packages = sorted(client.list_packages())
 
 wc = pip.commands.WheelCommand()
 
 wheels_dir = '/var/www/html'
+temp_dir = '/tmp/piwheels'
 
-
-class MyHandler(logging.Handler):
-    def emit(self, record):
-        msg = self.format(record)
-        self.log.append(msg)
-        if msg.startswith('Saved'):
-            file_path = msg.split(' ')[-1]
-            self.filename = file_path.split('/')[-1]
-            self.filesize = os.stat(file_path).st_size
-
-    def reset(self):
-        self.log = []
-        self.filename = None
-        self.filesize = None
-
-
-def main():
-    handler = MyHandler()
+def main(packages):
+    handler = PiWheelsHandler()
     pip.logger.addHandler(handler)
-    build_start_time = time()
-    success = 0
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+
     for package in packages:
         handler.reset()
-        start_time = time()
         module_dir = '{}/{}'.format(wheels_dir, package)
         if not os.path.exists(module_dir):
             os.makedirs(module_dir)
-        wheel_dir = '--wheel-dir={}'.format(module_dir)
-        no_deps = '--no-deps'
-        status = not wc.main([wheel_dir, no_deps, package])
-        success += status
 
-        architecture = 'armv7'
-        output = '\n'.join(handler.log)
-        filename = handler.filename
-        filesize = handler.filesize
+        wheel_dir = '--wheel-dir={}'.format(temp_dir)
+        no_deps = '--no-deps'
+        start_time = time()
+        status = not wc.main([wheel_dir, no_deps, package])
         build_time = time() - start_time
+        output = '\n'.join(handler.log)
+
+        if status:
+            temp_wheel_path = glob('{}/*'.format(temp_dir))[0]
+            wheel_file = temp_wheel_path.split('/')[-1]
+            final_wheel_path = '{}/{}/{}'.format(
+                wheels_dir, package, wheel_file
+            )
+            os.rename(temp_wheel_path, final_wheel_path)
+            filename = final_wheel_path.split('/')[-1]
+            filesize = os.stat(final_wheel_path).st_size
+            wheel_tags = final_wheel_path[:-4].split('-')[-4:]
+            version, py_version_tag, abi_tag, platform_tag = wheel_tags
+
         db.log_build(
-            package, architecture, status, output, filename, filesize,
-            build_time
+            package, status, output, filename, filesize, build_time, version,
+            py_version_tag, abi_tag, platform_tag
         )
-    total_time = time() - build_start_time
-    num_packages = len(packages)
-    fail = num_packages - success
-    db.log_build_run(num_packages, success, fail, total_time)
 
 if __name__ == '__main__':
-    main()
+    packages = list_pypi_packages()
+    main(packages)
