@@ -29,8 +29,9 @@ def main(packages):
 
         wheel_dir = '--wheel-dir={}'.format(temp_dir)
         no_deps = '--no-deps'
+        no_cache = '--no-cache-dir'
         start_time = time()
-        status = not wc.main([wheel_dir, no_deps, package])
+        status = not wc.main([wheel_dir, no_deps, no_cache, package])
         build_time = time() - start_time
         output = '\n'.join(handler.log)
 
