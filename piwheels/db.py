@@ -139,16 +139,18 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         self.conn.commit()
 
-    def get_attempted_packages(self):
+    def get_unattempted_packages(self):
         query = """
         SELECT
             package
         FROM
-            builds
+            packages
+        WHERE NOT
+            attempted
         """
         self.cursor.execute(query)
         results = self.cursor.fetchall()
-        return [result['package'] for result in results]
+        return (result['package'] for result in results)
 
 
 if __name__ == '__main__':

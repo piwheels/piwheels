@@ -6,7 +6,7 @@ import better_exceptions
 
 from db import PiWheelsDatabase
 from auth import dbname, user, host, password
-from tools import PiWheelsHandler, list_pypi_packages
+from tools import PiWheelsHandler
 
 db = PiWheelsDatabase(dbname, user, host, password)
 
@@ -52,5 +52,5 @@ def main(packages):
         )
 
 if __name__ == '__main__':
-    packages = list_pypi_packages()
+    packages = db.get_unattempted_packages()
     main(packages)
