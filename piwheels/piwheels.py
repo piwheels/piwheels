@@ -12,7 +12,6 @@ db = PiWheelsDatabase(dbname, user, host, password)
 
 wc = pip.commands.WheelCommand()
 
-wheels_dir = '/var/www/html'
 temp_dir = '/tmp/piwheels'
 
 def main(packages):
@@ -23,9 +22,6 @@ def main(packages):
 
     for package in packages:
         handler.reset()
-        module_dir = '{}/{}'.format(wheels_dir, package)
-        if not os.path.exists(module_dir):
-            os.makedirs(module_dir)
 
         wheel_dir = '--wheel-dir={}'.format(temp_dir)
         no_deps = '--no-deps'
@@ -36,16 +32,19 @@ def main(packages):
         output = '\n'.join(handler.log)
 
         if status:
-            temp_wheel_path = glob('{}/*'.format(temp_dir))[0]
-            wheel_file = temp_wheel_path.split('/')[-1]
-            final_wheel_path = '{}/{}/{}'.format(
-                wheels_dir, package, wheel_file
-            )
-            os.rename(temp_wheel_path, final_wheel_path)
-            filename = final_wheel_path.split('/')[-1]
-            filesize = os.stat(final_wheel_path).st_size
-            wheel_tags = final_wheel_path[:-4].split('-')[-4:]
+            wheel_path = glob('{}/*'.format(temp_dir))[0]
+            wheel_file = wheel_path.split('/')[-1]
+            filename = wheel_path.split('/')[-1]
+            filesize = os.stat(wheel_path).st_size
+            wheel_tags = wheel_path[:-4].split('-')[-4:]
             version, py_version_tag, abi_tag, platform_tag = wheel_tags
+        else:
+            filename = None
+            filesize = None
+            version = None
+            py_version_tag = None
+            abi_tag = None
+            platform_tag = None
 
         db.log_build(
             package, status, output, filename, filesize, build_time, version,
