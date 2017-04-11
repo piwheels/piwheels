@@ -1,11 +1,11 @@
 from db import PiWheelsDatabase
 from auth import dbname, user, host, password
 import better_exceptions
-from tools import list_pypi_packages, bash_dush, bash_dfh
+from tools import bash_dush, bash_dfh
 
 db = PiWheelsDatabase(dbname, user, host, password)
 
-total_packages = len(list_pypi_packages())
+total_packages = len(list(db.get_all_packages()))
 
 summary = db.get_package_summary()
 last_package = db.get_last_package_built()

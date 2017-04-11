@@ -139,6 +139,17 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         self.conn.commit()
 
+    def get_all_packages(self):
+        query = """
+        SELECT
+            package
+        FROM
+            packages
+        """
+        self.cursor.execute(query)
+        results = self.cursor.fetchall()
+        return (result['package'] for result in results)
+
     def get_unattempted_packages(self):
         query = """
         SELECT
