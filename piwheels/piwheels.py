@@ -71,4 +71,3 @@ class PiWheelsBuilder:
             self.abi_tag,
             self.platform_tag
         )
-        db.set_package_as_attempted(self.package)

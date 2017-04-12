@@ -169,8 +169,10 @@ class PiWheelsDatabase:
             package
         FROM
             packages
-        WHERE NOT
-            attempted
+        WHERE
+            package
+        NOT IN
+            (SELECT package FROM builds)
         """
         self.cursor.execute(query)
         results = self.cursor.fetchall()
@@ -189,7 +191,21 @@ class PiWheelsDatabase:
         results = self.cursor.fetchall()
         return (result['package'] for result in results)
 
+    def build_active(self):
+        query = """
+        SELECT
+            value
+        FROM
+            metadata
+        WHERE
+            key = 'active'
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
 
 if __name__ == '__main__':
     from auth import *
     db = PiWheelsDatabase(dbname, user, host, password)
+    print(db.build_active())
