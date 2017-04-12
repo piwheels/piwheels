@@ -139,6 +139,19 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         self.conn.commit()
 
+    def set_package_as_attempted(self, package):
+        query = """
+        UPDATE
+            packages
+        SET
+            attempted = true
+        WHERE
+            package = %s
+        """
+        values = (package,)
+        self.cursor.execute(query, values)
+        self.conn.commit()
+
     def get_all_packages(self):
         query = """
         SELECT
@@ -158,6 +171,19 @@ class PiWheelsDatabase:
             packages
         WHERE NOT
             attempted
+        """
+        self.cursor.execute(query)
+        results = self.cursor.fetchall()
+        return (result['package'] for result in results)
+
+    def get_previously_failed_packages(self):
+        query = """
+        SELECT
+            package
+        FROM
+            builds
+        WHERE NOT
+            status
         """
         self.cursor.execute(query)
         results = self.cursor.fetchall()
