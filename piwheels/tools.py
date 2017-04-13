@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import xmlrpc.client as xmlrpclib
+import requests
 
 
 class PiWheelsHandler(logging.Handler):
@@ -15,6 +16,14 @@ class PiWheelsHandler(logging.Handler):
 def list_pypi_packages():
     client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
     return sorted(client.list_packages())
+
+def get_package_info(package):
+    url = 'https://pypi.python.org/pypi/{}/json'.format(package)
+    r = requests.get(url)
+    try:
+        return r.json()
+    except:
+        return None
 
 def bash_dush(path):
     du = subprocess.Popen(['du', '-sh', path], stdout=subprocess.PIPE)

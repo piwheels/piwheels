@@ -126,7 +126,7 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
-    def add_new_package(self, package, attempted=False):
+    def add_new_package(self, package, version):
         query = """
         INSERT INTO
             packages
@@ -135,20 +135,20 @@ class PiWheelsDatabase:
             %s
         )
         """
-        values = (package, attempted)
+        values = (package, version)
         self.cursor.execute(query, values)
         self.conn.commit()
 
-    def set_package_as_attempted(self, package):
+    def update_package_version(self, package, version):
         query = """
         UPDATE
             packages
         SET
-            attempted = true
+            version = %s
         WHERE
             package = %s
         """
-        values = (package,)
+        values = (package, version)
         self.cursor.execute(query, values)
         self.conn.commit()
 
@@ -204,8 +204,27 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
+    def set_build_active_status(self, active=True):
+        query = """
+        UPDATE
+            metadata
+        SET
+            value = %s
+        WHERE
+            key = 'active'
+        """
+        value = (active,)
+        self.cursor.execute(query, value)
+        self.conn.commit()
+
+    def activate_build(self):
+        self.set_build_active_status(active=True)
+
+    def deactivate_build(self):
+        self.set_build_active_status(active=False)
+
 
 if __name__ == '__main__':
-    from auth import *
+    from auth import dbname, user, host, password
     db = PiWheelsDatabase(dbname, user, host, password)
     print(db.build_active())
