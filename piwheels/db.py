@@ -148,7 +148,7 @@ class PiWheelsDatabase:
         WHERE
             package = %s
         """
-        values = (package, version)
+        values = (version, package)
         self.cursor.execute(query, values)
         self.conn.commit()
 
