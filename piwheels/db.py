@@ -173,6 +173,8 @@ class PiWheelsDatabase:
             package
         NOT IN
             (SELECT package FROM builds)
+        ORDER BY
+            package
         """
         self.cursor.execute(query)
         results = self.cursor.fetchall()
