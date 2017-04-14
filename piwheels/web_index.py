@@ -15,6 +15,7 @@ total_built = summary['total']
 successful_builds = summary['success']
 failed_builds = summary['fail']
 total_build_time = db.get_total_build_time()
+packages_in_last_hour = db.get_number_of_packages_processed_in_last_hour()
 dush = bash_dush('/var/www/html/')
 dfh = bash_dfh('/')
 
@@ -23,13 +24,14 @@ html = """
 Python package repository providing wheels (pre-built binaries) for Raspberry Pi
 
 <h2>Stats</h2>
-<strong>Packages attempted</strong>: {0:,} / {1:,} ({2:,}%)<br>
+<strong>Packages processed</strong>: {0:,} / {1:,} ({2:,}%)<br>
 <strong>Successfully built</strong>: {3:,} ({4}%)<br>
 <strong>Failed</strong>: {5:,} ({6}%)<br>
 <strong>Last package built</strong>: <a href="/{7}/">{7}</a> (at {8})<br>
 <strong>Total time spent building</strong>: {9} hours<br>
-<strong>Total disk usage from wheels</strong>: {10}<br>
-<strong>System disk usage</strong>: {11}
+<strong>Packages processed in the last hour</strong>: {10}<br>
+<strong>Total disk usage from wheels</strong>: {11}<br>
+<strong>System disk usage</strong>: {12}
 
 <h2>About</h2>
 Read more about this project on GitHub: <a href="https://github.com/bennuttall/piwheels">github.com/bennuttall/piwheels</a>
@@ -44,6 +46,7 @@ Read more about this project on GitHub: <a href="https://github.com/bennuttall/p
     last_package_name,
     last_package_time,
     round(total_build_time / 60 / 60),
+    packages_in_last_hour,
     dush,
     dfh,
 )

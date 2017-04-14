@@ -223,6 +223,19 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0] == 1
 
+    def get_number_of_packages_processed_in_last_hour(self):
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            builds
+        WHERE
+            build_timestamp > NOW() - interval '1 hour'
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
 
 if __name__ == '__main__':
     from auth import dbname, user, host, password
