@@ -48,14 +48,15 @@ class PiWheelsBuilder:
             temp_dir_diff = list(temp_dir_contents_after.difference(
                 self._temp_dir_contents_before
             ))
-            wheel_path = temp_dir_diff[0]
-            self.filename = wheel_path.split('/')[-1]
-            self.filesize = os.stat(wheel_path).st_size
-            wheel_tags = wheel_path[:-4].split('-')[-4:]
-            self.version = wheel_tags[-4]
-            self.py_version_tag = wheel_tags[-3]
-            self.abi_tag = wheel_tags[-2]
-            self.platform_tag = wheel_tags[-1]
+            if len(temp_dir_diff) == 1:
+                wheel_path = temp_dir_diff[0]
+                self.filename = wheel_path.split('/')[-1]
+                self.filesize = os.stat(wheel_path).st_size
+                wheel_tags = wheel_path[:-4].split('-')[-4:]
+                self.version = wheel_tags[-4]
+                self.py_version_tag = wheel_tags[-3]
+                self.abi_tag = wheel_tags[-2]
+                self.platform_tag = wheel_tags[-1]
 
     def log_build(self):
         db.log_build(
