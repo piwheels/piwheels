@@ -190,7 +190,7 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
-    def set_build_active_status(self, active=True):
+    def _set_build_active_status(self, active=True):
         query = """
         UPDATE
             metadata
@@ -204,10 +204,10 @@ class PiWheelsDatabase:
         self.conn.commit()
 
     def activate_build(self):
-        self.set_build_active_status(active=True)
+        self._set_build_active_status(active=True)
 
     def deactivate_build(self):
-        self.set_build_active_status(active=False)
+        self._set_build_active_status(active=False)
 
     def wheel_is_processed(self, wheel):
         query = """
