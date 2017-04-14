@@ -9,13 +9,12 @@ total_packages = len(list(db.get_all_packages()))
 
 summary = db.get_package_summary()
 last_package = db.get_last_package_built()
+last_package_name = last_package['package']
+last_package_time = last_package['build_timestamp']
 total_built = summary['total']
 successful_builds = summary['success']
 failed_builds = summary['fail']
 total_build_time = db.get_total_build_time()
-longest_build = db.get_longest_build()
-longest_build_time = longest_build['build_time']
-longest_build_package = longest_build['package']
 dush = bash_dush('/var/www/html/')
 dfh = bash_dfh('/')
 
@@ -25,12 +24,10 @@ Python package repository providing wheels (pre-built binaries) for Raspberry Pi
 
 <h2>Stats</h2>
 <strong>Packages attempted</strong>: {0:,} / {1:,} ({2:,}%)<br>
-<strong>Successfully built</strong>: {3:,}<br>
-<strong>Failed</strong>: {4:,}<br>
-<strong>Success rate</strong>: {5}%<br>
-<strong>Last package built</strong>: <a href="/{6}/">{6}</a><br>
-<strong>Total time spent building</strong>: {7} hours<br>
-<strong>Longest time spent building a package</strong>: {8} minutes (<a href="/{9}/">{9}</a>)<br>
+<strong>Successfully built</strong>: {3:,} ({4}%)<br>
+<strong>Failed</strong>: {5:,} ({6}%)<br>
+<strong>Last package built</strong>: <a href="/{7}/">{7}</a> (at {8})<br>
+<strong>Total time spent building</strong>: {9} hours<br>
 <strong>Total disk usage from wheels</strong>: {10}<br>
 <strong>System disk usage</strong>: {11}
 
@@ -41,12 +38,12 @@ Read more about this project on GitHub: <a href="https://github.com/bennuttall/p
     total_packages,
     round(total_built / total_packages * 100),
     successful_builds,
-    failed_builds,
     round(successful_builds / total_built * 100),
-    last_package,
+    failed_builds,
+    round(failed_builds / total_built * 100),
+    last_package_name,
+    last_package_time,
     round(total_build_time / 60 / 60),
-    round(longest_build_time / 60),
-    longest_build_package,
     dush,
     dfh,
 )

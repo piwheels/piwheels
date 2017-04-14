@@ -47,18 +47,17 @@ class PiWheelsDatabase:
     def get_last_package_built(self):
         query = """
         SELECT
-            package
+            package,
+            TO_CHAR(build_timestamp, 'DD Mon HH24:MI') as build_timestamp
         FROM
             builds
         ORDER BY
-            build_timestamp
-            DESC
+            build_timestamp DESC
         LIMIT
             1
         """
         self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        return self.cursor.fetchone()
 
     def _get_packages_by_build_status(self, build_status=None):
         where_clause = {
@@ -99,21 +98,6 @@ class PiWheelsDatabase:
         self.cursor.execute(query)
         result = self.cursor.fetchone()
         return result[0]
-
-    def get_longest_build(self):
-        query = """
-        SELECT
-            package, build_time
-        FROM
-            builds
-        ORDER BY
-            build_time DESC
-        LIMIT
-            1
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result
 
     def get_total_wheel_filesize(self):
         query = """
