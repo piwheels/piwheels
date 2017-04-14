@@ -215,8 +215,8 @@ class PiWheelsDatabase:
         WHERE
             key = 'active'
         """
-        value = (active,)
-        self.cursor.execute(query, value)
+        values = (active,)
+        self.cursor.execute(query, values)
         self.conn.commit()
 
     def activate_build(self):
@@ -224,6 +224,20 @@ class PiWheelsDatabase:
 
     def deactivate_build(self):
         self.set_build_active_status(active=False)
+
+    def wheel_is_processed(self, wheel):
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            builds
+        WHERE
+            filename = %s
+        """
+        values = (wheel,)
+        self.cursor.execute(query, values)
+        result = self.cursor.fetchone()
+        return result[0] == 1
 
 
 if __name__ == '__main__':
