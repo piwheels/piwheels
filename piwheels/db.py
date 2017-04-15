@@ -44,7 +44,7 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result
 
-    def get_last_package_built(self):
+    def get_last_package_processed(self):
         query = """
         SELECT
             package,

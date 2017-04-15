@@ -8,7 +8,7 @@ db = PiWheelsDatabase(dbname, user, host, password)
 total_packages = len(list(db.get_all_packages()))
 
 summary = db.get_package_summary()
-last_package = db.get_last_package_built()
+last_package = db.get_last_package_processed()
 last_package_name = last_package['package']
 last_package_time = last_package['build_timestamp']
 total_built = summary['total']
@@ -27,7 +27,7 @@ Python package repository providing wheels (pre-built binaries) for Raspberry Pi
 <strong>Packages processed</strong>: {0:,} / {1:,} ({2:,}%)<br>
 <strong>Successfully built</strong>: {3:,} ({4}%)<br>
 <strong>Failed</strong>: {5:,} ({6}%)<br>
-<strong>Last package built</strong>: <a href="/{7}/">{7}</a> (at {8})<br>
+<strong>Last package processed</strong>: <a href="/{7}/">{7}</a> ({8})<br>
 <strong>Total time spent building</strong>: {9} hours<br>
 <strong>Packages processed in the last hour</strong>: {10}<br>
 <strong>Total disk usage from wheels</strong>: {11}<br>
