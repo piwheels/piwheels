@@ -50,5 +50,6 @@ Read more about this project on GitHub: <a href="https://github.com/bennuttall/p
     dush,
     dfh,
 )
+
 with open('/var/www/html/index.html', 'w') as f:
     f.write(html)
