@@ -25,6 +25,10 @@ def get_package_info(package):
     except:
         return None
 
+def get_package_latest_version(package):
+    package_info = get_package_info(package)
+    return package_info['info']['version'] if package_info else ''
+
 def bash_dush(path):
     du = subprocess.Popen(['du', '-sh', path], stdout=subprocess.PIPE)
     output = du.communicate()[0].split()
