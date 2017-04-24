@@ -24,5 +24,7 @@ for package in known_packages:
     latest_version = get_package_latest_version(package)
     known_version = db.get_package_version(package)
     if latest_version != known_version:
-        print('Updating {} to version {}'.format(package, latest_version))
+        print('Updating {} from {} to {}'.format(
+            package, known_version, latest_version
+        ))
         db.update_package_version(package, latest_version)
