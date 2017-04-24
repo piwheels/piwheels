@@ -40,11 +40,13 @@ def bash_dfh(path='/'):
     return output[11].decode('UTF-8')
 
 def get_wheels_lis(db, package):
-    html = ''
-    wheels = db.get_package_wheels(package)
+    lis = ''
+    wheels = list(db.get_package_wheels(package))
+    if wheels[0] is None:
+        return 'None available'
     for wheel in wheels:
-        html += '<li><a href="{0}">{0}</a></li>'.format(wheel)
-    return html
+        lis += '<li><a href="{0}">{0}</a></li>'.format(wheel)
+    return '<ul>{}</ul>'.format(lis)
 
 def get_package_output(db, package):
     html = ''
