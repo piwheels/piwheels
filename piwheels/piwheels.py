@@ -34,12 +34,17 @@ class PiWheelsBuilder:
     def _get_temp_dir_contents(self):
         return set(glob('{}/*'.format(temp_dir)))
 
-    def build_wheel(self):
+    def build_wheel(self, version=None):
+        if version is None:
+            package_spec = self.package
+        else:
+            package_spec = '{}=={}'.format(self.package, version)
         wheel_dir = '--wheel-dir={}'.format(temp_dir)
         no_deps = '--no-deps'
         no_cache = '--no-cache-dir'
         start_time = time()
-        self.status = not wc.main([wheel_dir, no_deps, no_cache, self.package])
+        wc_args = [wheel_dir, no_deps, no_cache, package_spec]
+        self.status = not wc.main(wc_args)
         self.build_time = time() - start_time
         self.output = '\n'.join(handler.log)
 
