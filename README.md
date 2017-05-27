@@ -44,9 +44,9 @@ or to use as an "extra" index:
 pip install <package> --extra-index-url http://piwheels.bennuttall.com/
 ```
 
-## Package maintainers
+## Uploading wheels to PyPI
 
-Package maintainers are able to upload wheels (from piwheels or built elsewhere) to their projects on PyPI, without needing to version-bump. It is not possible to replace existing files, but it is possible to upload additional files.
+PyPI does not currently support uploading ARM wheels. The [next generation](https://pypi.org/) of PyPI [will support ARM wheels](https://github.com/pypa/warehouse/issues/2003).
 
 ## Developers
 
