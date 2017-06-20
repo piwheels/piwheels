@@ -5,6 +5,9 @@ import requests
 
 
 class PiWheelsHandler(logging.Handler):
+    """
+    Custom logging handler appends all messages to a list
+    """
     def emit(self, record):
         msg = self.format(record)
         self.log.append(msg)
@@ -14,10 +17,16 @@ class PiWheelsHandler(logging.Handler):
 
 
 def list_pypi_packages():
+    """
+    Returns a sorted list of all packages on PyPI using the xmlrpc interface
+    """
     client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
     return sorted(client.list_packages())
 
 def get_package_info(package):
+    """
+    Returns information about a given package from the PyPI JSON API
+    """
     url = 'https://pypi.python.org/pypi/{}/json'.format(package)
     r = requests.get(url)
     try:
@@ -25,11 +34,10 @@ def get_package_info(package):
     except:
         return None
 
-def get_package_latest_version(package):
-    package_info = get_package_info(package)
-    return package_info['info']['version'] if package_info else ''
-
 def get_package_versions(package):
+    """
+    Returns all versions for a given package released on PyPI
+    """
     package_info = get_package_info(package)
     return sorted(package_info['releases'].keys())
 

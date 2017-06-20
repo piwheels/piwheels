@@ -1,6 +1,5 @@
 import pip
 import os
-import better_exceptions
 from glob import glob
 from time import time
 
@@ -16,8 +15,9 @@ pip.logger.addHandler(handler)
 temp_dir = '/tmp/piwheels'
 
 class PiWheelsBuilder:
-    def __init__(self, package):
+    def __init__(self, package, version):
         self.package = package
+        self.version = version
         self.filename = None
         self.filesize = None
         self.version = None
@@ -34,11 +34,8 @@ class PiWheelsBuilder:
     def _get_temp_dir_contents(self):
         return set(glob('{}/*'.format(temp_dir)))
 
-    def build_wheel(self, version=None):
-        if version is None:
-            package_spec = self.package
-        else:
-            package_spec = '{}=={}'.format(self.package, version)
+    def build_wheel(self):
+        package_spec = '{}=={}'.format(self.package, self.version)
         wheel_dir = '--wheel-dir={}'.format(temp_dir)
         no_deps = '--no-deps'
         no_cache = '--no-cache-dir'

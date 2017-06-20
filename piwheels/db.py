@@ -1,37 +1,48 @@
+import os
 import psycopg2
 from psycopg2.extras import DictCursor
 
 
 class PiWheelsDatabase:
-    def __init__(self, dbname, user, host, password):
+    """
+    PiWheels database connection bridge
+
+    Pass in DB credentials directly or store in environment variables: PW_DB,
+    PW_USER, PW_HOST, PW_PASS.
+    """
+    def __init__(self, dbname=None, user=None, host=None, password=None):
+        if dbname is None:
+            dbname = os.environ['PW_DB']
+        if user is None:
+            user = os.environ['PW_USER']
+        if host is None:
+            host = os.environ['PW_HOST']
+        if password is None:
+            password = os.environ['PW_PASS']
         connect_str = "dbname='{}' user='{}' host='{}' password='{}'".format(
             dbname, user, host, password
         )
         self.conn = psycopg2.connect(connect_str)
         self.cursor = self.conn.cursor(cursor_factory=DictCursor)
 
-    def log_build(self, *values):
+    def add_new_package(self, package):
+        """
+        Insert a new package record into the database
+        """
         query = """
         INSERT INTO
-            builds
-        VALUES (
-            now(),
-            %s,
-            %s,
-            %s,
-            %s,
-            %s,
-            %s,
-            %s,
-            %s,
-            %s,
-            %s
-        )
+            packages (package)
+        VALUES
+            (%s)
         """
+        values = (package,)
         self.cursor.execute(query, values)
         self.conn.commit()
 
     def get_total_number_of_packages(self):
+        """
+        Returns the total number of known packages
+        """
         query = """
         SELECT
             COUNT(*)
@@ -42,7 +53,55 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
+    def add_new_package_version(self, package, version):
+        """
+        Insert a new package version record into the database
+        """
+        query = """
+        INSERT INTO
+            package_versions (package, version)
+        VALUES
+            (%s, %s)
+        """
+        values = (package, version)
+        self.cursor.execute(query, values)
+        self.conn.commit()
+
+    def get_total_number_of_package_versions(self):
+        """
+        Returns the total number of known package versions
+        """
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            package_versions
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
+    def log_build(self, *values):
+        """
+        Log a build attempt in the database, including build output and wheel
+        info if successful
+        """
+        query = """
+        INSERT INTO
+            builds (
+                package, version, status, output, filename, filesize,
+                build_time, py_version_tag, abi_tag, platform_tag
+            )
+        VALUES
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        self.cursor.execute(query, values)
+        self.conn.commit()
+
     def get_total_number_of_packages_processed(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             COUNT(*)
@@ -54,6 +113,9 @@ class PiWheelsDatabase:
         return result[0]
 
     def get_total_number_of_packages_successfully_built(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             COUNT(*)
@@ -65,6 +127,9 @@ class PiWheelsDatabase:
         return result[0]
 
     def get_last_package_processed(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             package,
@@ -80,6 +145,9 @@ class PiWheelsDatabase:
         return self.cursor.fetchone()
 
     def get_package_build_status(self, package):
+        """
+        Legacy
+        """
         query = """
         SELECT
             status
@@ -98,6 +166,9 @@ class PiWheelsDatabase:
         return result[0]
 
     def get_package_wheels(self, package):
+        """
+        Legacy
+        """
         query = """
         SELECT
             filename
@@ -114,6 +185,9 @@ class PiWheelsDatabase:
         return (result[0] for result in results)
 
     def get_package_output(self, package):
+        """
+        Legacy
+        """
         query = """
         SELECT
             TO_CHAR(build_timestamp, 'YY-MM-DD HH24:MI') as build_datetime,
@@ -130,6 +204,9 @@ class PiWheelsDatabase:
         return self.cursor.fetchall()
 
     def _get_packages_by_build_status(self, build_status=None):
+        """
+        Legacy
+        """
         where_clause = {
             True: 'status',
             False: 'NOT status',
@@ -150,15 +227,27 @@ class PiWheelsDatabase:
         return results
 
     def get_all_packages(self):
+        """
+        Legacy
+        """
         return self._get_packages_by_build_status()
 
     def get_built_packages(self):
+        """
+        Legacy
+        """
         return self._get_packages_by_build_status(True)
 
     def get_failed_packages(self):
+        """
+        Legacy
+        """
         return self._get_packages_by_build_status(False)
 
     def get_total_build_time(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             SUM(build_time)
@@ -170,6 +259,9 @@ class PiWheelsDatabase:
         return result[0]
 
     def get_total_wheel_filesize(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             SUM(filesize)
@@ -180,35 +272,10 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
-    def add_new_package(self, package, version):
-        query = """
-        INSERT INTO
-            packages
-        VALUES (
-            %s,
-            %s,
-            true
-        )
-        """
-        values = (package, version)
-        self.cursor.execute(query, values)
-        self.conn.commit()
-
-    def update_package_version(self, package, version):
-        query = """
-        UPDATE
-            packages
-        SET
-            version = %s,
-            update_required = true
-        WHERE
-            package = %s
-        """
-        values = (version, package)
-        self.cursor.execute(query, values)
-        self.conn.commit()
-
     def get_all_packages(self):
+        """
+        Returns a generator of all known package names
+        """
         query = """
         SELECT
             package
@@ -219,24 +286,45 @@ class PiWheelsDatabase:
         results = self.cursor.fetchall()
         return (result['package'] for result in results)
 
-    def get_unattempted_packages(self):
+    def get_total_number_of_packages_with_versions(self):
+        """
+        Returns the number of packages which have published at least one version
+        """
         query = """
         SELECT
-            p.package
+            package
         FROM
-            packages p
+            package_versions
+        GROUP BY
+            package
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
+    def get_build_queue(self):
+        """
+        Returns a list of package/version lists of all package versions
+        requiring building
+        """
+        query = """
+        SELECT
+            pv.package, pv.version
+        FROM
+            package_versions pv
         LEFT JOIN
             builds b
         ON
-            b.package = p.package
+            b.package = pv.package
         WHERE
             b.package IS NULL
         """
         self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return (result['package'] for result in results)
+        return self.cursor.fetchall()
 
     def get_previously_failed_packages(self):
+        """
+        Legacy
+        """
         query = """
         SELECT
             package
@@ -250,6 +338,10 @@ class PiWheelsDatabase:
         return (result['package'] for result in results)
 
     def build_active(self):
+        """
+        Checks whether the build is set to active. Returns True if active,
+        otherwise False
+        """
         query = """
         SELECT
             value
@@ -263,6 +355,9 @@ class PiWheelsDatabase:
         return result[0]
 
     def _set_build_active_status(self, active=True):
+        """
+        Sets the build status
+        """
         query = """
         UPDATE
             metadata
@@ -276,12 +371,21 @@ class PiWheelsDatabase:
         self.conn.commit()
 
     def activate_build(self):
+        """
+        Sets the build status to active
+        """
         self._set_build_active_status(active=True)
 
     def deactivate_build(self):
+        """
+        Sets the build status to inactive
+        """
         self._set_build_active_status(active=False)
 
     def wheel_is_processed(self, wheel):
+        """
+        Sets the build status
+        """
         query = """
         SELECT
             COUNT(*)
