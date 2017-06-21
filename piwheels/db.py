@@ -90,11 +90,13 @@ class PiWheelsDatabase:
         INSERT INTO
             builds (
                 package, version, status, output, filename, filesize,
-                build_time, py_version_tag, abi_tag, platform_tag
+                build_time, package_version_tag, py_version_tag, abi_tag,
+                platform_tag
             )
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
+        print(query % values)
         self.cursor.execute(query, values)
         self.conn.commit()
 

@@ -9,7 +9,8 @@ GRANT ALL ON packages TO piwheels;
 CREATE TABLE package_versions (
     package TEXT,
     version TEXT,
-    PRIMARY KEY (package, version)
+    PRIMARY KEY (package, version),
+    FOREIGN KEY (package) REFERENCES packages
 );
 GRANT ALL ON package_versions TO piwheels;
 
@@ -23,6 +24,7 @@ CREATE TABLE builds (
     filename TEXT,
     filesize INT,
     build_time NUMERIC,
+    package_version_tag TEXT,
     py_version_tag TEXT,
     abi_tag TEXT,
     platform_tag TEXT,
