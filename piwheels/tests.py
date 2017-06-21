@@ -63,6 +63,6 @@ if pypi_server.is_active:
     builder = PiWheelsBuilder('gpiozero', '1.0.0')
     builder.build_wheel()
     builder.log_build()
-
+    
 else:
     print('Failed connection to {}: Skipping PyPI tests'.format(pypi_server.host))

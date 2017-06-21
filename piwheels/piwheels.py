@@ -4,10 +4,9 @@ from glob import glob
 from time import time
 
 from db import PiWheelsDatabase
-from auth import dbname, user, host, password
 from tools import PiWheelsHandler
 
-db = PiWheelsDatabase(dbname, user, host, password)
+db = PiWheelsDatabase()
 wc = pip.commands.WheelCommand()
 handler = PiWheelsHandler()
 pip.logger.addHandler(handler)

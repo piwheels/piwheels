@@ -96,7 +96,6 @@ class PiWheelsDatabase:
         VALUES
             (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        print(query % values)
         self.cursor.execute(query, values)
         self.conn.commit()
 
