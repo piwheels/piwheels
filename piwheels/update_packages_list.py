@@ -1,30 +1,31 @@
-import better_exceptions
-
 from db import PiWheelsDatabase
-from auth import dbname, user, host, password
-from tools import list_pypi_packages, get_package_latest_version
+from tools import list_pypi_packages, get_package_versions
 
-db = PiWheelsDatabase(dbname, user, host, password)
+db = PiWheelsDatabase()
 
-pypi_packages = set(list_pypi_packages())
-known_packages = set(db.get_all_packages())
-missing_packages = pypi_packages.difference(known_packages)
+while True:
+    pypi_packages = set(list_pypi_packages())
+    known_packages = set(db.get_all_packages())
+    missing_packages = pypi_packages.difference(known_packages)
 
-print('{} missing packages: {}'.format(
-    len(missing_packages),
-    ' '.join(missing_packages)
-))
+    print('{} missing packages: {}'.format(
+        len(missing_packages), ' '.join(missing_packages)
+    ))
 
-for package in missing_packages:
-    version = get_package_latest_version(package)
-    print('Adding {} version {}'.format(package, version))
-    db.add_new_package(package, version)
+    for package in missing_packages:
+        print('Adding {}'.format(package))
+        db.add_new_package(package)
 
-for package in known_packages:
-    latest_version = get_package_latest_version(package)
-    known_version = db.get_package_version(package)
-    if latest_version != known_version:
-        print('Updating {} from {} to {}'.format(
-            package, known_version, latest_version
+    known_packages = db.get_all_packages()
+
+    for package in known_packages:
+        pypi_versions = set(get_package_versions())
+        known_versions = set(get_package_versions())
+        missing_versions = pypi_versions.difference(known_versions)
+        print('package {} has {} missing packages: {}'.format(
+            package, len(missing_versions), ' '.join(missing_versions)
         ))
-        db.update_package_version(package, latest_version)
+        for version in missing_versions:
+            print('Adding {} version {}'.format(package, version))
+            db.add_new_package_version(package, version)
+    sleep(60)
