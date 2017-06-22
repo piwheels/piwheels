@@ -39,7 +39,10 @@ def get_package_versions(package):
     Returns all versions for a given package released on PyPI
     """
     package_info = get_package_info(package)
-    return sorted(package_info['releases'].keys())
+    try:
+        return sorted(package_info['releases'].keys())
+    except TypeError:
+        return []
 
 def bash_dush(path):
     du = subprocess.Popen(['du', '-sh', path], stdout=subprocess.PIPE)

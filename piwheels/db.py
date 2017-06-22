@@ -403,7 +403,7 @@ class PiWheelsDatabase:
         values = (package,)
         self.cursor.execute(query, values)
         results = self.cursor.fetchall()
-        return [result[0] for result in results]
+        return list(sorted(result[0] for result in results))
 
     def get_packages_with_update_available(self):
         query = """

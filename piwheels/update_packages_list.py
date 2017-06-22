@@ -19,11 +19,11 @@ while True:
     known_packages = db.get_all_packages()
 
     for package in known_packages:
-        pypi_versions = set(get_package_versions())
-        known_versions = set(get_package_versions())
+        pypi_versions = set(get_package_versions(package))
+        known_versions = set(db.get_package_versions(package))
         missing_versions = pypi_versions.difference(known_versions)
-        print('package {} has {} missing packages: {}'.format(
-            package, len(missing_versions), ' '.join(missing_versions)
+        print('package {} has {} missing versions: {}'.format(
+            package, len(missing_versions), ', '.join(missing_versions)
         ))
         for version in missing_versions:
             print('Adding {} version {}'.format(package, version))
