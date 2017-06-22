@@ -1,7 +1,6 @@
 from db import PiWheelsDatabase
 from tools import list_pypi_packages, get_package_info, get_package_versions
 from piwheels import PiWheelsBuilder
-import better_exceptions
 
 from gpiozero import PingServer
 
@@ -19,15 +18,19 @@ assert db.get_build_queue() == []
 db.add_new_package('abc')
 assert db.get_total_number_of_packages() == 1
 assert db.get_build_queue() == []
+assert db.get_package_versions('abc') == []
 
 # Test adding a package version to the database
 db.add_new_package_version('abc', '0.0.1')
 assert db.get_total_number_of_package_versions() == 1
 assert db.get_build_queue() == [['abc', '0.0.1']]
+assert db.get_package_versions('abc') == ['0.0.1']
+
 db.add_new_package_version('abc', '0.0.2')
 assert db.get_total_number_of_packages() == 1
 assert db.get_total_number_of_package_versions() == 2
 assert db.get_build_queue() == [['abc', '0.0.1'], ['abc', '0.0.2']]
+assert db.get_package_versions('abc') == ['0.0.1', '0.0.2']
 
 # Test logging builds
 db.log_build('abc', '0.0.1', False, 'output', None, None, None, None, None, None, None)
@@ -63,6 +66,6 @@ if pypi_server.is_active:
     builder = PiWheelsBuilder('gpiozero', '1.0.0')
     builder.build_wheel()
     builder.log_build()
-    
+    assert db.get_last_package_processed()[0] == 'gpiozero'
 else:
     print('Failed connection to {}: Skipping PyPI tests'.format(pypi_server.host))

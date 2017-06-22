@@ -129,7 +129,7 @@ class PiWheelsDatabase:
 
     def get_last_package_processed(self):
         """
-        Legacy
+        Returns the name and build timestamp of the last package processed
         """
         query = """
         SELECT
@@ -200,50 +200,24 @@ class PiWheelsDatabase:
         ORDER BY
             build_timestamp DESC
         """
-        values = (package, )
+        values = (package,)
         self.cursor.execute(query, values)
         return self.cursor.fetchall()
 
-    def _get_packages_by_build_status(self, build_status=None):
+    def get_all_packages(self):
         """
-        Legacy
+        Returns a list of all known packages
         """
-        where_clause = {
-            True: 'status',
-            False: 'NOT status',
-            None: '1',
-        }[build_status]
         query = """
         SELECT
             package
         FROM
-            builds
-        WHERE
-            {}
+            packages
         ORDER BY
             package
-        """.format(where_clause)
+        """
         self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return results
-
-    def get_all_packages(self):
-        """
-        Legacy
-        """
-        return self._get_packages_by_build_status()
-
-    def get_built_packages(self):
-        """
-        Legacy
-        """
-        return self._get_packages_by_build_status(True)
-
-    def get_failed_packages(self):
-        """
-        Legacy
-        """
-        return self._get_packages_by_build_status(False)
+        return self.cursor.fetchall()
 
     def get_total_build_time(self):
         """
@@ -414,19 +388,22 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
-    def get_package_version(self, package):
+    def get_package_versions(self, package):
+        """
+        Returns a list of all known versions of a given package
+        """
         query = """
         SELECT
             version
         FROM
-            packages
+            package_versions
         WHERE
             package = %s
         """
         values = (package,)
         self.cursor.execute(query, values)
-        result = self.cursor.fetchone()
-        return result['version']
+        results = self.cursor.fetchall()
+        return [result[0] for result in results]
 
     def get_packages_with_update_available(self):
         query = """
