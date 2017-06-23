@@ -28,8 +28,8 @@ def get_package_info(package):
     Returns information about a given package from the PyPI JSON API
     """
     url = 'https://pypi.python.org/pypi/{}/json'.format(package)
-    r = requests.get(url)
     try:
+        r = requests.get(url)
         return r.json()
     except:
         return None

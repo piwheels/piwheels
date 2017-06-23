@@ -1,3 +1,5 @@
+from tools import list_pypi_packages, get_package_versions
+
 import os
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -67,6 +69,31 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         self.conn.commit()
 
+    def update_package_list(self):
+        """
+        Updates the list of known packages
+        """
+        pypi_packages = set(list_pypi_packages())
+        known_packages = set(self.get_all_packages())
+        missing_packages = pypi_packages.difference(known_packages)
+
+        for package in missing_packages:
+            self.add_new_package(package)
+
+    def update_package_version_list(self):
+        """
+        Updates the list of known package versions
+        """
+        known_packages = self.get_all_packages()
+
+        for package in known_packages:
+            pypi_versions = set(get_package_versions(package))
+            known_versions = set(self.get_package_versions(package))
+            missing_versions = pypi_versions.difference(known_versions)
+
+            for version in missing_versions:
+                self.add_new_package_version(package, version)
+
     def get_total_number_of_package_versions(self):
         """
         Returns the total number of known package versions
@@ -99,6 +126,165 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         self.conn.commit()
 
+    def get_last_package_processed(self):
+        """
+        Returns the name and build timestamp of the last package processed
+        """
+        query = """
+        SELECT
+            package,
+            TO_CHAR(build_timestamp, 'DD Mon HH24:MI') as build_datetime
+        FROM
+            builds
+        ORDER BY
+            build_timestamp DESC
+        LIMIT
+            1
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchone()
+
+    def get_all_packages(self):
+        """
+        Returns a list of all known packages
+        """
+        query = """
+        SELECT
+            package
+        FROM
+            packages
+        ORDER BY
+            package
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
+    def get_all_packages(self):
+        """
+        Returns a generator of all known package names
+        """
+        query = """
+        SELECT
+            package
+        FROM
+            packages
+        """
+        self.cursor.execute(query)
+        results = self.cursor.fetchall()
+        return (result['package'] for result in results)
+
+    def get_total_number_of_packages_with_versions(self):
+        """
+        Returns the number of packages which have published at least one version
+        """
+        query = """
+        SELECT
+            package
+        FROM
+            package_versions
+        GROUP BY
+            package
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
+    def get_build_queue(self):
+        """
+        Returns a list of package/version lists of all package versions
+        requiring building
+        """
+        query = """
+        SELECT
+            pv.package, pv.version
+        FROM
+            package_versions pv
+        LEFT JOIN
+            builds b
+        ON
+            b.package = pv.package
+        WHERE
+            b.package IS NULL
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+
+    def build_active(self):
+        """
+        Checks whether the build is set to active. Returns True if active,
+        otherwise False
+        """
+        query = """
+        SELECT
+            value
+        FROM
+            metadata
+        WHERE
+            key = 'active'
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
+    def _set_build_active_status(self, active=True):
+        """
+        Sets the build status
+        """
+        query = """
+        UPDATE
+            metadata
+        SET
+            value = %s
+        WHERE
+            key = 'active'
+        """
+        values = (active,)
+        self.cursor.execute(query, values)
+        self.conn.commit()
+
+    def activate_build(self):
+        """
+        Sets the build status to active
+        """
+        self._set_build_active_status(active=True)
+
+    def deactivate_build(self):
+        """
+        Sets the build status to inactive
+        """
+        self._set_build_active_status(active=False)
+
+    def get_package_versions(self, package):
+        """
+        Returns a list of all known versions of a given package
+        """
+        query = """
+        SELECT
+            version
+        FROM
+            package_versions
+        WHERE
+            package = %s
+        """
+        values = (package,)
+        self.cursor.execute(query, values)
+        results = self.cursor.fetchall()
+        return list(sorted(result[0] for result in results))
+
+    ### untested methods
+
+    def get_number_of_packages_processed_in_last_hour(self):
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            builds
+        WHERE
+            build_timestamp > NOW() - interval '1 hour'
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
     def get_total_number_of_packages_processed(self):
         """
         Legacy
@@ -126,24 +312,6 @@ class PiWheelsDatabase:
         self.cursor.execute(query)
         result = self.cursor.fetchone()
         return result[0]
-
-    def get_last_package_processed(self):
-        """
-        Returns the name and build timestamp of the last package processed
-        """
-        query = """
-        SELECT
-            package,
-            TO_CHAR(build_timestamp, 'DD Mon HH24:MI') as build_datetime
-        FROM
-            builds
-        ORDER BY
-            build_timestamp DESC
-        LIMIT
-            1
-        """
-        self.cursor.execute(query)
-        return self.cursor.fetchone()
 
     def get_package_build_status(self, package):
         """
@@ -204,21 +372,6 @@ class PiWheelsDatabase:
         self.cursor.execute(query, values)
         return self.cursor.fetchall()
 
-    def get_all_packages(self):
-        """
-        Returns a list of all known packages
-        """
-        query = """
-        SELECT
-            package
-        FROM
-            packages
-        ORDER BY
-            package
-        """
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
-
     def get_total_build_time(self):
         """
         Legacy
@@ -246,179 +399,3 @@ class PiWheelsDatabase:
         self.cursor.execute(query)
         result = self.cursor.fetchone()
         return result[0]
-
-    def get_all_packages(self):
-        """
-        Returns a generator of all known package names
-        """
-        query = """
-        SELECT
-            package
-        FROM
-            packages
-        """
-        self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return (result['package'] for result in results)
-
-    def get_total_number_of_packages_with_versions(self):
-        """
-        Returns the number of packages which have published at least one version
-        """
-        query = """
-        SELECT
-            package
-        FROM
-            package_versions
-        GROUP BY
-            package
-        """
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
-
-    def get_build_queue(self):
-        """
-        Returns a list of package/version lists of all package versions
-        requiring building
-        """
-        query = """
-        SELECT
-            pv.package, pv.version
-        FROM
-            package_versions pv
-        LEFT JOIN
-            builds b
-        ON
-            b.package = pv.package
-        WHERE
-            b.package IS NULL
-        """
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
-
-    def get_previously_failed_packages(self):
-        """
-        Legacy
-        """
-        query = """
-        SELECT
-            package
-        FROM
-            builds
-        WHERE NOT
-            status
-        """
-        self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return (result['package'] for result in results)
-
-    def build_active(self):
-        """
-        Checks whether the build is set to active. Returns True if active,
-        otherwise False
-        """
-        query = """
-        SELECT
-            value
-        FROM
-            metadata
-        WHERE
-            key = 'active'
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
-
-    def _set_build_active_status(self, active=True):
-        """
-        Sets the build status
-        """
-        query = """
-        UPDATE
-            metadata
-        SET
-            value = %s
-        WHERE
-            key = 'active'
-        """
-        values = (active,)
-        self.cursor.execute(query, values)
-        self.conn.commit()
-
-    def activate_build(self):
-        """
-        Sets the build status to active
-        """
-        self._set_build_active_status(active=True)
-
-    def deactivate_build(self):
-        """
-        Sets the build status to inactive
-        """
-        self._set_build_active_status(active=False)
-
-    def wheel_is_processed(self, wheel):
-        """
-        Sets the build status
-        """
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            builds
-        WHERE
-            filename = %s
-        """
-        values = (wheel,)
-        self.cursor.execute(query, values)
-        result = self.cursor.fetchone()
-        print(wheel, result)
-        return result[0] == 1
-
-    def get_number_of_packages_processed_in_last_hour(self):
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            builds
-        WHERE
-            build_timestamp > NOW() - interval '1 hour'
-        """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
-
-    def get_package_versions(self, package):
-        """
-        Returns a list of all known versions of a given package
-        """
-        query = """
-        SELECT
-            version
-        FROM
-            package_versions
-        WHERE
-            package = %s
-        """
-        values = (package,)
-        self.cursor.execute(query, values)
-        results = self.cursor.fetchall()
-        return list(sorted(result[0] for result in results))
-
-    def get_packages_with_update_available(self):
-        query = """
-        SELECT
-            package
-        FROM
-            packages
-        WHERE
-            update_required
-        """
-        self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return (result['package'] for result in results)
-
-
-if __name__ == '__main__':
-    from auth import dbname, user, host, password
-    db = PiWheelsDatabase(dbname, user, host, password)
