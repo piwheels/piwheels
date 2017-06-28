@@ -1,6 +1,6 @@
-# Installation
+# Installation on a Raspberry Pi
 
-Installation instructions (all as root), based on Raspbian Jessie Lite.
+Installation instructions (all as root), based on Raspbian Jessie Lite (or Mythic Beasts' Raspbian server image).
 
 First, install the required Debian packages:
 
@@ -59,4 +59,23 @@ Switch to the postgres user and load the database setup script:
 ```bash
 su postgres
 cat piwheels.sql | psql piwheels
+```
+
+Create an environment variables file in `~/.piwheels_env_vars`:
+
+```bash
+export PW_DB=piwheels
+export PW_USER=piwheels
+export PW_HOST=localhost
+export PW_PASS=piwheels
+```
+
+(change details as appropriate)
+
+Ensure this is loaded in your bash profile, e.g. add to your `.bashrc`:
+
+```bash
+if [ -f ~/.piwheels_env_vars ]; then
+    . ~/.piwheels_env_vars
+fi
 ```
