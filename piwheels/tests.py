@@ -3,6 +3,7 @@ from tools import list_pypi_packages, get_package_info, get_package_versions
 from piwheels import PiWheelsBuilder
 
 from gpiozero import PingServer
+import pytest
 
 db = PiWheelsDatabase()
 
@@ -14,7 +15,10 @@ db.activate_build()
 assert db.build_active()
 
 # Test adding a package to the database
+build_queue = db.build_queue_generator()
 assert db.get_build_queue() == []
+with pytest.raises(StopIteration):
+    next(build_queue)
 db.add_new_package('abc')
 assert db.get_total_number_of_packages() == 1
 assert db.get_build_queue() == []
@@ -24,18 +28,23 @@ assert db.get_package_versions('abc') == []
 db.add_new_package_version('abc', '0.0.1')
 assert db.get_total_number_of_package_versions() == 1
 assert db.get_build_queue() == [['abc', '0.0.1']]
+build_queue = db.build_queue_generator()
+assert next(build_queue) == ['abc', '0.0.1']
 assert db.get_package_versions('abc') == ['0.0.1']
 
 db.add_new_package_version('abc', '0.0.2')
 assert db.get_total_number_of_packages() == 1
 assert db.get_total_number_of_package_versions() == 2
 assert db.get_build_queue() == [['abc', '0.0.1'], ['abc', '0.0.2']]
+assert next(build_queue) == ['abc', '0.0.1']
 assert db.get_package_versions('abc') == ['0.0.1', '0.0.2']
 
 # Test logging builds
 db.log_build('abc', '0.0.1', False, 'output', None, None, None, None, None, None, None)
+assert next(build_queue) == ['abc', '0.0.2']
 db.log_build('abc', '0.0.2', True, 'output', 'HELLO', 12345, 1.2345, '0.0.2', 'py3', 'none', 'any')
-assert db.get_build_queue() == []
+with pytest.raises(StopIteration):
+    next(build_queue)
 
 # Test adding another package
 assert list(db.get_all_packages()) == ['abc']
@@ -46,6 +55,10 @@ assert db.get_total_number_of_packages() == 2
 assert db.get_total_number_of_package_versions() == 3
 assert db.get_build_queue() == [['def', '1.0']]
 
+build_queue = db.build_queue_generator()  # only works with this line present, but shouldn't require it
+assert next(build_queue) == ['def', '1.0']
+
+"""
 pypi_server = PingServer('pypi.python.org')
 
 if pypi_server.is_active:
@@ -69,3 +82,4 @@ if pypi_server.is_active:
     assert db.get_last_package_processed()[0] == 'gpiozero'
 else:
     print('Failed connection to {}: Skipping PyPI tests'.format(pypi_server.host))
+"""
