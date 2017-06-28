@@ -9,18 +9,14 @@ class PiWheelsDatabase:
     """
     PiWheels database connection bridge
 
-    Pass in DB credentials directly or store in environment variables: PW_DB,
-    PW_USER, PW_HOST, PW_PASS.
+    Store database credentials in environment variables: PW_DB, PW_USER,
+    PW_HOST, PW_PASS.
     """
-    def __init__(self, dbname=None, user=None, host=None, password=None):
-        if dbname is None:
-            dbname = os.environ['PW_DB']
-        if user is None:
-            user = os.environ['PW_USER']
-        if host is None:
-            host = os.environ['PW_HOST']
-        if password is None:
-            password = os.environ['PW_PASS']
+    def __init__(self):
+        dbname = os.environ['PW_DB']
+        user = os.environ['PW_USER']
+        host = os.environ['PW_HOST']
+        password = os.environ['PW_PASS']
         connect_str = "dbname='{}' user='{}' host='{}' password='{}'".format(
             dbname, user, host, password
         )
@@ -197,16 +193,46 @@ class PiWheelsDatabase:
         SELECT
             pv.package, pv.version
         FROM
-            package_versions pv
-        LEFT JOIN
             builds b
+        RIGHT JOIN
+            package_versions pv
         ON
             b.package = pv.package
+        AND
+            b.version = pv.version
         WHERE
-            b.package IS NULL
+            b.build_id IS NULL
         """
         self.cursor.execute(query)
         return self.cursor.fetchall()
+
+    def build_queue_generator(self):
+        """
+        Returns a generator yielding package/version lists from the build queue,
+        one at a time
+        """
+        result = True
+        while result:
+            query = """
+            SELECT
+                pv.package, pv.version
+            FROM
+                builds b
+            RIGHT JOIN
+                package_versions pv
+            ON
+                b.package = pv.package
+            AND
+                b.version = pv.version
+            WHERE
+                b.build_id IS NULL
+            LIMIT
+                1
+            """
+            self.cursor.execute(query)
+            result = self.cursor.fetchone()
+            if result:
+                yield result
 
     def build_active(self):
         """
