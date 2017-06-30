@@ -184,11 +184,9 @@ class PiWheelsDatabase:
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
-    def get_build_queue(self):
-        """
-        Returns a list of package/version lists of all package versions
-        requiring building
-        """
+    def get_build_queue_query(self, limit=None):
+        if limit is None:
+            limit = 'ALL'
         query = """
         SELECT
             pv.package, pv.version
@@ -202,7 +200,17 @@ class PiWheelsDatabase:
             b.version = pv.version
         WHERE
             b.build_id IS NULL
+        LIMIT
+            {}
+        """.format(limit)
+        return query
+
+    def get_build_queue(self):
         """
+        Returns a list of package/version lists of all package versions
+        requiring building
+        """
+        query = self.get_build_queue_query()
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
@@ -211,28 +219,14 @@ class PiWheelsDatabase:
         Returns a generator yielding package/version lists from the build queue,
         one at a time
         """
-        result = True
-        while result:
-            query = """
-            SELECT
-                pv.package, pv.version
-            FROM
-                builds b
-            RIGHT JOIN
-                package_versions pv
-            ON
-                b.package = pv.package
-            AND
-                b.version = pv.version
-            WHERE
-                b.build_id IS NULL
-            LIMIT
-                1
-            """
+        query = self.get_build_queue_query(limit=1)
+        while True:
             self.cursor.execute(query)
             result = self.cursor.fetchone()
             if result:
                 yield result
+            else:
+                raise StopIteration
 
     def build_active(self):
         """

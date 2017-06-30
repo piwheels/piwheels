@@ -30,13 +30,14 @@ assert db.get_total_number_of_package_versions() == 1
 assert db.get_build_queue() == [['abc', '0.0.1']]
 build_queue = db.build_queue_generator()
 assert next(build_queue) == ['abc', '0.0.1']
+assert next(build_queue) == ['abc', '0.0.1']  # should still be next in queue as it's not yet been built
 assert db.get_package_versions('abc') == ['0.0.1']
 
 db.add_new_package_version('abc', '0.0.2')
 assert db.get_total_number_of_packages() == 1
 assert db.get_total_number_of_package_versions() == 2
 assert db.get_build_queue() == [['abc', '0.0.1'], ['abc', '0.0.2']]
-assert next(build_queue) == ['abc', '0.0.1']
+assert next(build_queue) == ['abc', '0.0.1']  # should still be next in queue as it's not yet been built
 assert db.get_package_versions('abc') == ['0.0.1', '0.0.2']
 
 # Test logging builds
@@ -55,10 +56,9 @@ assert db.get_total_number_of_packages() == 2
 assert db.get_total_number_of_package_versions() == 3
 assert db.get_build_queue() == [['def', '1.0']]
 
-build_queue = db.build_queue_generator()  # only works with this line present, but shouldn't require it
+build_queue = db.build_queue_generator()
 assert next(build_queue) == ['def', '1.0']
 
-"""
 pypi_server = PingServer('pypi.python.org')
 
 if pypi_server.is_active:
@@ -82,4 +82,3 @@ if pypi_server.is_active:
     assert db.get_last_package_processed()[0] == 'gpiozero'
 else:
     print('Failed connection to {}: Skipping PyPI tests'.format(pypi_server.host))
-"""
