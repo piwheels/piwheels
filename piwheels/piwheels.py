@@ -12,6 +12,11 @@ handler = PiWheelsHandler()
 pip.logger.addHandler(handler)
 
 class PiWheelsBuilder:
+    """
+    PiWheels builder class
+
+    Builds Python wheels of a given version of a given package
+    """
     def __init__(self, package, version):
         self.package = package
         self.version = version
