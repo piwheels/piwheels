@@ -7,7 +7,7 @@ from psycopg2.extras import DictCursor
 
 class PiWheelsDatabase:
     """
-    PiWheels database connection bridge
+    PiWheels database connection class
 
     Store database credentials in environment variables: PW_DB, PW_USER,
     PW_HOST, PW_PASS.
@@ -90,7 +90,21 @@ class PiWheelsDatabase:
             for version in missing_versions:
                 self.add_new_package_version(package, version)
 
-    def get_total_number_of_package_versions(self):
+    def get_total_packages(self):
+        """
+        Returns the total number of known packages
+        """
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            packages
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
+    def get_total_package_versions(self):
         """
         Returns the total number of known package versions
         """
@@ -292,7 +306,10 @@ class PiWheelsDatabase:
 
     ### untested methods
 
-    def get_number_of_packages_processed_in_last_hour(self):
+    def get_builds_processed_in_last_hour(self):
+        """
+        Return the number of builds processed in the last hour
+        """
         query = """
         SELECT
             COUNT(*)
@@ -305,29 +322,45 @@ class PiWheelsDatabase:
         result = self.cursor.fetchone()
         return result[0]
 
-    def get_total_number_of_packages_processed(self):
+    def get_total_packages_processed(self):
         """
-        Legacy
+        Returns the total number of packages processed
         """
         query = """
         SELECT
-            COUNT(*)
+            COUNT(DISTINCT package)
         FROM
-            (SELECT package FROM builds GROUP BY package) AS total
+            builds
         """
         self.cursor.execute(query)
         result = self.cursor.fetchone()
         return result[0]
 
-    def get_total_number_of_packages_successfully_built(self):
+    def get_total_package_versions_processed(self):
         """
-        Legacy
+        Returns the total number of package versions processed
         """
         query = """
         SELECT
             COUNT(*)
         FROM
-            (SELECT package FROM builds WHERE status GROUP BY package) AS total
+            builds
+        """
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return result[0]
+
+    def get_total_successful_builds(self):
+        """
+        Returns the total number of successful builds
+        """
+        query = """
+        SELECT
+            COUNT(*)
+        FROM
+            builds
+        WHERE
+            status
         """
         self.cursor.execute(query)
         result = self.cursor.fetchone()
