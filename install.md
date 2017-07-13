@@ -2,7 +2,13 @@
 
 Installation instructions (all as root), based on Raspbian Jessie Lite (or Mythic Beasts' Raspbian server image).
 
-First, install the required Debian packages:
+First, set your timezone correctly:
+
+```bash
+dpkg-reconfigure tzdata
+```
+
+Install the required Debian packages:
 
 ```bash
 apt install dbus apache2 python3 python3-dev python3-pip build-essential postgresql -y
@@ -12,7 +18,7 @@ Upgrade pip and install the required pip packages:
 
 ```
 pip3 install pip --upgrade
-pip3 install psycopg2
+pip3 install psycopg2 gpiozero
 ```
 
 Install the Apache `speling` module:
@@ -54,10 +60,17 @@ Restart Apache:
 service apache2 restart
 ```
 
-Switch to the postgres user and load the database setup script:
+Switch to the postgres user and create a `piwheels` user (follow the interactive prompt to give the user a password):
 
 ```bash
 su postgres
+createuser piwheels -P --interactive
+```
+
+Create a database, and load the database setup script:
+
+```bash
+psql -c "create database piwheels"
 cat piwheels.sql | psql piwheels
 ```
 
