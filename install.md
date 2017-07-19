@@ -11,14 +11,14 @@ dpkg-reconfigure tzdata
 Install the required Debian packages:
 
 ```bash
-apt install dbus apache2 python3 python3-dev python3-pip build-essential postgresql -y
+apt install apache2 python3 python3-dev python3-pip build-essential postgresql -y
 ```
 
 Upgrade pip and install the required pip packages:
 
 ```
 pip3 install pip --upgrade
-pip3 install psycopg2 gpiozero
+pip3 install psycopg2
 ```
 
 Install the Apache `speling` module:
@@ -92,3 +92,16 @@ if [ -f ~/.piwheels_env_vars ]; then
     . ~/.piwheels_env_vars
 fi
 ```
+
+## Operation
+
+In order for piwheels to be fully operational, the following components need to be running:
+
+- Update package list
+	  - [update_package_list.py](piwheels/update_package_versions.py) should be continuously running to update the list of packages and versions on PyPI.
+- Build new packages
+		- [main.py](piwheels/main.py) should be running continuously to work through the build queue building any unattempted packages
+- Web index
+    - [web_index.py](piwheels/web_index.py) should be running every minute in cron
+
+One way of managing this is to install `byobu` and launch new windows for each of the two continuous scripts and just run the web index script minutely in cron.
