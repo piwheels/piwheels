@@ -63,8 +63,8 @@ pypi_server = PingServer('pypi.python.org')
 
 if pypi_server.is_active:
     # Test PyPI information functions
-    #packages = list_pypi_packages()
-    #assert len(packages) > 0
+    packages = list_pypi_packages()
+    assert len(packages) > 0
 
     gpiozero_info = get_package_info('gpiozero')
     assert 'releases' in gpiozero_info
