@@ -73,8 +73,12 @@ class PiWheelsDatabase:
         known_packages = set(self.get_all_packages())
         missing_packages = pypi_packages.difference(known_packages)
 
+        print('\n*** Adding {} new packages ***\n'.format(len(missing_packages)))
+
         for package in missing_packages:
+            print('    Adding new package: {}'.format(package))
             self.add_new_package(package)
+        print()
 
     def update_package_version_list(self):
         """
@@ -87,7 +91,15 @@ class PiWheelsDatabase:
             known_versions = set(self.get_package_versions(package))
             missing_versions = pypi_versions.difference(known_versions)
 
+            if missing_versions:
+                print('Adding {} new versions for package {}'.format(
+                    len(missing_versions), package
+                ))
+
             for version in missing_versions:
+                print('    Adding new package version: {} {}'.format(
+                    package, version
+                ))
                 self.add_new_package_version(package, version)
 
     def get_total_packages(self):
@@ -214,6 +226,8 @@ class PiWheelsDatabase:
             b.version = pv.version
         WHERE
             b.build_id IS NULL
+        ORDER BY
+            RANDOM()
         LIMIT
             {}
         """.format(limit)
