@@ -2,7 +2,34 @@ from tools import list_pypi_packages, get_package_versions
 
 import os
 import psycopg2
+import psycopg2.extensions
 from psycopg2.extras import DictCursor
+
+
+class NestedConnection(psycopg2.extensions.connection):
+    """
+    Derivative of psycopg2's connection object that, when used as a context
+    manager, only commits/rolls back with the outer most level.
+
+    A more nuanced implementation would use actual nested transactions (which
+    Postgres does support), but I don't need them and I'm too lazy.
+    """
+    def __init__(self, dsn, **kwargs):
+        super().__init__(dsn, **kwargs)
+        self._nesting = 0
+
+    def __enter__(self):
+        self._nesting += 1
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        assert self._nesting > 0
+        self._nesting -= 1
+        if not self._nesting:
+            if exc_type is None:
+                self.commit()
+            else:
+                self.rollback()
 
 
 class PiWheelsDatabase:
@@ -13,14 +40,9 @@ class PiWheelsDatabase:
     PW_HOST, PW_PASS.
     """
     def __init__(self):
-        dbname = os.environ['PW_DB']
-        user = os.environ['PW_USER']
-        host = os.environ['PW_HOST']
-        password = os.environ['PW_PASS']
-        connect_str = "dbname='{}' user='{}' host='{}' password='{}'".format(
-            dbname, user, host, password
-        )
-        self.conn = psycopg2.connect(connect_str, cursor_factory=DictCursor)
+        dsn = "dbname='{PW_DB}' user='{PW_USER}' host='{PW_HOST}' password='{PW_PASS}'".format(**os.environ)
+        self.conn = psycopg2.connect(
+            dsn, connection_factory=NestedConnection, cursor_factory=DictCursor)
 
     def add_new_package(self, package):
         """
