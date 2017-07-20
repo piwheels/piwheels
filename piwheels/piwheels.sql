@@ -33,8 +33,11 @@ CREATE TABLE builds (
 );
 GRANT ALL ON builds TO piwheels;
 
+CREATE INDEX builds_timestamp ON builds(build_timestamp DESC NULLS LAST);
+CREATE INDEX builds_package_versions ON builds(package, version);
+
 CREATE TABLE metadata (
-    key TEXT,
+    key TEXT PRIMARY KEY,
     value BOOLEAN
 );
 GRANT ALL ON metadata TO piwheels;

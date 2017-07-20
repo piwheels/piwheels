@@ -20,8 +20,7 @@ class PiWheelsDatabase:
         connect_str = "dbname='{}' user='{}' host='{}' password='{}'".format(
             dbname, user, host, password
         )
-        self.conn = psycopg2.connect(connect_str)
-        self.cursor = self.conn.cursor(cursor_factory=DictCursor)
+        self.conn = psycopg2.connect(connect_str, cursor_factory=DictCursor)
 
     def add_new_package(self, package):
         """
@@ -33,9 +32,10 @@ class PiWheelsDatabase:
         VALUES
             (%s)
         """
-        values = (package,)
-        self.cursor.execute(query, values)
-        self.conn.commit()
+        with self.conn:
+            values = (package,)
+            with self.conn.cursor() as cur:
+                cur.execute(query, values)
 
     def get_total_number_of_packages(self):
         """
@@ -47,9 +47,10 @@ class PiWheelsDatabase:
         FROM
             packages
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def add_new_package_version(self, package, version):
         """
@@ -61,9 +62,10 @@ class PiWheelsDatabase:
         VALUES
             (%s, %s)
         """
-        values = (package, version)
-        self.cursor.execute(query, values)
-        self.conn.commit()
+        with self.conn:
+            values = (package, version)
+            with self.conn.cursor() as cur:
+                cur.execute(query, values)
 
     def update_package_list(self):
         """
@@ -73,34 +75,33 @@ class PiWheelsDatabase:
         known_packages = set(self.get_all_packages())
         missing_packages = pypi_packages.difference(known_packages)
 
-        print('\n*** Adding {} new packages ***\n'.format(len(missing_packages)))
-
-        for package in missing_packages:
-            print('    Adding new package: {}'.format(package))
-            self.add_new_package(package)
+        with self.conn:
+            print('\n*** Adding {} new packages ***\n'.format(len(missing_packages)))
+            for package in missing_packages:
+                print('    Adding new package: {}'.format(package))
+                self.add_new_package(package)
         print()
 
     def update_package_version_list(self):
         """
         Updates the list of known package versions
         """
-        known_packages = self.get_all_packages()
+        with self.conn:
+            for package in self.get_all_packages():
+                pypi_versions = set(get_package_versions(package))
+                known_versions = set(self.get_package_versions(package))
+                missing_versions = pypi_versions.difference(known_versions)
 
-        for package in known_packages:
-            pypi_versions = set(get_package_versions(package))
-            known_versions = set(self.get_package_versions(package))
-            missing_versions = pypi_versions.difference(known_versions)
+                if missing_versions:
+                    print('Adding {} new versions for package {}'.format(
+                        len(missing_versions), package
+                    ))
 
-            if missing_versions:
-                print('Adding {} new versions for package {}'.format(
-                    len(missing_versions), package
-                ))
-
-            for version in missing_versions:
-                print('    Adding new package version: {} {}'.format(
-                    package, version
-                ))
-                self.add_new_package_version(package, version)
+                for version in missing_versions:
+                    print('    Adding new package version: {} {}'.format(
+                        package, version
+                    ))
+                    self.add_new_package_version(package, version)
 
     def get_total_packages(self):
         """
@@ -112,9 +113,10 @@ class PiWheelsDatabase:
         FROM
             packages
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_total_package_versions(self):
         """
@@ -126,9 +128,10 @@ class PiWheelsDatabase:
         FROM
             package_versions
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def log_build(self, *values):
         """
@@ -145,8 +148,9 @@ class PiWheelsDatabase:
         VALUES
             (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        self.cursor.execute(query, values)
-        self.conn.commit()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query, values)
 
     def get_last_package_processed(self):
         """
@@ -163,23 +167,10 @@ class PiWheelsDatabase:
         LIMIT
             1
         """
-        self.cursor.execute(query)
-        return self.cursor.fetchone()
-
-    def get_all_packages(self):
-        """
-        Returns a list of all known packages
-        """
-        query = """
-        SELECT
-            package
-        FROM
-            packages
-        ORDER BY
-            package
-        """
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()
 
     def get_all_packages(self):
         """
@@ -191,24 +182,25 @@ class PiWheelsDatabase:
         FROM
             packages
         """
-        self.cursor.execute(query)
-        results = self.cursor.fetchall()
-        return (result['package'] for result in results)
+        with self.conn:
+            with self.conn.cursor() as cur:
+                for rec in cur:
+                    yield rec['package']
 
     def get_total_number_of_packages_with_versions(self):
         """
         Returns the number of packages which have published at least one version
         """
         query = """
-        SELECT
+        SELECT DISTINCT
             package
         FROM
             package_versions
-        GROUP BY
-            package
         """
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchall()
 
     def get_build_queue_query(self, limit=None):
         if limit is None:
@@ -238,9 +230,10 @@ class PiWheelsDatabase:
         Returns a list of package/version lists of all package versions
         requiring building
         """
-        query = self.get_build_queue_query()
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(self.get_build_queue_query())
+                return cur.fetchall()
 
     def build_queue_generator(self):
         """
@@ -249,12 +242,14 @@ class PiWheelsDatabase:
         """
         query = self.get_build_queue_query(limit=1)
         while True:
-            self.cursor.execute(query)
-            result = self.cursor.fetchone()
+            with self.conn:
+                with self.conn.cursor() as cur:
+                    cur.execute(query)
+                    result = cur.fetchone()
             if result:
                 yield result
             else:
-                raise StopIteration
+                break
 
     def build_active(self):
         """
@@ -269,9 +264,10 @@ class PiWheelsDatabase:
         WHERE
             key = 'active'
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def _set_build_active_status(self, active=True):
         """
@@ -285,9 +281,10 @@ class PiWheelsDatabase:
         WHERE
             key = 'active'
         """
-        values = (active,)
-        self.cursor.execute(query, values)
-        self.conn.commit()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                values = (active,)
+                cur.execute(query, values)
 
     def activate_build(self):
         """
@@ -312,11 +309,14 @@ class PiWheelsDatabase:
             package_versions
         WHERE
             package = %s
+        ORDER BY
+            version
         """
-        values = (package,)
-        self.cursor.execute(query, values)
-        results = self.cursor.fetchall()
-        return list(sorted(result[0] for result in results))
+        with self.conn:
+            with self.conn.cursor() as cur:
+                values = (package,)
+                cur.execute(query, values)
+                return [rec[0] for rec in cur]
 
     ### untested methods
 
@@ -332,9 +332,10 @@ class PiWheelsDatabase:
         WHERE
             build_timestamp > NOW() - interval '1 hour'
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_total_packages_processed(self):
         """
@@ -346,9 +347,10 @@ class PiWheelsDatabase:
         FROM
             builds
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_total_package_versions_processed(self):
         """
@@ -360,9 +362,10 @@ class PiWheelsDatabase:
         FROM
             builds
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_total_successful_builds(self):
         """
@@ -376,9 +379,10 @@ class PiWheelsDatabase:
         WHERE
             status
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_package_build_status(self, package):
         """
@@ -396,10 +400,11 @@ class PiWheelsDatabase:
         LIMIT
             1
         """
-        values = (package, )
-        self.cursor.execute(query, values)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                values = (package, )
+                cur.execute(query, values)
+                return cur.fetchone()[0]
 
     def get_package_wheels(self, package):
         """
@@ -415,10 +420,11 @@ class PiWheelsDatabase:
         ORDER BY
             build_timestamp DESC
         """
-        values = (package, )
-        self.cursor.execute(query, values)
-        results = self.cursor.fetchall()
-        return (result[0] for result in results)
+        with self.conn:
+            with self.conn.cursor() as cur:
+                values = (package, )
+                cur.execute(query, values)
+                return [rec[0] for rec in cur]
 
     def get_package_output(self, package):
         """
@@ -435,9 +441,11 @@ class PiWheelsDatabase:
         ORDER BY
             build_timestamp DESC
         """
-        values = (package,)
-        self.cursor.execute(query, values)
-        return self.cursor.fetchall()
+        with self.conn:
+            with self.conn.cursor() as cur:
+                values = (package,)
+                cur.execute(query, values)
+                return cur.fetchall()
 
     def get_total_build_time(self):
         """
@@ -449,9 +457,10 @@ class PiWheelsDatabase:
         FROM
             builds
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
 
     def get_total_wheel_filesize(self):
         """
@@ -463,6 +472,7 @@ class PiWheelsDatabase:
         FROM
             builds
         """
-        self.cursor.execute(query)
-        result = self.cursor.fetchone()
-        return result[0]
+        with self.conn:
+            with self.conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchone()[0]
