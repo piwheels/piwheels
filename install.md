@@ -81,6 +81,7 @@ export PW_DB=piwheels
 export PW_USER=piwheels
 export PW_HOST=localhost
 export PW_PASS=piwheels
+export PW_NUM=1  # optional node number
 ```
 
 (change details as appropriate)

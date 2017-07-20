@@ -140,10 +140,10 @@ class PiWheelsDatabase:
             builds (
                 package, version, status, output, filename, filesize,
                 build_time, package_version_tag, py_version_tag, abi_tag,
-                platform_tag
+                platform_tag, built_by
             )
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         self.cursor.execute(query, values)
         self.conn.commit()

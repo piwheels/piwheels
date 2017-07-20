@@ -28,6 +28,7 @@ CREATE TABLE builds (
     py_version_tag TEXT,
     abi_tag TEXT,
     platform_tag TEXT,
+    built_by INT,
     FOREIGN KEY (package, version) REFERENCES package_versions
 );
 GRANT ALL ON builds TO piwheels;

@@ -26,7 +26,7 @@ assert db.get_package_versions('abc') == []
 
 # Test adding a package version to the database
 db.add_new_package_version('abc', '0.0.1')
-assert db.get_total_number_of_package_versions() == 1
+assert db.get_total_package_versions() == 1
 assert db.get_build_queue() == [['abc', '0.0.1']]
 build_queue = db.build_queue_generator()
 assert next(build_queue) == ['abc', '0.0.1']
@@ -35,15 +35,16 @@ assert db.get_package_versions('abc') == ['0.0.1']
 
 db.add_new_package_version('abc', '0.0.2')
 assert db.get_total_number_of_packages() == 1
-assert db.get_total_number_of_package_versions() == 2
-assert db.get_build_queue() == [['abc', '0.0.1'], ['abc', '0.0.2']]
-assert next(build_queue) == ['abc', '0.0.1']  # should still be next in queue as it's not yet been built
+assert db.get_total_package_versions() == 2
+assert len(db.get_build_queue()) == 2
+assert db.get_build_queue()[0] in (['abc', '0.0.1'], ['abc', '0.0.2'])
+assert next(build_queue) in (['abc', '0.0.1'], ['abc', '0.0.2'])
 assert db.get_package_versions('abc') == ['0.0.1', '0.0.2']
 
 # Test logging builds
-db.log_build('abc', '0.0.1', False, 'output', None, None, None, None, None, None, None)
+db.log_build('abc', '0.0.1', False, 'output', None, None, None, None, None, None, None, None)
 assert next(build_queue) == ['abc', '0.0.2']
-db.log_build('abc', '0.0.2', True, 'output', 'HELLO', 12345, 1.2345, '0.0.2', 'py3', 'none', 'any')
+db.log_build('abc', '0.0.2', True, 'output', 'HELLO', 12345, 1.2345, '0.0.2', 'py3', 'none', 'any', 1)
 with pytest.raises(StopIteration):
     next(build_queue)
 
@@ -53,7 +54,7 @@ db.add_new_package('def')
 assert list(db.get_all_packages()) == ['abc', 'def']
 db.add_new_package_version('def', '1.0')
 assert db.get_total_number_of_packages() == 2
-assert db.get_total_number_of_package_versions() == 3
+assert db.get_total_package_versions() == 3
 assert db.get_build_queue() == [['def', '1.0']]
 
 build_queue = db.build_queue_generator()

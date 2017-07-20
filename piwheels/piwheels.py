@@ -26,6 +26,7 @@ class PiWheelsBuilder:
         self.py_version_tag = None
         self.abi_tag = None
         self.platform_tag = None
+        self.built_by = os.environ.get('PW_NUM', None)
         handler.reset()
 
     def build_wheel(self, wheel_dir='/tmp/piwheels'):
@@ -65,5 +66,6 @@ class PiWheelsBuilder:
             self.package_version_tag,
             self.py_version_tag,
             self.abi_tag,
-            self.platform_tag
+            self.platform_tag,
+            self.built_by
         )

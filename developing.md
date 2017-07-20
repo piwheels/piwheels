@@ -37,6 +37,8 @@ Run the test runner bash script:
 ./test_runner.sh
 ```
 
+The test runner sets up some environment variables, sets up a test database and runs the Python test suite.
+
 Note that some tests require an internet connection. If you are online, these tests will be run. If you are offline, or PyPI is unreachable, the tests will be skipped and a message will be shown.
 
 ## Apache
