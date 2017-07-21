@@ -6,28 +6,31 @@ from signal import pause
 stop = Event()
 idle = Event()
 
-def update_pkgs(db):
-    while not stop.wait(60):
-        db.update_package_list()
-        db.update_package_version_list()
+def update_pkgs():
+    with PiWheelsDatabase() as db:
+        while not stop.wait(60):
+            db.update_package_list()
+            db.update_package_version_list()
 
-def queue_jobs(db, q):
-    while not stop.wait(0):
-        if idle.wait(60):
-            for package, version in db.get_build_queue():
-                q.send_json((package, version))
-            idle.clear()
+def queue_jobs(q):
+    with PiWheelsDatabase() as db:
+        while not stop.wait(0):
+            if idle.wait(60):
+                for package, version in db.get_build_queue():
+                    q.send_json((package, version))
+                idle.clear()
 
-def log_results(db, q):
-    while not stop.wait(0):
-        events = q.poll(10000)
-        if events:
-            msg = q.recv_json()
-            if msg == 'IDLE':
-                print('!!! Idle builder found')
-                idle.set()
-            else:
-                db.log_build(*msg)
+def log_results(q):
+    with PiWheelsDatabase() as db:
+        while not stop.wait(0):
+            events = q.poll(10000)
+            if events:
+                msg = q.recv_json()
+                if msg == 'IDLE':
+                    print('!!! Idle builder found')
+                    idle.set()
+                else:
+                    db.log_build(*msg)
 
 def main():
     ctx = zmq.Context()
@@ -38,10 +41,9 @@ def main():
     log_queue.ipv6 = True
     log_queue.bind('tcp://*:5556')
     try:
-        db = PiWheelsDatabase()
-        pkg_thread = Thread(target=update_pkgs, args=(db,), daemon=True)
-        job_thread = Thread(target=queue_jobs, args=(db, build_queue), daemon=True)
-        log_thread = Thread(target=log_results, args=(db, log_queue), daemon=True)
+        pkg_thread = Thread(target=update_pkgs, args=(), daemon=True)
+        job_thread = Thread(target=queue_jobs, args=(build_queue,), daemon=True)
+        log_thread = Thread(target=log_results, args=(log_queue,), daemon=True)
         pkg_thread.start()
         job_thread.start()
         log_thread.start()

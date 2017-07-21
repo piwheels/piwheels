@@ -55,7 +55,7 @@ def bash_dfh(path='/'):
     output = df.communicate()[0].split()
     return output[11].decode('UTF-8')
 
-def get_wheels_list(db, package):
+def get_wheels_lis(db, package):
     lis = ''
     wheels = list(db.get_package_wheels(package))
     if wheels[0] is None:

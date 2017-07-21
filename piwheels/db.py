@@ -48,6 +48,18 @@ class PiWheelsDatabase:
         self.conn = psycopg2.connect(
             dsn, connection_factory=NestedConnection, cursor_factory=DictCursor)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
+
+    def close(self):
+        """
+        Explicitly close the database connection
+        """
+        self.conn.close()
+
     def add_new_package(self, package):
         """
         Insert a new package record into the database
