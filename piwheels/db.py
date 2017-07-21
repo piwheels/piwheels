@@ -40,9 +40,25 @@ class PiWheelsDatabase:
     PW_HOST, PW_PASS.
     """
     def __init__(self):
-        dsn = "dbname='{PW_DB}' user='{PW_USER}' host='{PW_HOST}' password='{PW_PASS}'".format(**os.environ)
+        if 'PW_HOST' in os.environ:
+            dsn = "dbname='{PW_DB}' user='{PW_USER}' host='{PW_HOST}' password='{PW_PASS}'"
+        else:
+            dsn = "dbname='{PW_DB}'"
+        dsn = dsn.format(**os.environ)
         self.conn = psycopg2.connect(
             dsn, connection_factory=NestedConnection, cursor_factory=DictCursor)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
+
+    def close(self):
+        """
+        Explicitly close the database connection
+        """
+        self.conn.close()
 
     def add_new_package(self, package):
         """
@@ -170,6 +186,7 @@ class PiWheelsDatabase:
         VALUES
             (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
+        print('### Package {} {} build rc: {}'.format(*values))
         with self.conn:
             with self.conn.cursor() as cur:
                 cur.execute(query, values)
@@ -225,9 +242,11 @@ class PiWheelsDatabase:
                 cur.execute(query)
                 return cur.fetchall()
 
-    def get_build_queue_query(self, limit=None):
-        if limit is None:
-            limit = 'ALL'
+    def get_build_queue(self):
+        """
+        Generator yielding package/version tuples of all package versions
+        requiring building
+        """
         query = """
         SELECT
             pv.package, pv.version
@@ -241,38 +260,12 @@ class PiWheelsDatabase:
             b.version = pv.version
         WHERE
             b.build_id IS NULL
-        ORDER BY
-            RANDOM()
-        LIMIT
-            {}
-        """.format(limit)
-        return query
-
-    def get_build_queue(self):
-        """
-        Returns a list of package/version lists of all package versions
-        requiring building
         """
         with self.conn:
             with self.conn.cursor() as cur:
-                cur.execute(self.get_build_queue_query())
-                return cur.fetchall()
-
-    def build_queue_generator(self):
-        """
-        Returns a generator yielding package/version lists from the build queue,
-        one at a time
-        """
-        query = self.get_build_queue_query(limit=1)
-        while True:
-            with self.conn:
-                with self.conn.cursor() as cur:
-                    cur.execute(query)
-                    result = cur.fetchone()
-            if result:
-                yield result
-            else:
-                break
+                cur.execute(query)
+                for rec in cur:
+                    yield rec['package'], rec['version']
 
     def build_active(self):
         """

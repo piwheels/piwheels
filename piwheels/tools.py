@@ -20,6 +20,7 @@ def list_pypi_packages():
     """
     Returns a sorted list of all packages on PyPI using the xmlrpc interface
     """
+    print('Querying PyPI package list')
     client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
     return sorted(client.list_packages())
 
