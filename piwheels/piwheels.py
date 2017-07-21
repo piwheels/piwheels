@@ -3,10 +3,8 @@ import os
 from glob import glob
 from time import time
 
-from db import PiWheelsDatabase
 from tools import PiWheelsHandler
 
-db = PiWheelsDatabase()
 wc = pip.commands.WheelCommand()
 handler = PiWheelsHandler()
 pip.logger.addHandler(handler)
@@ -54,8 +52,8 @@ class PiWheelsBuilder:
             self.abi_tag = wheel_tags[-2]
             self.platform_tag = wheel_tags[-1]
 
-    def log_build(self):
-        db.log_build(
+    def log_build(self, queue):
+        queue.send_json((
             self.package,
             self.version,
             self.status,
@@ -68,4 +66,4 @@ class PiWheelsBuilder:
             self.abi_tag,
             self.platform_tag,
             self.built_by
-        )
+        ))
