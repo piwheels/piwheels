@@ -15,6 +15,7 @@ try:
     while True:
         events = build_queue.poll(60000)
         if not events:
+            print('idle; polling master')
             log_queue.send_string('IDLE')
         else:
             package, version = build_queue.recv_json()

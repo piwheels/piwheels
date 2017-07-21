@@ -174,6 +174,7 @@ class PiWheelsDatabase:
         VALUES
             (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
+        print('### Package {} {} build rc: {}'.format(*values))
         with self.conn:
             with self.conn.cursor() as cur:
                 cur.execute(query, values)

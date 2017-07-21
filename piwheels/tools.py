@@ -20,6 +20,7 @@ def list_pypi_packages():
     """
     Returns a sorted list of all packages on PyPI using the xmlrpc interface
     """
+    print('Querying PyPI package list')
     client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
     return sorted(client.list_packages())
 
@@ -54,7 +55,7 @@ def bash_dfh(path='/'):
     output = df.communicate()[0].split()
     return output[11].decode('UTF-8')
 
-def get_wheels_lis(db, package):
+def get_wheels_list(db, package):
     lis = ''
     wheels = list(db.get_package_wheels(package))
     if wheels[0] is None:
