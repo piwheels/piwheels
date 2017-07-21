@@ -206,6 +206,7 @@ class PiWheelsDatabase:
         """
         with self.conn:
             with self.conn.cursor() as cur:
+                cur.execute(query)
                 for rec in cur:
                     yield rec['package']
 
