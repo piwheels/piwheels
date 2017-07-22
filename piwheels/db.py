@@ -111,7 +111,7 @@ class PiWheelsDatabase:
         """
         pypi_packages = set(list_pypi_packages())
         known_packages = set(self.get_all_packages())
-        missing_packages = pypi_packages.difference(known_packages)
+        missing_packages = pypi_packages - known_packages
 
         with self.conn:
             print('\n*** Adding {} new packages ***\n'.format(len(missing_packages)))
