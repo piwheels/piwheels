@@ -487,6 +487,8 @@ class PiWheelsDatabase:
             SUM(filesize)
         FROM
             builds
+        WHERE
+            status
         """
         with self.conn:
             with self.conn.cursor() as cur:

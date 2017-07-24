@@ -29,7 +29,7 @@ data = {
     'last_package_time': last_package['build_datetime'],
     'total_build_time': round(total_build_time / 60 / 60),
     'builds_in_last_hour': db.get_builds_processed_in_last_hour(),
-    'dush': bash_dush('/home/piwheels/www/'),
+    'dush': db.get_total_wheel_filesize() // 1024**3,
     'dfh': bash_dfh('/'),
 }
 
@@ -45,7 +45,7 @@ Python package repository providing wheels (pre-built binaries) for Raspberry Pi
 <strong>Last package processed</strong>: <a href="/{last_package_name}/">{last_package_name}</a> ({last_package_time})<br>
 <strong>Total time spent building</strong>: {total_build_time} hours<br>
 <strong>Builds processed in the last hour</strong>: {builds_in_last_hour}<br>
-<strong>Total disk usage from wheels</strong>: {dush}<br>
+<strong>Total disk usage from wheels</strong>: {dush}GB<br>
 <strong>System disk usage</strong>: {dfh}
 
 <h2>About</h2>
