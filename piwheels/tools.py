@@ -9,8 +9,7 @@ class PiWheelsHandler(logging.Handler):
     Custom logging handler appends all messages to a list
     """
     def emit(self, record):
-        msg = self.format(record)
-        self.log.append(msg)
+        self.log.append(self.format(record))
 
     def reset(self):
         self.log = []
