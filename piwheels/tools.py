@@ -45,11 +45,6 @@ def get_package_versions(package):
     except TypeError:
         return []
 
-def bash_dush(path):
-    du = subprocess.Popen(['du', '-sh', path], stdout=subprocess.PIPE)
-    output = du.communicate()[0].split()
-    return output[0].decode('UTF-8') + 'B'
-
 def bash_dfh(path='/'):
     df = subprocess.Popen(['df', '-h', path], stdout=subprocess.PIPE)
     output = df.communicate()[0].split()

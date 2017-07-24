@@ -1,7 +1,7 @@
 from math import floor
 
 from db import PiWheelsDatabase
-from tools import bash_dush, bash_dfh
+from tools import bash_dfh
 
 db = PiWheelsDatabase()
 
@@ -12,7 +12,9 @@ total_package_versions_processed = db.get_total_package_versions_processed()
 successful_builds = db.get_total_successful_builds()
 failed_builds = total_package_versions_processed - successful_builds
 last_package = db.get_last_package_processed()
-total_build_time = db.get_total_build_time()
+total_build_time_seconds = db.get_total_build_time()
+build_time_days, build_time_hours = divmod(total_build_time_seconds / 60 / 60, 24)
+build_time_hours = floor(build_time_hours)
 
 data = {
     'total_packages': total_packages,
@@ -27,10 +29,11 @@ data = {
     'failed_pc': round(failed_builds / total_package_versions_processed * 100),
     'last_package_name': last_package['package'],
     'last_package_time': last_package['build_datetime'],
-    'total_build_time': round(total_build_time / 60 / 60),
+    'build_time_days': build_time_days,
+    'build_time_hours': build_time_hours,
     'builds_in_last_hour': db.get_builds_processed_in_last_hour(),
-    'dush': db.get_total_wheel_filesize() // 1024**3,
-    'dfh': bash_dfh('/'),
+    'total_wheel_usage': db.get_total_wheel_filesize() // 1024**3,
+    'disk_usage': bash_dfh('/'),
 }
 
 html = """
@@ -43,10 +46,10 @@ Python package repository providing wheels (pre-built binaries) for Raspberry Pi
 <strong>Successfully built</strong>: {successful_builds:,} ({success_pc}%)<br>
 <strong>Failed</strong>: {failed_builds:,} ({failed_pc}%)<br>
 <strong>Last package processed</strong>: <a href="/{last_package_name}/">{last_package_name}</a> ({last_package_time})<br>
-<strong>Total time spent building</strong>: {total_build_time} hours<br>
+<strong>Total time spent building</strong>: {build_time_days} days {build_time_hours} hours<br>
 <strong>Builds processed in the last hour</strong>: {builds_in_last_hour}<br>
-<strong>Total disk usage from wheels</strong>: {dush}GB<br>
-<strong>System disk usage</strong>: {dfh}
+<strong>Total disk usage from wheels</strong>: {total_wheel_usage}GB<br>
+<strong>System disk usage</strong>: {disk_usage}
 
 <h2>About</h2>
 Read more about this project on GitHub: <a href="https://github.com/bennuttall/piwheels">github.com/bennuttall/piwheels</a>
