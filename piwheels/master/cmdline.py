@@ -1,7 +1,10 @@
+import os
+import re
 import cmd
 import readline
 import logging
 from pathlib import Path
+from textwrap import TextWrapper
 
 from ..terminal import _CONSOLE
 

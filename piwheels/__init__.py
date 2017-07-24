@@ -6,7 +6,7 @@ __author_email__ = 'ben@raspberrypi.org'
 __url__          = 'http://www.piwheels.pihosted.com/'
 __platforms__    = 'ALL'
 
-__requires__ = ['psycopg2', 'pyzmq']
+__requires__ = ['psycopg2', 'pyzmq', 'requests']
 
 __extra_requires__ = {
     'test':   ['pytest'],

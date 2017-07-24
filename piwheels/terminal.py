@@ -9,6 +9,19 @@ try:
 except ImportError:
     argcomplete = None
 
+
+# Use the user's default locale instead of C
+locale.setlocale(locale.LC_ALL, '')
+
+# Set up a console logging handler which just prints messages without any other
+# adornments. This will be used for logging messages sent before we "properly"
+# configure logging according to the user's preferences
+_CONSOLE = logging.StreamHandler(sys.stderr)
+_CONSOLE.setFormatter(logging.Formatter('%(message)s'))
+_CONSOLE.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(_CONSOLE)
+
+
 class TerminalApplication:
     """
     Base class for command line applications.

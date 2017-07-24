@@ -21,7 +21,7 @@ class PiWheelsSlave(TerminalApplication):
             help='The IP address or hostname of the master server; defaults to '
             ' the value of the PW_MASTER env-var (%(default)s)')
         self.parser.add_argument(
-            '--id', default=os.environ.get('PW_NUM', '1'),
+            '-i', '--id', '--slave-id', default=os.environ.get('PW_NUM', '1'),
             help='The identifier of the slave; defaults to the value of the '
             'PW_NUM env-var (%(default)s)')
         self.parser.add_argument(
@@ -31,7 +31,6 @@ class PiWheelsSlave(TerminalApplication):
 
     def main(self, args):
         print('PiWheels Slave version {}'.format(__version__))
-        proc = PiWheelsCmd()
         self.slave_id = args.id
         self.wheel_dir = Path(args.output)
         self.ctx = zmq.Context()
@@ -52,12 +51,11 @@ class PiWheelsSlave(TerminalApplication):
         self.build_thread = Thread(self.build_run, daemon=True)
         self.build_thread.start()
         try:
-            proc.cmdloop()
+            self.terminate.wait()
         finally:
             self.close()
 
     def close(self):
-        logging.warning('terminating slave %d', self.slave_id)
         self.run.clear()
         self.terminate.set()
         self.ctrl_thread.join()

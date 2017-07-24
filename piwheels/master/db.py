@@ -1,9 +1,10 @@
-from tools import list_pypi_packages, get_package_versions
-
 import os
+
 import psycopg2
 import psycopg2.extensions
 from psycopg2.extras import DictCursor
+
+from .pypi import list_pypi_packages, get_package_versions
 
 
 class NestedConnection(psycopg2.extensions.connection):
@@ -39,12 +40,12 @@ class PiWheelsDatabase:
     Store database credentials in environment variables: PW_DB, PW_USER,
     PW_HOST, PW_PASS.
     """
-    def __init__(self):
-        if 'PW_HOST' in os.environ:
-            dsn = "dbname='{PW_DB}' user='{PW_USER}' host='{PW_HOST}' password='{PW_PASS}'"
+    def __init__(self, database, *, host=None, username=None, password=None, **kwargs):
+        if host is not None:
+            dsn = "dbname='{database}' user='{host}' host='{username}' password='{password}'"
         else:
-            dsn = "dbname='{PW_DB}'"
-        dsn = dsn.format(**os.environ)
+            dsn = "dbname='{database}'"
+        dsn = dsn.format(**vars())
         self.conn = psycopg2.connect(
             dsn, connection_factory=NestedConnection, cursor_factory=DictCursor)
 
