@@ -336,9 +336,11 @@ class PiWheelsDatabase:
 
     ### untested methods
 
-    def get_builds_processed_in_last_hour(self):
+    def get_builds_processed_in_interval(self, interval):
         """
-        Return the number of builds processed in the last hour
+        Return the number of builds processed in a given interval.
+
+        e.g. db.get_builds_processed_in_interval('1 hour')
         """
         query = """
         SELECT
@@ -346,11 +348,12 @@ class PiWheelsDatabase:
         FROM
             builds
         WHERE
-            build_timestamp > NOW() - interval '1 hour'
+            build_timestamp > NOW() - interval %s
         """
+        values = (interval, )
         with self.conn:
             with self.conn.cursor() as cur:
-                cur.execute(query)
+                cur.execute(query, values)
                 return cur.fetchone()[0]
 
     def get_total_packages_processed(self):
