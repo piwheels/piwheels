@@ -16,18 +16,15 @@ from .. import __version__
 
 class PiWheelsSlave(TerminalApplication):
     def __init__(self):
+        super().__init__(__version__)
         self.parser.add_argument(
             '-m', '--master', default=os.environ.get('PW_MASTER', 'localhost'),
             help='The IP address or hostname of the master server; defaults to '
             ' the value of the PW_MASTER env-var (%(default)s)')
         self.parser.add_argument(
-            '-i', '--id', '--slave-id', default=os.environ.get('PW_NUM', '1'),
+            '-i', '--id', '--slave-id', default=os.environ.get('PW_SLAVE', '1'),
             help='The identifier of the slave; defaults to the value of the '
-            'PW_NUM env-var (%(default)s)')
-        self.parser.add_argument(
-            '-o', '--output', default=os.path.expanduser('wheels'),
-            help='Copy the generated wheels to this path on the master (default: '
-            '%(default)s)')
+            'PW_SLAVE env-var (%(default)s)')
 
     def main(self, args):
         print('PiWheels Slave version {}'.format(__version__))
@@ -70,19 +67,20 @@ class PiWheelsSlave(TerminalApplication):
         while not self.terminate.wait(0):
             events = self.ctrl_queue.poll(1000)
             if events:
-                cmd = self.ctrl_queue.recv_json()
-                if cmd == 'QUIT':
-                    logging.warning('Terminating')
-                    self.run.clear()
-                    self.terminate.set()
-                elif cmd == 'PAUSE':
-                    logging.warning('Pausing')
-                    self.run.clear()
-                elif cmd == 'RESUME':
-                    logging.warning('Resuming')
-                    self.run.set()
-                elif cmd == 'PING':
-                    self.log_queue.send_json((self.slave_id, 'PONG'))
+                target_id, cmd, *args = self.ctrl_queue.recv_json()
+                if target_id in (self.slave_id, '*'):
+                    if cmd == 'QUIT':
+                        logging.warning('Terminating')
+                        self.run.clear()
+                        self.terminate.set()
+                    elif cmd == 'PAUSE':
+                        logging.warning('Pausing')
+                        self.run.clear()
+                    elif cmd == 'RESUME':
+                        logging.warning('Resuming')
+                        self.run.set()
+                    elif cmd == 'PING':
+                        self.log_queue.send_json((self.slave_id, 'PONG'))
 
     def build_run(self):
         while not self.terminate.wait(0):
@@ -93,7 +91,6 @@ class PiWheelsSlave(TerminalApplication):
                 logging.info('building package %s version %s', package, version)
                 builder = PiWheelsBuilder(self.builder_id, package, version)
                 builder.build_wheel('/home/piwheels/www')
-                builder.log_build(log_queue)
                 log_queue.send_json((
                     self.slave_id,
                     'BUILT',
@@ -114,5 +111,4 @@ class PiWheelsSlave(TerminalApplication):
                 log_queue.send_json((self.slave_id, 'IDLE'))
 
 
-def main():
-
+main = PiWheelsSlave()

@@ -2,7 +2,7 @@ import xmlrpc.client as xmlrpclib
 import requests
 
 
-def list_pypi_packages():
+def get_all_packages():
     """
     Returns a sorted list of all packages on PyPI using the xmlrpc interface
     """

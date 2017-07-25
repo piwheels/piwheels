@@ -1,10 +1,15 @@
 import os
 import re
 import cmd
+import sys
+import struct
 import readline
 import logging
+import termios
+import fnctl
 from pathlib import Path
 from textwrap import TextWrapper
+from threading import Lock
 
 from ..terminal import _CONSOLE
 
@@ -33,8 +38,9 @@ class Cmd(cmd.Cmd):
 
     def __init__(self):
         super().__init__()
-        self._width = None
         self._wrapper = TextWrapper()
+        self._print_lock = Lock()
+        self._input_active = False
         self.logging_handler = CmdHandler(self, logging.DEBUG)
 
     def default(self, line):
@@ -76,19 +82,15 @@ class Cmd(cmd.Cmd):
             line=None):
         logging.warning(str(message))
 
-    def _get_width(self):
-        if self._width:
-            return self._width
-        else:
-            try:
-                result = int(os.environ['COLUMNS'])
-            except (KeyError, ValueError):
-                result = 80
-            return result - 2
-    def _set_width(self, value):
-        self._width = value
-    width = property(
-        _get_width, _set_width, doc="Determine or set the terminal width")
+    @property
+    def width(self):
+        """
+        Determine the width of the terminal.
+        """
+        buf = bytearray(4)
+        fcntl.ioctl(sys.stdout, termios.TIOCGWINSZ, buf)
+        rows, cols = struct.unpack('hh', buf)
+        return cols
 
     whitespace_re = re.compile(r'\s+$')
     def wrap(self, s, newline=True, wrap=True, initial_indent='',
@@ -113,14 +115,29 @@ class Cmd(cmd.Cmd):
         lines = self.wrap(prompt, newline=False).split('\n')
         prompt = lines[-1]
         s = ''.join(line + '\n' for line in lines[:-1])
-        self.stdout.write(s)
-        return input(prompt).strip()
+        with self._print_lock:
+            self.stdout.write(s)
+            self.stdout.flush()
+        self._input_active = True:
+        try:
+            return input(prompt).strip()
+        finally:
+            self._input_active = False
 
     def pprint(self, s, newline=True, wrap=True,
             initial_indent='', subsequent_indent=''):
         "Pretty-prints text to the terminal"
         s = self.wrap(s, newline, wrap, initial_indent, subsequent_indent)
-        self.stdout.write(s)
+        with self._print_lock:
+            if self._input_active:
+                text_len = len(readline.get_line_buffer()) + len(self.prompt)
+                self.stdout.write('\x1b[2K') # clear current line
+                self.stdout.write('\x1b[1A\x1b[2K' * (text_len / self.width)) # move up and clear other lines
+                self.stdout.write('\x1b[0G') # move to start of line
+            self.stdout.write(s)
+            if self._input_active:
+                self.stdout.write(self.prompt + readline.get_line_buffer())
+            self.stdout.flush()
 
     def pprint_table(self, data, header_rows=1, footer_rows=0):
         "Pretty-prints a table of data"
@@ -141,11 +158,13 @@ class Cmd(cmd.Cmd):
         # don't want to wrap anything (in the vague hope that the terminal is
         # wide enough).
         # XXX Improve algorithm to reduce column widths when terminal is slim
-        for row in data:
-            s = ' '.join(
-                '%-*s' % (length, s) for (length, s) in zip(lengths, row)
-                ) + '\n'
-            self.stdout.write(s)
+        with self._print_lock:
+            for row in data:
+                s = ' '.join(
+                    '%-*s' % (length, s) for (length, s) in zip(lengths, row)
+                    ) + '\n'
+                self.stdout.write(s)
+            self.stdout.flush()
 
     def parse_bool(self, value, default=None):
         """

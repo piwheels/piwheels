@@ -1,13 +1,26 @@
 import pip
+import logging
+import tempfile
 from glob import glob
 from time import time
 from pathlib import Path
 
-from .tools import PiWheelsHandler
+
+class PiWheelsHandler(logging.Handler):
+    """
+    Custom logging handler appends all messages to a list
+    """
+    def emit(self, record):
+        self.log.append(self.format(record))
+
+    def reset(self):
+        self.log = []
+
 
 wc = pip.commands.WheelCommand()
 handler = PiWheelsHandler()
 pip.logger.addHandler(handler)
+
 
 class PiWheelsBuilder:
     """
@@ -26,10 +39,12 @@ class PiWheelsBuilder:
         self.platform_tag = None
         handler.reset()
 
-    def build_wheel(self, wheel_dir='/tmp/piwheels'):
-        wheel_dir = Path(wheel_dir) / self.package
+    def build_wheel(self, wheel_dir=None):
+        if wheel_dir is None:
+            wheel_dir = tempfile.mkdtemp()
+        self.wheel_dir = Path(wheel_dir)
         try:
-            wheel_dir.mkdir()
+            self.wheel_dir.mkdir()
         except FileExistsError:
             pass
 
@@ -43,10 +58,10 @@ class PiWheelsBuilder:
         self.output = '\n'.join(handler.log)
 
         if self.status:
-            wheel_file = wheel_dir.glob('*.whl')[0]
-            self.filename = wheel_file.name
-            self.filesize = wheel_file.stat().st_size
-            wheel_tags = wheel_file.name[:-4].split('-')
+            self.wheel_file = wheel_dir.glob('*.whl')[0]
+            self.filename = self.wheel_file.name
+            self.filesize = self.wheel_file.stat().st_size
+            wheel_tags = self.filename[:-4].split('-')
             self.package_version_tag = wheel_tags[-4]
             self.py_version_tag = wheel_tags[-3]
             self.abi_tag = wheel_tags[-2]

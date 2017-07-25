@@ -15,20 +15,9 @@ from .. import __version__
 class PiWheelsMaster(TerminalApplication):
     def __init__(self):
         super().__init__(__version__, __doc__)
-        self.parser.add_argument('-d', '--database', '--db', default='piwheels',
-                                 help='The name of the PostgreSQL database to '
-                                 'connect to (default: %(default)s)')
-        self.parser.add_argument('-H', '--host',
-                                 help='The hostname of the PostgreSQL server '
-                                 '(default: local machine)')
-        self.parser.add_argument('-u', '--username',
-                                 help='The username to use when connecting to '
-                                 'the database (default: local machine '
-                                 'connection uses logged on user)')
-        self.parser.add_argument('-p', '--password',
-                                 help='The password for the PostgreSQL user '
-                                 '(default: implicit authentication for local '
-                                 'machine users)')
+        self.parser.add_argument('-d', '--dsn', default='postgres:///piwheels',
+                                 help='The SQLAlchemy DSN used to connect to '
+                                 'the piwheels database (default: %(default)s)')
 
     def main(self, args):
         cmd = PiWheelsCmd(args)

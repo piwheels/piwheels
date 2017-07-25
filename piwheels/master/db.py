@@ -1,59 +1,27 @@
 import os
 
-import psycopg2
-import psycopg2.extensions
-from psycopg2.extras import DictCursor
+from sqlalchemy import MetaData, Table, func
 
-from .pypi import list_pypi_packages, get_package_versions
-
-
-class NestedConnection(psycopg2.extensions.connection):
-    """
-    Derivative of psycopg2's connection object that, when used as a context
-    manager, only commits/rolls back with the outer most level.
-
-    A more nuanced implementation would use actual nested transactions (which
-    Postgres does support), but I don't need them and I'm too lazy.
-    """
-    def __init__(self, dsn, **kwargs):
-        super().__init__(dsn, **kwargs)
-        self._nesting = 0
-
-    def __enter__(self):
-        self._nesting += 1
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        assert self._nesting > 0
-        self._nesting -= 1
-        if not self._nesting:
-            if exc_type is None:
-                self.commit()
-            else:
-                self.rollback()
+from . import pypi
 
 
 class PiWheelsDatabase:
     """
     PiWheels database connection class
-
-    Store database credentials in environment variables: PW_DB, PW_USER,
-    PW_HOST, PW_PASS.
     """
-    def __init__(self, database, *, host=None, username=None, password=None, **kwargs):
-        if host is not None:
-            dsn = "dbname='{database}' user='{host}' host='{username}' password='{password}'"
-        else:
-            dsn = "dbname='{database}'"
-        dsn = dsn.format(**vars())
-        self.conn = psycopg2.connect(
-            dsn, connection_factory=NestedConnection, cursor_factory=DictCursor)
+    def __init__(self, engine):
+        self.conn = engine.connect()
+        self.meta = MetaData(bind=self.conn)
+        self.packages = Table('packages', self.meta, autoload=True)
+        self.versions = Table('versions', self.meta, autoload=True)
+        self.builds = Table('builds', self.meta, autoload=True)
+        self.files = Table('files', self.meta, autoload=True)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.close()
+        self.conn.close()
 
     def close(self):
         """
@@ -65,168 +33,113 @@ class PiWheelsDatabase:
         """
         Insert a new package record into the database
         """
-        query = """
-        INSERT INTO
-            packages (package)
-        VALUES
-            (%s)
-        """
-        with self.conn:
-            values = (package,)
-            with self.conn.cursor() as cur:
-                cur.execute(query, values)
-
-    def get_total_number_of_packages(self):
-        """
-        Returns the total number of known packages
-        """
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            packages
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            self.conn.execute(
+                self.packages.insert(),
+                package=package
+            )
 
     def add_new_package_version(self, package, version):
         """
         Insert a new package version record into the database
         """
-        query = """
-        INSERT INTO
-            package_versions (package, version)
-        VALUES
-            (%s, %s)
-        """
-        with self.conn:
-            values = (package, version)
-            with self.conn.cursor() as cur:
-                cur.execute(query, values)
+        with self.conn.begin():
+            self.conn.execute(
+                self.versions.insert(),
+                package=package, version=version
+            )
 
     def update_package_list(self):
         """
         Updates the list of known packages
         """
-        pypi_packages = set(list_pypi_packages())
+        pypi_packages = set(pypi.get_all_packages())
         known_packages = set(self.get_all_packages())
         missing_packages = pypi_packages - known_packages
 
-        with self.conn:
-            print('\n*** Adding {} new packages ***\n'.format(len(missing_packages)))
+        with self.conn.begin():
+            logging.info('Adding %d new packages', len(missing_packages))
             for package in missing_packages:
-                print('    Adding new package: {}'.format(package))
+                logging.info('    Adding new package: %s', package)
                 self.add_new_package(package)
-        print()
 
     def update_package_version_list(self):
         """
         Updates the list of known package versions
         """
-        with self.conn:
+        with self.conn.begin():
             for package in self.get_all_packages():
-                pypi_versions = set(get_package_versions(package))
+                pypi_versions = set(pypi.get_package_versions(package))
                 known_versions = set(self.get_package_versions(package))
-                missing_versions = pypi_versions.difference(known_versions)
+                missing_versions = pypi_versions - known_versions
 
                 if missing_versions:
-                    print('Adding {} new versions for package {}'.format(
-                        len(missing_versions), package
-                    ))
+                    logging.info('Adding %d new versions for package %s',
+                                 len(missing_versions), package)
 
                 for version in missing_versions:
-                    print('    Adding new package version: {} {}'.format(
-                        package, version
-                    ))
+                    logging.info('    Adding new package version: %s %s',
+                                 package, version)
                     self.add_new_package_version(package, version)
 
     def get_total_packages(self):
         """
         Returns the total number of known packages
         """
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            packages
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).select_from(self.packages)
+            )
 
     def get_total_package_versions(self):
         """
         Returns the total number of known package versions
         """
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            package_versions
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).select_from(self.versions)
+            )
 
-    def log_build(self, *values):
+    def log_build(self, build):
         """
         Log a build attempt in the database, including build output and wheel
         info if successful
         """
-        query = """
-        INSERT INTO
-            builds (
-                package, version, status, output, filename, filesize,
-                build_time, package_version_tag, py_version_tag, abi_tag,
-                platform_tag, built_by
+        logging.info('Package %s %s %s',
+                     ('failed', 'built')[build.status], build.package, build.version)
+        with self.conn.begin():
+            result = self.conn.execute(
+                self.builds.insert().returning(self.builds.c.build_id),
+                package=build.package, version=build.version,
+                built_at=build.build_time, built_by=build.built_by
             )
-        VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        print('### Package {} {} build rc: {}'.format(*values))
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query, values)
+            build_id, = result.fetchone()
+            if build.status:
+                self.conn.execute(
+                    self.files.insert(),
+                    filename=build.filename, build_id=build_id,
+                    filesize=build.filesize, filehash=build.filehash,
+                    package_version_tag=build.package_version_tag,
+                    py_version_tag=build.py_version_tag, abi_tag=build.abi_tag,
+                    platform_tag=build.platform_tag)
 
     def get_last_package_processed(self):
         """
         Returns the name and build timestamp of the last package processed
         """
-        query = """
-        SELECT
-            package,
-            TO_CHAR(build_timestamp, 'DD Mon HH24:MI') as build_datetime
-        FROM
-            builds
-        ORDER BY
-            build_timestamp DESC
-        LIMIT
-            1
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.builds.c.package, self.builds.c.built_at]).
+                order_by(self.builds.c.built_at.desc()).limit(1)
+            ).fetchone()
 
     def get_all_packages(self):
         """
         Returns a generator of all known package names
         """
-        query = """
-        SELECT
-            package
-        FROM
-            packages
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                for rec in cur:
-                    yield rec['package']
+        with self.conn.begin():
+            for package in self.conn.execute(select([self.packages.c.package])):
+                yield package
 
     def get_total_number_of_packages_with_versions(self):
         """
