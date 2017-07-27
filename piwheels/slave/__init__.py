@@ -6,6 +6,7 @@ from datetime import datetime
 from time import sleep
 from threading import Event, Thread
 from signal import pause
+from pathlib import Path
 
 import zmq
 
@@ -29,7 +30,6 @@ class PiWheelsSlave(TerminalApplication):
     def main(self, args):
         print('PiWheels Slave version {}'.format(__version__))
         self.slave_id = args.id
-        self.wheel_dir = Path(args.output)
         self.ctx = zmq.Context()
         self.build_queue = ctx.socket(zmq.PULL)
         self.build_queue.hwm = 10 # only allow 10 jobs to build up in queue
@@ -43,10 +43,14 @@ class PiWheelsSlave(TerminalApplication):
         self.ctrl_queue.connect('tcp://{args.master}:5557'.format(args=args))
         self.run = Event()
         self.terminate = Event()
+        self.builds = {} # map of filename->build
+        self.send_queue = []
         self.ctrl_thread = Thread(self.ctrl_run, daemon=True)
-        self.ctrl_thread.start()
         self.build_thread = Thread(self.build_run, daemon=True)
+        self.files_thread = Thread(self.files_run, daemon=True)
+        self.ctrl_thread.start()
         self.build_thread.start()
+        self.files_thread.start()
         try:
             self.terminate.wait()
         finally:
@@ -55,6 +59,7 @@ class PiWheelsSlave(TerminalApplication):
     def close(self):
         self.run.clear()
         self.terminate.set()
+        self.files_thread.join()
         self.ctrl_thread.join()
         self.build_thread.join()
         self.log_queue.close()
@@ -81,6 +86,16 @@ class PiWheelsSlave(TerminalApplication):
                         self.run.set()
                     elif cmd == 'PING':
                         self.log_queue.send_json((self.slave_id, 'PONG'))
+                    elif cmd == 'SEND':
+                        filename, = args
+                        try:
+                            build = self.builds.pop(filename)
+                        except KeyError:
+                            if not filename in [build.filename for build in self.send_queue]:
+                                self.log_queue.send_json((self.slave_id, 'LOST', filename))
+                        else:
+                            self.send_queue.append(build)
+
 
     def build_run(self):
         while not self.terminate.wait(0):
@@ -89,26 +104,32 @@ class PiWheelsSlave(TerminalApplication):
             if self.build_queue.poll(1000):
                 package, version = build_queue.recv_json()
                 logging.info('building package %s version %s', package, version)
-                builder = PiWheelsBuilder(self.builder_id, package, version)
-                builder.build_wheel('/home/piwheels/www')
-                log_queue.send_json((
+                builder = PiWheelsBuilder(package, version)
+                builder.build_wheel()
+                if builder.status:
+                    self.builds[builder.filename] = builder
+                self.log_queue.send_json((
                     self.slave_id,
                     'BUILT',
-                    self.package,
-                    self.version,
-                    self.status,
-                    self.output,
-                    self.filename,
-                    self.filesize,
-                    self.build_time,
-                    self.package_version_tag,
-                    self.py_version_tag,
-                    self.abi_tag,
-                    self.platform_tag,
+                    builder.package,
+                    builder.version,
+                    builder.status,
+                    builder.output,
+                    builder.filename,
+                    builder.filesize,
+                    builder.duration,
+                    builder.package_version_tag,
+                    builder.py_version_tag,
+                    builder.abi_tag,
+                    builder.platform_tag,
                 ))
             else:
                 logging.info('Idle: polling master for more jobs')
                 log_queue.send_json((self.slave_id, 'IDLE'))
+
+    def files_run(self):
+        while not self.terminate.wait(1):
+            pass
 
 
 main = PiWheelsSlave()

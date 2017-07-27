@@ -6,10 +6,12 @@ import struct
 import readline
 import logging
 import termios
-import fnctl
+import fcntl
+import warnings
 from pathlib import Path
 from textwrap import TextWrapper
 from threading import Lock
+from collections import deque
 
 from ..terminal import _CONSOLE
 
@@ -26,9 +28,23 @@ class CmdHandler(logging.Handler):
     def __init__(self, cmd, level=logging.NOTSET):
         super().__init__(level)
         self.cmd = cmd
+        self._paused = False
+        self._pause_buffer = deque(maxlen=3000)
+
+    def pause(self):
+        self._paused = True
+
+    def resume(self):
+        while self._pause_buffer:
+            record = self._pause_buffer.popleft()
+            self.cmd.pprint(record.msg % record.args)
+        self._paused = False
 
     def emit(self, record):
-        self.cmd.pprint(record.msg % record.args)
+        if self._paused:
+            self._pause_buffer.append(record)
+        else:
+            self.cmd.pprint(record.msg % record.args)
 
 
 class Cmd(cmd.Cmd):
@@ -110,17 +126,43 @@ class Cmd(cmd.Cmd):
             s = self._wrapper.fill(s)
         return s + suffix
 
+    def cmdloop(self, intro=None):
+        # Overridden to use our own input method
+        self.preloop()
+        self.old_completer = readline.get_completer()
+        readline.set_completer(self.complete)
+        readline.parse_and_bind(self.completekey + ": complete")
+        try:
+            stop = None
+            while not stop:
+                if self.cmdqueue:
+                    line = self.cmdqueue.pop(0)
+                else:
+                    try:
+                        line = self.input(self.prompt)
+                    except EOFError:
+                        line = 'EOF'
+                line = self.precmd(line)
+                stop = self.onecmd(line)
+                stop = self.postcmd(stop, line)
+            self.postloop()
+        finally:
+            readline.set_completer(self.old_completer)
+
     def input(self, prompt=''):
         "Prompts and reads input from the user"
         lines = self.wrap(prompt, newline=False).split('\n')
         prompt = lines[-1]
         s = ''.join(line + '\n' for line in lines[:-1])
-        with self._print_lock:
-            self.stdout.write(s)
-            self.stdout.flush()
-        self._input_active = True:
+        self._input_active = True
         try:
-            return input(prompt).strip()
+            with self._print_lock:
+                self.stdout.write(s)
+                self.stdout.write('\x1b[1;32m') # bold green
+                self.stdout.write(self.prompt)
+                self.stdout.write('\x1b[0m') # reset
+                self.stdout.flush()
+            return input().strip()
         finally:
             self._input_active = False
 
@@ -132,11 +174,14 @@ class Cmd(cmd.Cmd):
             if self._input_active:
                 text_len = len(readline.get_line_buffer()) + len(self.prompt)
                 self.stdout.write('\x1b[2K') # clear current line
-                self.stdout.write('\x1b[1A\x1b[2K' * (text_len / self.width)) # move up and clear other lines
+                self.stdout.write('\x1b[1A\x1b[2K' * (text_len // self.width)) # move up and clear other lines
                 self.stdout.write('\x1b[0G') # move to start of line
             self.stdout.write(s)
             if self._input_active:
-                self.stdout.write(self.prompt + readline.get_line_buffer())
+                self.stdout.write('\x1b[1;32m') # bold green
+                self.stdout.write(self.prompt)
+                self.stdout.write('\x1b[0m') # reset style
+                self.stdout.write(readline.get_line_buffer())
             self.stdout.flush()
 
     def pprint_table(self, data, header_rows=1, footer_rows=0):

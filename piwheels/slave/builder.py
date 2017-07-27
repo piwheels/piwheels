@@ -28,7 +28,7 @@ class PiWheelsBuilder:
 
     Builds Python wheels of a given version of a given package
     """
-    def __init__(self, root_logger, package, version):
+    def __init__(self, package, version):
         self.package = package
         self.version = version
         self.filename = None
@@ -54,7 +54,7 @@ class PiWheelsBuilder:
         _package_spec = '{}=={}'.format(self.package, self.version)
         start_time = time()
         self.status = not wc.main((_wheel_dir, _no_deps, _no_cache, _package_spec))
-        self.build_time = time() - start_time
+        self.duration = time() - start_time
         self.output = '\n'.join(handler.log)
 
         if self.status:

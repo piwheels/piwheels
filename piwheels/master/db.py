@@ -1,6 +1,8 @@
 import os
+import logging
 
-from sqlalchemy import MetaData, Table, func, text, distinct
+from sqlalchemy import MetaData, Table, select, func, text, distinct
+from sqlalchemy.exc import DBAPIError
 
 from . import pypi
 
@@ -21,7 +23,7 @@ class PiWheelsDatabase:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.conn.close()
+        self.close()
 
     def close(self):
         """
@@ -63,23 +65,22 @@ class PiWheelsDatabase:
                 logging.info('    Adding new package: %s', package)
                 self.add_new_package(package)
 
-    def update_package_version_list(self):
+    def update_package_version_list(self, package):
         """
-        Updates the list of known package versions
+        Updates the list of known package versions for the specified package
         """
         with self.conn.begin():
-            for package in self.get_all_packages():
-                pypi_versions = set(pypi.get_package_versions(package))
-                known_versions = set(self.get_package_versions(package))
-                missing_versions = pypi_versions - known_versions
+            pypi_versions = set(pypi.get_package_versions(package))
+            known_versions = set(self.get_package_versions(package))
+            missing_versions = pypi_versions - known_versions
 
-                if missing_versions:
-                    logging.info('Adding %d new versions for package %s',
-                                 len(missing_versions), package)
+            if missing_versions:
+                logging.info('Adding %d new versions for package %s',
+                                len(missing_versions), package)
 
                 for version in missing_versions:
                     logging.info('    Adding new package version: %s %s',
-                                 package, version)
+                                    package, version)
                     self.add_new_package_version(package, version)
 
     def get_total_packages(self):
@@ -112,18 +113,38 @@ class PiWheelsDatabase:
         with self.conn.begin():
             result = self.conn.execute(
                 self.builds.insert().returning(self.builds.c.build_id),
-                package=build.package, version=build.version,
-                built_at=build.build_time, built_by=build.built_by
+                package=build.package,
+                version=build.version,
+                built_by=build.built_by,
+                duration=build.duration
             )
             build_id, = result.fetchone()
             if build.status:
-                self.conn.execute(
-                    self.files.insert(),
-                    filename=build.filename, build_id=build_id,
-                    filesize=build.filesize, filehash=build.filehash,
-                    package_version_tag=build.package_version_tag,
-                    py_version_tag=build.py_version_tag, abi_tag=build.abi_tag,
-                    platform_tag=build.platform_tag)
+                try:
+                    with self.conn.begin_nested():
+                        self.conn.execute(
+                            self.files.insert(),
+                            filename=build.filename,
+                            build_id=build_id,
+                            filesize=build.filesize,
+                            filehash=build.filehash,
+                            package_version_tag=build.package_version_tag,
+                            py_version_tag=build.py_version_tag,
+                            abi_tag=build.abi_tag,
+                            platform_tag=build.platform_tag
+                        )
+                except DBAPIError:
+                    self.conn.execute(
+                        self.files.update().where(filename=build.filename),
+                        build_id=build_id,
+                        filesize=build.filesize,
+                        filehash=build.filehash,
+                        package_version_tag=build.package_version_tag,
+                        py_version_tag=build.py_version_tag,
+                        abi_tag=build.abi_tag,
+                        platform_tag=build.platform_tag
+                    )
+
 
     def get_last_package_processed(self):
         """
