@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import MetaData, Table, func
+from sqlalchemy import MetaData, Table, func, text, distinct
 
 from . import pypi
 
@@ -88,7 +88,8 @@ class PiWheelsDatabase:
         """
         with self.conn.begin():
             return self.conn.scalar(
-                select([func.count('*')]).select_from(self.packages)
+                select([func.count('*')]).
+                select_from(self.packages)
             )
 
     def get_total_package_versions(self):
@@ -97,7 +98,8 @@ class PiWheelsDatabase:
         """
         with self.conn.begin():
             return self.conn.scalar(
-                select([func.count('*')]).select_from(self.versions)
+                select([func.count('*')]).
+                select_from(self.versions)
             )
 
     def log_build(self, build):
@@ -138,117 +140,44 @@ class PiWheelsDatabase:
         Returns a generator of all known package names
         """
         with self.conn.begin():
-            for package in self.conn.execute(select([self.packages.c.package])):
-                yield package
+            for rec in self.conn.execute(
+                select([self.packages.c.package])
+            ):
+                yield rec.package
 
     def get_total_number_of_packages_with_versions(self):
         """
         Returns the number of packages which have published at least one version
         """
-        query = """
-        SELECT DISTINCT
-            package
-        FROM
-            package_versions
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchall()
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.versions.c.package]).distinct()
+            ).fetchall()
 
     def get_build_queue(self):
         """
         Generator yielding package/version tuples of all package versions
         requiring building
         """
-        query = """
-        SELECT
-            pv.package, pv.version
-        FROM
-            builds b
-        RIGHT JOIN
-            package_versions pv
-        ON
-            b.package = pv.package
-        AND
-            b.version = pv.version
-        WHERE
-            b.build_id IS NULL
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                for rec in cur:
-                    yield rec['package'], rec['version']
-
-    def build_active(self):
-        """
-        Checks whether the build is set to active. Returns True if active,
-        otherwise False
-        """
-        query = """
-        SELECT
-            value
-        FROM
-            metadata
-        WHERE
-            key = 'active'
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
-
-    def _set_build_active_status(self, active=True):
-        """
-        Sets the build status
-        """
-        query = """
-        UPDATE
-            metadata
-        SET
-            value = %s
-        WHERE
-            key = 'active'
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                values = (active,)
-                cur.execute(query, values)
-
-    def activate_build(self):
-        """
-        Sets the build status to active
-        """
-        self._set_build_active_status(active=True)
-
-    def deactivate_build(self):
-        """
-        Sets the build status to inactive
-        """
-        self._set_build_active_status(active=False)
+        with self.conn.begin():
+            for rec in self.conn.execute(
+                select([self.versions.c.package, self.versions.c.version]).
+                select_from(self.versions.outerjoin(self.builds)).
+                where(self.builds.c.package == None)
+            ):
+                yield rec.package, rec.version
 
     def get_package_versions(self, package):
         """
         Returns a list of all known versions of a given package
         """
-        query = """
-        SELECT
-            version
-        FROM
-            package_versions
-        WHERE
-            package = %s
-        ORDER BY
-            version
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                values = (package,)
-                cur.execute(query, values)
-                return [rec[0] for rec in cur]
-
-    ### untested methods
+        with self.conn.begin():
+            result = self.conn.execute(
+                select([self.versions.c.version]).
+                where(self.versions.c.package == package).
+                order_by(self.versions.c.version)
+            )
+            return [rec.version for rec in result]
 
     def get_builds_processed_in_interval(self, interval):
         """
@@ -256,158 +185,93 @@ class PiWheelsDatabase:
 
         e.g. db.get_builds_processed_in_interval('1 hour')
         """
-        query = """
-        SELECT
-            COUNT(*)
-        FROM
-            builds
-        WHERE
-            build_timestamp > NOW() - interval %s
-        """
-        values = (interval, )
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query, values)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).
+                select_from(self.builds).
+                where(self.builds.c.built_at > text("NOW() - INTERVAL '1 HOUR'"))
+            )
 
     def get_total_packages_processed(self):
         """
         Returns the total number of packages processed
         """
-        query = """
-        SELECT
-            COUNT(DISTINCT package)
-        FROM
-            builds
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count(distinct(self.builds.c.package))])
+            )
 
     def get_total_package_versions_processed(self):
         """
         Returns the total number of package versions processed
         """
-        query = """
-        SELECT
-            COUNT(DISTINCT (package, version))
-        FROM
-            builds
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).
+                select_from(self.builds)
+            )
 
     def get_total_successful_builds(self):
         """
         Returns the total number of successful builds
         """
-        query = """
-        SELECT
-            COUNT(DISTINCT (package, version))
-        FROM
-            builds
-        WHERE
-            status
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).
+                select_from(self.builds).
+                where(self.builds.c.status)
+            )
 
     def get_package_build_status(self, package):
         """
         Legacy
         """
-        query = """
-        SELECT
-            status
-        FROM
-            builds
-        WHERE
-            package = %s
-        ORDER BY
-            build_timestamp DESC
-        LIMIT
-            1
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                values = (package, )
-                cur.execute(query, values)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([self.builds.c.status]).
+                where(self.builds.c.package == package).
+                order_by(self.builds.c.built_at.desc()).
+                limit(1)
+            )
 
     def get_package_wheels(self, package):
         """
         Legacy
         """
-        query = """
-        SELECT
-            filename
-        FROM
-            builds
-        WHERE
-            package = %s
-        ORDER BY
-            build_timestamp DESC
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                values = (package, )
-                cur.execute(query, values)
-                return [rec[0] for rec in cur]
+        with self.conn.begin():
+            result = self.conn.execute(
+                select([self.builds.c.filename]).
+                where(self.builds.c.package == package).
+                where(self.builds.c.filename != None).
+                order_by(self.builds.c.built_at.desc())
+            )
+            return [rec.filename for rec in result]
 
     def get_package_output(self, package):
         """
         Legacy
         """
-        query = """
-        SELECT
-            TO_CHAR(build_timestamp, 'YY-MM-DD HH24:MI') as build_datetime,
-            status, output
-        FROM
-            builds
-        WHERE
-            package = %s
-        ORDER BY
-            build_timestamp DESC
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                values = (package,)
-                cur.execute(query, values)
-                return cur.fetchall()
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.builds.c.built_at, self.builds.c.status, self.builds.c.output]).
+                where(self.builds.c.package == package).
+                order_by(self.builds.c.built_at.desc())
+            ).fetchall()
 
     def get_total_build_time(self):
         """
         Legacy
         """
-        query = """
-        SELECT
-            SUM(build_time)
-        FROM
-            builds
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.sum(self.builds.c.duration)])
+            )
 
     def get_total_wheel_filesize(self):
         """
         Legacy
         """
-        query = """
-        SELECT
-            SUM(filesize)
-        FROM
-            builds
-        WHERE
-            status
-        """
-        with self.conn:
-            with self.conn.cursor() as cur:
-                cur.execute(query)
-                return cur.fetchone()[0]
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.sum(self.files.c.filesize)])
+            )
