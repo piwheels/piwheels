@@ -377,7 +377,7 @@ class PiWheelsDatabase:
         """
         query = """
         SELECT
-            COUNT(*)
+            COUNT(DISTINCT (package, version))
         FROM
             builds
         """
@@ -392,7 +392,7 @@ class PiWheelsDatabase:
         """
         query = """
         SELECT
-            COUNT(*)
+            COUNT(DISTINCT (package, version))
         FROM
             builds
         WHERE
