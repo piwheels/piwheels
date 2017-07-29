@@ -116,7 +116,8 @@ class PiWheelsDatabase:
                 package=build.package,
                 version=build.version,
                 built_by=build.built_by,
-                duration=build.duration
+                duration=build.duration,
+                status=build.status
             )
             build_id, = result.fetchone()
             if build.status:
@@ -183,8 +184,10 @@ class PiWheelsDatabase:
         with self.conn.begin():
             for rec in self.conn.execute(
                 select([self.versions.c.package, self.versions.c.version]).
-                select_from(self.versions.outerjoin(self.builds)).
-                where(self.builds.c.package == None)
+                select_from(self.packages.join(self.versions.outerjoin(self.builds))).
+                where(self.builds.c.package == None).
+                where(not self.packages.c.skip).
+                where(not self.versions.c.skip)
             ):
                 yield rec.package, rec.version
 

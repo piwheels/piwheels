@@ -3,20 +3,26 @@ DROP TABLE IF EXISTS
 
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
 
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
 GRANT SELECT,INSERT,UPDATE,DELETE ON packages TO piwheels;
 
+CREATE INDEX packages_skip ON packages(skip);
+
 CREATE TABLE versions (
     package VARCHAR(200) NOT NULL,
     version VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
 
     CONSTRAINT versions_pk PRIMARY KEY (package, version),
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
         REFERENCES packages ON DELETE RESTRICT
 );
 GRANT SELECT,INSERT,UPDATE,DELETE ON versions TO piwheels;
+
+CREATE INDEX versions_skip ON versions(skip);
 
 CREATE TABLE builds (
     build_id        SERIAL NOT NULL,
@@ -25,6 +31,7 @@ CREATE TABLE builds (
     built_by        VARCHAR(100) DEFAULT NULL,
     built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     duration        INTERVAL NOT NULL,
+    status          BOOLEAN DEFAULT true NOT NULL,
     output          TEXT NOT NULL,
 
     CONSTRAINT builds_pk PRIMARY KEY (build_id),

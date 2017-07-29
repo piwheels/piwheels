@@ -29,6 +29,7 @@ class PiWheelsBuilder:
     Builds Python wheels of a given version of a given package
     """
     def __init__(self, package, version):
+        self.wheel_dir = None
         self.package = package
         self.version = version
         self.filename = None
@@ -39,16 +40,10 @@ class PiWheelsBuilder:
         self.platform_tag = None
         handler.reset()
 
-    def build_wheel(self, wheel_dir=None):
-        if wheel_dir is None:
-            wheel_dir = tempfile.mkdtemp()
-        self.wheel_dir = Path(wheel_dir)
-        try:
-            self.wheel_dir.mkdir()
-        except FileExistsError:
-            pass
+    def build(self):
+        self.wheel_dir = tempfile.TemporaryDirectory()
 
-        _wheel_dir = '--wheel-dir={}'.format(wheel_dir)
+        _wheel_dir = '--wheel-dir={}'.format(wheel_dir.name)
         _no_deps = '--no-deps'
         _no_cache = '--no-cache-dir'
         _package_spec = '{}=={}'.format(self.package, self.version)
@@ -58,7 +53,7 @@ class PiWheelsBuilder:
         self.output = '\n'.join(handler.log)
 
         if self.status:
-            self.wheel_file = wheel_dir.glob('*.whl')[0]
+            self.wheel_file = Path(wheel_dir.name).glob('*.whl')[0]
             self.filename = self.wheel_file.name
             self.filesize = self.wheel_file.stat().st_size
             wheel_tags = self.filename[:-4].split('-')
@@ -66,4 +61,9 @@ class PiWheelsBuilder:
             self.py_version_tag = wheel_tags[-3]
             self.abi_tag = wheel_tags[-2]
             self.platform_tag = wheel_tags[-1]
+
+    def clean(self):
+        if self.wheel_dir:
+            self.wheel_dir.cleanup()
+            self.wheel_dir = None
 
