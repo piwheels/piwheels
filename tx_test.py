@@ -3,18 +3,11 @@ import os
 import binascii
 from threading import Thread
 from pprint import pprint
-from itertools import tee
 
 import zmq
 
 PIPELINE = 10
 CHUNKSIZE = 65536
-
-
-def pairwise(iterable):
-    a, b = tee(iterable)
-    next(b, None)
-    return zip(a, b)
 
 
 def consolidate(ranges):
@@ -42,6 +35,25 @@ def exclude(ranges, start, stop):
     for r in split(split(ranges, start), stop):
         if r.stop <= start or r.start >= stop:
             yield r
+
+
+def intersect(r1, r2):
+    r = range(max(r1.start, r2.start), min(r1.stop, r2.stop))
+    if r:
+        return r
+
+
+def fetch(offset, rec_map):
+    fetch_range = range(offset, offset + CHUNKSIZE)
+    while True:
+        for map_range in rec_map:
+            result = intersect(map_range, fetch_range)
+            if result:
+                offset = result.stop
+                return offset, result
+            elif map_range.start > fetch_range.start:
+                fetch_range = range(map_range.start, map_range.start + CHUNKSIZE)
+        fetch_range = range(rec_map.start, rec_map.start + CHUNKSIZE)
 
 
 def zpipe(ctx):
@@ -103,8 +115,6 @@ def server_thread(ctx):
     router.bind("ipc://files")
 
     credit = PIPELINE
-    offset = filesize = 0
-    received = []
 
     while True:
         try:
@@ -117,8 +127,9 @@ def server_thread(ctx):
 
         if msg == b'HELLO':
             f = io.open('target.dat', 'wb')
-            received = []
+            offset = 0
             filesize = int(args[0].decode('ascii'))
+            rec_map = [range(filesize)]
             f.seek(filesize)
             f.truncate()
 
@@ -128,7 +139,7 @@ def server_thread(ctx):
             f.seek(c_offset)
             f.write(args[1])
             credit += 1
-            received.append(range(c_offset, c_offset + c_size))
+            rec_map = list(exclude(rec_map, range(c_offset, c_offset + c_size)))
             print('Received %d bytes' % (c_offset + c_size))
             if c_size < CHUNKSIZE:
                 router.send_multipart(zencode([address, 'DONE']))
@@ -138,8 +149,9 @@ def server_thread(ctx):
             raise ValueError('unknown message from client: %s' % msg)
 
         while credit:
-            router.send_multipart(zencode([address, 'FETCH', offset, CHUNKSIZE]))
-            offset += CHUNKSIZE
+            offset, size = fetch(offset, rec_map)
+            router.send_multipart(zencode([address, 'FETCH', offset, size]))
+            offset += size
             credit -= 1
 
     pprint(received)

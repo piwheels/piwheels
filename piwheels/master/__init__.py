@@ -1,4 +1,5 @@
 import io
+import os
 import cmd
 import argparse
 import locale
@@ -17,6 +18,7 @@ from sqlalchemy import create_engine
 from .cli import PiWheelsCmd
 from .db import PiWheelsDatabase
 from ..terminal import TerminalApplication
+from .ranges import exclude, intersect
 from .. import __version__
 
 
@@ -82,14 +84,40 @@ class SlaveState:
 
 
 class TransferState:
+    chunk_size = 65536
+
     def __init__(self, output_path, build):
-        self.size = build.filesize
-        self.offset = 0
-        self._file = tempfile.NamedTemporaryFile
-        self._chunks = [range(self.size)]
+        self._build = build
+        self._file = tempfile.NamedTemporaryFile(dir=output_path)
+        self._file.seek(build.filesize)
+        self._file.truncate()
+        # _offset is the position that we will next return when the fetch()
+        # method is called (or rather, it's the minimum position we'll return)
+        # whilst _map is a sorted list of ranges indicating which bytes of the
+        # file we have yet to received; this is manipulated by chunk()
+        self._offset = 0
+        self._map = [range(build.filesize)]
+
+    def fetch(self):
+        fetch_range = range(self._offset, self._offset + self.chunk_size)
+        while True:
+            for map_range in self._map:
+                result = intersect(map_range, fetch_range)
+                if result:
+                    self._offset = result.stop
+                    return result
+                elif map_range.start > fetch_range.start:
+                    fetch_range = range(map_range.start, map_range.start + self.chunk_size)
+            fetch_range = range(self._map[0].start, self._map[0].start + self.chunk_size)
 
     def chunk(self, offset, data):
-        pass
+        self._file.seek(offset)
+        self._file.write(data)
+        self._map = list(exclude(self._map, range(offset, offset + len(data))))
+
+    def done(self):
+        assert not self._map
+        os.rename(self._file.name, self._build.filename)
 
 
 class PiWheelsMaster(TerminalApplication):
