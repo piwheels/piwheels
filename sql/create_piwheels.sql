@@ -28,7 +28,7 @@ CREATE TABLE builds (
     build_id        SERIAL NOT NULL,
     package         VARCHAR(200) NOT NULL,
     version         VARCHAR(200) NOT NULL,
-    built_by        INTEGER DEFAULT NULL,
+    built_by        INTEGER NOT NULL,
     built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     duration        INTERVAL NOT NULL,
     status          BOOLEAN DEFAULT true NOT NULL,

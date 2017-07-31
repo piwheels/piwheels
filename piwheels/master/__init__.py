@@ -93,14 +93,15 @@ class SlaveState:
 class TransferState:
     chunk_size = 65536
     pipeline_size = 10
-    output_path = None
+    output_path = Path('.')
 
     def __init__(self, filesize):
-        self._file = tempfile.NamedTemporaryFile(dir=self.output_path, delete=False)
+        self._file = tempfile.NamedTemporaryFile(
+            dir=str(self.output_path), delete=False)
         self._file.seek(filesize)
         self._file.truncate()
         # XXX Calculate max pipeline required from filesize
-        self._credit = min(self.pipeline_size, math.ceil(filesize / chunk_size))
+        self._credit = min(self.pipeline_size, math.ceil(filesize / self.chunk_size))
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
@@ -231,10 +232,14 @@ class PiWheelsMaster(TerminalApplication):
         build_queue.bind('inproc://builds')
         try:
             with PiWheelsDatabase(db_engine) as db:
-                while not ctrl_queue.poll(1000):
+                while not ctrl_queue.poll(0):
                     for package, version in db.get_build_queue():
-                        build_queue.send_json((package, version))
-                        if ctrl_queue.poll(0):
+                        try:
+                            build_queue.send_json((package, version), flags=zmq.DONTWAIT)
+                        except zmq.ZMQError as e:
+                            if e.errno != zmq.EAGAIN:
+                                raise
+                        if ctrl_queue.poll(10):
                             break
         finally:
             build_queue.close()

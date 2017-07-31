@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import timedelta
 
 from sqlalchemy import MetaData, Table, select, func, text, distinct
 from sqlalchemy.exc import DBAPIError
@@ -115,8 +116,9 @@ class PiWheelsDatabase:
                 self.builds.insert().returning(self.builds.c.build_id),
                 package=build.package,
                 version=build.version,
-                built_by=build.built_by,
-                duration=build.duration,
+                built_by=build.slave_id,
+                duration=timedelta(seconds=build.duration),
+                output=build.output,
                 status=build.status
             )
             build_id, = result.fetchone()

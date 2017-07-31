@@ -2,7 +2,7 @@ import os
 import logging
 import tempfile
 import hashlib
-from datetime import datetime
+from time import time
 from pathlib import Path
 
 import pip
@@ -52,9 +52,9 @@ class PiWheelsBuilder:
         _no_deps = '--no-deps'
         _no_cache = '--no-cache-dir'
         _package_spec = '{}=={}'.format(self.package, self.version)
-        start = datetime.utcnow()
+        start = time()
         self.status = not wc.main([_wheel_dir, _no_deps, _no_cache, _package_spec])
-        self.duration = datetime.utcnow() - start
+        self.duration = time() - start
         self.output = '\n'.join(handler.log)
 
         if self.status:

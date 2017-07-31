@@ -20,11 +20,12 @@ class PiWheelsSlave(TerminalApplication):
     def main(self, args):
         logging.info('PiWheels Slave version {}'.format(__version__))
         ctx = zmq.Context()
+        master = args.master
         slave_id = None
         builder = None
         queue = ctx.socket(zmq.REQ)
         queue.ipv6 = True
-        queue.connect('tcp://{args.master}:5555'.format(args=args))
+        queue.connect('tcp://{master}:5555'.format(master=master))
         request = ['HELLO']
         while True:
             queue.send_json(request)
@@ -73,7 +74,7 @@ class PiWheelsSlave(TerminalApplication):
                 assert builder.status, 'Send after failed build'
                 assert len(args) == 0, 'Invalid SEND messsage'
                 logging.info('Sending package to master')
-                self.transfer(ctx, slave_id, builder)
+                self.transfer(master, ctx, slave_id, builder)
                 request = ['SENT']
 
             elif reply == 'DONE':
@@ -92,11 +93,11 @@ class PiWheelsSlave(TerminalApplication):
             else:
                 assert False, 'Invalid message from master'
 
-    def transfer(self, ctx, slave_id, builder):
+    def transfer(self, master, ctx, slave_id, builder):
         with builder.open() as f:
             queue = ctx.socket(zmq.DEALER)
             queue.ipv6 = True
-            queue.connect('tcp://{args.master}:5556'.format(args=args))
+            queue.connect('tcp://{master}:5556'.format(master=master))
             try:
                 queue.send_multipart([b'HELLO', str(slave_id).encode('ascii')])
                 while True:
