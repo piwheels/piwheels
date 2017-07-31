@@ -26,11 +26,15 @@ def get_package_info(package):
 
 def get_package_versions(package):
     """
-    Returns all versions for a given package released on PyPI
+    Returns all versions with source code for a given package released on PyPI
     """
     package_info = get_package_info(package)
     try:
-        return package_info['releases'].keys()
+        return [
+            release
+            for release, release_files in package_info['releases'].items()
+            if 'sdist' in [release_file['packagetype'] for release_file in release_files]
+        ]
     except TypeError:
         return []
 
