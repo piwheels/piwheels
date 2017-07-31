@@ -1,9 +1,11 @@
-import pip
+import os
 import logging
 import tempfile
 from glob import glob
-from time import time
+from datetime import datetime
 from pathlib import Path
+
+import pip
 
 
 class PiWheelsHandler(logging.Handler):
@@ -16,6 +18,9 @@ class PiWheelsHandler(logging.Handler):
     def reset(self):
         self.log = []
 
+# Force git to fail if it needs to prompt for anything (a disturbing minority
+# of packages try to run git clone during their setup.py ...)
+os.environ['GIT_TERMINAL_PROMPT'] = '0'
 
 wc = pip.commands.WheelCommand()
 handler = PiWheelsHandler()
@@ -47,9 +52,9 @@ class PiWheelsBuilder:
         _no_deps = '--no-deps'
         _no_cache = '--no-cache-dir'
         _package_spec = '{}=={}'.format(self.package, self.version)
-        start_time = time()
+        start = datetime.utcnow()
         self.status = not wc.main((_wheel_dir, _no_deps, _no_cache, _package_spec))
-        self.duration = time() - start_time
+        self.duration = datetime.utcnow() - start
         self.output = '\n'.join(handler.log)
 
         if self.status:
