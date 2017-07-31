@@ -28,7 +28,7 @@ CREATE TABLE builds (
     build_id        SERIAL NOT NULL,
     package         VARCHAR(200) NOT NULL,
     version         VARCHAR(200) NOT NULL,
-    built_by        VARCHAR(100) DEFAULT NULL,
+    built_by        INTEGER DEFAULT NULL,
     built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     duration        INTERVAL NOT NULL,
     status          BOOLEAN DEFAULT true NOT NULL,
@@ -37,7 +37,8 @@ CREATE TABLE builds (
     CONSTRAINT builds_pk PRIMARY KEY (build_id),
     CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
     CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
-        REFERENCES versions ON DELETE CASCADE
+        REFERENCES versions ON DELETE CASCADE,
+    CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
 );
 GRANT SELECT,INSERT,UPDATE,DELETE ON builds TO piwheels;
 
@@ -48,7 +49,7 @@ CREATE TABLE files (
     filename            VARCHAR(255) NOT NULL,
     build_id            INTEGER NOT NULL,
     filesize            INTEGER NOT NULL,
-    filehash            CHAR(20) NOT NULL,
+    filehash            CHAR(32) NOT NULL,
     package_version_tag VARCHAR(100) NOT NULL,
     py_version_tag      VARCHAR(100) NOT NULL,
     abi_tag             VARCHAR(100) NOT NULL,

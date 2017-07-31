@@ -19,27 +19,30 @@ class PiWheelsSlave(TerminalApplication):
 
     def main(self, args):
         logging.info('PiWheels Slave version {}'.format(__version__))
+        ctx = zmq.Context()
         slave_id = None
         builder = None
-        ctx = zmq.Context()
         queue = ctx.socket(zmq.REQ)
         queue.ipv6 = True
         queue.connect('tcp://{args.master}:5555'.format(args=args))
         request = ['HELLO']
         while True:
             queue.send_json(request)
-            reply, *args = self.queue.recv_json()
+            reply, *args = queue.recv_json()
+
             if reply == 'HELLO':
                 assert slave_id is None, 'Duplicate hello'
                 assert len(args) == 1, 'Invalid HELLO message'
-                slave_id = args[0]
+                slave_id = int(args[0])
                 request = ['IDLE']
+
             elif reply == 'SLEEP':
                 assert slave_id is not None, 'Sleep before hello'
                 assert len(args) == 0, 'Invalid SLEEP message'
                 logging.info('No available jobs; sleeping')
                 sleep(10)
                 request = ['IDLE']
+
             elif reply == 'BUILD':
                 assert slave_id is not None, 'Build before hello'
                 assert not builder, 'Last build still exists'
@@ -56,19 +59,23 @@ class PiWheelsSlave(TerminalApplication):
                     builder.output,
                     builder.filename,
                     builder.filesize,
+                    builder.filehash,
                     builder.duration,
                     builder.package_version_tag,
                     builder.py_version_tag,
                     builder.abi_tag,
                     builder.platform_tag,
                 ]
+
             elif reply == 'SEND':
                 assert slave_id is not None, 'Send before hello'
                 assert builder, 'Send before build / after failed build'
-                assert len(args) == 0, 'Invalid SEND messsage')
+                assert builder.status, 'Send after failed build'
+                assert len(args) == 0, 'Invalid SEND messsage'
                 logging.info('Sending package to master')
-                # TODO file-transfer code
+                self.transfer(ctx, slave_id, builder)
                 request = ['SENT']
+
             elif reply == 'DONE':
                 assert slave_id is not None, 'Okay before hello'
                 assert builder, 'Okay before build'
@@ -77,10 +84,30 @@ class PiWheelsSlave(TerminalApplication):
                 builder.clean()
                 builder = None
                 request = ['IDLE']
+
             elif reply == 'BYE':
                 logging.warning('Master requested termination')
                 break
+
             else:
                 assert False, 'Invalid message from master'
+
+    def transfer(self, ctx, slave_id, builder):
+        with builder.open() as f:
+            queue = ctx.socket(zmq.DEALER)
+            queue.ipv6 = True
+            queue.connect('tcp://{args.master}:5556'.format(args=args))
+            try:
+                queue.send_multipart([b'HELLO', str(slave_id).encode('ascii')])
+                while True:
+                    req, *args = queue.recv_multipart()
+                    if req == b'DONE':
+                        return
+                    elif req == b'FETCH':
+                        offset, size = args
+                        f.seek(int(args[0]))
+                        queue.send_multipart([b'CHUNK', args[0], f.read(int(args[1]))])
+            finally:
+                queue.close()
 
 main = PiWheelsSlave()

@@ -159,22 +159,21 @@ class PiWheelsDatabase:
 
     def get_all_packages(self):
         """
-        Returns a generator of all known package names
+        Returns a list of all known package names
         """
         with self.conn.begin():
-            for rec in self.conn.execute(
+            return [rec.package for rec in self.conn.execute(
                 select([self.packages.c.package])
-            ):
-                yield rec.package
+            )]
 
     def get_total_number_of_packages_with_versions(self):
         """
-        Returns the number of packages which have published at least one version
+        Returns the list of packages which have published at least one version
         """
         with self.conn.begin():
-            return self.conn.execute(
+            return [rec.package for rec in self.conn.execute(
                 select([self.versions.c.package]).distinct()
-            ).fetchall()
+            )]
 
     def get_build_queue(self):
         """
@@ -186,8 +185,8 @@ class PiWheelsDatabase:
                 select([self.versions.c.package, self.versions.c.version]).
                 select_from(self.packages.join(self.versions.outerjoin(self.builds))).
                 where(self.builds.c.package == None).
-                where(not self.packages.c.skip).
-                where(not self.versions.c.skip)
+                where(self.packages.c.skip == False).
+                where(self.versions.c.skip == False)
             ):
                 yield rec.package, rec.version
 

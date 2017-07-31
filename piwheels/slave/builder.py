@@ -1,7 +1,7 @@
 import os
 import logging
 import tempfile
-from glob import glob
+import hashlib
 from datetime import datetime
 from pathlib import Path
 
@@ -48,24 +48,36 @@ class PiWheelsBuilder:
     def build(self):
         self.wheel_dir = tempfile.TemporaryDirectory()
 
-        _wheel_dir = '--wheel-dir={}'.format(wheel_dir.name)
+        _wheel_dir = '--wheel-dir={}'.format(self.wheel_dir.name)
         _no_deps = '--no-deps'
         _no_cache = '--no-cache-dir'
         _package_spec = '{}=={}'.format(self.package, self.version)
         start = datetime.utcnow()
-        self.status = not wc.main((_wheel_dir, _no_deps, _no_cache, _package_spec))
+        self.status = not wc.main([_wheel_dir, _no_deps, _no_cache, _package_spec])
         self.duration = datetime.utcnow() - start
         self.output = '\n'.join(handler.log)
 
         if self.status:
-            self.wheel_file = Path(wheel_dir.name).glob('*.whl')[0]
+            self.wheel_file = next(Path(self.wheel_dir.name).glob('*.whl'))
             self.filename = self.wheel_file.name
             self.filesize = self.wheel_file.stat().st_size
+            m = hashlib.md5()
+            with self.wheel_file.open('rb') as f:
+                while True:
+                    buf = f.read(65536)
+                    if buf:
+                        m.update(buf)
+                    else:
+                        break
+            self.filehash = m.hexdigest().lower()
             wheel_tags = self.filename[:-4].split('-')
             self.package_version_tag = wheel_tags[-4]
             self.py_version_tag = wheel_tags[-3]
             self.abi_tag = wheel_tags[-2]
             self.platform_tag = wheel_tags[-1]
+
+    def open(self):
+        return self.wheel_file.open('rb')
 
     def clean(self):
         if self.wheel_dir:
