@@ -138,7 +138,7 @@ class PiWheelsDatabase:
                         )
                 except DBAPIError:
                     self.conn.execute(
-                        self.files.update().where(filename=build.filename),
+                        self.files.update().where(self.files.c.filename=build.filename),
                         build_id=build_id,
                         filesize=build.filesize,
                         filehash=build.filehash,
@@ -147,7 +147,6 @@ class PiWheelsDatabase:
                         abi_tag=build.abi_tag,
                         platform_tag=build.platform_tag
                     )
-
 
     def get_last_package_processed(self):
         """

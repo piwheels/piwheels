@@ -39,6 +39,7 @@ class PiWheelsBuilder:
         self.version = version
         self.filename = None
         self.filesize = None
+        self.filehash = None
         self.package_version_tag = None
         self.py_version_tag = None
         self.abi_tag = None

@@ -9,8 +9,9 @@ __platforms__    = 'ALL'
 __requires__ = ['pyzmq']
 
 __extra_requires__ = {
-    'master': ['psycopg2', 'sqlalchemy', 'requests'],
-    'test':   ['pytest'],
+    'monitor': ['urwid'],
+    'master':  ['psycopg2', 'sqlalchemy', 'requests'],
+    'test':    ['pytest'],
     }
 
 __classifiers__ = [
@@ -27,6 +28,7 @@ __entry_points__ = {
     'console_scripts': [
         'piw-master = piwheels.master:main',
         'piw-slave = piwheels.slave:main',
+        'piw-monitor = piwheels.monitor:main',
         ],
     }
 
