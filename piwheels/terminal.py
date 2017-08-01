@@ -38,7 +38,7 @@ class TerminalApplication:
     # utility classes defined. It provides some basic facilities like an option
     # parser, console pretty-printing, logging and exception handling
 
-    def __init__(self, version, description=None):
+    def __init__(self, version, description=None, log_params=True):
         super(TerminalApplication, self).__init__()
         if description is None:
             description = self.__doc__
@@ -47,18 +47,19 @@ class TerminalApplication:
             fromfile_prefix_chars='@')
         self.parser.add_argument(
             '--version', action='version', version=version)
-        self.parser.set_defaults(log_level=logging.WARNING)
-        self.parser.add_argument(
-            '-q', '--quiet', dest='log_level', action='store_const',
-            const=logging.ERROR, help='produce less console output')
-        self.parser.add_argument(
-            '-v', '--verbose', dest='log_level', action='store_const',
-            const=logging.INFO, help='produce more console output')
-        arg = self.parser.add_argument(
-            '-l', '--log-file', metavar='FILE',
-            help='log messages to the specified file')
-        if argcomplete:
-            arg.completer = argcomplete.FilesCompleter(['*.log', '*.txt'])
+        if log_params:
+            self.parser.set_defaults(log_level=logging.WARNING)
+            self.parser.add_argument(
+                '-q', '--quiet', dest='log_level', action='store_const',
+                const=logging.ERROR, help='produce less console output')
+            self.parser.add_argument(
+                '-v', '--verbose', dest='log_level', action='store_const',
+                const=logging.INFO, help='produce more console output')
+            arg = self.parser.add_argument(
+                '-l', '--log-file', metavar='FILE',
+                help='log messages to the specified file')
+            if argcomplete:
+                arg.completer = argcomplete.FilesCompleter(['*.log', '*.txt'])
         self.parser.add_argument(
             '-P', '--pdb', dest='debug', action='store_true', default=False,
             help='run under PDB (debug mode)')

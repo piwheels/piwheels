@@ -9,7 +9,7 @@ from .. import __version__
 
 class PiWheelsMonitor(TerminalApplication):
     def __init__(self):
-        super().__init__(__version__)
+        super().__init__(__version__, log_params=False)
 
     def main(self, args):
         ctx = zmq.Context()
@@ -17,6 +17,8 @@ class PiWheelsMonitor(TerminalApplication):
         self.status_queue.hwm = 10
         self.status_queue.connect('ipc:///tmp/piw-status')
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        self.ctrl_queue = ctx.socket(zmq.PUSH)
+        self.ctrl_queue.connect('ipc:///tmp/piw-control')
         try:
             self.loop = urwid.MainLoop(
                 *self.build_ui(),
@@ -25,45 +27,47 @@ class PiWheelsMonitor(TerminalApplication):
             self.loop.event_loop.alarm(0.01, self.poll)
             self.loop.run()
         finally:
+            self.ctrl_queue.close()
             self.status_queue.close()
             ctx.term()
 
+    def build_button(self, caption, callback):
+        btn = urwid.Button(('normal', [('hotkey', caption[0]), caption[1:]]))
+        urwid.connect_signal(btn, 'click', callback)
+        return urwid.AttrMap(btn, None, focus_map={'normal': 'invert'})
+
     def build_ui(self):
         palette = [
-            ('idle',    'light red',    'default'),
-            ('silent',  'yellow',       'default'),
-            ('busy',    'light green',  'default'),
-            ('hotkey',  'yellow',       'default'),
-            ('normal',  'light gray',   'default'),
-            ('invert',  'black',        'light gray'),
+            ('idle',    'light red',       'default'),
+            ('silent',  'yellow',          'default'),
+            ('busy',    'light green',     'default'),
+            ('time',    'light gray',      'default'),
+            ('status',  'light gray',      'default'),
+            ('hotkey',  'yellow',          'default'),
+            ('normal',  'light gray',      'default'),
+            ('invert',  'black',           'light gray'),
         ]
         self.slave_list = SlaveListWalker()
         list_box = urwid.ListBox(self.slave_list)
-        self.quit_btn = urwid.Button(('normal', [('hotkey', 'Q'), 'uit']))
-        self.kill_btn = urwid.Button(('normal', [('hotkey', 'K'), 'ill']))
-        self.pause_btn = urwid.Button(('normal', [('hotkey', 'P'), 'ause']))
-        self.resume_btn = urwid.Button(('normal', [('hotkey', 'R'), 'esume']))
         actions = urwid.Columns([
-            urwid.AttrMap(widget, None, focus_map={'normal': 'invert'})
-            for widget in [
-                self.pause_btn,
-                self.resume_btn,
-                self.kill_btn,
-                self.quit_btn,
-            ]
+            self.build_button('Pause', self.pause_clicked),
+            self.build_button('Resume', self.resume_clicked),
+            self.build_button('Kill slave', self.kill_clicked),
+            self.build_button('Terminate master', self.term_clicked),
+            self.build_button('Quit', self.quit_clicked),
         ])
-        urwid.connect_signal(self.quit_btn, 'click', self.quit_clicked)
-        urwid.connect_signal(self.pause_btn, 'click', self.pause_clicked)
-        urwid.connect_signal(self.resume_btn, 'click', self.resume_clicked)
-        urwid.connect_signal(self.kill_btn, 'click', self.kill_clicked)
         filler = urwid.Filler(actions, valign='bottom')
         pile = urwid.Pile([list_box, filler])
         return pile, palette
 
     def poll(self):
         if self.status_queue.poll(0):
-            self.slave_list.message(*self.status_queue.recv_json())
-        # XXX Remove terminated slaves
+            msg = self.status_queue.recv_json()
+            if msg[0] < 0:
+                # It's a status message
+                pass
+            else:
+                self.slave_list.message(*msg)
         self.loop.event_loop.alarm(0.01, self.poll)
 
     def tick(self):
@@ -71,29 +75,48 @@ class PiWheelsMonitor(TerminalApplication):
         self.loop.event_loop.alarm(1, self.tick)
 
     def unhandled_input(self, key):
-        try:
-            {
-                'q': lambda: self.quit_clicked(self.quit_btn),
-                'k': lambda: self.kill_clicked(self.kill_btn),
-                'p': lambda: self.pause_clicked(self.pause_btn),
-                'r': lambda: self.resume_clicked(self.resume_btn),
-            }[key.lower()]()
-        except KeyError:
-            return False
+        if isinstance(key, str):
+            try:
+                {
+                    'p': lambda: self.pause_clicked(None),
+                    'r': lambda: self.resume_clicked(None),
+                    'k': lambda: self.kill_clicked(None),
+                    't': lambda: self.term_clicked(None),
+                    'q': lambda: self.quit_clicked(None),
+                }[key.lower()]()
+            except KeyError:
+                return False
+            else:
+                return True
         else:
-            return True
+            # Ignore unhandled mouse events
+            return False
 
     def quit_clicked(self, button):
         raise urwid.ExitMainLoop()
 
     def pause_clicked(self, button):
-        control_queue.send_json(('PAUSE',))
+        self.ctrl_queue.send_json(('PAUSE',))
 
     def resume_clicked(self, button):
-        control_queue.send_json(('RESUME',))
+        self.ctrl_queue.send_json(('RESUME',))
 
     def kill_clicked(self, button):
-        control_queue.send_json(('KILL', self.slave_list.focus))
+        # XXX Maybe add an "are you sure?"
+        try:
+            widget = self.slave_list[self.slave_list.focus]
+        except IndexError:
+            pass
+        else:
+            for slave_id, slave in self.slave_list.slaves.items():
+                if slave.widget == widget:
+                    self.ctrl_queue.send_json(('KILL', slave_id))
+                    break
+
+    def term_clicked(self, button):
+        # XXX Maybe add an "are you sure?"
+        self.ctrl_queue.send_json(('QUIT',))
+        raise urwid.ExitMainLoop()
 
 
 class SlaveListWalker(urwid.ListWalker):
@@ -103,14 +126,11 @@ class SlaveListWalker(urwid.ListWalker):
         self.slaves = {}
         self.widgets = []
 
-    def __len__(self):
-        return len(self.widgets)
-
     def __getitem__(self, position):
         return self.widgets[position]
 
     def next_position(self, position):
-        if position >= len(self) - 1:
+        if position >= len(self.widgets) - 1:
             raise IndexError
         return position + 1
 
@@ -136,16 +156,24 @@ class SlaveListWalker(urwid.ListWalker):
         self._modified()
 
     def tick(self):
+        # Increment "time in state" labels
         for state in self.slaves.values():
             state.tick()
+        # Remove terminated slaves
+        now = datetime.utcnow()
+        for slave_id, state in list(self.slaves.items()):
+            if state.last_msg == 'BYE' and (now - state.last_seen > timedelta(seconds=5)):
+                self.widgets.remove(state.widget)
+                del self.slaves[slave_id]
+        self.focus = min(self.focus, len(self.widgets) - 1)
         self._modified()
 
 
 class SlaveState:
     def __init__(self):
         self.widget = urwid.AttrMap(
-            urwid.Text(''), None,
-            focus_map={'normal': 'invert'}
+            urwid.SelectableIcon(''), None,
+            focus_map={'status': 'invert'}
         )
         self.last_msg = ''
         self.last_seen = None
@@ -153,7 +181,7 @@ class SlaveState:
 
     def update(self, last_seen, msg, *args):
         self.last_msg = msg
-        self.last_seen = datetime.utcfromtimestamp(last_seen)
+        self.last_seen = datetime.fromtimestamp(last_seen)
         if msg == 'HELLO':
             self.status = 'Initializing'
         elif msg == 'SLEEP':
@@ -171,12 +199,13 @@ class SlaveState:
     def tick(self):
         self.widget.original_widget.set_text([
             ('idle' if self.last_msg == 'SLEEP' else
-             'silent' if datetime.now() - self.last_seen > timedelta(minutes=10) else
+             'silent' if datetime.utcnow() - self.last_seen > timedelta(minutes=10) else
              'busy', '*'),
-            ('normal', ' '),
-            ('normal', str(datetime.now() - self.last_seen)),
-            ('normal', ' '),
-            ('normal', self.status),
+            ('time', ' '),
+            # Annoyingly, timedelta doesn't have a __format__ method...
+            ('time', str(datetime.utcnow().replace(microsecond=0) - self.last_seen.replace(microsecond=0))),
+            ('time', ' '),
+            ('status', self.status),
         ])
 
 

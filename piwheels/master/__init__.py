@@ -14,7 +14,6 @@ import zmq
 from zmq.utils import jsonapi
 
 
-from .cli import PiWheelsCmd
 from .db import PiWheelsDatabase
 from .ranges import exclude, intersect
 from ..terminal import TerminalApplication
@@ -46,51 +45,73 @@ class PiWheelsMaster(TerminalApplication):
         quit_queue = ctx.socket(zmq.PUB)
         quit_queue.hwm = 1
         quit_queue.bind('inproc://quit')
-        status_queue = ctx.socket(zmq.PUB)
-        status_queue.hwm = 10
-        status_queue.bind('ipc:///tmp/piw-status')
         ctrl_queue = ctx.socket(zmq.PULL)
         ctrl_queue.hwm = 1
         ctrl_queue.bind('ipc:///tmp/piw-control')
-        SlaveState.status_queue = status_queue
+        int_status_queue = ctx.socket(zmq.PULL)
+        int_status_queue.hwm = 10
+        int_status_queue.bind('inproc://status')
+        ext_status_queue = ctx.socket(zmq.PUB)
+        ext_status_queue.hwm = 10
+        ext_status_queue.bind('ipc:///tmp/piw-status')
         TransferState.output_path = output_path
         packages_thread = Thread(target=self.web_scraper, args=(db_engine,))
         builds_thread = Thread(target=self.queue_filler, args=(db_engine,))
         files_thread = Thread(target=self.build_catcher)
+        status_thread = Thread(target=self.status_watcher)
         slave_thread = Thread(target=self.slave_driver, args=(db_engine,))
         packages_thread.start()
         builds_thread.start()
         files_thread.start()
+        status_thread.start()
         slave_thread.start()
         try:
+            poller = zmq.Poller()
+            poller.register(ctrl_queue, zmq.POLLIN)
+            poller.register(int_status_queue, zmq.POLLIN)
             while True:
-                msg, *args = ctrl_queue.recv_json()
-                if msg == 'QUIT':
-                    logging.warning('Shutting down on QUIT message')
-                    break
-                elif msg == 'KILL':
-                    kill_id = int(args[0])
-                    logging.warning('Killing slave %d', kill_id)
-                    for slave in self.slaves.values():
-                        if slave.slave_id == kill_id:
-                            slave.kill()
-                elif msg == 'PAUSE':
-                    logging.warning('Pausing operations')
-                    self.paused = True
-                elif msg == 'RESUME':
-                    logging.warning('Resuming operations')
-                    self.paused = False
+                socks = dict(poller.poll())
+                if int_status_queue in socks:
+                    ext_status_queue.send(int_status_queue.recv())
+                if ctrl_queue in socks:
+                    msg, *args = ctrl_queue.recv_json()
+                    if msg == 'QUIT':
+                        logging.warning('Shutting down on QUIT message')
+                        break
+                    elif msg == 'KILL':
+                        logging.warning('Killing slave %d', args[0])
+                        for slave in self.slaves.values():
+                            if slave.slave_id == kill_id:
+                                slave.kill()
+                    elif msg == 'PAUSE':
+                        logging.warning('Pausing operations')
+                        self.paused = True
+                    elif msg == 'RESUME':
+                        logging.warning('Resuming operations')
+                        self.paused = False
         except KeyboardInterrupt:
             logging.warning('Shutting down on Ctrl+C')
         finally:
+            # Give all slaves 5 seconds to quit; this may seem rather arbitrary
+            # but it's entirely possible there're dead slaves hanging around in
+            # the slaves dict and there's no way (in our ridiculously simple
+            # protocol) to terminate a slave in the middle of a build so an
+            # arbitrary timeout is about the best we can do
+            for slave in self.slaves.values():
+                slave.kill()
+            for i in range(5):
+                if not self.slaves:
+                    break
+                sleep(1)
             quit_queue.send_string('QUIT')
             slave_thread.join()
+            status_thread.join()
             files_thread.join()
             builds_thread.join()
             packages_thread.join()
-            SlaveState.status_queue = None
             quit_queue.close()
-            status_queue.close()
+            ext_status_queue.close()
+            int_status_queue.close()
             ctrl_queue.close()
             ctx.term()
 
@@ -134,8 +155,42 @@ class PiWheelsMaster(TerminalApplication):
             build_queue.close()
             quit_queue.close()
 
+    def status_watcher(self, db_engine):
+        status_queue = ctx.socket(zmq.PUSH)
+        status_queue.hwm = 1
+        status_queue.connect('inproc://status')
+        quit_queue = ctx.socket(zmq.SUB)
+        quit_queue.connect('inproc://quit')
+        quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
+        try:
+            with PiWheelsDatabase(db_engine) as db:
+                while not quit_queue.poll(2000):
+                    pass
+                    #status_queue.send_json([
+                    #    -1,
+                    #    datetime.utcnow().timestamp(),
+                    #    'STATUS',
+                    #    {
+                    #        'builds_last_hour': db.get_builds_processed_in_last_hour(),
+                    #        'builds_count':     db.get_builds_count(),
+                    #        'builds_success':   db.get_successful_builds_count(),
+                    #        'build_time':       db.get_total_build_time(),
+                    #        'packages_count':   db.get_packages_count(),
+                    #        'versions_count':   db.get_versions_count(),
+                    #        'files_size':       db.get_total_wheel_filesize(),
+                    #        'disk_free':        os.statvfs(str(TransferState.output_path))...
+                    #    },
+                    #])
+        finally:
+            status_queue.close()
+            quit_queue.close()
+
     def slave_driver(self, db_engine):
         ctx = zmq.Context.instance()
+        status_queue = ctx.socket(zmq.PUSH)
+        status_queue.hwm = 10
+        status_queue.connect('inproc://status')
+        SlaveState.status_queue = status_queue
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
@@ -217,6 +272,8 @@ class PiWheelsMaster(TerminalApplication):
         finally:
             build_queue.close()
             slave_queue.close()
+            status_queue.close()
+            SlaveState.status_queue = None
             quit_queue.close()
 
     def build_catcher(self):
@@ -238,8 +295,11 @@ class PiWheelsMaster(TerminalApplication):
                     transfer = self.transfers[address]
 
                 except KeyError:
-                    if msg != b'HELLO':
-                        logging.warning('Invalid start transfer from slave: %s', msg)
+                    if msg == b'CHUNK':
+                        logging.debug('Ignoring redundant CHUNK from prior transfer')
+                        continue
+                    elif msg != b'HELLO':
+                        logging.error('Invalid start transfer from slave: %s', msg)
                         continue
                     try:
                         slave_id = int(args[0])
@@ -384,6 +444,8 @@ class TransferState:
             dir=str(self.output_path), delete=False)
         self._file.seek(filesize)
         self._file.truncate()
+        # See 0MQ guide's File Transfers section for more on the credit-driven
+        # nature of this interaction
         self._credit = min(self.pipeline_size, math.ceil(filesize / self.chunk_size))
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
@@ -445,7 +507,12 @@ class TransferState:
         p = Path(self._file.name)
         if m.hexdigest().lower() == build.filehash:
             p.chmod(0o644)
-            p.rename(p.with_name(build.filename))
+            try:
+                p.with_name(build.package).mkdir()
+            except FileExistsError:
+                pass
+            p.rename(p.with_name(build.package) / build.filename)
+            # XXX Rebuild HTML package index
             return True
         else:
             p.unlink()
