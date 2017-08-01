@@ -140,6 +140,12 @@ class TransferState:
         else:
             self._credit += 1
 
+    def reset_credit(self):
+        if self._credit == 0:
+            self._credit = self.pipeline_size
+        else:
+            logging.warning('Transfer still has credit; no need for reset')
+
     def verify(self, build):
         self._file.seek(0)
         m = hashlib.md5()
@@ -228,18 +234,17 @@ class PiWheelsMaster(TerminalApplication):
         ctrl_queue.connect('inproc://control')
         ctrl_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         build_queue = ctx.socket(zmq.PUSH)
-        build_queue.hwm = 100
+        build_queue.hwm = 10
         build_queue.bind('inproc://builds')
         try:
             with PiWheelsDatabase(db_engine) as db:
                 while not ctrl_queue.poll(0):
                     for package, version in db.get_build_queue():
-                        try:
-                            build_queue.send_json((package, version), flags=zmq.DONTWAIT)
-                        except zmq.ZMQError as e:
-                            if e.errno != zmq.EAGAIN:
-                                raise
-                        if ctrl_queue.poll(10):
+                        while not ctrl_queue.poll(0):
+                            if build_queue.poll(1000, zmq.POLLOUT):
+                                build_queue.send_json((package, version))
+                                break
+                        if ctrl_queue.poll(0):
                             break
         finally:
             build_queue.close()
@@ -255,6 +260,7 @@ class PiWheelsMaster(TerminalApplication):
         slave_queue.ipv6 = True
         slave_queue.bind('tcp://*:5555')
         build_queue = ctx.socket(zmq.PULL)
+        build_queue.hwm = 10
         build_queue.connect('inproc://builds')
         try:
             with PiWheelsDatabase(db_engine) as db:
@@ -367,6 +373,15 @@ class PiWheelsMaster(TerminalApplication):
                             file_queue.send_multipart([address, b'DONE'])
                             del self.transfers[address]
                             continue
+
+                    elif msg == b'HELLO':
+                        # This only happens if we've dropped a *lot* of packets,
+                        # and the slave's timed out waiting for another FETCH.
+                        # In this case reset the amount of "credit" on the
+                        # transfer so it can start fetching again
+                        # XXX Should check slave ID reported in HELLO matches
+                        # the slave retrieved from the cache
+                        transfer.reset_credit()
 
                     else:
                         logging.error('Invalid chunk header from slave: %s', msg)

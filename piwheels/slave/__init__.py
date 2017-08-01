@@ -99,8 +99,15 @@ class PiWheelsSlave(TerminalApplication):
             queue.ipv6 = True
             queue.connect('tcp://{master}:5556'.format(master=master))
             try:
-                queue.send_multipart([b'HELLO', str(slave_id).encode('ascii')])
+                timeout = 0
                 while True:
+                    if not queue.poll(timeout):
+                        # Initially, send HELLO immediately; in subsequent loops
+                        # if we hear nothing from the server for 5 seconds then
+                        # it's dropped a *lot* of packets; prod the master with
+                        # HELLO again
+                        queue.send_multipart([b'HELLO', str(slave_id).encode('ascii')])
+                        timeout = 5000
                     req, *args = queue.recv_multipart()
                     if req == b'DONE':
                         return
