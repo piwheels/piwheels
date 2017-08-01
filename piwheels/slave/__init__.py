@@ -26,72 +26,77 @@ class PiWheelsSlave(TerminalApplication):
         queue = ctx.socket(zmq.REQ)
         queue.ipv6 = True
         queue.connect('tcp://{master}:5555'.format(master=master))
-        request = ['HELLO']
-        while True:
-            queue.send_json(request)
-            reply, *args = queue.recv_json()
+        try:
+            request = ['HELLO']
+            while True:
+                queue.send_json(request)
+                reply, *args = queue.recv_json()
 
-            if reply == 'HELLO':
-                assert slave_id is None, 'Duplicate hello'
-                assert len(args) == 1, 'Invalid HELLO message'
-                slave_id = int(args[0])
-                request = ['IDLE']
+                if reply == 'HELLO':
+                    assert slave_id is None, 'Duplicate hello'
+                    assert len(args) == 1, 'Invalid HELLO message'
+                    slave_id = int(args[0])
+                    request = ['IDLE']
 
-            elif reply == 'SLEEP':
-                assert slave_id is not None, 'Sleep before hello'
-                assert len(args) == 0, 'Invalid SLEEP message'
-                logging.info('No available jobs; sleeping')
-                sleep(10)
-                request = ['IDLE']
+                elif reply == 'SLEEP':
+                    assert slave_id is not None, 'Sleep before hello'
+                    assert len(args) == 0, 'Invalid SLEEP message'
+                    logging.info('No available jobs; sleeping')
+                    sleep(10)
+                    request = ['IDLE']
 
-            elif reply == 'BUILD':
-                assert slave_id is not None, 'Build before hello'
-                assert not builder, 'Last build still exists'
-                assert len(args) == 2, 'Invalid BUILD message'
-                package, version = args
-                logging.info('Building package %s version %s', package, version)
-                builder = PiWheelsBuilder(package, version)
-                builder.build()
-                request = [
-                    'BUILT',
-                    builder.package,
-                    builder.version,
-                    builder.status,
-                    builder.output,
-                    builder.filename,
-                    builder.filesize,
-                    builder.filehash,
-                    builder.duration,
-                    builder.package_version_tag,
-                    builder.py_version_tag,
-                    builder.abi_tag,
-                    builder.platform_tag,
-                ]
+                elif reply == 'BUILD':
+                    assert slave_id is not None, 'Build before hello'
+                    assert not builder, 'Last build still exists'
+                    assert len(args) == 2, 'Invalid BUILD message'
+                    package, version = args
+                    logging.info('Building package %s version %s', package, version)
+                    builder = PiWheelsBuilder(package, version)
+                    builder.build()
+                    request = [
+                        'BUILT',
+                        builder.package,
+                        builder.version,
+                        builder.status,
+                        builder.output,
+                        builder.filename,
+                        builder.filesize,
+                        builder.filehash,
+                        builder.duration,
+                        builder.package_version_tag,
+                        builder.py_version_tag,
+                        builder.abi_tag,
+                        builder.platform_tag,
+                    ]
 
-            elif reply == 'SEND':
-                assert slave_id is not None, 'Send before hello'
-                assert builder, 'Send before build / after failed build'
-                assert builder.status, 'Send after failed build'
-                assert len(args) == 0, 'Invalid SEND messsage'
-                logging.info('Sending package to master')
-                self.transfer(master, ctx, slave_id, builder)
-                request = ['SENT']
+                elif reply == 'SEND':
+                    assert slave_id is not None, 'Send before hello'
+                    assert builder, 'Send before build / after failed build'
+                    assert builder.status, 'Send after failed build'
+                    assert len(args) == 0, 'Invalid SEND messsage'
+                    logging.info('Sending package to master')
+                    self.transfer(master, ctx, slave_id, builder)
+                    request = ['SENT']
 
-            elif reply == 'DONE':
-                assert slave_id is not None, 'Okay before hello'
-                assert builder, 'Okay before build'
-                assert len(args) == 0, 'Invalid DONE message'
-                logging.info('Removing temporary build directories')
-                builder.clean()
-                builder = None
-                request = ['IDLE']
+                elif reply == 'DONE':
+                    assert slave_id is not None, 'Okay before hello'
+                    assert builder, 'Okay before build'
+                    assert len(args) == 0, 'Invalid DONE message'
+                    logging.info('Removing temporary build directories')
+                    builder.clean()
+                    builder = None
+                    request = ['IDLE']
 
-            elif reply == 'BYE':
-                logging.warning('Master requested termination')
-                break
+                elif reply == 'BYE':
+                    logging.warning('Master requested termination')
+                    break
 
-            else:
-                assert False, 'Invalid message from master'
+                else:
+                    assert False, 'Invalid message from master'
+        finally:
+            queue.send_json(['BYE'])
+            queue.close()
+            ctx.term()
 
     def transfer(self, master, ctx, slave_id, builder):
         with builder.open() as f:

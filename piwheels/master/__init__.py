@@ -39,6 +39,7 @@ BuildState = namedtuple('BuildState', (
 
 class SlaveState:
     counter = 0
+    status_queue = None
 
     def __init__(self):
         SlaveState.counter += 1
@@ -75,6 +76,8 @@ class SlaveState:
         self._request = value
         if value[0] == 'BUILT':
             self._build = BuildState(self._slave_id, *value[1:])
+            SlaveState.status_queue.send_json(
+                [self._slave_id, self._last_seen.timestamp()] + value)
 
     @property
     def reply(self):
@@ -186,11 +189,15 @@ class PiWheelsMaster(TerminalApplication):
             output_path.mkdir()
         except FileExistsError:
             pass
-        TransferState.output_path = output_path
         ctx = zmq.Context.instance()
         ctrl_queue = ctx.socket(zmq.PUB)
         ctrl_queue.hwm = 1
         ctrl_queue.bind('inproc://control')
+        status_queue = ctx.socket(zmq.PUB)
+        status_queue.hwm = 10
+        status_queue.bind('ipc:///tmp/piw-status')
+        SlaveState.status_queue = status_queue
+        TransferState.output_path = output_path
         packages_thread = Thread(target=self.web_scraper, args=(db_engine,))
         builds_thread = Thread(target=self.queue_filler, args=(db_engine,))
         files_thread = Thread(target=self.build_catcher)
@@ -209,7 +216,9 @@ class PiWheelsMaster(TerminalApplication):
             files_thread.join()
             builds_thread.join()
             packages_thread.join()
+            SlaveState.status_queue = None
             ctrl_queue.close()
+            status_queue.close()
             ctx.term()
 
     def web_scraper(self, db_engine):
@@ -251,7 +260,6 @@ class PiWheelsMaster(TerminalApplication):
             ctrl_queue.close()
 
     def slave_driver(self, db_engine):
-        slave_counter = 0
         ctx = zmq.Context.instance()
         ctrl_queue = ctx.socket(zmq.SUB)
         ctrl_queue.connect('inproc://control')
@@ -288,6 +296,11 @@ class PiWheelsMaster(TerminalApplication):
                         logging.info('New slave: %d', slave.slave_id)
                         reply = ['HELLO', slave.slave_id]
 
+                    elif msg == 'BYE':
+                        logging.warning('Slave shutdown: %d', slave.slave_id)
+                        del self.slaves[address]
+                        reply = []
+
                     elif msg == 'IDLE':
                         events = build_queue.poll(0)
                         if events:
@@ -317,11 +330,12 @@ class PiWheelsMaster(TerminalApplication):
                         logging.error('Invalid message from existing slave: %s', msg)
 
                     slave.reply = reply
-                    slave_queue.send_multipart([
-                        address,
-                        empty,
-                        jsonapi.dumps(reply)
-                    ])
+                    if reply:
+                        slave_queue.send_multipart([
+                            address,
+                            empty,
+                            jsonapi.dumps(reply)
+                        ])
         finally:
             build_queue.close()
             slave_queue.close()
