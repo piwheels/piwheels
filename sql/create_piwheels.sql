@@ -49,7 +49,7 @@ CREATE TABLE files (
     filename            VARCHAR(255) NOT NULL,
     build_id            INTEGER NOT NULL,
     filesize            INTEGER NOT NULL,
-    filehash            CHAR(32) NOT NULL,
+    filehash            CHAR(64) NOT NULL,
     package_version_tag VARCHAR(100) NOT NULL,
     py_version_tag      VARCHAR(100) NOT NULL,
     abi_tag             VARCHAR(100) NOT NULL,

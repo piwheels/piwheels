@@ -165,6 +165,19 @@ class PiWheelsDatabase:
             ):
                 yield rec.package, rec.version
 
+    def get_package_files(self, package):
+        """
+        Returns all details required to build the index.html for the specified
+        package.
+        """
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.files.c.filename, self.files.c.filehash]).
+                select_from(self.builds.join(self.files)).
+                where(self.builds.c.status).
+                where(self.builds.c.package == package)
+            )
+
     def get_package_versions(self, package):
         """
         Returns a list of all known versions of a given package

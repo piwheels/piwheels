@@ -15,6 +15,7 @@ from zmq.utils import jsonapi
 
 from .db import PiWheelsDatabase
 from .ranges import exclude, intersect
+from .html import tag
 from ..terminal import TerminalApplication
 from .. import __version__
 
@@ -47,6 +48,7 @@ class PiWheelsMaster(TerminalApplication):
             output_path.mkdir()
         except FileExistsError:
             pass
+        TransferState.output_path = output_path
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.PUB)
         quit_queue.hwm = 1
@@ -60,17 +62,18 @@ class PiWheelsMaster(TerminalApplication):
         ext_status_queue = ctx.socket(zmq.PUB)
         ext_status_queue.hwm = 10
         ext_status_queue.bind('ipc:///tmp/piw-status')
-        TransferState.output_path = output_path
         packages_thread = Thread(target=self.web_scraper)
-        builds_thread = Thread(target=self.queue_filler)
-        status_thread = Thread(target=self.status_watcher)
+        builds_thread = Thread(target=self.queue_stuffer)
+        status_thread = Thread(target=self.big_brother)
         slave_thread = Thread(target=self.slave_driver)
         files_thread = Thread(target=self.build_catcher)
+        index_thread = Thread(target=self.index_scribbler)
         packages_thread.start()
         builds_thread.start()
         files_thread.start()
         status_thread.start()
         slave_thread.start()
+        index_thread.start()
         try:
             poller = zmq.Poller()
             poller.register(ctrl_queue, zmq.POLLIN)
@@ -110,6 +113,7 @@ class PiWheelsMaster(TerminalApplication):
                     break
                 sleep(1)
             quit_queue.send_string('QUIT')
+            index_thread.join()
             slave_thread.join()
             status_thread.join()
             files_thread.join()
@@ -139,7 +143,7 @@ class PiWheelsMaster(TerminalApplication):
         finally:
             quit_queue.close()
 
-    def queue_filler(self):
+    def queue_stuffer(self):
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -161,7 +165,7 @@ class PiWheelsMaster(TerminalApplication):
             build_queue.close()
             quit_queue.close()
 
-    def status_watcher(self):
+    def big_brother(self):
         ctx = zmq.Context.instance()
         status_queue = ctx.socket(zmq.PUSH)
         status_queue.hwm = 1
@@ -210,6 +214,9 @@ class PiWheelsMaster(TerminalApplication):
         build_queue = ctx.socket(zmq.PULL)
         build_queue.hwm = 10
         build_queue.connect('inproc://builds')
+        index_queue = ctx.socket(zmq.PUSH)
+        index_queue.hwm = 10
+        index_queue.bind('inproc://indexes')
         try:
             with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(0):
@@ -267,6 +274,7 @@ class PiWheelsMaster(TerminalApplication):
                             continue
                         if slave.transfer.verify(slave.build):
                             reply = ['DONE']
+                            index_queue.send_string(slave.build.package)
                         else:
                             reply = ['SEND']
 
@@ -313,6 +321,9 @@ class PiWheelsMaster(TerminalApplication):
                         continue
                     try:
                         slave_id = int(args[0])
+                        # XXX Yucky; in fact the whole "transfer state generated
+                        # by the slave thread then passed to the transfer
+                        # thread" is crap. Would be slightly nicer to
                         slave = [
                             slave for slave in self.slaves.values()
                             if slave.slave_id == slave_id
@@ -360,6 +371,78 @@ class PiWheelsMaster(TerminalApplication):
                     fetch_range = transfer.fetch()
         finally:
             file_queue.close()
+            quit_queue.close()
+
+    def write_root_index(self, packages):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path),
+                delete=False) as index:
+            index.file.write(
+                tag.html(
+                    tag.head(
+                        tag.title('Pi Wheels Simple Index'),
+                        tag.meta(name='api-version', value=2),
+                    ),
+                    tag.body(
+                        (tag.a(package, href=package), tag.br())
+                        for package in packages
+                    )
+                )
+            )
+            os.fchmod(index.file.fileno(), 0o644)
+            os.replace(index.name, str(TransferState.output_path / 'index.html'))
+
+    def write_package_index(self, package, files):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path / package),
+                delete=False) as index:
+            index.file.write(
+                tag.html(
+                    tag.head(
+                        tag.title('Links for {}'.format(package))
+                    ),
+                    tag.body(
+                        tag.h1('Links for {}'.format(package)),
+                        (
+                            (tag.a(rec.filename,
+                                  href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
+                                  rel='internal'), tag.br())
+                            for rec in files
+                        )
+                    )
+                )
+            )
+            os.fchmod(index.file.fileno(), 0o644)
+            os.replace(index.name, str(TransferState.output_path / package / 'index.html'))
+
+    def index_scribbler(self):
+        ctx = zmq.Context.instance()
+        quit_queue = ctx.socket(zmq.SUB)
+        quit_queue.connect('inproc://quit')
+        quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
+        index_queue = ctx.socket(zmq.PULL)
+        index_queue.hwm = 10
+        index_queue.connect('inproc://indexes')
+        try:
+            # Build the initial index from the set of directories that exist
+            # under the output path (this is much faster than querying the
+            # database for the same info)
+            packages = {
+                d for d in TransferState.output_path.iterdir()
+                if d.is_dir()
+            }
+
+            with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
+                while not quit_queue.poll(0):
+                    if not index_queue.poll(1000):
+                        continue
+                    package = index_queue.recv_string()
+                    if package not in packages:
+                        packages.add(package)
+                        self.write_root_index(packages)
+                    self.write_package_index(package, db.get_package_files(package))
+        finally:
+            index_queue.close()
             quit_queue.close()
 
 
@@ -505,8 +588,10 @@ class TransferState:
             logging.warning('Transfer still has credit; no need for reset')
 
     def verify(self, build):
+        # XXX Would be nicer to construct the hash from the transferred chunks
+        # with a tree, but this potentially costs quite a bit of memory
         self._file.seek(0)
-        m = hashlib.md5()
+        m = hashlib.sha256()
         while True:
             buf = self._file.read(self.chunk_size)
             if buf:

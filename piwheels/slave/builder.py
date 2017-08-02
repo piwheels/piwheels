@@ -62,7 +62,7 @@ class PiWheelsBuilder:
             self.wheel_file = next(Path(self.wheel_dir.name).glob('*.whl'))
             self.filename = self.wheel_file.name
             self.filesize = self.wheel_file.stat().st_size
-            m = hashlib.md5()
+            m = hashlib.sha256()
             with self.wheel_file.open('rb') as f:
                 while True:
                     buf = f.read(65536)
