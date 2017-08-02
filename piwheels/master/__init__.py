@@ -32,7 +32,7 @@ class PiWheelsMaster(TerminalApplication):
                                  help='The SQLAlchemy DSN used to connect to '
                                  'the piwheels database (default: %(default)s)')
         self.parser.add_argument('-o', '--output', metavar='PATH',
-                                 default=Path('~/www').expanduser(),
+                                 default=Path(os.path.expanduser('~/www')),
                                  help='The path to write wheels into '
                                  '(default: %(default)s)')
 
