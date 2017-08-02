@@ -1,5 +1,4 @@
 import os
-import math
 import logging
 import tempfile
 import hashlib
@@ -23,10 +22,16 @@ from .. import __version__
 class PiWheelsMaster(TerminalApplication):
     def __init__(self):
         super().__init__(__version__, __doc__)
-        self.parser.add_argument('-d', '--dsn', default='postgres:///piwheels',
+        self.parser.add_argument('-p', '--pypi-root', metavar='URL',
+                                 default='https://pypi.python.org/pypi',
+                                 help='The root URL of the PyPI repository '
+                                 '(default: %(default)s)')
+        self.parser.add_argument('-d', '--dsn', metavar='URL',
+                                 default='postgres:///piwheels',
                                  help='The SQLAlchemy DSN used to connect to '
                                  'the piwheels database (default: %(default)s)')
-        self.parser.add_argument('-o', '--output', default=Path('~/www').expanduser(),
+        self.parser.add_argument('-o', '--output', metavar='PATH',
+                                 default=Path('~/www').expanduser(),
                                  help='The path to write wheels into '
                                  '(default: %(default)s)')
 
@@ -35,7 +40,8 @@ class PiWheelsMaster(TerminalApplication):
         self.slaves = {}
         self.transfers = {}
         self.paused = False
-        db_engine = sa.create_engine(args.dsn)
+        self.db_engine = sa.create_engine(args.dsn)
+        self.pypi_root = args.pypi_root
         output_path = Path(args.output)
         try:
             output_path.mkdir()
@@ -55,11 +61,11 @@ class PiWheelsMaster(TerminalApplication):
         ext_status_queue.hwm = 10
         ext_status_queue.bind('ipc:///tmp/piw-status')
         TransferState.output_path = output_path
-        packages_thread = Thread(target=self.web_scraper, args=(db_engine,))
-        builds_thread = Thread(target=self.queue_filler, args=(db_engine,))
-        files_thread = Thread(target=self.build_catcher)
+        packages_thread = Thread(target=self.web_scraper)
+        builds_thread = Thread(target=self.queue_filler)
         status_thread = Thread(target=self.status_watcher)
-        slave_thread = Thread(target=self.slave_driver, args=(db_engine,))
+        slave_thread = Thread(target=self.slave_driver)
+        files_thread = Thread(target=self.build_catcher)
         packages_thread.start()
         builds_thread.start()
         files_thread.start()
@@ -81,7 +87,7 @@ class PiWheelsMaster(TerminalApplication):
                     elif msg == 'KILL':
                         logging.warning('Killing slave %d', args[0])
                         for slave in self.slaves.values():
-                            if slave.slave_id == kill_id:
+                            if slave.slave_id == args[0]:
                                 slave.kill()
                     elif msg == 'PAUSE':
                         logging.warning('Pausing operations')
@@ -115,13 +121,13 @@ class PiWheelsMaster(TerminalApplication):
             ctrl_queue.close()
             ctx.term()
 
-    def web_scraper(self, db_engine):
+    def web_scraper(self):
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         try:
-            with PiWheelsDatabase(db_engine) as db:
+            with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(1000):
                     db.update_package_list()
                     for package in db.get_all_packages():
@@ -133,7 +139,7 @@ class PiWheelsMaster(TerminalApplication):
         finally:
             quit_queue.close()
 
-    def queue_filler(self, db_engine):
+    def queue_filler(self):
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -142,7 +148,7 @@ class PiWheelsMaster(TerminalApplication):
         build_queue.hwm = 10
         build_queue.bind('inproc://builds')
         try:
-            with PiWheelsDatabase(db_engine) as db:
+            with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(0):
                     for package, version in db.get_build_queue():
                         while not quit_queue.poll(0):
@@ -155,7 +161,8 @@ class PiWheelsMaster(TerminalApplication):
             build_queue.close()
             quit_queue.close()
 
-    def status_watcher(self, db_engine):
+    def status_watcher(self):
+        ctx = zmq.Context.instance()
         status_queue = ctx.socket(zmq.PUSH)
         status_queue.hwm = 1
         status_queue.connect('inproc://status')
@@ -163,29 +170,32 @@ class PiWheelsMaster(TerminalApplication):
         quit_queue.connect('inproc://quit')
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         try:
-            with PiWheelsDatabase(db_engine) as db:
-                while not quit_queue.poll(2000):
-                    pass
-                    #status_queue.send_json([
-                    #    -1,
-                    #    datetime.utcnow().timestamp(),
-                    #    'STATUS',
-                    #    {
-                    #        'builds_last_hour': db.get_builds_processed_in_last_hour(),
-                    #        'builds_count':     db.get_builds_count(),
-                    #        'builds_success':   db.get_successful_builds_count(),
-                    #        'build_time':       db.get_total_build_time(),
-                    #        'packages_count':   db.get_packages_count(),
-                    #        'versions_count':   db.get_versions_count(),
-                    #        'files_size':       db.get_total_wheel_filesize(),
-                    #        'disk_free':        os.statvfs(str(TransferState.output_path))...
-                    #    },
-                    #])
+            with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
+                while not quit_queue.poll(10000):
+                    stat = os.statvfs(str(TransferState.output_path))
+                    status_queue.send_json([
+                        -1,
+                        datetime.utcnow().timestamp(),
+                        'STATUS',
+                        {
+                            'packages_count':   db.get_packages_count(),
+                            'packages_built':   db.get_packages_built(),
+                            'versions_count':   db.get_versions_count(),
+                            'versions_built':   db.get_versions_built(),
+                            'builds_count':     db.get_builds_count(),
+                            'builds_last_hour': db.get_builds_count_last_hour(),
+                            'builds_success':   db.get_builds_count_success(),
+                            'builds_time':      db.get_builds_time().total_seconds(),
+                            'builds_size':      db.get_builds_size(),
+                            'disk_free':        stat.f_frsize * stat.f_bavail,
+                            'disk_size':        stat.f_frsize * stat.f_blocks,
+                        },
+                    ])
         finally:
             status_queue.close()
             quit_queue.close()
 
-    def slave_driver(self, db_engine):
+    def slave_driver(self):
         ctx = zmq.Context.instance()
         status_queue = ctx.socket(zmq.PUSH)
         status_queue.hwm = 10
@@ -201,7 +211,7 @@ class PiWheelsMaster(TerminalApplication):
         build_queue.hwm = 10
         build_queue.connect('inproc://builds')
         try:
-            with PiWheelsDatabase(db_engine) as db:
+            with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(0):
                     if not slave_queue.poll(1000):
                         continue
@@ -446,7 +456,7 @@ class TransferState:
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = min(self.pipeline_size, math.ceil(filesize / self.chunk_size))
+        self._credit = max(1, min(self.pipeline_size, filesize // self.chunk_size))
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the

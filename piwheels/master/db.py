@@ -12,7 +12,8 @@ class PiWheelsDatabase:
     """
     PiWheels database connection class
     """
-    def __init__(self, engine):
+    def __init__(self, engine, pypi_root='https://pypi.python.org/pypi'):
+        self.pypi_root = pypi_root
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         self.packages = Table('packages', self.meta, autoload=True)
@@ -56,7 +57,7 @@ class PiWheelsDatabase:
         """
         Updates the list of known packages
         """
-        pypi_packages = set(pypi.get_all_packages())
+        pypi_packages = set(pypi.get_all_packages(self.pypi_root))
         known_packages = set(self.get_all_packages())
         missing_packages = pypi_packages - known_packages
 
@@ -71,7 +72,7 @@ class PiWheelsDatabase:
         Updates the list of known package versions for the specified package
         """
         with self.conn.begin():
-            pypi_versions = set(pypi.get_package_versions(package))
+            pypi_versions = set(pypi.get_package_versions(package, self.pypi_root))
             known_versions = set(self.get_package_versions(package))
             missing_versions = pypi_versions - known_versions
 
@@ -131,36 +132,6 @@ class PiWheelsDatabase:
                         platform_tag=build.platform_tag
                     )
 
-    def get_last_package_processed(self):
-        """
-        Returns the name and build timestamp of the last package processed
-        """
-        with self.conn.begin():
-            return self.conn.execute(
-                select([self.builds.c.package, self.builds.c.built_at]).
-                order_by(self.builds.c.built_at.desc()).limit(1)
-            ).fetchone()
-
-    def get_packages_count(self):
-        """
-        Returns the total number of known packages
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.packages)
-            )
-
-    def get_versions_count(self):
-        """
-        Returns the total number of known package versions
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.versions)
-            )
-
     def get_all_packages(self):
         """
         Returns a list of all known package names
@@ -206,20 +177,17 @@ class PiWheelsDatabase:
             )
             return [rec.version for rec in result]
 
-    def get_builds_processed_in_interval(self, interval):
+    def get_packages_count(self):
         """
-        Return the number of builds processed in a given interval.
-
-        e.g. db.get_builds_processed_in_interval('1 hour')
+        Returns the total number of known packages
         """
         with self.conn.begin():
             return self.conn.scalar(
                 select([func.count('*')]).
-                select_from(self.builds).
-                where(self.builds.c.built_at > text("NOW() - INTERVAL '1 HOUR'"))
+                select_from(self.packages)
             )
 
-    def get_total_packages_processed(self):
+    def get_packages_built(self):
         """
         Returns the total number of packages processed
         """
@@ -228,7 +196,26 @@ class PiWheelsDatabase:
                 select([func.count(distinct(self.builds.c.package))])
             )
 
-    def get_successful_builds_count(self):
+    def get_versions_count(self):
+        """
+        Returns the total number of known package versions
+        """
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).
+                select_from(self.versions)
+            )
+
+    def get_versions_built(self):
+        """
+        Returns the total number of distinct package versions built.
+        """
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count(func.distinct(self.builds.c.package, self.builds.c.version))])
+            )
+
+    def get_builds_count_success(self):
         """
         Returns the total number of successful builds
         """
@@ -237,6 +224,17 @@ class PiWheelsDatabase:
                 select([func.count('*')]).
                 select_from(self.builds).
                 where(self.builds.c.status)
+            )
+
+    def get_builds_count_last_hour(self):
+        """
+        Return the number of builds processed in the last hour
+        """
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.count('*')]).
+                select_from(self.builds).
+                where(self.builds.c.built_at > text("TIMEZONE('UTC', NOW() - INTERVAL '1 HOUR')"))
             )
 
     def get_builds_count(self):
@@ -249,13 +247,24 @@ class PiWheelsDatabase:
                 select_from(self.builds)
             )
 
-    def get_total_build_time(self):
+    def get_builds_time(self):
         """
         Returns the total duration of time spent building packages
         """
         with self.conn.begin():
             return self.conn.scalar(
                 select([func.sum(self.builds.c.duration)])
+            )
+
+    def get_builds_size(self):
+        """
+        Returns the total number of bytes used by all built wheels (note: this
+        is probably smaller than the actual file-system space used as it doesn't
+        take into account file-system overhead).
+        """
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([func.sum(self.files.c.filesize)])
             )
 
     def get_package_output(self, package):
@@ -269,11 +278,3 @@ class PiWheelsDatabase:
                 order_by(self.builds.c.built_at.desc())
             ).fetchall()
 
-    def get_total_wheel_filesize(self):
-        """
-        Legacy
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.sum(self.files.c.filesize)])
-            )

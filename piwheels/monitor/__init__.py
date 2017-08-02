@@ -24,6 +24,7 @@ class PiWheelsMonitor(TerminalApplication):
                 *self.build_ui(),
                 unhandled_input=self.unhandled_input)
             self.loop.event_loop.alarm(1, self.tick)
+            # XXX This is crap; ought to make a proper 0MQ event loop instead
             self.loop.event_loop.alarm(0.01, self.poll)
             self.loop.run()
         finally:
@@ -46,28 +47,56 @@ class PiWheelsMonitor(TerminalApplication):
             ('hotkey',  'yellow',          'default'),
             ('normal',  'light gray',      'default'),
             ('invert',  'black',           'light gray'),
+            ('todo',    'white',           'default'),
+            ('done',    'black',           'light gray'),
+            ('smooth',  'default',         'light gray'),
         ]
         self.slave_list = SlaveListWalker()
         list_box = urwid.ListBox(self.slave_list)
-        actions = urwid.Columns([
+        actions_box = urwid.Columns([
             self.build_button('Pause', self.pause_clicked),
             self.build_button('Resume', self.resume_clicked),
             self.build_button('Kill slave', self.kill_clicked),
             self.build_button('Terminate master', self.term_clicked),
             self.build_button('Quit', self.quit_clicked),
         ])
-        filler = urwid.Filler(actions, valign='bottom')
-        pile = urwid.Pile([list_box, filler])
+        self.builds_bar = urwid.ProgressBar('todo', 'done', satt='smooth')
+        self.disk_bar = urwid.ProgressBar('todo', 'done', satt='smooth')
+        self.build_rate_label = urwid.Text('0 pkgs/hour')
+        self.build_time_label = urwid.Text('0:00:00')
+        self.build_size_label = urwid.Text('0 bytes')
+        status_box = urwid.Columns([
+            (12, urwid.Pile([
+                urwid.Text(('normal', 'Disk')),
+                urwid.Text(('normal', 'Builds')),
+                urwid.Text(('normal', 'Build Rate')),
+                urwid.Text(('normal', 'Build Time')),
+                urwid.Text(('normal', 'Build Size')),
+            ])),
+            urwid.Pile([
+                self.disk_bar,
+                self.builds_bar,
+                self.build_rate_label,
+                self.build_time_label,
+                self.build_size_label,
+            ]),
+        ])
+        pile = urwid.Pile([
+            ('pack', status_box),
+            ('pack', urwid.Divider('\N{HORIZONTAL BAR}')),
+            list_box,
+            ('pack', urwid.Divider('\N{HORIZONTAL BAR}')),
+            ('pack', actions_box),
+        ])
         return pile, palette
 
     def poll(self):
         if self.status_queue.poll(0):
-            msg = self.status_queue.recv_json()
-            if msg[0] < 0:
-                # It's a status message
-                pass
+            slave_id, timestamp, msg, *args = self.status_queue.recv_json()
+            if msg == 'STATUS':
+                self.update_status(args[0])
             else:
-                self.slave_list.message(*msg)
+                self.slave_list.message(slave_id, timestamp, msg, *args)
         self.loop.event_loop.alarm(0.01, self.poll)
 
     def tick(self):
@@ -91,6 +120,19 @@ class PiWheelsMonitor(TerminalApplication):
         else:
             # Ignore unhandled mouse events
             return False
+
+    def update_status(self, status_info):
+        self.builds_bar.set_completion(
+            status_info['versions_built'] * 100 / status_info['versions_count'])
+        self.disk_bar.set_completion(
+            status_info['disk_free'] * 100 / status_info['disk_size'])
+        self.build_rate_label.set_text(
+            '{} pkgs/hour'.format(status_info['builds_last_hour']))
+        self.build_size_label.set_text(
+            '{} Mbytes'.format(status_info['builds_size'] // 1048576))
+        time = timedelta(seconds=status_info['builds_time'])
+        time -= timedelta(microseconds=time.microseconds)
+        self.build_time_label.set_text('{}'.format(time))
 
     def quit_clicked(self, button):
         raise urwid.ExitMainLoop()
@@ -144,7 +186,7 @@ class SlaveListWalker(urwid.ListWalker):
         self.focus = position
         self._modified()
 
-    def message(self, slave_id, last_seen, msg, *args):
+    def message(self, slave_id, timestamp, msg, *args):
         try:
             state = self.slaves[slave_id]
         except KeyError:
@@ -152,7 +194,7 @@ class SlaveListWalker(urwid.ListWalker):
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
             self._modified()
-        state.update(last_seen, msg, *args)
+        state.update(timestamp, msg, *args)
         self._modified()
 
     def tick(self):
@@ -179,9 +221,9 @@ class SlaveState:
         self.last_seen = None
         self.status = ''
 
-    def update(self, last_seen, msg, *args):
+    def update(self, timestamp, msg, *args):
         self.last_msg = msg
-        self.last_seen = datetime.fromtimestamp(last_seen)
+        self.last_seen = datetime.fromtimestamp(timestamp)
         if msg == 'HELLO':
             self.status = 'Initializing'
         elif msg == 'SLEEP':

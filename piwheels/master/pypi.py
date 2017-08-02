@@ -4,31 +4,31 @@ import xmlrpc.client as xmlrpclib
 import requests
 
 
-def get_all_packages():
+def get_all_packages(pypi_root='https://pypi.python.org/pypi'):
     """
     Returns a sorted list of all packages on PyPI using the xmlrpc interface
     """
     logging.info('Querying PyPI package list')
-    client = xmlrpclib.ServerProxy('https://pypi.python.org/pypi')
+    client = xmlrpclib.ServerProxy(pypi_root)
     return client.list_packages()
 
 
-def get_package_info(package):
+def get_package_info(package, pypi_root='https://pypi.python.org/pypi'):
     """
     Returns information about a given package from the PyPI JSON API
     """
-    url = 'https://pypi.python.org/pypi/{}/json'.format(package)
+    url = '{pypi_root}/{package}/json'.format(**vars())
     try:
         return requests.get(url).json()
     except:
         return None
 
 
-def get_package_versions(package):
+def get_package_versions(package, pypi_root='https://pypi.python.org/pypi'):
     """
     Returns all versions with source code for a given package released on PyPI
     """
-    package_info = get_package_info(package)
+    package_info = get_package_info(package, pypi_root)
     try:
         return [
             release
