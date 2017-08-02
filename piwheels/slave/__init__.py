@@ -24,6 +24,7 @@ class PiWheelsSlave(TerminalApplication):
         slave_id = None
         builder = None
         queue = ctx.socket(zmq.REQ)
+        queue.hwm = 1
         queue.ipv6 = True
         queue.connect('tcp://{master}:5555'.format(master=master))
         try:

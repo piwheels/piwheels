@@ -267,7 +267,7 @@ class PiWheelsDatabase:
         with self.conn.begin():
             return self.conn.scalar(
                 select([func.sum(self.builds.c.duration)])
-            )
+            ) or timedelta(seconds=0)
 
     def get_builds_size(self):
         """
@@ -278,7 +278,7 @@ class PiWheelsDatabase:
         with self.conn.begin():
             return self.conn.scalar(
                 select([func.sum(self.files.c.filesize)])
-            )
+            ) or 0
 
     def get_package_output(self, package):
         """
