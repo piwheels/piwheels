@@ -24,7 +24,7 @@ digraph piwheels {
         db [label="piwheels\ndatabase", shape=folder];
         fs [label="www\nfilesystem", shape=folder];
 
-        web_scraper:t->db;
+        web_scraper:t->db [dir=both];
         db->queue_stuffer:t;
         db->big_brother:t;
         slave_driver:t->db;
@@ -41,12 +41,12 @@ digraph piwheels {
 
     subgraph cluster_slave1 {
         graph [label="slave1"];
-        slave1 [label="{<t>main|{<builds>DEALER|<files>DEALER}}"];
+        slave1 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
     }
 
     subgraph cluster_slave2 {
         graph [label="slave2"];
-        slave2 [label="{<t>main|{<builds>DEALER|<files>DEALER}}"];
+        slave2 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
     }
 
     pypi->web_scraper:t;
