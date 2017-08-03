@@ -1,5 +1,5 @@
 digraph piwheels {
-    graph [nodesep=1, ranksep=1, style=filled, fontname=Sans, fontsize=14, fillcolor="#cccccc"];
+    graph [nodesep=0.5, ranksep=0.5, style=filled, fontname=Sans, fontsize=14, fillcolor="#cccccc"];
     node [shape=record, fontname=Sans, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
     edge [fontname=Sans, fontsize=8];
 
@@ -27,6 +27,7 @@ digraph piwheels {
         web_scraper:t->db [dir=both];
         db->queue_stuffer:t;
         db->big_brother:t;
+        fs->big_brother:t;
         slave_driver:t->db;
         db->index_scribbler:t;
 

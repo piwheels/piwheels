@@ -5,6 +5,7 @@ digraph slave {
     IDLE;
     BUILT;
     SENT;
+    BYE2 [label="BYE"];
 
     /* Received messages */
     node [shape=invhouse, fontname=Sans, fontsize=10, style=filled, fillcolor="#aaffaa", penwidth=0];
@@ -13,7 +14,7 @@ digraph slave {
     SEND;
     DONE;
     SLEEP;
-    BYE;
+    BYE1 [label="BYE"];
 
     /* Edges */
     edge [fontname=Sans, fontsize=10];
@@ -21,7 +22,7 @@ digraph slave {
     HELLO2->IDLE [label="[id]"];
     IDLE->BUILD [label="[package,\nversion]"];
     IDLE->SLEEP;
-    IDLE->BYE;
+    IDLE->BYE1;
     SLEEP->IDLE;
     BUILD->BUILT [label="[package,\nversion,\nstatus,\n..."];
     BUILT->DONE [label="failure"];
@@ -30,4 +31,5 @@ digraph slave {
     SENT->DONE [label="success"];
     SENT->SEND [label="failure"];
     DONE->IDLE;
+    BYE1->BYE2;
 }
