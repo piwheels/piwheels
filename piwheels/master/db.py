@@ -64,8 +64,11 @@ class PiWheelsDatabase:
         with self.conn.begin():
             logging.info('Adding %d new packages', len(missing_packages))
             for package in missing_packages:
-                logging.info('    Adding new package: %s', package)
-                self.add_new_package(package)
+                if len(package) > 200:
+                    logging.warning('    Ignoring stupid package name: %s', package)
+                else:
+                    logging.info('    Adding new package: %s', package)
+                    self.add_new_package(package)
 
     def update_package_version_list(self, package):
         """
@@ -81,9 +84,12 @@ class PiWheelsDatabase:
                                 len(missing_versions), package)
 
                 for version in missing_versions:
-                    logging.info('    Adding new package version: %s %s',
-                                    package, version)
-                    self.add_new_package_version(package, version)
+                    if len(version) > 200:
+                        logging.warning('    Ignoring stupid version: %s', version)
+                    else:
+                        logging.info('    Adding new package version: %s %s',
+                                        package, version)
+                        self.add_new_package_version(package, version)
 
     def log_build(self, build):
         """
