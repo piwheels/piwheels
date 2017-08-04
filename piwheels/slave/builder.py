@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import tempfile
 import hashlib
@@ -21,6 +22,12 @@ class PiWheelsHandler(logging.Handler):
 # Force git to fail if it needs to prompt for anything (a disturbing minority
 # of packages try to run git clone during their setup.py ...)
 os.environ['GIT_TERMINAL_PROMPT'] = '0'
+
+# Force any attempt to read from the command line to fail by closing stdin
+# (it's not enough to just close sys.stdin as that's a wrapper for the "real"
+# stdin)
+sys.stdin.close()
+os.close(0)
 
 wc = pip.commands.WheelCommand()
 handler = PiWheelsHandler()
@@ -48,13 +55,14 @@ class PiWheelsBuilder:
 
     def build(self):
         self.wheel_dir = tempfile.TemporaryDirectory()
-
-        _wheel_dir = '--wheel-dir={}'.format(self.wheel_dir.name)
-        _no_deps = '--no-deps'
-        _no_cache = '--no-cache-dir'
-        _package_spec = '{}=={}'.format(self.package, self.version)
         start = time()
-        self.status = not wc.main([_wheel_dir, _no_deps, _no_cache, _package_spec])
+        self.status = not wc.main([
+            '--wheel-dir={}'.format(self.wheel_dir.name),
+            '--no-deps',         # don't build dependencies
+            '--no-cache-dir',    # disable the cache directory
+            '--exists-action=w', # if paths already exist, wipe them
+            '{}=={}'.format(self.package, self.version),
+        ])
         self.duration = time() - start
         self.output = '\n'.join(handler.log)
 

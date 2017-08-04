@@ -103,6 +103,7 @@ class PiWheelsSlave(TerminalApplication):
         with builder.open() as f:
             queue = ctx.socket(zmq.DEALER)
             queue.ipv6 = True
+            queue.hwm = 10
             queue.connect('tcp://{master}:5556'.format(master=master))
             try:
                 timeout = 0
