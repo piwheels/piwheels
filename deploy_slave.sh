@@ -25,8 +25,13 @@ pip3 install pip --upgrade
 pip3 install pypandoc
 pip3 install versioneer
 pip3 install kervi
+getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m piwheels
 passwd -d piwheels
-su -c "rm -fr piwheels" -l piwheels
-su -c "git clone https://github.com/bennuttall/piwheels" -l piwheels
+git clone https://github.com/bennuttall/piwheels
+cd piwheels
+git remote add waveform https://github.com/waveform80/piwheels
+git fetch --all
+git checkout cli
+pip install .
