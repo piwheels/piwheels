@@ -123,7 +123,8 @@ class PiWheelsMonitor(TerminalApplication):
 
     def update_status(self, status_info):
         self.builds_bar.set_completion(
-            status_info['versions_built'] * 100 / status_info['versions_count'])
+            (status_info['versions_built'] * 100 / status_info['versions_count'])
+            if status_info['versions_count'] else 0)
         self.disk_bar.set_completion(
             status_info['disk_free'] * 100 / status_info['disk_size'])
         self.build_rate_label.set_text(
