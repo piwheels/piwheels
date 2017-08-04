@@ -153,6 +153,7 @@ class PiWheelsMonitor(TerminalApplication):
         else:
             for slave_id, slave in self.slave_list.slaves.items():
                 if slave.widget == widget:
+                    slave.terminated = True
                     self.ctrl_queue.send_json(('KILL', slave_id))
                     break
 
@@ -165,9 +166,9 @@ class PiWheelsMonitor(TerminalApplication):
 class SlaveListWalker(urwid.ListWalker):
     def __init__(self):
         super().__init__()
-        self.focus = 0
-        self.slaves = {}
-        self.widgets = []
+        self.focus = -1
+        self.slaves = {} # maps slave ID to SlaveState
+        self.widgets = [] # list of SlaveState.widget objects in list order
 
     def __getitem__(self, position):
         return self.widgets[position]
@@ -205,7 +206,7 @@ class SlaveListWalker(urwid.ListWalker):
         # Remove terminated slaves
         now = datetime.utcnow()
         for slave_id, state in list(self.slaves.items()):
-            if state.last_msg == 'BYE' and (now - state.last_seen > timedelta(seconds=5)):
+            if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
                 self.widgets.remove(state.widget)
                 del self.slaves[slave_id]
         self.focus = min(self.focus, len(self.widgets) - 1)
@@ -218,6 +219,7 @@ class SlaveState:
             urwid.SelectableIcon(''), None,
             focus_map={'status': 'invert'}
         )
+        self.terminated = False
         self.last_msg = ''
         self.last_seen = None
         self.status = ''
@@ -230,6 +232,7 @@ class SlaveState:
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
         elif msg == 'BYE':
+            self.terminated = True
             self.status = 'Terminating'
         elif msg == 'BUILD':
             self.status = 'Building {} {}'.format(args[0], args[1])

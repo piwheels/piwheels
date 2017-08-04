@@ -101,14 +101,14 @@ class PiWheelsMaster(TerminalApplication):
         except KeyboardInterrupt:
             logging.warning('Shutting down on Ctrl+C')
         finally:
-            # Give all slaves 5 seconds to quit; this may seem rather arbitrary
+            # Give all slaves 10 seconds to quit; this may seem rather arbitrary
             # but it's entirely possible there're dead slaves hanging around in
             # the slaves dict and there's no way (in our ridiculously simple
             # protocol) to terminate a slave in the middle of a build so an
             # arbitrary timeout is about the best we can do
             for slave in self.slaves.values():
                 slave.kill()
-            for i in range(5):
+            for i in range(10):
                 if not self.slaves:
                     break
                 sleep(1)
