@@ -35,3 +35,13 @@ git remote add waveform https://github.com/waveform80/piwheels
 git fetch --all
 git checkout cli
 pip install .
+if ! grep swapfile /etc/rc.local >/dev/null; then
+    dd if=/dev/zero of=/swapfile bs=1M count=512
+    chmod 0600 /swapfile
+    cat << EOF >> /etc/rc.local
+chmod 0600 /swapfile
+losetup /dev/loop0 /swapfile
+mkswap /dev/loop0
+swapon /dev/loop0
+EOF
+fi
