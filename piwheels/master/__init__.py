@@ -378,6 +378,7 @@ class PiWheelsMaster(TerminalApplication):
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(TransferState.output_path),
                 delete=False) as index:
+            index.file.write('<!DOCTYPE html>\n')
             index.file.write(
                 tag.html(
                     tag.head(
@@ -397,6 +398,7 @@ class PiWheelsMaster(TerminalApplication):
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(TransferState.output_path / package),
                 delete=False) as index:
+            index.file.write('<!DOCTYPE html>\n')
             index.file.write(
                 tag.html(
                     tag.head(
@@ -429,7 +431,8 @@ class PiWheelsMaster(TerminalApplication):
             # under the output path (this is much faster than querying the
             # database for the same info)
             packages = {
-                d for d in TransferState.output_path.iterdir()
+                str(d.relative_to(TransferState.output_path))
+                for d in TransferState.output_path.iterdir()
                 if d.is_dir()
             }
 
