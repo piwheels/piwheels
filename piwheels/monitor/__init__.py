@@ -179,7 +179,7 @@ class PiWheelsMonitor(TerminalApplication):
                     self.slave_to_kill = slave_id
                     break
             dialog = widgets.YesNoDialog('Kill Slave',
-                                 'Are you sure you wish to shutdown slave {}? '
+                                 'Are you sure you wish to shutdown slave {}?\n\n'
                                  'NOTE: this will only request shutdown after '
                                  'current task finishes; it will not terminate '
                                  'a "stuck" slave'.format(self.slave_to_kill))
