@@ -6,8 +6,8 @@ apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
     libffi-dev libxml2-dev libgmp-dev libhdf5-dev libldap2-dev libjpeg-dev \
-    libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev python-numpy \
-    python3-numpy python-scipy python3-scipy python-matplotlib \
+    libusb-dev libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
+    python-numpy python3-numpy python-scipy python3-scipy python-matplotlib \
     python3-matplotlib python-pandas python3-pandas cython cython3 \
     python-yaml python3-yaml python-lxml python3-lxml python-cffi \
     python3-cffi python-bs4 python3-bs4 python-click \
@@ -20,7 +20,7 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
     python-dnspython python3-dnspython python-sphinx python3-sphinx \
     python-boto python3-boto python-gi python3-gi python-gi-cairo \
     python3-gi-cairo python-cairocffi python3-cairocffi \
-    ipython ipython3 git tree byobu htop pkg-config
+    ipython ipython3 git tree byobu htop pkg-config gfortran
 pip3 install pip --upgrade
 pip3 install pypandoc
 pip3 install versioneer

@@ -3,7 +3,7 @@ import logging
 import tempfile
 import hashlib
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Thread, Event
 from collections import namedtuple
 from pathlib import Path
@@ -11,6 +11,7 @@ from pathlib import Path
 import sqlalchemy as sa
 import zmq
 from zmq.utils import jsonapi
+from pkg_resources import resource_string, resource_stream
 
 
 from .db import PiWheelsDatabase
@@ -36,6 +37,23 @@ class PiWheelsMaster(TerminalApplication):
                                  help='The path to write wheels into '
                                  '(default: %(default)s)')
 
+    def setup_paths(self, args):
+        output_path = Path(args.output)
+        try:
+            output_path.mkdir()
+        except FileExistsError:
+            pass
+        try:
+            (output_path / 'simple').mkdir()
+        except FileExistsError:
+            pass
+        for filename in ('raspberry-pi-logo.svg', 'python-logo.svg'):
+            with (output_path / filename).open('wb') as f:
+                source = resource_stream(__name__, filename)
+                f.write(source.read())
+                source.close()
+        TransferState.output_path = output_path
+
     def main(self, args):
         logging.info('PiWheels Master version {}'.format(__version__))
         self.slaves = {}
@@ -43,12 +61,8 @@ class PiWheelsMaster(TerminalApplication):
         self.paused = False
         self.db_engine = sa.create_engine(args.dsn)
         self.pypi_root = args.pypi_root
-        output_path = Path(args.output)
-        try:
-            output_path.mkdir()
-        except FileExistsError:
-            pass
-        TransferState.output_path = output_path
+        self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
+        self.setup_paths(args)
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.PUB)
         quit_queue.hwm = 1
@@ -178,11 +192,7 @@ class PiWheelsMaster(TerminalApplication):
             with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(10000):
                     stat = os.statvfs(str(TransferState.output_path))
-                    status_queue.send_json([
-                        -1,
-                        datetime.utcnow().timestamp(),
-                        'STATUS',
-                        {
+                    status_info = {
                             'packages_count':   db.get_packages_count(),
                             'packages_built':   db.get_packages_built(),
                             'versions_count':   db.get_versions_count(),
@@ -194,7 +204,13 @@ class PiWheelsMaster(TerminalApplication):
                             'builds_size':      db.get_builds_size(),
                             'disk_free':        stat.f_frsize * stat.f_bavail,
                             'disk_size':        stat.f_frsize * stat.f_blocks,
-                        },
+                        }
+                    self.write_homepage(status_info)
+                    status_queue.send_json([
+                        -1,
+                        datetime.utcnow().timestamp(),
+                        'STATUS',
+                        status_info
                     ])
         finally:
             status_queue.close()
@@ -374,9 +390,22 @@ class PiWheelsMaster(TerminalApplication):
             file_queue.close()
             quit_queue.close()
 
-    def write_root_index(self, packages):
+    def write_homepage(self, status_info):
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(TransferState.output_path),
+                delete=False) as index:
+            index.file.write(self.homepage_template.format(
+                packages_built=status_info['packages_built'],
+                versions_built=status_info['versions_built'],
+                builds_time=timedelta(seconds=status_info['builds_time']),
+                builds_size=status_info['builds_size'] // 1048576
+            ))
+            os.fchmod(index.file.fileno(), 0o664)
+            os.replace(index.name, str(TransferState.output_path / 'index.html'))
+
+    def write_root_index(self, packages):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path / 'simple'),
                 delete=False) as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
@@ -392,11 +421,11 @@ class PiWheelsMaster(TerminalApplication):
                 )
             )
             os.fchmod(index.file.fileno(), 0o644)
-            os.replace(index.name, str(TransferState.output_path / 'index.html'))
+            os.replace(index.name, str(TransferState.output_path / 'simple' / 'index.html'))
 
     def write_package_index(self, package, files):
         with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(TransferState.output_path / package),
+                mode='w', dir=str(TransferState.output_path / 'simple' / package),
                 delete=False) as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
@@ -416,7 +445,7 @@ class PiWheelsMaster(TerminalApplication):
                 )
             )
             os.fchmod(index.file.fileno(), 0o644)
-            os.replace(index.name, str(TransferState.output_path / package / 'index.html'))
+            os.replace(index.name, str(TransferState.output_path / 'simple' / package / 'index.html'))
 
     def index_scribbler(self):
         ctx = zmq.Context.instance()

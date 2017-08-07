@@ -61,6 +61,7 @@ class PiWheelsBuilder:
             '--no-deps',         # don't build dependencies
             '--no-cache-dir',    # disable the cache directory
             '--exists-action=w', # if paths already exist, wipe them
+            '--disable-pip-version-check', # don't bother checking for new pip
             '{}=={}'.format(self.package, self.version),
         ])
         self.duration = time() - start
