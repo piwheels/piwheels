@@ -65,22 +65,22 @@ Python packages) specifically for the <a
 href="https://raspberrypi.org">Raspberry Pi</a>.</p>
 
 <h2>Configuration</h2>
-<p>If you're using a recent edition of <a
-  href="https://www.raspberrypi.org/downloads/raspbian/">Raspbian</a> then
-you're likely already configured to use piwheels. However, if you're on an
-older edition or an alternate distribution, place the following lines in
-<tt>/etc/pip.conf</tt>:</p>
+<p>Future versions of <a
+             href="https://www.raspberrypi.org/downloads/raspbian/">Raspbian</a>
+are likely to include configuration implicitly for piwheels. However, until
+then (or if you're using an alternate distribution), place the following lines
+in <tt>/etc/pip.conf</tt>:</p>
 <pre><code>[global]
 extra-index-url=https://www.piwheels.hostedpi.com/simple
 </code></pre>
 <p>That's it! With this simple configuration change, <tt>pip</tt> should now
 search piwheels for binary packages and use them in preference to building from
 source. You can test this out by creating a virtual environment and attempting
-to install <a href="https://numpy.org/">numpy</a> which usually involves a
+to install <a href="https://numpy.org/">cffi</a> which usually involves a
 fairly lengthy compilation:</p>
 <pre><code>$ virtualenv -p /usr/bin/python3 testpip
 $ source testpip/bin/activate
-(testpip) $ pip install numpy
+(testpip) $ pip install cffi
 ...
 (testpip) $ deactivate
 $ rm -fr testpip/
