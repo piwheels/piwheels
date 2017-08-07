@@ -567,7 +567,7 @@ class TransferState:
 
     def __init__(self, filesize):
         self._file = tempfile.NamedTemporaryFile(
-            dir=str(self.output_path), delete=False)
+            dir=str(self.output_path / 'simple'), delete=False)
         self._file.seek(filesize)
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
