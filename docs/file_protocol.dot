@@ -1,0 +1,19 @@
+digraph slave {
+    /* Sent messages */
+    node [shape=house, fontname=Sans, fontsize=10, style=filled, fillcolor="#ffaaaa", penwidth=0];
+    HELLO;
+    CHUNK;
+
+    /* Received messages */
+    node [shape=invhouse, fontname=Sans, fontsize=10, style=filled, fillcolor="#aaffaa", penwidth=0];
+    FETCH;
+    DONE;
+
+    /* Edges */
+    edge [fontname=Sans, fontsize=10];
+    HELLO->FETCH [label="[id]"];
+    FETCH->CHUNK [label="[offset,length]"];
+    CHUNK->FETCH [label="[offset,data]"];
+    CHUNK->DONE;
+}
+

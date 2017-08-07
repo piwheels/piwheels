@@ -1,0 +1,2 @@
+include piwheels/master/*.svg
+include piwheels/master/*.html
