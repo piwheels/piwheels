@@ -21,7 +21,7 @@ class PiWheelsHandler(logging.Handler):
 
 # Force git to fail if it needs to prompt for anything (a disturbing minority
 # of packages try to run git clone during their setup.py ...)
-os.environ['GIT_TERMINAL_PROMPT'] = '0'
+os.environ['GIT_ALLOW_PROTOCOL'] = 'file'
 
 # Force any attempt to read from the command line to fail by closing stdin
 # (it's not enough to just close sys.stdin as that's a wrapper for the "real"
