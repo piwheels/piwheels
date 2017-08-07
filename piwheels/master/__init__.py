@@ -460,8 +460,8 @@ class PiWheelsMaster(TerminalApplication):
             # under the output path (this is much faster than querying the
             # database for the same info)
             packages = {
-                str(d.relative_to(TransferState.output_path))
-                for d in TransferState.output_path.iterdir()
+                str(d.relative_to(TransferState.output_path / 'simple'))
+                for d in (TransferState.output_path / 'simple').iterdir()
                 if d.is_dir()
             }
 
