@@ -29,11 +29,14 @@ getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m piwheels
 passwd -d piwheels
-git clone https://github.com/bennuttall/piwheels
-cd piwheels
-git remote add waveform https://github.com/waveform80/piwheels
-git fetch --all
-git checkout cli
+if [ -d piwheels ]; then
+  cd piwheels
+  git pull
+  pip uninstall -y piwheels
+else
+  git clone https://github.com/bennuttall/piwheels
+  cd piwheels
+fi
 pip install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
     dd if=/dev/zero of=/swapfile bs=1M count=512
