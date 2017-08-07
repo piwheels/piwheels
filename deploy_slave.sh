@@ -27,7 +27,7 @@ pip3 install versioneer
 pip3 install kervi
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
-getent passwd piwheels || useradd -g piwheels -m piwheels
+getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 if [ -d piwheels ]; then
   cd piwheels
