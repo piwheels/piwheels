@@ -39,12 +39,12 @@ else
 fi
 pip install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
-    dd if=/dev/zero of=/swapfile bs=1M count=512
+    dd if=/dev/zero of=/swapfile bs=1M count=1024
     chmod 0600 /swapfile
-    cat << EOF >> /etc/rc.local
-chmod 0600 /swapfile
-losetup /dev/loop0 /swapfile
-mkswap /dev/loop0
-swapon /dev/loop0
-EOF
+    sed -i -e '$i\
+chmod 0600 /swapfile\
+losetup /dev/loop0 /swapfile\
+mkswap /dev/loop0\
+swapon /dev/loop0\
+' /etc/rc.local
 fi

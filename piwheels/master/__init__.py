@@ -164,7 +164,7 @@ class PiWheelsMaster(TerminalApplication):
         quit_queue.connect('inproc://quit')
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         build_queue = ctx.socket(zmq.PUSH)
-        build_queue.hwm = 10
+        build_queue.hwm = 50
         build_queue.bind('inproc://builds')
         try:
             with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
@@ -318,7 +318,7 @@ class PiWheelsMaster(TerminalApplication):
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         file_queue = ctx.socket(zmq.ROUTER)
         file_queue.ipv6 = True
-        file_queue.hwm = TransferState.pipeline_size * 10
+        file_queue.hwm = TransferState.pipeline_size * 50
         file_queue.bind('tcp://*:5556')
         try:
             while not quit_queue.poll(0):
