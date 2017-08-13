@@ -67,7 +67,7 @@ class PiWheelsMonitor(TerminalApplication):
             widgets.Pile([
                 widgets.Columns([
                     (12, widgets.Pile([
-                        widgets.Text('Disk'),
+                        widgets.Text('Disk Free'),
                         widgets.Text('Builds'),
                         widgets.Text('Build Rate'),
                         widgets.Text('Build Time'),

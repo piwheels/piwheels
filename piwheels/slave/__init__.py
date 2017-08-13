@@ -19,7 +19,7 @@ class PiWheelsSlave(TerminalApplication):
 
     def main(self, args):
         logging.info('PiWheels Slave version {}'.format(__version__))
-        ctx = zmq.Context()
+        ctx = zmq.Context.instance()
         master = args.master
         slave_id = None
         builder = None
@@ -59,24 +59,30 @@ class PiWheelsSlave(TerminalApplication):
                         builder.package,
                         builder.version,
                         builder.status,
-                        builder.output,
-                        builder.filename,
-                        builder.filesize,
-                        builder.filehash,
                         builder.duration,
-                        builder.package_version_tag,
-                        builder.py_version_tag,
-                        builder.abi_tag,
-                        builder.platform_tag,
+                        builder.output,
+                        {
+                            pkg.filename: (
+                                pkg.filesize,
+                                pkg.filehash,
+                                pkg.package_version_tag,
+                                pkg.py_version_tag,
+                                pkg.abi_tag,
+                                pkg.platform_tag,
+                            )
+                            for pkg in builder.files
+                        },
+
                     ]
 
                 elif reply == 'SEND':
                     assert slave_id is not None, 'Send before hello'
                     assert builder, 'Send before build / after failed build'
                     assert builder.status, 'Send after failed build'
-                    assert len(args) == 0, 'Invalid SEND messsage'
-                    logging.info('Sending package to master')
-                    self.transfer(master, ctx, slave_id, builder)
+                    assert len(args) == 1, 'Invalid SEND messsage'
+                    pkg = [f for f in builder.files if f.filename == args[0]][0]
+                    logging.info('Sending %s to master', pkg.filename)
+                    self.transfer(master, slave_id, pkg)
                     request = ['SENT']
 
                 elif reply == 'DONE':
@@ -99,8 +105,9 @@ class PiWheelsSlave(TerminalApplication):
             queue.close()
             ctx.term()
 
-    def transfer(self, master, ctx, slave_id, builder):
-        with builder.open() as f:
+    def transfer(self, master, slave_id, package):
+        ctx = zmq.Context.instance()
+        with package.open() as f:
             queue = ctx.socket(zmq.DEALER)
             queue.ipv6 = True
             queue.hwm = 10

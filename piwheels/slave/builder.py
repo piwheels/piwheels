@@ -5,6 +5,7 @@ import tempfile
 import hashlib
 from time import time
 from pathlib import Path
+from collections import namedtuple
 
 import pip
 
@@ -34,6 +35,30 @@ handler = PiWheelsHandler()
 pip.logger.addHandler(handler)
 
 
+class PiWheelsPackage:
+    def __init__(self, path):
+        self.wheel_file = path
+        self.filename = path.name
+        self.filesize = path.stat().st_size
+        m = hashlib.sha256()
+        with path.open('rb') as f:
+            while True:
+                buf = f.read(65536)
+                if buf:
+                    m.update(buf)
+                else:
+                    break
+        self.filehash = m.hexdigest().lower()
+        wheel_tags = self.filename[:-4].split('-')
+        self.package_version_tag = wheel_tags[-4]
+        self.py_version_tag = wheel_tags[-3]
+        self.abi_tag = wheel_tags[-2]
+        self.platform_tag = wheel_tags[-1]
+
+    def open(self, mode='rb'):
+        return self.wheel_file.open(mode)
+
+
 class PiWheelsBuilder:
     """
     PiWheels builder class
@@ -44,13 +69,9 @@ class PiWheelsBuilder:
         self.wheel_dir = None
         self.package = package
         self.version = version
-        self.filename = None
-        self.filesize = None
-        self.filehash = None
-        self.package_version_tag = None
-        self.py_version_tag = None
-        self.abi_tag = None
-        self.platform_tag = None
+        self.duration = None
+        self.output = ''
+        self.files = []
         handler.reset()
 
     def build(self):
@@ -68,26 +89,8 @@ class PiWheelsBuilder:
         self.output = '\n'.join(handler.log)
 
         if self.status:
-            self.wheel_file = next(Path(self.wheel_dir.name).glob('*.whl'))
-            self.filename = self.wheel_file.name
-            self.filesize = self.wheel_file.stat().st_size
-            m = hashlib.sha256()
-            with self.wheel_file.open('rb') as f:
-                while True:
-                    buf = f.read(65536)
-                    if buf:
-                        m.update(buf)
-                    else:
-                        break
-            self.filehash = m.hexdigest().lower()
-            wheel_tags = self.filename[:-4].split('-')
-            self.package_version_tag = wheel_tags[-4]
-            self.py_version_tag = wheel_tags[-3]
-            self.abi_tag = wheel_tags[-2]
-            self.platform_tag = wheel_tags[-1]
-
-    def open(self):
-        return self.wheel_file.open('rb')
+            for path in Path(self.wheel_dir.name).glob('*.whl'):
+                self.files.append(PiWheelsPackage(path))
 
     def clean(self):
         if self.wheel_dir:

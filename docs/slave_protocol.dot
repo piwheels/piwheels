@@ -29,7 +29,7 @@ digraph slave {
     BUILT->SEND [label="success"];
     SEND->SENT;
     SENT->DONE [label="success"];
-    SENT->SEND [label="failure"];
+    SENT->SEND [label="failure/more"];
     DONE->IDLE;
     BYE1->BYE2;
 }
