@@ -7,6 +7,7 @@ apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
     libffi-dev libxml2-dev libgmp-dev libhdf5-dev libldap2-dev libjpeg-dev \
     libusb-dev libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
+    libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libgles1-mesa-dev \
     python-numpy python3-numpy python-scipy python3-scipy python-matplotlib \
     python3-matplotlib python-pandas python3-pandas cython cython3 \
     python-yaml python3-yaml python-lxml python3-lxml python-cffi \

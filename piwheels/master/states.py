@@ -1,0 +1,373 @@
+import os
+import hashlib
+import logging
+import tempfile
+from pathlib import Path
+from datetime import datetime
+from collections import namedtuple
+
+from .ranges import exclude, intersect
+
+
+class FileState:
+    """
+    Represents the state of an individual package file including its
+    :attr:`filename`, :attr:`filesize`, the SHA256 :attr:`filehash`, and various
+    tags extracted from the build. Also tracks whether or not the file has been
+    :attr:`transferred`.
+    """
+
+    def __init__(self, filename, filesize, filehash, package_version_tag,
+                 py_version_tag, abi_tag, platform_tag, transferred=False):
+        self._filename = filename
+        self._filesize = filesize
+        self._filehash = filehash
+        self._package_version_tag = package_version_tag
+        self._py_version_tag = py_version_tag
+        self._abi_tag = abi_tag
+        self._platform_tag = platform_tag
+        self._transferred = transferred
+
+    def __repr__(self):
+        return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
+            filename=self.filename,
+            filesize=self.filesize // 1024,
+            transferred=('' if self.transferred else 'not ') + 'transferred'
+        )
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def filesize(self):
+        return self._filesize
+
+    @property
+    def filehash(self):
+        return self._filehash
+
+    @property
+    def package_version_tag(self):
+        return self._package_version_tag
+
+    @property
+    def py_version_tag(self):
+        return self._py_version_tag
+
+    @property
+    def abi_tag(self):
+        return self._abi_tag
+
+    @property
+    def platform_tag(self):
+        return self._platform_tag
+
+    @property
+    def transferred(self):
+        return self._transferred
+
+    def verified(self):
+        self._transferred = True
+
+
+class BuildState:
+    """
+    Represents the state of a package build including the :attr:`package`,
+    :attr:`version`, :attr:`status`, build :attr:`duration`, and all the lines
+    of :attr:`output`. The :attr:`files` attribute is a mapping containing
+    details of each successfully built package file.
+    """
+
+    def __init__(self, slave_id, package, version, status, duration, output,
+                 files, build_id=None):
+        self._slave_id = slave_id
+        self._package = package
+        self._version = version
+        self._status = status
+        self._duration = duration
+        self._output = output
+        self._files = files
+        self._build_id = build_id
+
+    def __repr__(self):
+        return "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".format(
+            build_id=self.build_id, package=self.package, version=self.version,
+            status='failed' if not self.status else '{count} files'.format(count=len(self.files))
+        )
+
+    @classmethod
+    def from_db(self, db, build_id):
+        for brec in db.get_build(build_id):
+            return BuildState(
+                brec.built_by,
+                brec.package,
+                brec.version,
+                brec.status,
+                brec.duration,
+                brec.output,
+                {
+                    frec.filename: FileState(
+                        frec.filename,
+                        frec.filesize,
+                        frec.filehash,
+                        frec.package_version_tag,
+                        frec.py_version_tag,
+                        frec.abi_tag,
+                        frec.platform_tag,
+                        transferred=True
+                    )
+                    for frec in db.get_files(build_id)
+                },
+                build_id
+            )
+        raise ValueError('Unknown build id %d' % build_id)
+
+    @property
+    def slave_id(self):
+        return self._slave_id
+
+    @property
+    def build_id(self):
+        return self._build_id
+
+    @property
+    def package(self):
+        return self._package
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def status(self):
+        return self._status
+
+    @property
+    def duration(self):
+        return self._duration
+
+    @property
+    def output(self):
+        return self._output
+
+    @property
+    def files(self):
+        """
+        A mapping of filename to :class:`FileState` instances.
+        """
+        return self._files
+
+    @property
+    def transfers_done(self):
+        """
+        Returns ``True`` if all files have been transferred.
+        """
+        return all(f.transferred for f in self._files.values())
+
+    @property
+    def next_file(self):
+        """
+        Returns the filename of the next file that needs transferring or
+        ``None`` if all files have been transferred.
+        """
+        for filename, f in self._files.items():
+            if not f.transferred:
+                return filename
+        return None
+
+    def logged(self, build_id):
+        """
+        Called to fill in the build's ID in the backend database.
+        """
+        self._build_id = build_id
+
+
+class SlaveState:
+    """
+    Tracks the state of a build slave. The master updates this state which each
+    request and reply sent to and received from the slave, and this class in
+    turn manages the associated :class:`BuildState` (accessible from
+    :attr:`build`) and :class:`TransferState` (accessible from
+    :attr:`transfer`). The class also tracks the time a request was last seen
+    from the build slave, and includes a :meth:`kill` method.
+    """
+
+    counter = 0
+    status_queue = None
+
+    def __init__(self):
+        SlaveState.counter += 1
+        self._slave_id = SlaveState.counter
+        self._last_seen = None
+        self._request = None
+        self._reply = None
+        self._build = None
+        self._transfer = None
+        self._terminated = False
+
+    def __repr__(self):
+        return "<SlaveState: id={slave_id}, last_seen={last_seen}, last_reply={reply}, {alive}>".format(
+            slave_id=self.slave_id,
+            last_seen=datetime.utcnow() - self.last_seen,
+            reply='none' if self.reply is None else self.reply[0],
+            alive='killed' if self.terminated else 'alive'
+        )
+
+    def kill(self):
+        self._terminated = True
+
+    @property
+    def terminated(self):
+        return self._terminated
+
+    @property
+    def slave_id(self):
+        return self._slave_id
+
+    @property
+    def last_seen(self):
+        return self._last_seen
+
+    @property
+    def build(self):
+        return self._build
+
+    @property
+    def transfer(self):
+        return self._transfer
+
+    @property
+    def request(self):
+        return self._request
+
+    @request.setter
+    def request(self, value):
+        self._last_seen = datetime.utcnow()
+        self._request = value
+        if value[0] == 'BUILT':
+            self._build = BuildState(self._slave_id, *value[1:6], files={
+                filename: FileState(filename, *filestate)
+                for filename, filestate in value[-1].items()
+            })
+
+    @property
+    def reply(self):
+        return self._reply
+
+    @reply.setter
+    def reply(self, value):
+        self._reply = value
+        if value[0] == 'SEND':
+            self._transfer = TransferState(self._build.files[value[1]].filesize)
+        elif value[0] == 'DONE':
+            self._build = None
+            self._transfer = None
+        SlaveState.status_queue.send_json(
+            [self._slave_id, self._last_seen.timestamp()] + value)
+
+
+class TransferState:
+    """
+    Tracks the state of a file transfer. All file transfers are held in
+    temporary locations until :meth:`verify` indicates the transfer was
+    successful, at which point they are atomically renamed into their final
+    location.
+
+    The state is intimately tied to the file transfer protocol and includes
+    methods to write a recevied :meth:`chunk`, and to determine the next chunk
+    to :meth:`fetch`, as well as a property to determine when the transfer is
+    :attr:`done`.
+    """
+
+    chunk_size = 65536
+    pipeline_size = 10
+    output_path = Path('.')
+
+    def __init__(self, filesize):
+        self._file = tempfile.NamedTemporaryFile(
+            dir=str(self.output_path / 'simple'), delete=False)
+        self._file.seek(filesize)
+        self._file.truncate()
+        # See 0MQ guide's File Transfers section for more on the credit-driven
+        # nature of this interaction
+        self._credit = max(1, min(self.pipeline_size, filesize // self.chunk_size))
+        # _offset is the position that we will next return when the fetch()
+        # method is called (or rather, it's the minimum position we'll return)
+        # whilst _map is a sorted list of ranges indicating which bytes of the
+        # file we have yet to received; this is manipulated by chunk()
+        self._offset = 0
+        self._map = [range(filesize)]
+
+    def __repr__(self):
+        return "<TransferState: offset={offset} map={_map}>".format(
+            offset=self._offset, _map=self._map)
+
+    @property
+    def done(self):
+        return not self._map
+
+    def fetch(self):
+        if self._credit:
+            self._credit -= 1
+            assert self._credit >= 0
+            fetch_range = range(self._offset, self._offset + self.chunk_size)
+            while True:
+                for map_range in self._map:
+                    result = intersect(map_range, fetch_range)
+                    if result:
+                        self._offset = result.stop
+                        return result
+                    elif map_range.start > fetch_range.start:
+                        fetch_range = range(map_range.start, map_range.start + self.chunk_size)
+                try:
+                    fetch_range = range(self._map[0].start, self._map[0].start + self.chunk_size)
+                except IndexError:
+                    return None
+
+    def chunk(self, offset, data):
+        self._file.seek(offset)
+        self._file.write(data)
+        self._map = list(exclude(self._map, range(offset, offset + len(data))))
+        if not self._map:
+            self._credit = 0
+        else:
+            self._credit += 1
+
+    def reset_credit(self):
+        if self._credit == 0:
+            # NOTE: We don't bother with the filesize here; if we're dropping
+            # that many packets we should max out "in-flight" packets for this
+            # transfer anyway
+            self._credit = self.pipeline_size
+        else:
+            logging.warning('Transfer still has credit; no need for reset')
+
+    def verify(self, build):
+        file_state = build.files[build.next_file]
+        # XXX Would be nicer to construct the hash from the transferred chunks
+        # with a tree, but this potentially costs quite a bit of memory
+        self._file.seek(0)
+        m = hashlib.sha256()
+        while True:
+            buf = self._file.read(self.chunk_size)
+            if buf:
+                m.update(buf)
+            else:
+                break
+        self._file.close()
+        p = Path(self._file.name)
+        if m.hexdigest().lower() == file_state.filehash:
+            p.chmod(0o644)
+            try:
+                p.with_name(build.package).mkdir()
+            except FileExistsError:
+                pass
+            pkg_name = p.with_name(build.package) / file_state.filename
+            p.rename(pkg_name)
+            file_state.verified()
+            return True
+        else:
+            p.unlink()
+            return False
+

@@ -20,6 +20,9 @@ class PiWheelsDatabase:
         self.versions = Table('versions', self.meta, autoload=True)
         self.builds = Table('builds', self.meta, autoload=True)
         self.files = Table('files', self.meta, autoload=True)
+        # The following are views on the tables above
+        self.builds_pending = Table('builds_pending', self.meta, autoload=True)
+        self.statistics = Table('statistics', self.meta, autoload=True)
 
     def __enter__(self):
         return self
@@ -99,7 +102,7 @@ class PiWheelsDatabase:
         logging.info('Package %s %s %s',
                      ('failed', 'built')[build.status], build.package, build.version)
         with self.conn.begin():
-            result = self.conn.execute(
+            build.logged(self.conn.scalar(
                 self.builds.insert().returning(self.builds.c.build_id),
                 package=build.package,
                 version=build.version,
@@ -107,54 +110,52 @@ class PiWheelsDatabase:
                 duration=timedelta(seconds=build.duration),
                 output=build.output,
                 status=build.status
-            )
-            build_id, = result.fetchone()
+            ))
             if build.status:
-                try:
-                    with self.conn.begin_nested():
-                        self.conn.execute(
-                            self.files.insert(),
+                for f in build.files.values():
+                    self.log_file(build, f)
 
-                            filename=build.filename,
-                            build_id=build_id,
-                            filesize=build.filesize,
-                            filehash=build.filehash,
-                            package_version_tag=build.package_version_tag,
-                            py_version_tag=build.py_version_tag,
-                            abi_tag=build.abi_tag,
-                            platform_tag=build.platform_tag
-                        )
-                except DBAPIError:
+    def log_file(self, build, file):
+        """
+        Log a pending file transfer in the database, including file-size, hash,
+        and various tags
+        """
+        logging.info('Pending file transfer for %s', file.filename)
+        with self.conn.begin():
+            try:
+                with self.conn.begin_nested():
                     self.conn.execute(
-                        self.files.update().
-                        where(self.files.c.filename == build.filename),
+                        self.files.insert(),
 
-                        build_id=build_id,
-                        filesize=build.filesize,
-                        filehash=build.filehash,
-                        package_version_tag=build.package_version_tag,
-                        py_version_tag=build.py_version_tag,
-                        abi_tag=build.abi_tag,
-                        platform_tag=build.platform_tag
+                        filename=file.filename,
+                        build_id=build.build_id,
+                        filesize=file.filesize,
+                        filehash=file.filehash,
+                        package_version_tag=file.package_version_tag,
+                        py_version_tag=file.py_version_tag,
+                        abi_tag=file.abi_tag,
+                        platform_tag=file.platform_tag
                     )
+            except DBAPIError:
+                self.conn.execute(
+                    self.files.update().
+                    where(self.files.c.filename == file.filename),
+
+                    build_id=build.build_id,
+                    filesize=file.filesize,
+                    filehash=file.filehash,
+                    package_version_tag=file.package_version_tag,
+                    py_version_tag=file.py_version_tag,
+                    abi_tag=file.abi_tag,
+                    platform_tag=file.platform_tag
+                )
 
     def get_all_packages(self):
         """
         Returns a list of all known package names
         """
         with self.conn.begin():
-            return [rec.package for rec in self.conn.execute(
-                select([self.packages.c.package])
-            )]
-
-    def get_total_number_of_packages_with_versions(self):
-        """
-        Returns the list of packages which have published at least one version
-        """
-        with self.conn.begin():
-            return [rec.package for rec in self.conn.execute(
-                select([self.versions.c.package]).distinct()
-            )]
+            return [rec.package for rec in self.conn.execute(select([self.packages]))]
 
     def get_build_queue(self):
         """
@@ -162,14 +163,38 @@ class PiWheelsDatabase:
         requiring building
         """
         with self.conn.begin():
-            for rec in self.conn.execute(
-                select([self.versions.c.package, self.versions.c.version]).
-                select_from(self.packages.join(self.versions.outerjoin(self.builds))).
-                where(self.builds.c.package == None).
-                where(self.packages.c.skip == False).
-                where(self.versions.c.skip == False)
-            ):
+            for rec in self.conn.execute(select([self.builds_pending])):
                 yield rec.package, rec.version
+
+    def get_statistics(self):
+        """
+        Return various build related statistics from the database (see the
+        definition of the ``statistics`` view in the database creation script
+        for more information.
+        """
+        with self.conn.begin():
+            for rec in self.conn.execute(select([self.statistics])):
+                return rec
+
+    def get_build(self, build_id):
+        """
+        Return all details about a given build.
+        """
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.builds]).
+                where(self.builds.c.build_id == build_id)
+            )
+
+    def get_files(self, build_id):
+        """
+        Return all details about the files generated by a given build.
+        """
+        with self.conn.begin():
+            return self.conn.execute(
+                select([self.files]).
+                where(self.files.c.build_id == build_id)
+            )
 
     def get_package_files(self, package):
         """
@@ -195,96 +220,6 @@ class PiWheelsDatabase:
                 order_by(self.versions.c.version)
             )
             return [rec.version for rec in result]
-
-    def get_packages_count(self):
-        """
-        Returns the total number of known packages
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.packages)
-            )
-
-    def get_packages_built(self):
-        """
-        Returns the total number of packages processed
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count(distinct(self.builds.c.package))])
-            )
-
-    def get_versions_count(self):
-        """
-        Returns the total number of known package versions
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.versions)
-            )
-
-    def get_versions_built(self):
-        """
-        Returns the total number of distinct package versions built.
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count(func.distinct(self.builds.c.package, self.builds.c.version))])
-            )
-
-    def get_builds_count_success(self):
-        """
-        Returns the total number of successful builds
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.builds).
-                where(self.builds.c.status)
-            )
-
-    def get_builds_count_last_hour(self):
-        """
-        Return the number of builds processed in the last hour
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.builds).
-                where(self.builds.c.built_at > text("TIMEZONE('UTC', NOW() - INTERVAL '1 HOUR')"))
-            )
-
-    def get_builds_count(self):
-        """
-        Returns the total number of package versions processed
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.count('*')]).
-                select_from(self.builds)
-            )
-
-    def get_builds_time(self):
-        """
-        Returns the total duration of time spent building packages
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.sum(self.builds.c.duration)])
-            ) or timedelta(seconds=0)
-
-    def get_builds_size(self):
-        """
-        Returns the total number of bytes used by all built wheels (note: this
-        is probably smaller than the actual file-system space used as it doesn't
-        take into account file-system overhead).
-        """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([func.sum(self.files.c.filesize)])
-            ) or 0
 
     def get_package_output(self, package):
         """

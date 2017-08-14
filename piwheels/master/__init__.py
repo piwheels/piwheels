@@ -1,11 +1,9 @@
 import os
 import logging
 import tempfile
-import hashlib
 from time import sleep
 from datetime import datetime, timedelta
 from threading import Thread, Event
-from collections import namedtuple
 from pathlib import Path
 
 import sqlalchemy as sa
@@ -13,10 +11,9 @@ import zmq
 from zmq.utils import jsonapi
 from pkg_resources import resource_string, resource_stream
 
-
 from .db import PiWheelsDatabase
-from .ranges import exclude, intersect
 from .html import tag
+from .states import FileState, BuildState, SlaveState, TransferState
 from ..terminal import TerminalApplication
 from .. import __version__
 
@@ -55,6 +52,13 @@ class PiWheelsMaster(TerminalApplication):
         TransferState.output_path = output_path
 
     def main(self, args):
+        """
+        The "main" task is responsible for constructing (and starting) the
+        threads for all the sub-tasks. It also creates the queues used to
+        interact with any monitors ("piw-control" and "piw-status"). Finally, it
+        also creates and controls the internal "quit" queue, used to indicate to
+        the sub-tasks when termination has been requested.
+        """
         logging.info('PiWheels Master version {}'.format(__version__))
         self.slaves = {}
         self.transfers = {}
@@ -141,6 +145,11 @@ class PiWheelsMaster(TerminalApplication):
             ctx.term()
 
     def web_scraper(self):
+        """
+        This task scrapes PyPI for the list of available packages, and the
+        versions of those packages. This information is written into the backend
+        database for :meth:`queue_stuffer` to use.
+        """
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -159,6 +168,12 @@ class PiWheelsMaster(TerminalApplication):
             quit_queue.close()
 
     def queue_stuffer(self):
+        """
+        This task queries the backend database to determine which versions of
+        packages have yet to be built (and aren't marked to be skipped). It
+        places a tuple of (package, version) for each such build into the
+        internal "builds" queue for :meth:`slave_driver` to read.
+        """
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -181,6 +196,14 @@ class PiWheelsMaster(TerminalApplication):
             quit_queue.close()
 
     def big_brother(self):
+        """
+        This task periodically queries the database and output file-system for
+        various statistics like the number of packages known to the system,
+        the number built, the number of packages built in the last hour, the
+        remaining file-system space, etc. These statistics are written to the
+        internal "status" queue which :meth:`main` uses to pass statistics to
+        any listening monitors.
+        """
         ctx = zmq.Context.instance()
         status_queue = ctx.socket(zmq.PUSH)
         status_queue.hwm = 1
@@ -192,16 +215,17 @@ class PiWheelsMaster(TerminalApplication):
             with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
                 while not quit_queue.poll(10000):
                     stat = os.statvfs(str(TransferState.output_path))
+                    rec = db.get_statistics()
                     status_info = {
-                            'packages_count':   db.get_packages_count(),
-                            'packages_built':   db.get_packages_built(),
-                            'versions_count':   db.get_versions_count(),
-                            'versions_built':   db.get_versions_built(),
-                            'builds_count':     db.get_builds_count(),
-                            'builds_last_hour': db.get_builds_count_last_hour(),
-                            'builds_success':   db.get_builds_count_success(),
-                            'builds_time':      db.get_builds_time().total_seconds(),
-                            'builds_size':      db.get_builds_size(),
+                            'packages_count':   rec.packages_count,
+                            'packages_built':   rec.packages_built,
+                            'versions_count':   rec.versions_count,
+                            'versions_built':   rec.versions_built,
+                            'builds_count':     rec.builds_count,
+                            'builds_last_hour': rec.builds_count_last_hour,
+                            'builds_success':   rec.builds_count_success,
+                            'builds_time':      rec.builds_time.total_seconds(),
+                            'builds_size':      rec.builds_size,
                             'disk_free':        stat.f_frsize * stat.f_bavail,
                             'disk_size':        stat.f_frsize * stat.f_blocks,
                         }
@@ -217,6 +241,20 @@ class PiWheelsMaster(TerminalApplication):
             quit_queue.close()
 
     def slave_driver(self):
+        """
+        This task handles interaction with the build slaves using the slave
+        protocol. Interaction is driven by the slaves (i.e. the master doesn't
+        *push* jobs, rather the slaves *request* a job and the master replies
+        with the next (package, version) tuple from the internal "builds"
+        queue).
+
+        The task also incidentally interacts with several other queues: the
+        internal "status" queue is sent details of every reply sent to a build
+        slave (the :meth:`main` task passes this information on to any listening
+        monitors). Also, the internal "indexes" queue is informed of any
+        packages that need web page indexes re-building (as a result of a
+        successful build).
+        """
         ctx = zmq.Context.instance()
         status_queue = ctx.socket(zmq.PUSH)
         status_queue.hwm = 10
@@ -281,7 +319,7 @@ class PiWheelsMaster(TerminalApplication):
                     elif msg == 'BUILT':
                         db.log_build(slave.build)
                         if slave.build.status:
-                            reply = ['SEND']
+                            reply = ['SEND', slave.build.next_file]
                         else:
                             reply = ['DONE']
 
@@ -290,10 +328,14 @@ class PiWheelsMaster(TerminalApplication):
                             logging.error('No transfer to verify from slave')
                             continue
                         if slave.transfer.verify(slave.build):
-                            reply = ['DONE']
-                            index_queue.send_string(slave.build.package)
+                            if slave.build.transfers_done:
+                                reply = ['DONE']
+                                self.build_armv6l_hack(db, slave.build)
+                                index_queue.send_string(slave.build.package)
+                            else:
+                                reply = ['SEND', slave.build.next_file]
                         else:
-                            reply = ['SEND']
+                            reply = ['SEND', slave.build.next_file]
 
                     else:
                         logging.error('Invalid message from existing slave: %s', msg)
@@ -312,6 +354,21 @@ class PiWheelsMaster(TerminalApplication):
             quit_queue.close()
 
     def build_catcher(self):
+        """
+        This task handles file transfers from the build slaves. The specifics of
+        the file transfer protocol are best understood from the implementation
+        of the :class:`FileState` class.
+
+        However, to detail how a file transfer begins: when a build slave has
+        successfully completed a build it informs the master via the
+        :meth:`slave_driver` task. That task replies with a "SEND" instruction
+        to the slave (including a filename). The slave then initiates the
+        transfer with a "HELLO" message to this task. Once transfers are
+        complete the slave sends a "SENT" message to the :meth:`slave_driver`
+        task which verifies the transfer and either retries it (when
+        verification fails) or sends back "DONE" indicating the slave can wipe
+        the source file.
+        """
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -340,7 +397,7 @@ class PiWheelsMaster(TerminalApplication):
                         slave_id = int(args[0])
                         # XXX Yucky; in fact the whole "transfer state generated
                         # by the slave thread then passed to the transfer
-                        # thread" is crap. Would be slightly nicer to
+                        # thread" is crap. Would be slightly nicer to ... ?
                         slave = [
                             slave for slave in self.slaves.values()
                             if slave.slave_id == slave_id
@@ -390,64 +447,45 @@ class PiWheelsMaster(TerminalApplication):
             file_queue.close()
             quit_queue.close()
 
-    def write_homepage(self, status_info):
-        with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(TransferState.output_path),
-                delete=False) as index:
-            index.file.write(self.homepage_template.format(
-                packages_built=status_info['packages_built'],
-                versions_built=status_info['versions_built'],
-                builds_time=timedelta(seconds=status_info['builds_time']),
-                builds_size=status_info['builds_size'] // 1048576
-            ))
-            os.fchmod(index.file.fileno(), 0o664)
-            os.replace(index.name, str(TransferState.output_path / 'index.html'))
-
-    def write_root_index(self, packages):
-        with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(TransferState.output_path / 'simple'),
-                delete=False) as index:
-            index.file.write('<!DOCTYPE html>\n')
-            index.file.write(
-                tag.html(
-                    tag.head(
-                        tag.title('Pi Wheels Simple Index'),
-                        tag.meta(name='api-version', value=2),
-                    ),
-                    tag.body(
-                        (tag.a(package, href=package), tag.br())
-                        for package in packages
-                    )
-                )
-            )
-            os.fchmod(index.file.fileno(), 0o644)
-            os.replace(index.name, str(TransferState.output_path / 'simple' / 'index.html'))
-
-    def write_package_index(self, package, files):
-        with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(TransferState.output_path / 'simple' / package),
-                delete=False) as index:
-            index.file.write('<!DOCTYPE html>\n')
-            index.file.write(
-                tag.html(
-                    tag.head(
-                        tag.title('Links for {}'.format(package))
-                    ),
-                    tag.body(
-                        tag.h1('Links for {}'.format(package)),
-                        (
-                            (tag.a(rec.filename,
-                                  href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
-                                  rel='internal'), tag.br())
-                            for rec in files
-                        )
-                    )
-                )
-            )
-            os.fchmod(index.file.fileno(), 0o644)
-            os.replace(index.name, str(TransferState.output_path / 'simple' / package / 'index.html'))
+    def build_armv6l_hack(self, db, build):
+        # NOTE: dirty hack; if the build contains any arch-specific wheels for
+        # armv7l, link armv6l name to the armv7l file and stick some entries
+        # in the database for them.
+        for file in list(build.files.values()):
+            if file.platform_tag == 'linux_armv7l':
+                arm7_path = (
+                    TransferState.output_path / 'simple' / build.package /
+                    file.filename)
+                arm6_path = arm7_path.with_name(
+                    arm7_path.name[:-16] + 'linux_armv6l.whl')
+                new_file = FileState(arm6_path.name, file.filesize,
+                                    file.filehash, file.package_version_tag,
+                                    file.py_version_tag, file.abi_tag,
+                                    'linux_armv6l')
+                new_file.verified()
+                build.files[new_file.filename] = new_file
+                db.log_file(build, new_file)
+                try:
+                    arm6_path.symlink_to(arm7_path.name)
+                except FileExistsError:
+                    pass
 
     def index_scribbler(self):
+        """
+        This task is responsible for writing web-page ``index.html`` files. It
+        reads the names of packages off the internal "indexes" queue and
+        rebuilds the ``index.html`` for that package and, optionally, the
+        overall ``index.html`` if the package is one that wasn't previously
+        present.
+
+        .. note::
+
+            It is important to note that package names are never pushed into the
+            internal "indexes" queue until all file-transfers associated with
+            the build are complete. Furthermore, while the entire index for a
+            package is re-built, hashes are *never* re-calculated from the disk
+            files (they are always read from the database).
+        """
         ctx = zmq.Context.instance()
         quit_queue = ctx.socket(zmq.SUB)
         quit_queue.connect('inproc://quit')
@@ -478,173 +516,81 @@ class PiWheelsMaster(TerminalApplication):
             index_queue.close()
             quit_queue.close()
 
-
-BuildState = namedtuple('BuildState', (
-    'slave_id',
-    'package',
-    'version',
-    'status',
-    'output',
-    'filename',
-    'filesize',
-    'filehash',
-    'duration',
-    'package_version_tag',
-    'py_version_tag',
-    'abi_tag',
-    'platform_tag',
-))
-
-
-class SlaveState:
-    counter = 0
-    status_queue = None
-
-    def __init__(self):
-        SlaveState.counter += 1
-        self._slave_id = SlaveState.counter
-        self._last_seen = None
-        self._request = None
-        self._reply = None
-        self._build = None
-        self._transfer = None
-        self._terminated = False
-
-    def kill(self):
-        self._terminated = True
-
-    @property
-    def terminated(self):
-        return self._terminated
-
-    @property
-    def slave_id(self):
-        return self._slave_id
-
-    @property
-    def last_seen(self):
-        return self._last_seen
-
-    @property
-    def build(self):
-        return self._build
-
-    @property
-    def transfer(self):
-        return self._transfer
-
-    @property
-    def request(self):
-        return self._request
-
-    @request.setter
-    def request(self, value):
-        self._last_seen = datetime.utcnow()
-        self._request = value
-        if value[0] == 'BUILT':
-            self._build = BuildState(self._slave_id, *value[1:])
-
-    @property
-    def reply(self):
-        return self._reply
-
-    @reply.setter
-    def reply(self, value):
-        self._reply = value
-        if value[0] == 'SEND':
-            self._transfer = TransferState(self._build.filesize)
-        elif value[0] == 'DONE':
-            self._build = None
-            self._transfer = None
-        SlaveState.status_queue.send_json(
-            [self._slave_id, self._last_seen.timestamp()] + value)
-
-
-class TransferState:
-    chunk_size = 65536
-    pipeline_size = 10
-    output_path = Path('.')
-
-    def __init__(self, filesize):
-        self._file = tempfile.NamedTemporaryFile(
-            dir=str(self.output_path / 'simple'), delete=False)
-        self._file.seek(filesize)
-        self._file.truncate()
-        # See 0MQ guide's File Transfers section for more on the credit-driven
-        # nature of this interaction
-        self._credit = max(1, min(self.pipeline_size, filesize // self.chunk_size))
-        # _offset is the position that we will next return when the fetch()
-        # method is called (or rather, it's the minimum position we'll return)
-        # whilst _map is a sorted list of ranges indicating which bytes of the
-        # file we have yet to received; this is manipulated by chunk()
-        self._offset = 0
-        self._map = [range(filesize)]
-
-    @property
-    def done(self):
-        return not self._map
-
-    def fetch(self):
-        if self._credit:
-            self._credit -= 1
-            assert self._credit >= 0
-            fetch_range = range(self._offset, self._offset + self.chunk_size)
-            while True:
-                for map_range in self._map:
-                    result = intersect(map_range, fetch_range)
-                    if result:
-                        self._offset = result.stop
-                        return result
-                    elif map_range.start > fetch_range.start:
-                        fetch_range = range(map_range.start, map_range.start + self.chunk_size)
-                try:
-                    fetch_range = range(self._map[0].start, self._map[0].start + self.chunk_size)
-                except IndexError:
-                    return None
-
-    def chunk(self, offset, data):
-        self._file.seek(offset)
-        self._file.write(data)
-        self._map = list(exclude(self._map, range(offset, offset + len(data))))
-        if not self._map:
-            self._credit = 0
-        else:
-            self._credit += 1
-
-    def reset_credit(self):
-        if self._credit == 0:
-            # NOTE: We don't bother with the filesize here; if we're dropping
-            # that many packets we should max out "in-flight" packets for this
-            # transfer anyway
-            self._credit = self.pipeline_size
-        else:
-            logging.warning('Transfer still has credit; no need for reset')
-
-    def verify(self, build):
-        # XXX Would be nicer to construct the hash from the transferred chunks
-        # with a tree, but this potentially costs quite a bit of memory
-        self._file.seek(0)
-        m = hashlib.sha256()
-        while True:
-            buf = self._file.read(self.chunk_size)
-            if buf:
-                m.update(buf)
-            else:
-                break
-        self._file.close()
-        p = Path(self._file.name)
-        if m.hexdigest().lower() == build.filehash:
-            p.chmod(0o644)
+    def write_homepage(self, status_info):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path),
+                delete=False) as index:
             try:
-                p.with_name(build.package).mkdir()
-            except FileExistsError:
-                pass
-            p.rename(p.with_name(build.package) / build.filename)
-            # XXX Rebuild HTML package index
-            return True
-        else:
-            p.unlink()
-            return False
+                index.file.write(self.homepage_template.format(
+                    packages_built=status_info['packages_built'],
+                    versions_built=status_info['versions_built'],
+                    builds_time=timedelta(seconds=status_info['builds_time']),
+                    builds_size=status_info['builds_size'] // 1048576
+                ))
+            except:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o664)
+                os.replace(index.name, str(TransferState.output_path /
+                                           'index.html'))
+
+    def write_root_index(self, packages):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path / 'simple'),
+                delete=False) as index:
+            try:
+                index.file.write('<!DOCTYPE html>\n')
+                index.file.write(
+                    tag.html(
+                        tag.head(
+                            tag.title('Pi Wheels Simple Index'),
+                            tag.meta(name='api-version', value=2),
+                        ),
+                        tag.body(
+                            (tag.a(package, href=package), tag.br())
+                            for package in packages
+                        )
+                    )
+                )
+            except:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o644)
+                os.replace(index.name, str(TransferState.output_path /
+                                           'simple' / 'index.html'))
+
+    def write_package_index(self, package, files):
+        with tempfile.NamedTemporaryFile(
+                mode='w', dir=str(TransferState.output_path /
+                                  'simple' / package),
+                delete=False) as index:
+            try:
+                index.file.write('<!DOCTYPE html>\n')
+                index.file.write(
+                    tag.html(
+                        tag.head(
+                            tag.title('Links for {}'.format(package))
+                        ),
+                        tag.body(
+                            tag.h1('Links for {}'.format(package)),
+                            (
+                                (tag.a(rec.filename,
+                                    href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
+                                    rel='internal'), tag.br())
+                                for rec in files
+                            )
+                        )
+                    )
+                )
+            except:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o644)
+                os.replace(index.name, str(TransferState.output_path /
+                                           'simple' / package / 'index.html'))
 
 
 main = PiWheelsMaster()
