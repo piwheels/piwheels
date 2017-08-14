@@ -72,10 +72,19 @@ FROM
 
 GRANT SELECT ON statistics TO piwheels;
 
-INSERT INTO files
+INSERT INTO files (
+    filename,
+    build_id,
+    filesize,
+    filehash,
+    package_version_tag,
+    py_version_tag,
+    abi_tag,
+    platform_tag
+)
 SELECT
     regexp_replace(filename, 'linux_armv7l\.whl$', 'linux_armv6l.whl'),
-    build_id
+    build_id,
     filesize,
     filehash,
     package_version_tag,
