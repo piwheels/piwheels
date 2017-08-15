@@ -1,38 +1,9 @@
 import os
-import sys
-import logging
 import tempfile
 import hashlib
+from subprocess import Popen, DEVNULL, TimeoutExpired
 from time import time
 from pathlib import Path
-from collections import namedtuple
-
-import pip
-
-
-class PiWheelsHandler(logging.Handler):
-    """
-    Custom logging handler appends all messages to a list
-    """
-    def emit(self, record):
-        self.log.append(self.format(record))
-
-    def reset(self):
-        self.log = []
-
-# Force git to fail if it needs to prompt for anything (a disturbing minority
-# of packages try to run git clone during their setup.py ...)
-os.environ['GIT_ALLOW_PROTOCOL'] = 'file'
-
-# Force any attempt to read from the command line to fail by closing stdin
-# (it's not enough to just close sys.stdin as that's a wrapper for the "real"
-# stdin)
-sys.stdin.close()
-os.close(0)
-
-wc = pip.commands.WheelCommand()
-handler = PiWheelsHandler()
-pip.logger.addHandler(handler)
 
 
 class PiWheelsPackage:
@@ -72,28 +43,54 @@ class PiWheelsBuilder:
         self.duration = None
         self.output = ''
         self.files = []
-        handler.reset()
 
-    def build(self):
+    def build(self, timeout=None):
         self.wheel_dir = tempfile.TemporaryDirectory()
-        start = time()
-        self.status = not wc.main([
-            '--wheel-dir={}'.format(self.wheel_dir.name),
-            '--no-deps',         # don't build dependencies
-            '--no-cache-dir',    # disable the cache directory
-            '--exists-action=w', # if paths already exist, wipe them
-            '--disable-pip-version-check', # don't bother checking for new pip
-            '{}=={}'.format(self.package, self.version),
-        ])
-        self.duration = time() - start
-        self.output = '\n'.join(handler.log)
+        with tempfile.NamedTemporaryFile(dir=self.wheel_dir.name) as log_file:
+            env = os.environ.copy()
+            # Force git to fail if it needs to prompt for anything (a disturbing
+            # minority of packages try to run git clone during their setup.py)
+            env['GIT_ALLOW_PROTOCOL'] = 'file'
+            args = [
+                'pip', 'wheel',
+                '--wheel-dir={}'.format(self.wheel_dir.name),
+                '--log={}'.format(log_file.name),
+                '--no-deps',                    # don't build dependencies
+                '--no-cache-dir',               # disable the cache directory
+                '--exists-action=w',            # if paths already exist, wipe them
+                '--disable-pip-version-check',  # don't bother checking for new pip
+                '{}=={}'.format(self.package, self.version),
+            ]
+            start = time()
+            proc = Popen(
+                args,
+                stdin=DEVNULL,     # ensure stdin is /dev/null; this causes
+                                   # anything silly enough to use input() in
+                                   # its setup.py to fail immediately
+                stdout=DEVNULL,    # also ignore all output
+                stderr=DEVNULL,
+                env=env
+            )
+            # If the build times out attempt to kill it with SIGTERM; if that
+            # hasn't worked after 10 seconds, resort to SIGKILL
+            try:
+                proc.wait(timeout)
+            except TimeoutExpired:
+                proc.terminate()
+                try:
+                    proc.wait(10)
+                except TimeoutExpired:
+                    proc.kill()
+            self.duration = time() - start
+            self.status = proc.returncode == 0
+            log_file.seek(0)
+            self.output = log_file.read()
 
-        if self.status:
-            for path in Path(self.wheel_dir.name).glob('*.whl'):
-                self.files.append(PiWheelsPackage(path))
+            if self.status:
+                for path in Path(self.wheel_dir.name).glob('*.whl'):
+                    self.files.append(PiWheelsPackage(path))
 
     def clean(self):
         if self.wheel_dir:
             self.wheel_dir.cleanup()
             self.wheel_dir = None
-
