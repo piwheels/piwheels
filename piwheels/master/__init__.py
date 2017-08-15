@@ -3,7 +3,7 @@ import logging
 import tempfile
 from time import sleep
 from datetime import datetime, timedelta
-from threading import Thread, Event
+from threading import Thread
 from pathlib import Path
 
 import sqlalchemy as sa
@@ -13,7 +13,7 @@ from pkg_resources import resource_string, resource_stream
 
 from .db import PiWheelsDatabase
 from .html import tag
-from .states import FileState, BuildState, SlaveState, TransferState
+from .states import FileState, SlaveState, TransferState
 from ..terminal import TerminalApplication
 from .. import __version__
 
@@ -304,7 +304,12 @@ class PiWheelsMaster(TerminalApplication):
                         continue
 
                     elif msg == 'IDLE':
-                        if slave.terminated:
+                        if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
+                            logging.error(
+                                'Protocol error (IDLE after %s), dropping %d',
+                                slave.reply[0], slave.slave_id)
+                            reply = ['BYE']
+                        elif slave.terminated:
                             reply = ['BYE']
                         elif self.paused:
                             reply = ['SLEEP']
@@ -317,17 +322,41 @@ class PiWheelsMaster(TerminalApplication):
                                 reply = ['SLEEP']
 
                     elif msg == 'BUILT':
-                        db.log_build(slave.build)
-                        if slave.build.status:
-                            reply = ['SEND', slave.build.next_file]
+                        if slave.reply[0] != 'BUILD':
+                            logging.error(
+                                'Protocol error (BUILD after %s), dropping %d',
+                                slave.reply[0], slave.slave_id)
+                            reply = ['BYE']
+                        elif slave.reply[1] != slave.build.package:
+                            logging.error(
+                                'Protocol error (BUILT %s instead of %s), dropping %d',
+                                slave.build.package, slave.reply[1],
+                                slave.slave_id)
+                            reply = ['BYE']
                         else:
-                            reply = ['DONE']
+                            if slave.reply[2] != slave.build.version:
+                                logging.warning(
+                                    'Build version mismatch: %s != %s',
+                                    slave.reply[2], slave.build.version)
+                            db.log_build(slave.build)
+                            if slave.build.status:
+                                reply = ['SEND', slave.build.next_file]
+                            else:
+                                reply = ['DONE']
 
                     elif msg == 'SENT':
-                        if not slave.transfer:
-                            logging.error('No transfer to verify from slave')
+                        if slave.reply[0] != 'SEND':
+                            logging.error(
+                                'Protocol error (SENT after %s), dropping %d',
+                                slave.reply[0], slave.slave_id)
+                            reply = ['BYE']
+                        elif not slave.transfer:
+                            logging.error(
+                                'Internal error; no transfer to verify')
                             continue
-                        if slave.transfer.verify(slave.build):
+                        elif slave.transfer.verify(slave.build):
+                            logging.info(
+                                'Verified transfer of %s', slave.reply[1])
                             if slave.build.transfers_done:
                                 reply = ['DONE']
                                 self.build_armv6l_hack(db, slave.build)
@@ -338,7 +367,9 @@ class PiWheelsMaster(TerminalApplication):
                             reply = ['SEND', slave.build.next_file]
 
                     else:
-                        logging.error('Invalid message from existing slave: %s', msg)
+                        logging.error(
+                            'Protocol error (%s), dropping %d',
+                            msg, slave.slave_id)
 
                     slave.reply = reply
                     slave_queue.send_multipart([
@@ -459,9 +490,9 @@ class PiWheelsMaster(TerminalApplication):
                 arm6_path = arm7_path.with_name(
                     arm7_path.name[:-16] + 'linux_armv6l.whl')
                 new_file = FileState(arm6_path.name, file.filesize,
-                                    file.filehash, file.package_version_tag,
-                                    file.py_version_tag, file.abi_tag,
-                                    'linux_armv6l')
+                                     file.filehash, file.package_version_tag,
+                                     file.py_version_tag, file.abi_tag,
+                                     'linux_armv6l')
                 new_file.verified()
                 build.files[new_file.filename] = new_file
                 db.log_file(build, new_file)
@@ -577,8 +608,8 @@ class PiWheelsMaster(TerminalApplication):
                             tag.h1('Links for {}'.format(package)),
                             (
                                 (tag.a(rec.filename,
-                                    href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
-                                    rel='internal'), tag.br())
+                                       href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
+                                       rel='internal'), tag.br())
                                 for rec in files
                             )
                         )
