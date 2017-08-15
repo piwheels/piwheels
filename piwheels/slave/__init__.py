@@ -49,6 +49,7 @@ class PiWheelsSlave(TerminalApplication):
                 if reply == 'HELLO':
                     assert slave_id is None, 'Duplicate hello'
                     assert len(args) == 1, 'Invalid HELLO message'
+                    logging.info('Advertising new slave to master at %s', master)
                     slave_id = int(args[0])
                     request = ['IDLE']
 
@@ -64,9 +65,12 @@ class PiWheelsSlave(TerminalApplication):
                     assert not builder, 'Last build still exists'
                     assert len(args) == 2, 'Invalid BUILD message'
                     package, version = args
-                    logging.info('Building package %s version %s', package, version)
+                    logging.warning('Building package %s version %s', package, version)
                     builder = PiWheelsBuilder(package, version)
-                    builder.build(timeout)
+                    if builder.build(timeout):
+                        logging.info('Build succeeded')
+                    else:
+                        logging.warning('Build failed')
                     request = [
                         'BUILT',
                         builder.package,

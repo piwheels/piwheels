@@ -63,33 +63,43 @@ class PiWheelsBuilder:
                 '{}=={}'.format(self.package, self.version),
             ]
             start = time()
-            proc = Popen(
-                args,
-                stdin=DEVNULL,     # ensure stdin is /dev/null; this causes
-                                   # anything silly enough to use input() in
-                                   # its setup.py to fail immediately
-                stdout=DEVNULL,    # also ignore all output
-                stderr=DEVNULL,
-                env=env
-            )
-            # If the build times out attempt to kill it with SIGTERM; if that
-            # hasn't worked after 10 seconds, resort to SIGKILL
             try:
-                proc.wait(timeout)
-            except TimeoutExpired:
-                proc.terminate()
+                proc = Popen(
+                    args,
+                    stdin=DEVNULL,     # ensure stdin is /dev/null; this causes
+                                    # anything silly enough to use input() in
+                                    # its setup.py to fail immediately
+                    stdout=DEVNULL,    # also ignore all output
+                    stderr=DEVNULL,
+                    env=env
+                )
+                # If the build times out attempt to kill it with SIGTERM; if that
+                # hasn't worked after 10 seconds, resort to SIGKILL
                 try:
-                    proc.wait(10)
+                    proc.wait(timeout)
                 except TimeoutExpired:
-                    proc.kill()
+                    proc.terminate()
+                    try:
+                        proc.wait(10)
+                    except TimeoutExpired:
+                        proc.kill()
+                    raise
+            except Exception as e:
+                error = str(e)
+            else:
+                error = None
             self.duration = time() - start
             self.status = proc.returncode == 0
+            if error is not None:
+                log_file.seek(0, os.SEEK_END)
+                log_file.write('\n' + error)
             log_file.seek(0)
             self.output = log_file.read()
 
             if self.status:
                 for path in Path(self.wheel_dir.name).glob('*.whl'):
                     self.files.append(PiWheelsPackage(path))
+            return self.status
 
     def clean(self):
         if self.wheel_dir:
