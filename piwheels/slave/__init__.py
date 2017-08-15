@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime, timedelta
 from time import sleep
 
 import zmq
@@ -9,18 +10,30 @@ from ..terminal import TerminalApplication
 from .. import __version__
 
 
+def timeout(arg):
+    d = datetime.strptime(arg, '%H:%M:%S')
+    return timedelta(hours=d.hour, minutes=d.minute, seconds=d.second)
+
+
 class PiWheelsSlave(TerminalApplication):
     def __init__(self):
         super().__init__(__version__)
         self.parser.add_argument(
-            '-m', '--master', default=os.environ.get('PW_MASTER', 'localhost'),
+            '-m', '--master', metavar='HOST',
+            default=os.environ.get('PW_MASTER', 'localhost'),
             help='The IP address or hostname of the master server; defaults to '
-            ' the value of the PW_MASTER env-var (%(default)s)')
+            'the value of the PW_MASTER env-var (%(default)s)')
+        self.parser.add_argument(
+            '-t', '--timeout', metavar='TIME', type=timeout,
+            default=os.environ.get('PW_TIMEOUT', '03:00:00'),
+            help='The time to wait before assuming a build has failed; '
+            'defaults to the value of the PW_TIMEOUT env-var (%(default)s)')
 
     def main(self, args):
         logging.info('PiWheels Slave version {}'.format(__version__))
         ctx = zmq.Context.instance()
         master = args.master
+        timeout = args.timeout.total_seconds()
         slave_id = None
         builder = None
         queue = ctx.socket(zmq.REQ)
@@ -36,6 +49,7 @@ class PiWheelsSlave(TerminalApplication):
                 if reply == 'HELLO':
                     assert slave_id is None, 'Duplicate hello'
                     assert len(args) == 1, 'Invalid HELLO message'
+                    logging.info('Advertising new slave to master at %s', master)
                     slave_id = int(args[0])
                     request = ['IDLE']
 
@@ -51,9 +65,12 @@ class PiWheelsSlave(TerminalApplication):
                     assert not builder, 'Last build still exists'
                     assert len(args) == 2, 'Invalid BUILD message'
                     package, version = args
-                    logging.info('Building package %s version %s', package, version)
+                    logging.warning('Building package %s version %s', package, version)
                     builder = PiWheelsBuilder(package, version)
-                    builder.build()
+                    if builder.build(timeout):
+                        logging.info('Build succeeded')
+                    else:
+                        logging.warning('Build failed')
                     request = [
                         'BUILT',
                         builder.package,
