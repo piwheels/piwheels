@@ -53,7 +53,7 @@ class PiWheelsBuilder:
             # minority of packages try to run git clone during their setup.py)
             env['GIT_ALLOW_PROTOCOL'] = 'file'
             args = [
-                'pip', 'wheel',
+                'pip3', 'wheel',
                 '--wheel-dir={}'.format(self.wheel_dir.name),
                 '--log={}'.format(log_file.name),
                 '--no-deps',                    # don't build dependencies
