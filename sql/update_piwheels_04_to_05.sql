@@ -52,7 +52,7 @@ file_stats AS (
     WHERE
         -- Exclude armv6l packages as they're just hard-links to armv7l packages
         -- and thus don't really count towards space used
-        platform_tag <> 'armv6l'
+        platform_tag <> 'linux_armv6l'
 )
 SELECT
     p.packages_count,
