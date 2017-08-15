@@ -46,7 +46,8 @@ class PiWheelsBuilder:
 
     def build(self, timeout=None):
         self.wheel_dir = tempfile.TemporaryDirectory()
-        with tempfile.NamedTemporaryFile(dir=self.wheel_dir.name) as log_file:
+        with tempfile.NamedTemporaryFile('w+', dir=self.wheel_dir.name,
+                                         suffix='.log', encoding='utf-8') as log_file:
             env = os.environ.copy()
             # Force git to fail if it needs to prompt for anything (a disturbing
             # minority of packages try to run git clone during their setup.py)
