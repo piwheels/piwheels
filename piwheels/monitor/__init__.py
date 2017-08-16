@@ -211,7 +211,7 @@ class PiWheelsMonitor(TerminalApplication):
 class SlaveListWalker(widgets.ListWalker):
     def __init__(self):
         super().__init__()
-        self.focus = 0
+        self.focus = None
         self.slaves = {} # maps slave ID to SlaveState
         self.widgets = [] # list of SlaveState.widget objects in list order
 
@@ -229,6 +229,8 @@ class SlaveListWalker(widgets.ListWalker):
         return position - 1
 
     def set_focus(self, position):
+        if position < 0: # don't permit negative indexes for focus
+            raise IndexError
         self.widgets[position] # raises IndexError if position is invalid
         self.focus = position
         self._modified()
@@ -240,7 +242,6 @@ class SlaveListWalker(widgets.ListWalker):
             state = SlaveState()
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
-            self._modified()
         state.update(timestamp, msg, *args)
         self._modified()
 
@@ -254,7 +255,10 @@ class SlaveListWalker(widgets.ListWalker):
             if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
                 self.widgets.remove(state.widget)
                 del self.slaves[slave_id]
-        self.focus = min(self.focus, len(self.widgets) - 1)
+        if self.widgets:
+            self.focus = min(self.focus or 0, len(self.widgets) - 1)
+        else:
+            self.focus = None
         self._modified()
 
 
