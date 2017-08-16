@@ -1,6 +1,7 @@
 import os
 import tempfile
 import hashlib
+import resource
 from subprocess import Popen, DEVNULL, TimeoutExpired
 from time import time
 from pathlib import Path
@@ -62,6 +63,12 @@ class PiWheelsBuilder:
                 '--disable-pip-version-check',  # don't bother checking for new pip
                 '{}=={}'.format(self.package, self.version),
             ]
+            # Limit the data segment of this process (and all children) to
+            # 1Gb in size. This doesn't guarantee that stuff can't grow until
+            # it crashes (after, multiple children can violate the limit
+            # together while obeying it individually), but it should reduce the
+            # incidence of huge C++ compiles killing the build slaves
+            resource.setrlimit(resource.RLIMIT_DATA, (1024**3, 1024**3))
             start = time()
             try:
                 proc = Popen(
