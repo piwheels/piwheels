@@ -1,4 +1,5 @@
 import os
+import errno
 import heapq
 import select
 from time import time
@@ -133,7 +134,11 @@ class ZMQEventLoop():
     def run(self):
         try:
             while True:
-                self._loop()
+                try:
+                    self._loop()
+                except zmq.ZMQError as e:
+                    if e.errno != errno.EINTR:
+                        raise
         except ExitMainLoop:
             pass
 
