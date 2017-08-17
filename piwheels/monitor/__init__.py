@@ -22,10 +22,10 @@ class PiWheelsMonitor(TerminalApplication):
         try:
             self.loop = widgets.MainLoop(
                 *self.build_ui(),
+                event_loop=widgets.ZMQEventLoop(),
                 unhandled_input=self.unhandled_input)
+            self.loop.event_loop.watch_queue(self.status_queue, self.status_message)
             self.loop.event_loop.alarm(1, self.tick)
-            # XXX This is crap; ought to make a proper 0MQ event loop instead
-            self.loop.event_loop.alarm(0.01, self.poll)
             self.loop.run()
         finally:
             self.ctrl_queue.close()
@@ -92,14 +92,12 @@ class PiWheelsMonitor(TerminalApplication):
         )
         return self.frame, widgets.palette
 
-    def poll(self):
-        if self.status_queue.poll(0):
-            slave_id, timestamp, msg, *args = self.status_queue.recv_json()
-            if msg == 'STATUS':
-                self.update_status(args[0])
-            else:
-                self.slave_list.message(slave_id, timestamp, msg, *args)
-        self.loop.event_loop.alarm(0.01, self.poll)
+    def status_message(self):
+        slave_id, timestamp, msg, *args = self.status_queue.recv_json()
+        if msg == 'STATUS':
+            self.update_status(args[0])
+        else:
+            self.slave_list.message(slave_id, timestamp, msg, *args)
 
     def tick(self):
         self.slave_list.tick()

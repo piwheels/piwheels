@@ -1,3 +1,12 @@
+import os
+import heapq
+import select
+from time import time
+from itertools import count
+from collections import namedtuple
+
+import zmq
+
 from urwid import (
     connect_signal,
     AttrMap,
@@ -41,6 +50,119 @@ palette = [
     ('inv_button',  'black',           'light gray'),
     ('inv_status',  'black',           'light gray'),
 ]
+
+
+
+AlarmTask = namedtuple('AlarmTask', ('due', 'tie_break', 'callback'))
+
+class ZMQEventLoop():
+    _alarm_break = count()
+
+    def __init__(self):
+        self._did_something = True
+        self._alarms = []
+        self._poller = zmq.Poller()
+        self._queue_callbacks = {}
+        self._idle_handle = 0
+        self._idle_callbacks = {}
+
+    def alarm(self, seconds, callback):
+        tm = time() + seconds
+        handle = AlarmTask(tm, next(self._alarm_break), callback)
+        heapq.heappush(self._alarms, handle)
+        return handle
+
+    def remove_alarm(self, handle):
+        try:
+            self._alarms.remove(handle)
+            heapq.heapify(self._alarms)
+            return True
+        except ValueError:
+            return False
+
+    def watch_queue(self, q, callback, flags=zmq.POLLIN):
+        if q in self._queue_callbacks:
+            raise ValueError('already watching %r' % q)
+        self._poller.register(q, flags)
+        self._queue_callbacks[q] = callback
+        return q
+
+    def watch_file(self, fd, callback, flags=zmq.POLLIN):
+        if isinstance(fd, int):
+            fd = os.fdopen(fd)
+        self._poller.register(fd, flags)
+        self._queue_callbacks[fd.fileno()] = callback
+        return fd
+
+    def remove_watch_queue(self, handle):
+        try:
+            try:
+                self._poller.unregister(handle)
+            finally:
+                self._queue_callbacks.pop(handle, None)
+            return True
+        except KeyError:
+            return False
+
+    def remove_watch_file(self, handle):
+        try:
+            try:
+                self._poller.unregister(handle)
+            finally:
+                self._queue_callbacks.pop(handle.fileno(), None)
+            return True
+        except KeyError:
+            return False
+
+    def enter_idle(self, callback):
+        self._idle_handle += 1
+        self._idle_callbacks[self._idle_handle] = callback
+        return self._idle_handle
+
+    def remove_enter_idle(self, handle):
+        try:
+            del self._idle_callbacks[handle]
+            return True
+        except KeyError:
+            return False
+
+    def _entering_idle(self):
+        for callback in list(self._idle_callbacks.values()):
+            callback()
+
+    def run(self):
+        try:
+            while True:
+                self._loop()
+        except ExitMainLoop:
+            pass
+
+    def _loop(self):
+        if self._alarms or self._did_something:
+            if self._alarms:
+                tm = self._alarms[0][0]
+                timeout = max(0, tm - time())
+            if self._did_something and (not self._alarms or
+                                        (self._alarms and timeout > 0)):
+                tm = 'idle'
+                timeout = 0
+            ready = self._poller.poll(timeout * 1000) # ms
+        else:
+            tm = None
+            ready = self._poller.poll()
+
+        if not ready:
+            if tm == 'idle':
+                self._entering_idle()
+                self._did_something = False
+            elif tm is not None:
+                task = heapq.heappop(self._alarms)
+                task.callback()
+                self._did_something = True
+
+        for q, event in ready:
+            self._queue_callbacks[q]()
+            self._did_something = True
 
 
 class SimpleButton(Button):
