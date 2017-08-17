@@ -3,7 +3,7 @@ __version__      = '0.5'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
-__url__          = 'http://www.piwheels.pihosted.com/'
+__url__          = 'https://www.piwheels.hostedpi.com/'
 __platforms__    = 'ALL'
 
 __requires__ = ['pyzmq']
@@ -31,4 +31,3 @@ __entry_points__ = {
         'piw-monitor = piwheels.monitor:main',
         ],
     }
-
