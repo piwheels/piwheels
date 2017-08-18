@@ -18,7 +18,7 @@ digraph slave {
 
     /* Edges */
     edge [fontname=Sans, fontsize=10];
-    HELLO1->HELLO2;
+    HELLO1->HELLO2 [label="[timeout,\npyver,\nabi,\n..."];
     HELLO2->IDLE [label="[id]"];
     IDLE->BUILD [label="[package,\nversion]"];
     IDLE->SLEEP;

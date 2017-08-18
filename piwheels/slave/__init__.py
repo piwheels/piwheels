@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from time import sleep
 
 import zmq
+from wheel import pep425tags
 
 from .builder import PiWheelsBuilder
 from ..terminal import TerminalApplication
@@ -41,7 +42,7 @@ class PiWheelsSlave(TerminalApplication):
         queue.ipv6 = True
         queue.connect('tcp://{master}:5555'.format(master=master))
         try:
-            request = ['HELLO']
+            request = ['HELLO', timeout] + list(pep425tags.get_supported()[0])
             while True:
                 queue.send_json(request)
                 reply, *args = queue.recv_json()
@@ -49,14 +50,16 @@ class PiWheelsSlave(TerminalApplication):
                 if reply == 'HELLO':
                     assert slave_id is None, 'Duplicate hello'
                     assert len(args) == 1, 'Invalid HELLO message'
-                    logging.info('Advertising new slave to master at %s', master)
                     slave_id = int(args[0])
+                    logging.info('Slave %d: Advertising new slave to master at %s',
+                                 slave_id, master)
                     request = ['IDLE']
 
                 elif reply == 'SLEEP':
                     assert slave_id is not None, 'Sleep before hello'
                     assert len(args) == 0, 'Invalid SLEEP message'
-                    logging.info('No available jobs; sleeping')
+                    logging.info('Slave %d: No available jobs; sleeping',
+                                 slave_id)
                     sleep(10)
                     request = ['IDLE']
 
@@ -65,12 +68,13 @@ class PiWheelsSlave(TerminalApplication):
                     assert not builder, 'Last build still exists'
                     assert len(args) == 2, 'Invalid BUILD message'
                     package, version = args
-                    logging.warning('Building package %s version %s', package, version)
+                    logging.warning('Slave %d: Building package %s version %s',
+                                    slave_id, package, version)
                     builder = PiWheelsBuilder(package, version)
                     if builder.build(timeout):
-                        logging.info('Build succeeded')
+                        logging.info('Slave %d: Build succeeded', slave_id)
                     else:
-                        logging.warning('Build failed')
+                        logging.warning('Slave %d: Build failed', slave_id)
                     request = [
                         'BUILT',
                         builder.package,
@@ -98,7 +102,8 @@ class PiWheelsSlave(TerminalApplication):
                     assert builder.status, 'Send after failed build'
                     assert len(args) == 1, 'Invalid SEND messsage'
                     pkg = [f for f in builder.files if f.filename == args[0]][0]
-                    logging.info('Sending %s to master', pkg.filename)
+                    logging.info('Slave %d: Sending %s to master',
+                                 slave_id, pkg.filename)
                     self.transfer(master, slave_id, pkg)
                     request = ['SENT']
 
@@ -106,13 +111,15 @@ class PiWheelsSlave(TerminalApplication):
                     assert slave_id is not None, 'Okay before hello'
                     assert builder, 'Okay before build'
                     assert len(args) == 0, 'Invalid DONE message'
-                    logging.info('Removing temporary build directories')
+                    logging.info('Slave %d: Removing temporary build directories',
+                                 slave_id)
                     builder.clean()
                     builder = None
                     request = ['IDLE']
 
                 elif reply == 'BYE':
-                    logging.warning('Master requested termination')
+                    logging.warning('Slave %d: Master requested termination',
+                                    slave_id)
                     break
 
                 else:

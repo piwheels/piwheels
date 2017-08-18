@@ -21,11 +21,13 @@ class PiWheelsPackage:
                 else:
                     break
         self.filehash = m.hexdigest().lower()
-        wheel_tags = self.filename[:-4].split('-')
-        self.package_version_tag = wheel_tags[-4]
-        self.py_version_tag = wheel_tags[-3]
-        self.abi_tag = wheel_tags[-2]
-        self.platform_tag = wheel_tags[-1]
+        tags = self.filename.split('-')
+        self.package_tag = tags[0]
+        self.package_version_tag = tags[1]
+        self.platform_tag = tags[-1]
+        self.abi_tag = tags[-2]
+        self.py_version_tag = tags[-3]
+        self.build_tag = tags[2] if len(tags) == 6 else None
 
     def open(self, mode='rb'):
         return self.wheel_file.open(mode)

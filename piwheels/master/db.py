@@ -64,34 +64,33 @@ class PiWheelsDatabase:
         known_packages = set(self.get_all_packages())
         missing_packages = pypi_packages - known_packages
 
-        with self.conn.begin():
+        if missing_packages:
             logging.info('Adding %d new packages', len(missing_packages))
-            for package in missing_packages:
-                if len(package) > 200:
-                    logging.warning('    Ignoring stupid package name: %s', package)
-                else:
-                    logging.info('    Adding new package: %s', package)
-                    self.add_new_package(package)
+
+            with self.conn.begin():
+                for package in missing_packages:
+                    if len(package) > 200:
+                        logging.warning('Ignoring stupid package name: %s', package)
+                    else:
+                        self.add_new_package(package)
 
     def update_package_version_list(self, package):
         """
         Updates the list of known package versions for the specified package
         """
-        with self.conn.begin():
-            pypi_versions = set(pypi.get_package_versions(package, self.pypi_root))
-            known_versions = set(self.get_package_versions(package))
-            missing_versions = pypi_versions - known_versions
+        pypi_versions = set(pypi.get_package_versions(package, self.pypi_root))
+        known_versions = set(self.get_package_versions(package))
+        missing_versions = pypi_versions - known_versions
 
-            if missing_versions:
-                logging.info('Adding %d new versions for package %s',
-                                len(missing_versions), package)
+        if missing_versions:
+            with self.conn.begin():
+                logging.info('Adding new versions for package %s: %s',
+                             package, ', '.join(missing_versions))
 
                 for version in missing_versions:
                     if len(version) > 200:
-                        logging.warning('    Ignoring stupid version: %s', version)
+                        logging.warning('Ignoring stupid version: %s', version)
                     else:
-                        logging.info('    Adding new package version: %s %s',
-                                        package, version)
                         self.add_new_package_version(package, version)
 
     def log_build(self, build):
@@ -99,8 +98,6 @@ class PiWheelsDatabase:
         Log a build attempt in the database, including build output and wheel
         info if successful
         """
-        logging.info('Package %s %s %s',
-                     ('failed', 'built')[build.status], build.package, build.version)
         with self.conn.begin():
             build.logged(self.conn.scalar(
                 self.builds.insert().returning(self.builds.c.build_id),
@@ -120,7 +117,6 @@ class PiWheelsDatabase:
         Log a pending file transfer in the database, including file-size, hash,
         and various tags
         """
-        logging.info('Pending file transfer for %s', file.filename)
         with self.conn.begin():
             try:
                 with self.conn.begin_nested():

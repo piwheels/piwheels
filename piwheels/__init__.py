@@ -10,7 +10,8 @@ __requires__ = ['pyzmq']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
-    'master':  ['psycopg2', 'sqlalchemy', 'requests'],
+    'master':  ['sqlalchemy', 'requests'],
+    'slave':   ['pip', 'wheel'],
     'test':    ['pytest'],
     }
 

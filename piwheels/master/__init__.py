@@ -290,12 +290,14 @@ class PiWheelsMaster(TerminalApplication):
                         if msg != 'HELLO':
                             logging.error('Invalid first message from slave: %s', msg)
                             continue
-                        slave = SlaveState()
+                        slave = SlaveState(*args)
                         self.slaves[address] = slave
                     slave.request = [msg] + args
 
                     if msg == 'HELLO':
-                        logging.warning('New slave: %d', slave.slave_id)
+                        logging.warning('Slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
+                                        slave.slave_id, slave.timeout,
+                                        slave.native_abi, slave.native_platform)
                         reply = ['HELLO', slave.slave_id]
 
                     elif msg == 'BYE':
@@ -306,38 +308,42 @@ class PiWheelsMaster(TerminalApplication):
                     elif msg == 'IDLE':
                         if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
                             logging.error(
-                                'Protocol error (IDLE after %s), dropping %d',
-                                slave.reply[0], slave.slave_id)
+                                'Slave %d: Protocol error (IDLE after %s)',
+                                slave.slave_id, slave.reply[0])
                             reply = ['BYE']
                         elif slave.terminated:
                             reply = ['BYE']
                         elif self.paused:
                             reply = ['SLEEP']
                         else:
-                            events = build_queue.poll(0)
-                            if events:
-                                package, version = build_queue.recv_json()
-                                reply = ['BUILD', package, version]
-                            else:
-                                reply = ['SLEEP']
+                            while True:
+                                events = build_queue.poll(0)
+                                if events:
+                                    package, version = build_queue.recv_json()
+                                    if (package, version) in self.active_builds():
+                                        continue
+                                    reply = ['BUILD', package, version]
+                                else:
+                                    reply = ['SLEEP']
+                                break
 
                     elif msg == 'BUILT':
                         if slave.reply[0] != 'BUILD':
                             logging.error(
-                                'Protocol error (BUILD after %s), dropping %d',
-                                slave.reply[0], slave.slave_id)
+                                'Slave %d: Protocol error (BUILD after %s)',
+                                slave.slave_id, slave.reply[0])
                             reply = ['BYE']
                         elif slave.reply[1] != slave.build.package:
                             logging.error(
-                                'Protocol error (BUILT %s instead of %s), dropping %d',
-                                slave.build.package, slave.reply[1],
-                                slave.slave_id)
+                                'Slave %d: Protocol error (BUILT %s instead of %s)',
+                                slave.slave_id, slave.build.package, slave.reply[1])
                             reply = ['BYE']
                         else:
                             if slave.reply[2] != slave.build.version:
                                 logging.warning(
-                                    'Build version mismatch: %s != %s',
-                                    slave.reply[2], slave.build.version)
+                                    'Slave %d: Build version mismatch: %s != %s',
+                                    slave.slave_id, slave.reply[2],
+                                    slave.build.version)
                             db.log_build(slave.build)
                             if slave.build.status:
                                 reply = ['SEND', slave.build.next_file]
@@ -347,16 +353,18 @@ class PiWheelsMaster(TerminalApplication):
                     elif msg == 'SENT':
                         if slave.reply[0] != 'SEND':
                             logging.error(
-                                'Protocol error (SENT after %s), dropping %d',
-                                slave.reply[0], slave.slave_id)
+                                'Slave %d: Protocol error (SENT after %s)',
+                                slave.slave_id, slave.reply[0])
                             reply = ['BYE']
                         elif not slave.transfer:
                             logging.error(
-                                'Internal error; no transfer to verify')
+                                'Slave %d: Internal error; no transfer to verify',
+                                slave.slave_id)
                             continue
                         elif slave.transfer.verify(slave.build):
                             logging.info(
-                                'Verified transfer of %s', slave.reply[1])
+                                'Slave %d: Verified transfer of %s',
+                                slave.slave_id, slave.reply[1])
                             if slave.build.transfers_done:
                                 reply = ['DONE']
                                 self.build_armv6l_hack(db, slave.build)
@@ -368,8 +376,8 @@ class PiWheelsMaster(TerminalApplication):
 
                     else:
                         logging.error(
-                            'Protocol error (%s), dropping %d',
-                            msg, slave.slave_id)
+                            'Slave %d: Protocol error (%s)',
+                            slave.slave_id, msg)
 
                     slave.reply = reply
                     slave_queue.send_multipart([
@@ -383,6 +391,35 @@ class PiWheelsMaster(TerminalApplication):
             status_queue.close()
             SlaveState.status_queue = None
             quit_queue.close()
+
+    def active_builds(self):
+        for slave in self.slaves.values():
+            if slave.reply is not None and slave.reply[0] == 'BUILD':
+                if slave.last_seen + slave.timeout > datetime.utcnow():
+                    yield (slave.reply[1], slave.reply[2])
+
+    def build_armv6l_hack(self, db, build):
+        # NOTE: dirty hack; if the build contains any arch-specific wheels for
+        # armv7l, link armv6l name to the armv7l file and stick some entries
+        # in the database for them.
+        for file in list(build.files.values()):
+            if file.platform_tag == 'linux_armv7l':
+                arm7_path = (
+                    TransferState.output_path / 'simple' / build.package /
+                    file.filename)
+                arm6_path = arm7_path.with_name(
+                    arm7_path.name[:-16] + 'linux_armv6l.whl')
+                new_file = FileState(arm6_path.name, file.filesize,
+                                     file.filehash, file.package_version_tag,
+                                     file.py_version_tag, file.abi_tag,
+                                     'linux_armv6l')
+                new_file.verified()
+                build.files[new_file.filename] = new_file
+                db.log_file(build, new_file)
+                try:
+                    arm6_path.symlink_to(arm7_path.name)
+                except FileExistsError:
+                    pass
 
     def build_catcher(self):
         """
@@ -477,29 +514,6 @@ class PiWheelsMaster(TerminalApplication):
         finally:
             file_queue.close()
             quit_queue.close()
-
-    def build_armv6l_hack(self, db, build):
-        # NOTE: dirty hack; if the build contains any arch-specific wheels for
-        # armv7l, link armv6l name to the armv7l file and stick some entries
-        # in the database for them.
-        for file in list(build.files.values()):
-            if file.platform_tag == 'linux_armv7l':
-                arm7_path = (
-                    TransferState.output_path / 'simple' / build.package /
-                    file.filename)
-                arm6_path = arm7_path.with_name(
-                    arm7_path.name[:-16] + 'linux_armv6l.whl')
-                new_file = FileState(arm6_path.name, file.filesize,
-                                     file.filehash, file.package_version_tag,
-                                     file.py_version_tag, file.abi_tag,
-                                     'linux_armv6l')
-                new_file.verified()
-                build.files[new_file.filename] = new_file
-                db.log_file(build, new_file)
-                try:
-                    arm6_path.symlink_to(arm7_path.name)
-                except FileExistsError:
-                    pass
 
     def index_scribbler(self):
         """

@@ -3,7 +3,7 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import namedtuple
 
 from .ranges import exclude, intersect
@@ -196,9 +196,13 @@ class SlaveState:
     counter = 0
     status_queue = None
 
-    def __init__(self):
+    def __init__(self, timeout, native_py_version, native_abi, native_platform):
         SlaveState.counter += 1
         self._slave_id = SlaveState.counter
+        self._timeout = timedelta(seconds=timeout)
+        self._native_py_version = native_py_version
+        self._native_abi = native_abi
+        self._native_platform = native_platform
         self._last_seen = None
         self._request = None
         self._reply = None
@@ -224,6 +228,22 @@ class SlaveState:
     @property
     def slave_id(self):
         return self._slave_id
+
+    @property
+    def timeout(self):
+        return self._timeout
+
+    @property
+    def native_platform(self):
+        return self._native_platform
+
+    @property
+    def native_abi(self):
+        return self._native_abi
+
+    @property
+    def native_py_version(self):
+        return self._native_py_version
 
     @property
     def last_seen(self):

@@ -3,6 +3,9 @@ import xmlrpc.client as xmlrpclib
 
 import requests
 
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+
 
 def get_all_packages(pypi_root='https://pypi.python.org/pypi'):
     """
