@@ -179,7 +179,7 @@ class PiWheelsMaster(TerminalApplication):
         quit_queue.connect('inproc://quit')
         quit_queue.setsockopt_string(zmq.SUBSCRIBE, 'QUIT')
         build_queue = ctx.socket(zmq.PUSH)
-        build_queue.hwm = 50
+        build_queue.hwm = 1
         build_queue.bind('inproc://builds')
         try:
             with PiWheelsDatabase(self.db_engine, self.pypi_root) as db:
@@ -267,7 +267,7 @@ class PiWheelsMaster(TerminalApplication):
         slave_queue.ipv6 = True
         slave_queue.bind('tcp://*:5555')
         build_queue = ctx.socket(zmq.PULL)
-        build_queue.hwm = 10
+        build_queue.hwm = 1
         build_queue.connect('inproc://builds')
         index_queue = ctx.socket(zmq.PUSH)
         index_queue.hwm = 10
