@@ -8,12 +8,11 @@ from sqlalchemy.exc import DBAPIError
 from . import pypi
 
 
-class PiWheelsDatabase:
+class Database():
     """
     PiWheels database connection class
     """
-    def __init__(self, engine, pypi_root='https://pypi.python.org/pypi'):
-        self.pypi_root = pypi_root
+    def __init__(self, engine):
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         self.packages = Table('packages', self.meta, autoload=True)
@@ -56,13 +55,13 @@ class PiWheelsDatabase:
                 package=package, version=version
             )
 
-    def update_package_list(self):
+    def update_package_list(self, packages):
         """
-        Updates the list of known packages
+        Merges *packages* (an iterable of package names) into the known set of
+        packages.
         """
-        pypi_packages = set(pypi.get_all_packages(self.pypi_root))
         known_packages = set(self.get_all_packages())
-        missing_packages = pypi_packages - known_packages
+        missing_packages = packages - known_packages
 
         if missing_packages:
             logging.info('Adding %d new packages', len(missing_packages))
@@ -74,13 +73,13 @@ class PiWheelsDatabase:
                     else:
                         self.add_new_package(package)
 
-    def update_package_version_list(self, package):
+    def update_package_version_list(self, package, versions):
         """
-        Updates the list of known package versions for the specified package
+        Merges *versions* (an iterable of version strings) into the known set
+        of versions of *package* (a package name).
         """
-        pypi_versions = set(pypi.get_package_versions(package, self.pypi_root))
         known_versions = set(self.get_package_versions(package))
-        missing_versions = pypi_versions - known_versions
+        missing_versions = versions - known_versions
 
         if missing_versions:
             with self.conn.begin():

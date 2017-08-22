@@ -8,7 +8,7 @@ digraph piwheels {
     subgraph cluster_master {
         graph [label="master"];
 
-        main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
+        high_priest [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
         web_scraper [label="<t>web_scraper"];
         queue_stuffer [label="{<t>queue_stuffer|<builds>PUSH}"];
         big_brother [label="{<t>big_brother|<int_status>PUSH}"];
@@ -16,8 +16,8 @@ digraph piwheels {
         build_catcher [label="{<slaves>ROUTER|<t>build_catcher}"];
         index_scribbler [label="{<indexes>PULL|<t>index_scribbler}"];
 
-        big_brother:int_status->main:int_status [label="inproc://\nstatus"];
-        slave_driver:int_status->main:int_status [label="inproc://\nstatus"];
+        big_brother:int_status->high_priest:int_status [label="inproc://\nstatus"];
+        slave_driver:int_status->high_priest:int_status [label="inproc://\nstatus"];
         queue_stuffer:builds->slave_driver:builds [label="inproc://\nbuilds"];
         slave_driver:indexes->index_scribbler:indexes [label="inproc://\nindexes"];
 
