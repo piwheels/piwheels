@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 import zmq
-from pkg_resources import resource_string
+from pkg_resources import resource_string, resource_stream
 
 from .tasks import PausableTask, DatabaseMixin, TaskQuit
 
@@ -17,16 +17,31 @@ class BigBrother(PausableTask, DatabaseMixin):
     "status" queue which :meth:`main` uses to pass statistics to any listening
     monitors.
     """
-    def __init__(self, *, status_queue='inproc://status',
-                 output_path=Path('/var/www'), **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **config):
+        super().__init__(**config)
         self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
-        self.output_path = output_path
+        self.output_path = Path(config['output_path'])
         self.status_queue = ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 1
-        self.status_queue.connect(status_queue)
+        self.status_queue.connect(config['int_status_queue'])
+
+    def setup_output_path(self):
+        try:
+            self.output_path.mkdir()
+        except FileExistsError:
+            pass
+        try:
+            (self.output_path / 'simple').mkdir()
+        except FileExistsError:
+            pass
+        for filename in ('raspberry-pi-logo.svg', 'python-logo.svg'):
+            with (self.output_path / filename).open('wb') as f:
+                source = resource_stream(__name__, filename)
+                f.write(source.read())
+                source.close()
 
     def run(self):
+        self.setup_output_path()
         try:
             while True:
                 stat = os.statvfs(str(self.output_path))

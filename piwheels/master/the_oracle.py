@@ -3,7 +3,7 @@ import zmq
 from .tasks import PausableTask, DatabaseMixin, Quit
 
 
-class QueueStuffer(PausableTask, DatabaseMixin):
+class TheOracle(PausableTask, DatabaseMixin):
     """
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It places a

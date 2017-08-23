@@ -1,7 +1,7 @@
 from .tasks import PausableTask, DatabaseMixin, PyPIMixin, TaskQuit
 
 
-class WebScraper(PausableTask, DatabaseMixin, PyPIMixin):
+class CloudGazer(PausableTask, DatabaseMixin, PyPIMixin):
     """
     This task scrapes PyPI for the list of available packages, and the versions
     of those packages. This information is written into the backend database for

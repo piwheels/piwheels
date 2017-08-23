@@ -6,7 +6,7 @@ from .tasks import Task, TaskQuit
 from .states import TransferState
 
 
-class BuildCatcher(Task):
+class FileJuggler(Task):
     """
     This task handles file transfers from the build slaves. The specifics of the
     file transfer protocol are best understood from the implementation of the
@@ -21,12 +21,12 @@ class BuildCatcher(Task):
     transfer and either retries it (when verification fails) or sends back
     "DONE" indicating the slave can wipe the source file.
     """
-    def __init__(self, *, file_queue='tcp://*:5556', **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **config)
+        super().__init__(**config)
         self.file_queue = self.ctx.socket(zmq.ROUTER)
         self.file_queue.ipv6 = True
         self.file_queue.hwm = TransferState.pipeline_size * 50
-        self.file_queue.bind(file_queue)
+        self.file_queue.bind(config['file_queue'])
 
     def close(self):
         self.file_queue.close()

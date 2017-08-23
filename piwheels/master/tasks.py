@@ -46,9 +46,9 @@ class PausableTask(Task):
 
 
 class DatabaseMixin():
-    def __init__(self, *, db_engine='postgres:///piwheels', **kwargs):
-        super().__init__(**kwargs)
-        self.db = Database(db_engine)
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.db = Database(config['database'])
 
     def close(self):
         self.db.close()
@@ -56,9 +56,9 @@ class DatabaseMixin():
 
 
 class PyPIMixin():
-    def __init__(self, *, pypi_root='https://pypi.python.org/pypi', **kwargs):
-        super().__init__(**kwargs)
-        self.pypi = PyPI(pypi_root)
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.pypi = PyPI(config['pypi_root'])
 
     def close(self):
         self.pypi.close()

@@ -8,31 +8,31 @@ digraph piwheels {
     subgraph cluster_master {
         graph [label="master"];
 
-        high_priest [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
-        web_scraper [label="<t>web_scraper"];
-        queue_stuffer [label="{<t>queue_stuffer|<builds>PUSH}"];
+        high_priest [label="{{<int_status>PULL}|high_priest|{<control>PULL|<ext_status>PUB}}"];
+        cloud_gazer [label="<t>cloud_gazer"];
+        the_oracle [label="{<t>the_oracle|<builds>PUSH}"];
         big_brother [label="{<t>big_brother|<int_status>PUSH}"];
         slave_driver [label="{{<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<indexes>PUSH|<int_status>PUSH}}"];
-        build_catcher [label="{<slaves>ROUTER|<t>build_catcher}"];
-        index_scribbler [label="{<indexes>PULL|<t>index_scribbler}"];
+        file_juggler [label="{<slaves>ROUTER|<t>file_juggler}"];
+        index_scribe [label="{<indexes>PULL|<t>index_scribe}"];
 
         big_brother:int_status->high_priest:int_status [label="inproc://\nstatus"];
         slave_driver:int_status->high_priest:int_status [label="inproc://\nstatus"];
-        queue_stuffer:builds->slave_driver:builds [label="inproc://\nbuilds"];
-        slave_driver:indexes->index_scribbler:indexes [label="inproc://\nindexes"];
+        the_oracle:builds->slave_driver:builds [label="inproc://\nbuilds"];
+        slave_driver:indexes->index_scribe:indexes [label="inproc://\nindexes"];
 
         db [label="piwheels\ndatabase", shape=folder];
         fs [label="www\nfilesystem", shape=folder];
 
-        web_scraper:t->db [dir=both];
-        db->queue_stuffer:t;
+        cloud_gazer:t->db [dir=both];
+        db->the_oracle:t;
         db->big_brother:t;
         fs->big_brother:t;
         slave_driver:t->db;
-        db->index_scribbler:t;
+        db->index_scribe:t;
 
-        index_scribbler:t->fs;
-        build_catcher:t->fs;
+        index_scribe:t->fs;
+        file_juggler:t->fs;
     }
 
     subgraph cluster_monitor {
@@ -50,13 +50,13 @@ digraph piwheels {
         slave2 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
     }
 
-    pypi->web_scraper:t;
+    pypi->cloud_gazer:t;
     pypi->slave1:t;
     pypi->slave2:t;
     slave1:builds->slave_driver:slaves [dir=both, label="tcp://\n*:5555"];
     slave2:builds->slave_driver:slaves [dir=both, label="tcp://\n*:5555"];
-    slave1:files->build_catcher:slaves [dir=both, label="tcp://\n*:5556"];
-    slave2:files->build_catcher:slaves [dir=both, label="tcp://\n*:5556"];
-    main:ext_status->monitor:status [label="ipc://\n/tmp/piw-status"];
-    monitor:control->main:control [label="ipc://\n/tmp/piw-control"];
+    slave1:files->file_juggler:slaves [dir=both, label="tcp://\n*:5556"];
+    slave2:files->file_juggler:slaves [dir=both, label="tcp://\n*:5556"];
+    high_priest:ext_status->monitor:status [label="ipc://\n/tmp/piw-status"];
+    monitor:control->high_priest:control [label="ipc://\n/tmp/piw-control"];
 }

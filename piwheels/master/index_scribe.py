@@ -8,7 +8,7 @@ from .html import tag
 from .tasks import PausableTask, DatabaseMixin, TaskQuit
 
 
-class IndexScribbler(PausableTask, DatabaseMixin):
+class IndexScribe(PausableTask, DatabaseMixin):
     """
     This task is responsible for writing web-page ``index.html`` files. It reads
     the names of packages off the internal "indexes" queue and rebuilds the
@@ -23,13 +23,12 @@ class IndexScribbler(PausableTask, DatabaseMixin):
         re-built, hashes are *never* re-calculated from the disk files (they are
         always read from the database).
     """
-    def __init__(self, *, index_queue='inproc://indexes',
-                 output_path=Path('/var/www'), **kwargs):
-        super().__init__(**kwargs)
-        self.output_path = output_path
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.output_path = Path(config['output_path'])
         self.index_queue = self.ctx.socket(zmq.PULL)
         self.index_queue.hwm = 10
-        self.index_queue.connect(index_queue)
+        self.index_queue.connect(config['index_queue'])
 
     def close(self):
         self.index_queue.close()

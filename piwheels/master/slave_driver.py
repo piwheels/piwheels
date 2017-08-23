@@ -22,26 +22,23 @@ class SlaveDriver(Task, DatabaseMixin):
     Also, the internal "indexes" queue is informed of any packages that need web
     page indexes re-building (as a result of a successful build).
     """
-    def __init__(self, *, status_queue='inproc://status',
-                 slave_queue='tcp://*:5555', build_queue='inproc://builds',
-                 index_queue='inproc://indexes', output_path=Path('/var/www'),
-                 **kwargs):
+    def __init__(self, **config):
         super().__init__(**kwargs)
-        self.output_path = output_path
+        self.output_path = Path(config['output_path'])
         self.paused = False
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
-        self.status_queue.connect(status_queue)
-        SlaveState.status_queue = status_queue
+        self.status_queue.connect(config['int_status_queue'])
+        SlaveState.status_queue = self.status_queue
         self.slave_queue = self.ctx.socket(zmq.ROUTER)
         self.slave_queue.ipv6 = True
-        self.slave_queue.bind(slave_queue)
+        self.slave_queue.bind(config['slave_queue'])
         self.build_queue = self.ctx.socket(zmq.PULL)
         self.build_queue.hwm = 1
-        self.build_queue.connect(build_queue)
+        self.build_queue.connect(config['build_queue'])
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
-        self.index_queue.bind(index_queue)
+        self.index_queue.bind(config['index_queue'])
 
     def close(self):
         self.build_queue.close()
