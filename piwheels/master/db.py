@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import timedelta
 
-from sqlalchemy import MetaData, Table, select, func, text, distinct
+from sqlalchemy import MetaData, Table, select, func, text, distinct, create_engine
 from sqlalchemy.exc import DBAPIError
 
 from . import pypi
@@ -12,7 +12,14 @@ class Database():
     """
     PiWheels database connection class
     """
-    def __init__(self, engine):
+    engines = {}
+
+    def __init__(self, dsn):
+        try:
+            engine = Database.engines[dsn]
+        except KeyError:
+            engine = create_engine(dsn)
+            Database.engines[dsn] = engine
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         self.packages = Table('packages', self.meta, autoload=True)

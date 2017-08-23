@@ -5,10 +5,10 @@ from pathlib import Path
 import zmq
 
 from .html import tag
-from .tasks import PausableTask, DatabaseMixin, TaskQuit
+from .tasks import PauseableTask, DatabaseMixin, TaskQuit
 
 
-class IndexScribe(PausableTask, DatabaseMixin):
+class IndexScribe(DatabaseMixin, PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It reads
     the names of packages off the internal "indexes" queue and rebuilds the

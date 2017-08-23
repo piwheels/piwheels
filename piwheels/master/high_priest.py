@@ -1,11 +1,12 @@
 import logging
+from threading import Thread
 
 import zmq
 
 from .tasks import TaskQuit
 
 
-class HighPriest():  # NOTE: not a Task descendant
+class HighPriest(Thread):  # NOTE: not a Task descendant
     """
     The high priest is responsible for reporting the state of the system, and
     all associated slaves to whoever or whatever might be listening to the
@@ -14,6 +15,7 @@ class HighPriest():  # NOTE: not a Task descendant
     queue.
     """
     def __init__(self, **config):
+        super().__init__()
         self.ctx = zmq.Context.instance()
         self.int_control_queue = self.ctx.socket(zmq.PUB)
         self.int_control_queue.hwm = 1
@@ -29,6 +31,7 @@ class HighPriest():  # NOTE: not a Task descendant
         self.ext_status_queue.bind(config['ext_status_queue'])
 
     def close(self):
+        self.join()
         self.int_control_queue.close()
         self.ext_status_queue.close()
         self.int_status_queue.close()
@@ -59,4 +62,3 @@ class HighPriest():  # NOTE: not a Task descendant
             pass
         finally:
             self.int_control_queue.send_json(['QUIT'])
-            poller.close()

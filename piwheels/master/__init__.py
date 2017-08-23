@@ -1,8 +1,7 @@
+import os
 import signal
 import logging
 from configparser import ConfigParser
-from pathlib import Path
-from signal import pause
 
 import zmq
 
@@ -40,21 +39,22 @@ class PiWheelsMaster(TerminalApplication):
         })
         parser.add_section('master')
         parser.add_section('slave')
-        if args.config is not None:
-            parser.read(args.config)
+        if args.configuration is not None:
+            parser.read(args.configuration)
         else:
             parser.read([
                 '/etc/piwheels.conf',
                 '/usr/local/etc/piwheels.conf',
-                str(Path('~/.config/piwheels/piwheels.conf').expanduser()),
+                os.path.expanduser('~/.config/piwheels/piwheels.conf'),
             ])
+        # Expand any ~ in output_path
+        parser['master']['output_path'] = os.path.expanduser(parser['master']['output_path'])
         return parser['master']
 
     def main(self, args):
         signal.signal(signal.SIGTERM, self.sig_term)
         logging.info('PiWheels Master version {}'.format(__version__))
         config = self.load_configuration(args)
-        self.setup_paths(args)
         ctx = zmq.Context.instance()
         tasks = [
             task(**config)
@@ -68,16 +68,26 @@ class PiWheelsMaster(TerminalApplication):
                 IndexScribe,
             )
         ]
+        for task in tasks:
+            task.start()
         try:
-            pause()
+            tasks[0].join()
         except SystemExit:
             logging.warning('Shutting down on SIGTERM')
+            self.send_quit(ctx, config)
         except KeyboardInterrupt:
             logging.warning('Shutting down on Ctrl+C')
+            self.send_quit(ctx, config)
         finally:
             for task in tasks:
                 task.close()
             ctx.term()
+
+    def send_quit(self, ctx, config):
+        q = ctx.socket(zmq.PUSH)
+        q.connect(config['ext_control_queue'])
+        q.send_json(['QUIT'])
+        q.close()
 
     def sig_term(signo, stack_frame):
         raise SystemExit(0)

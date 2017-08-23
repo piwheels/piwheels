@@ -9,7 +9,7 @@ from .states import SlaveState, FileState
 from .tasks import Task, DatabaseMixin, TaskQuit
 
 
-class SlaveDriver(Task, DatabaseMixin):
+class SlaveDriver(DatabaseMixin, Task):
     """
     This task handles interaction with the build slaves using the slave
     protocol. Interaction is driven by the slaves (i.e. the master doesn't
@@ -23,7 +23,7 @@ class SlaveDriver(Task, DatabaseMixin):
     page indexes re-building (as a result of a successful build).
     """
     def __init__(self, **config):
-        super().__init__(**kwargs)
+        super().__init__(**config)
         self.output_path = Path(config['output_path'])
         self.paused = False
         self.status_queue = self.ctx.socket(zmq.PUSH)

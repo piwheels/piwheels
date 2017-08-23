@@ -21,7 +21,7 @@ class FileJuggler(Task):
     transfer and either retries it (when verification fails) or sends back
     "DONE" indicating the slave can wipe the source file.
     """
-    def __init__(self, **config)
+    def __init__(self, **config):
         super().__init__(**config)
         self.file_queue = self.ctx.socket(zmq.ROUTER)
         self.file_queue.ipv6 = True

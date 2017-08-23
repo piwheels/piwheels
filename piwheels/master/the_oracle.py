@@ -1,20 +1,20 @@
 import zmq
 
-from .tasks import PausableTask, DatabaseMixin, Quit
+from .tasks import PauseableTask, DatabaseMixin, TaskQuit
 
 
-class TheOracle(PausableTask, DatabaseMixin):
+class TheOracle(DatabaseMixin, PauseableTask):
     """
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It places a
     tuple of (package, version) for each such build into the internal "builds"
     queue for :class:`SlaveDriver` to read.
     """
-    def __init__(self, *, build_queue='inproc://builds', **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **config):
+        super().__init__(**config)
         self.build_queue = self.ctx.socket(zmq.PUSH)
         self.build_queue.hwm = 1
-        self.build_queue.bind(build_queue)
+        self.build_queue.bind(config['build_queue'])
 
     def close(self):
         self.build_queue.close()

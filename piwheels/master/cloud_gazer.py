@@ -1,7 +1,7 @@
-from .tasks import PausableTask, DatabaseMixin, PyPIMixin, TaskQuit
+from .tasks import PauseableTask, DatabaseMixin, PyPIMixin, TaskQuit
 
 
-class CloudGazer(PausableTask, DatabaseMixin, PyPIMixin):
+class CloudGazer(DatabaseMixin, PyPIMixin, PauseableTask):
     """
     This task scrapes PyPI for the list of available packages, and the versions
     of those packages. This information is written into the backend database for
@@ -13,7 +13,7 @@ class CloudGazer(PausableTask, DatabaseMixin, PyPIMixin):
                 self.db.update_package_list(self.pypi.get_all_packages())
                 for package in self.db.get_all_packages():
                     self.handle_control()
-                    db.update_package_version_list(
+                    self.db.update_package_version_list(
                         package, self.pypi.get_package_versions(package))
                 self.handle_control(60000)
         except TaskQuit:

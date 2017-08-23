@@ -1,14 +1,15 @@
+import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import zmq
 from pkg_resources import resource_string, resource_stream
 
-from .tasks import PausableTask, DatabaseMixin, TaskQuit
+from .tasks import PauseableTask, DatabaseMixin, TaskQuit
 
 
-class BigBrother(PausableTask, DatabaseMixin):
+class BigBrother(DatabaseMixin, PauseableTask):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the
@@ -21,9 +22,10 @@ class BigBrother(PausableTask, DatabaseMixin):
         super().__init__(**config)
         self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
         self.output_path = Path(config['output_path'])
-        self.status_queue = ctx.socket(zmq.PUSH)
+        self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 1
         self.status_queue.connect(config['int_status_queue'])
+        self.setup_output_path()
 
     def setup_output_path(self):
         try:
@@ -41,7 +43,6 @@ class BigBrother(PausableTask, DatabaseMixin):
                 source.close()
 
     def run(self):
-        self.setup_output_path()
         try:
             while True:
                 stat = os.statvfs(str(self.output_path))

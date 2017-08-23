@@ -20,8 +20,8 @@ class PyPI():
         interface.
         """
         logging.info('Querying PyPI package list')
-        client = xmlrpclib.ServerProxy(pypi_root)
-        return client.list_packages()
+        client = xmlrpclib.ServerProxy(self.pypi_root)
+        return set(client.list_packages())
 
     def get_package_info(self, package):
         """
@@ -38,13 +38,12 @@ class PyPI():
         Returns all versions with source code for a given package released on
         PyPI.
         """
-        package_info = get_package_info(package, self.pypi_root)
+        package_info = self.get_package_info(package)
         try:
-            return [
+            return {
                 release
                 for release, release_files in package_info['releases'].items()
                 if 'sdist' in [release_file['packagetype'] for release_file in release_files]
-            ]
+            }
         except TypeError:
-            return []
-
+            return set()
