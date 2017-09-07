@@ -1,49 +1,74 @@
+import re
 import logging
-import xmlrpc.client as xmlrpclib
+import xmlrpc.client
+from collections import namedtuple, deque
+from time import sleep
 
 import requests
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 
+PackageVersion = namedtuple('PackageVersion', ('package', 'version'))
+
 
 class PyPI():
+    """
+    When treated as an iterator, this class yields PackageVersion tuples
+    indicating new packages or package versions registered on PyPI (only
+    versions with files are reported). A small attempt is made to avoid
+    duplicate reports, but we don't attempt to avoid reporting stuff already in
+    the database (it's simpler to just start from the beginning of PyPI's log
+    and work through it).
+
+    When no more entries are found, the iterator ends. However, note that PyPI
+    (very sensibly) limits the number of entries in a single query (to 50,000
+    at the time of writing), so the instance will need repeated querying to
+    retrieve all rows (this works in our favour though as it means we can poll
+    the internal control queue between runs).
+
+    The *pypi_root* argument configures the web address at which to find the
+    PyPI XML-RPC server.
+    """
+
     def __init__(self, pypi_root='https://pypi.python.org/pypi'):
-        self.pypi_root = pypi_root
+        self.last_serial = 0
+        self.packages = set()
+        # Keep a list of the last 100 (package, version) tuples so we can make
+        # a vague attempt at reducing duplicate reports
+        self.cache = deque(maxlen=100)
+        self.client = xmlrpc.client.ServerProxy(pypi_root)
+
+    def __iter__(self):
+        # First seed a list of all packages; there doesn't seem to be a specific
+        # action for registering a new package on PyPI, just package versions
+        # but that's okay
+        if not self.packages:
+            self.packages = set(self.client.list_packages())
+            for package in self.packages:
+                yield PackageVersion(package, None)
+        # NOTE: starting at serial 0 doesn't return *all* records as PyPI
+        # (very sensibly) limits the number of entries in a result set (to
+        # 50000 at the time of writing)
+        for (package, version, timestamp, action, serial) in self.client.changelog_since_serial(self.last_serial):
+            delay = True
+            # If we've never seen the package before, report it as a new
+            # one
+            if package not in self.packages:
+                self.packages.add(package)
+                yield PackageVersion(package, None)
+            # If the event is adding a file, report a new version (we're
+            # only interested in versions with associated file releases)
+            if re.search('^add [^ ]+ file', action):
+                rec = PackageVersion(package, version)
+                if rec not in self.cache:
+                    self.cache.append(rec)
+                    yield rec
+            self.last_serial = serial
 
     def close(self):
-        pass
+        self.last_serial = None
+        self.packages = None
+        self.cache = None
+        self.client = None
 
-    def get_all_packages(self):
-        """
-        Returns a sorted list of all packages on PyPI using the xmlrpc
-        interface.
-        """
-        logging.info('Querying PyPI package list')
-        client = xmlrpclib.ServerProxy(self.pypi_root)
-        return set(client.list_packages())
-
-    def get_package_info(self, package):
-        """
-        Returns information about a given package from the PyPI JSON API.
-        """
-        url = '{self.pypi_root}/{package}/json'.format(**vars())
-        try:
-            return requests.get(url).json()
-        except:
-            return None
-
-    def get_package_versions(self, package):
-        """
-        Returns all versions with source code for a given package released on
-        PyPI.
-        """
-        package_info = self.get_package_info(package)
-        try:
-            return {
-                release
-                for release, release_files in package_info['releases'].items()
-                if 'sdist' in [release_file['packagetype'] for release_file in release_files]
-            }
-        except TypeError:
-            return set()

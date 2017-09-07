@@ -10,12 +10,13 @@ class CloudGazer(DatabaseMixin, PyPIMixin, PauseableTask):
     def run(self):
         try:
             while True:
-                self.db.update_package_list(self.pypi.get_all_packages())
-                for package in self.db.get_all_packages():
+                for package, version in self.pypi:
                     self.handle_control()
-                    self.db.update_package_version_list(
-                        package, self.pypi.get_package_versions(package))
-                self.handle_control(60000)
+                    if version is None:
+                        self.db.add_new_package(package)
+                    else:
+                        self.db.add_new_package_version(package, version)
+                self.handle_control(10000)
         except TaskQuit:
             pass
 

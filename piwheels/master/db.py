@@ -44,60 +44,35 @@ class Database():
 
     def add_new_package(self, package):
         """
-        Insert a new package record into the database
+        Insert a new package record into the database. Key violations are
+        ignored as packages is effectively an append-only table.
         """
         with self.conn.begin():
-            self.conn.execute(
-                self.packages.insert(),
-                package=package
-            )
+            try:
+                self.conn.execute(
+                    self.packages.insert(),
+                    package=package
+                )
+            except DBAPIError:
+                pass
+            else:
+                logging.info('Added package %s', package)
 
     def add_new_package_version(self, package, version):
         """
-        Insert a new package version record into the database
+        Insert a new package version record into the database. Key violations
+        are ignored as versions is effectively an append-only table.
         """
         with self.conn.begin():
-            self.conn.execute(
-                self.versions.insert(),
-                package=package, version=version
-            )
-
-    def update_package_list(self, packages):
-        """
-        Merges *packages* (an iterable of package names) into the known set of
-        packages.
-        """
-        known_packages = set(self.get_all_packages())
-        missing_packages = packages - known_packages
-
-        if missing_packages:
-            logging.info('Adding %d new packages', len(missing_packages))
-
-            with self.conn.begin():
-                for package in missing_packages:
-                    if len(package) > 200:
-                        logging.warning('Ignoring stupid package name: %s', package)
-                    else:
-                        self.add_new_package(package)
-
-    def update_package_version_list(self, package, versions):
-        """
-        Merges *versions* (an iterable of version strings) into the known set
-        of versions of *package* (a package name).
-        """
-        known_versions = set(self.get_package_versions(package))
-        missing_versions = versions - known_versions
-
-        if missing_versions:
-            with self.conn.begin():
-                logging.info('Adding new versions for package %s: %s',
-                             package, ', '.join(missing_versions))
-
-                for version in missing_versions:
-                    if len(version) > 200:
-                        logging.warning('Ignoring stupid version: %s', version)
-                    else:
-                        self.add_new_package_version(package, version)
+            try:
+                self.conn.execute(
+                    self.versions.insert(),
+                    package=package, version=version
+                )
+            except DBAPIError:
+                pass
+            else:
+                logging.info('Added package %s version %s', package, version)
 
     def log_build(self, build):
         """
@@ -222,15 +197,4 @@ class Database():
                 order_by(self.versions.c.version)
             )
             return [rec.version for rec in result]
-
-    def get_package_output(self, package):
-        """
-        Legacy
-        """
-        with self.conn.begin():
-            return self.conn.execute(
-                select([self.builds.c.built_at, self.builds.c.status, self.builds.c.output]).
-                where(self.builds.c.package == package).
-                order_by(self.builds.c.built_at.desc())
-            ).fetchall()
 
