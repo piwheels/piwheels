@@ -45,7 +45,6 @@ class SlaveDriver(DatabaseMixin, Task):
         self.slave_queue.close()
         self.status_queue.close()
         SlaveState.status_queue = None
-        self.int_control_queue.close()
         super().close()
 
     def run(self):
@@ -68,18 +67,10 @@ class SlaveDriver(DatabaseMixin, Task):
                         logging.error('Invalid first message from slave: %s', msg)
                         continue
                     slave = SlaveState(*args)
-                    self.slaves[address] = slave
                 slave.request = [msg] + args
 
-                try:
-                    handler = {
-                        'HELLO': self.handle_HELLO,
-                        'BYE':   self.handle_BYE,
-                        'IDLE':  self.handle_IDLE,
-                        'BUILT': self.handle_BUILT,
-                        'SENT':  self.handle_SENT,
-                    }[msg]
-                except KeyError:
+                handler = getattr(self, 'handle_%s' % msg, None)
+                if handler is None:
                     logging.error(
                         'Slave %d: Protocol error (%s)',
                         slave.slave_id, msg)
@@ -97,7 +88,7 @@ class SlaveDriver(DatabaseMixin, Task):
 
     def handle_control(self, timeout=0):
         if self.control_queue.poll(timeout):
-            msg = self.control_queue.recv_string()
+            msg, *args = self.control_queue.recv_string()
             if msg == 'QUIT':
                 raise TaskQuit
             elif msg == 'PAUSE':
@@ -109,11 +100,12 @@ class SlaveDriver(DatabaseMixin, Task):
         logging.warning('Slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
                         slave.slave_id, slave.timeout,
                         slave.native_abi, slave.native_platform)
+        self.slaves[slave.address] = slave
         return ['HELLO', slave.slave_id]
 
     def handle_BYE(self, slave):
         logging.warning('Slave shutdown: %d', slave.slave_id)
-        del self.slaves[address]
+        del self.slaves[slave.address]
         return None
 
     def handle_IDLE(self, slave):

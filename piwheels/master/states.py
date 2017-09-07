@@ -196,8 +196,9 @@ class SlaveState:
     counter = 0
     status_queue = None
 
-    def __init__(self, timeout, native_py_version, native_abi, native_platform):
+    def __init__(self, address, timeout, native_py_version, native_abi, native_platform):
         SlaveState.counter += 1
+        self._address = address
         self._slave_id = SlaveState.counter
         self._timeout = timedelta(seconds=timeout)
         self._native_py_version = native_py_version
@@ -224,6 +225,10 @@ class SlaveState:
     @property
     def terminated(self):
         return self._terminated
+
+    @property
+    def address(self):
+        return self._address
 
     @property
     def slave_id(self):

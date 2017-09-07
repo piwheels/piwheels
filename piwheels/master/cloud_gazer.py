@@ -9,6 +9,7 @@ class CloudGazer(DatabaseMixin, PyPIMixin, PauseableTask):
     """
     def run(self):
         try:
+            self.pypi.last_serial = self.db.get_pypi_serial()
             while True:
                 for package, version in self.pypi:
                     self.handle_control()
@@ -19,4 +20,6 @@ class CloudGazer(DatabaseMixin, PyPIMixin, PauseableTask):
                 self.handle_control(10000)
         except TaskQuit:
             pass
+        finally:
+            self.db.set_pypi_serial(self.pypi.last_serial)
 

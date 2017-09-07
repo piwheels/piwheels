@@ -67,7 +67,6 @@ class PyPI():
             self.last_serial = serial
 
     def close(self):
-        self.last_serial = None
         self.packages = None
         self.cache = None
         self.client = None

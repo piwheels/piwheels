@@ -22,6 +22,7 @@ class Database():
             Database.engines[dsn] = engine
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
+        self.configuration = Table('configuration', self.meta, autoload=True)
         self.packages = Table('packages', self.meta, autoload=True)
         self.versions = Table('versions', self.meta, autoload=True)
         self.builds = Table('builds', self.meta, autoload=True)
@@ -126,6 +127,27 @@ class Database():
                     abi_tag=file.abi_tag,
                     platform_tag=file.platform_tag
                 )
+
+    def get_pypi_serial(self):
+        """
+        Return the serial number of the last PyPI event
+        """
+        with self.conn.begin():
+            return self.conn.scalar(
+                select([self.configuration.c.pypi_serial]).
+                where(self.configuration.c.id == 1)
+            )
+
+    def set_pypi_serial(self, serial):
+        """
+        Update the serial number of the last PyPI event
+        """
+        with self.conn.begin():
+            self.conn.execute(
+                self.configuration.update().
+                where(self.configuration.c.id == 1),
+                pypi_serial=serial
+            )
 
     def get_all_packages(self):
         """

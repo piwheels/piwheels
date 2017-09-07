@@ -1,5 +1,5 @@
 __project__      = 'piwheels'
-__version__      = '0.5'
+__version__      = '0.6'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
