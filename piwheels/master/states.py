@@ -208,7 +208,6 @@ class SlaveState:
         self._request = None
         self._reply = None
         self._build = None
-        self._transfer = None
         self._terminated = False
 
     def __repr__(self):
@@ -259,10 +258,6 @@ class SlaveState:
         return self._build
 
     @property
-    def transfer(self):
-        return self._transfer
-
-    @property
     def request(self):
         return self._request
 
@@ -283,11 +278,8 @@ class SlaveState:
     @reply.setter
     def reply(self, value):
         self._reply = value
-        if value[0] == 'SEND':
-            self._transfer = TransferState(self._build.files[value[1]].filesize)
-        elif value[0] == 'DONE':
+        if value[0] == 'DONE':
             self._build = None
-            self._transfer = None
         SlaveState.status_queue.send_json(
             [self._slave_id, self._last_seen.timestamp()] + value)
 
@@ -368,8 +360,7 @@ class TransferState:
         else:
             logging.warning('Transfer still has credit; no need for reset')
 
-    def verify(self, build):
-        file_state = build.files[build.next_file]
+    def verify(self, filehash):
         # XXX Would be nicer to construct the hash from the transferred chunks
         # with a tree, but this potentially costs quite a bit of memory
         self._file.seek(0)

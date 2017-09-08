@@ -1,43 +1,47 @@
 digraph piwheels {
-    graph [nodesep=0.5, ranksep=0.5, style=filled, fontname=Sans, fontsize=14, fillcolor="#cccccc"];
+    graph [nodesep=0.5, ranksep=1, style=filled, fontname=Sans, fontsize=14, fillcolor="#cccccc"];
     node [shape=record, fontname=Sans, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
     edge [fontname=Sans, fontsize=8];
 
     pypi [label="PyPI", shape=egg];
 
+    subgraph cluster_db_server {
+        graph [label="db-server"];
+
+        cloud_gazer [label="{<db>REQ|<t>cloud_gazer}"];
+        the_oracle [label="{<t>the_oracle|<db>REP}"];
+        the_architect [label="{<t>the_architect|<builds>PUSH}"];
+        db [label="piwheels\ndatabase", shape=folder];
+
+        db->the_oracle:t [dir=both];
+        db->the_architect:t;
+    }
+
+    subgraph cluster_file_server {
+        graph [label="file-server"];
+
+        file_juggler [label="{{<transfers>REP|<slaves>ROUTER}|<t>file_juggler}"];
+        index_scribe [label="{{<db>REQ|<indexes>PULL}|<t>index_scribe}"];
+        fs [label="www\nfilesystem", shape=folder];
+
+        index_scribe:t->fs;
+        file_juggler:t->fs [dir=both];
+    }
+
     subgraph cluster_master {
         graph [label="master"];
 
         high_priest [label="{{<int_status>PULL}|high_priest|{<control>PULL|<ext_status>PUB}}"];
-        cloud_gazer [label="<t>cloud_gazer"];
-        the_oracle [label="{<t>the_oracle|<builds>PUSH}"];
-        big_brother [label="{<t>big_brother|<int_status>PUSH}"];
-        slave_driver [label="{{<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<indexes>PUSH|<int_status>PUSH}}"];
-        file_juggler [label="{<slaves>ROUTER|<t>file_juggler}"];
-        index_scribe [label="{<indexes>PULL|<t>index_scribe}"];
+        big_brother [label="{<t>big_brother|{<int_status>PUSH|<transfers>REQ}}"];
+        slave_driver [label="{{<db>REQ|<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<indexes>PUSH|<transfers>REQ}}"];
 
-        big_brother:int_status->high_priest:int_status [label="inproc://\nstatus"];
-        slave_driver:int_status->high_priest:int_status [label="inproc://\nstatus"];
-        the_oracle:builds->slave_driver:builds [label="inproc://\nbuilds"];
-        slave_driver:indexes->index_scribe:indexes [label="inproc://\nindexes"];
-
-        db [label="piwheels\ndatabase", shape=folder];
-        fs [label="www\nfilesystem", shape=folder];
-
-        cloud_gazer:t->db [dir=both];
-        db->the_oracle:t;
-        db->big_brother:t;
-        fs->big_brother:t;
-        slave_driver:t->db;
-        db->index_scribe:t;
-
-        index_scribe:t->fs;
-        file_juggler:t->fs;
+        big_brother:int_status->high_priest:int_status;
+        slave_driver:int_status->high_priest:int_status;
     }
 
     subgraph cluster_monitor {
         graph [label="monitor"];
-        monitor [label="{<status>SUB|<t>main|<control>PUSH}"];
+        monitor [label="{{<control>PUSH|<status>SUB}|<t>main}"];
     }
 
     subgraph cluster_slave1 {
@@ -53,10 +57,18 @@ digraph piwheels {
     pypi->cloud_gazer:t;
     pypi->slave1:t;
     pypi->slave2:t;
-    slave1:builds->slave_driver:slaves [dir=both, label="tcp://\n*:5555"];
-    slave2:builds->slave_driver:slaves [dir=both, label="tcp://\n*:5555"];
-    slave1:files->file_juggler:slaves [dir=both, label="tcp://\n*:5556"];
-    slave2:files->file_juggler:slaves [dir=both, label="tcp://\n*:5556"];
-    high_priest:ext_status->monitor:status [label="ipc://\n/tmp/piw-status"];
-    monitor:control->high_priest:control [label="ipc://\n/tmp/piw-control"];
+    slave1:builds->slave_driver:slaves [dir=both];
+    slave2:builds->slave_driver:slaves [dir=both];
+    slave1:files->file_juggler:slaves [dir=both];
+    slave2:files->file_juggler:slaves [dir=both];
+    high_priest:ext_status->monitor:status;
+    monitor:control->high_priest:control;
+
+    the_architect:builds->slave_driver:builds;
+    cloud_gazer:db->the_oracle:db [dir=both];
+    slave_driver:indexes->index_scribe:indexes;
+    index_scribe:db->the_oracle:db [dir=both];
+    big_brother:transfers->file_juggler:transfers [dir=both];
+    slave_driver:transfers->file_juggler:transfers [dir=both];
+    slave_driver:db->the_oracle:db [dir=both];
 }

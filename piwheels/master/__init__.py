@@ -9,6 +9,7 @@ from .. import __version__
 from ..terminal import TerminalApplication
 from .high_priest import HighPriest
 from .big_brother import BigBrother
+from .the_architect import TheArchitect
 from .the_oracle import TheOracle
 from .slave_driver import SlaveDriver
 from .file_juggler import FileJuggler
@@ -32,6 +33,8 @@ class PiWheelsMaster(TerminalApplication):
             'int_status_queue':  'inproc://status',
             'index_queue':       'inproc://indexes',
             'build_queue':       'inproc://builds',
+            'fs_queue':          'inproc://fs',
+            'db_queue':          'inproc://db',
             'ext_control_queue': 'ipc:///tmp/piw-control',
             'ext_status_queue':  'ipc:///tmp/piw-status',
             'slave_queue':       'tcp://*:5555',
@@ -60,11 +63,12 @@ class PiWheelsMaster(TerminalApplication):
             task(**config)
             for task in (
                 HighPriest,
+                TheOracle,
                 BigBrother,
                 CloudGazer,
-                TheOracle,
-                SlaveDriver,
+                TheArchitect,
                 FileJuggler,
+                SlaveDriver,
                 IndexScribe,
             )
         ]

@@ -6,10 +6,11 @@ import zmq
 from zmq.utils import jsonapi
 
 from .states import SlaveState, FileState
-from .tasks import Task, DatabaseMixin, TaskQuit
+from .tasks import Task, TaskQuit
+from .the_oracle import OracleClient
 
 
-class SlaveDriver(DatabaseMixin, Task):
+class SlaveDriver(Task):
     """
     This task handles interaction with the build slaves using the slave
     protocol. Interaction is driven by the slaves (i.e. the master doesn't
@@ -39,50 +40,31 @@ class SlaveDriver(DatabaseMixin, Task):
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.bind(config['index_queue'])
+        self.fs_queue = self.ctx.socket(zmq.REQ)
+        self.fs_queue.hwm = 1
+        self.fs_queue.connect(config['fs_queue'])
+        self.db = OracleClient(**config)
 
     def close(self):
         self.build_queue.close()
         self.slave_queue.close()
         self.status_queue.close()
+        self.fs_queue.close()
+        self.db.close()
         SlaveState.status_queue = None
         super().close()
 
     def run(self):
+        poller = zmq.Poller()
         try:
+            poller.register(self.control_queue, zmq.POLLIN)
+            poller.register(self.slave_queue, zmq.POLLIN)
             while True:
-                self.handle_control()
-                if not self.slave_queue.poll(1000):
-                    continue
-                try:
-                    address, empty, msg = self.slave_queue.recv_multipart()
-                except ValueError:
-                    logging.error('Invalid message structure from slave')
-                    continue
-                msg, *args = jsonapi.loads(msg)
-
-                try:
-                    slave = self.slaves[address]
-                except KeyError:
-                    if msg != 'HELLO':
-                        logging.error('Invalid first message from slave: %s', msg)
-                        continue
-                    slave = SlaveState(*args)
-                slave.request = [msg] + args
-
-                handler = getattr(self, 'handle_%s' % msg, None)
-                if handler is None:
-                    logging.error(
-                        'Slave %d: Protocol error (%s)',
-                        slave.slave_id, msg)
-                else:
-                    reply = handler(slave)
-                    if reply is not None:
-                        slave.reply = reply
-                        self.slave_queue.send_multipart([
-                            address,
-                            empty,
-                            jsonapi.dumps(reply)
-                        ])
+                socks = dict(poller.poll(1000))
+                if self.control_queue in socks:
+                    self.handle_control()
+                if self.slave_queue in socks:
+                    self.handle_slave()
         except TaskQuit:
             pass
 
@@ -96,19 +78,51 @@ class SlaveDriver(DatabaseMixin, Task):
             elif msg == 'RESUME':
                 self.paused = False
 
-    def handle_HELLO(self, slave):
+    def handle_slave(self):
+        try:
+            address, empty, msg = self.slave_queue.recv_multipart()
+        except ValueError:
+            logging.error('Invalid message structure from slave')
+            continue
+        msg, *args = jsonapi.loads(msg)
+
+        try:
+            slave = self.slaves[address]
+        except KeyError:
+            if msg != 'HELLO':
+                logging.error('Invalid first message from slave: %s', msg)
+                continue
+            slave = SlaveState(*args)
+        slave.request = [msg] + args
+
+        handler = getattr(self, 'do_%s' % msg, None)
+        if handler is None:
+            logging.error(
+                'Slave %d: Protocol error (%s)',
+                slave.slave_id, msg)
+        else:
+            reply = handler(slave)
+            if reply is not None:
+                slave.reply = reply
+                self.slave_queue.send_multipart([
+                    address,
+                    empty,
+                    jsonapi.dumps(reply)
+                ])
+
+    def do_HELLO(self, slave):
         logging.warning('Slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
                         slave.slave_id, slave.timeout,
                         slave.native_abi, slave.native_platform)
         self.slaves[slave.address] = slave
         return ['HELLO', slave.slave_id]
 
-    def handle_BYE(self, slave):
+    def do_BYE(self, slave):
         logging.warning('Slave shutdown: %d', slave.slave_id)
         del self.slaves[slave.address]
         return None
 
-    def handle_IDLE(self, slave):
+    def do_IDLE(self, slave):
         if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
             logging.error(
                 'Slave %d: Protocol error (IDLE after %s)',
@@ -129,7 +143,7 @@ class SlaveDriver(DatabaseMixin, Task):
                 else:
                     return ['SLEEP']
 
-    def handle_BUILT(self, slave):
+    def do_BUILT(self, slave):
         if slave.reply[0] != 'BUILD':
             logging.error(
                 'Slave %d: Protocol error (BUILD after %s)',
@@ -152,7 +166,7 @@ class SlaveDriver(DatabaseMixin, Task):
             else:
                 return ['DONE']
 
-    def handle_SENT(self, slave, *args):
+    def do_SENT(self, slave, *args):
         if slave.reply[0] != 'SEND':
             logging.error(
                 'Slave %d: Protocol error (SENT after %s)',
