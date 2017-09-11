@@ -176,7 +176,7 @@ class FileJuggler(Task):
 class FsClient:
     def __init__(self, **config):
         self.ctx = zmq.Context.instance()
-        self.fs_queue = self.ctx.socket(zmq.REP)
+        self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config['fs_queue'])
 
@@ -199,4 +199,4 @@ class FsClient:
         return self._execute(['VERIFY', build_state.slave_id, build_state.package])
 
     def statvfs(self):
-        return posix(**self._execute(['STATVFS']))
+        return posix.statvfs_result(**self._execute(['STATVFS']))

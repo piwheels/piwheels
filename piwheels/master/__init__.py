@@ -64,12 +64,12 @@ class PiWheelsMaster(TerminalApplication):
             for task in (
                 HighPriest,
                 TheOracle,
+                IndexScribe,
+                FileJuggler,
                 BigBrother,
                 CloudGazer,
                 TheArchitect,
-                FileJuggler,
                 SlaveDriver,
-                IndexScribe,
             )
         ]
         for task in tasks:
