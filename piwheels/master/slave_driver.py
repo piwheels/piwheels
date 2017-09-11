@@ -80,32 +80,32 @@ class SlaveDriver(Task):
             address, empty, msg = self.slave_queue.recv_multipart()
         except ValueError:
             logging.error('Invalid message structure from slave')
-            continue
-        msg, *args = jsonapi.loads(msg)
-
-        try:
-            slave = self.slaves[address]
-        except KeyError:
-            if msg != 'HELLO':
-                logging.error('Invalid first message from slave: %s', msg)
-                continue
-            slave = SlaveState(*args)
-        slave.request = [msg] + args
-
-        handler = getattr(self, 'do_%s' % msg, None)
-        if handler is None:
-            logging.error(
-                'Slave %d: Protocol error (%s)',
-                slave.slave_id, msg)
         else:
-            reply = handler(slave)
-            if reply is not None:
-                slave.reply = reply
-                self.slave_queue.send_multipart([
-                    address,
-                    empty,
-                    jsonapi.dumps(reply)
-                ])
+            msg, *args = jsonapi.loads(msg)
+
+            try:
+                slave = self.slaves[address]
+            except KeyError:
+                if msg != 'HELLO':
+                    logging.error('Invalid first message from slave: %s', msg)
+                    return
+                slave = SlaveState(*args)
+            slave.request = [msg] + args
+
+            handler = getattr(self, 'do_%s' % msg, None)
+            if handler is None:
+                logging.error(
+                    'Slave %d: Protocol error (%s)',
+                    slave.slave_id, msg)
+            else:
+                reply = handler(slave)
+                if reply is not None:
+                    slave.reply = reply
+                    self.slave_queue.send_multipart([
+                        address,
+                        empty,
+                        jsonapi.dumps(reply)
+                    ])
 
     def do_HELLO(self, slave):
         logging.warning('Slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
@@ -159,7 +159,7 @@ class SlaveDriver(Task):
                     slave.build.version)
             self.db.log_build(slave.build)
             if slave.build.status:
-                self.fs.expect(slave.build.next_file)
+                self.fs.expect(slave.build.files[slave.build.next_file])
                 return ['SEND', slave.build.next_file]
             else:
                 return ['DONE']
@@ -206,7 +206,8 @@ class SlaveDriver(Task):
                 arm6_path = arm7_path.with_name(
                     arm7_path.name[:-16] + 'linux_armv6l.whl')
                 new_file = FileState(arm6_path.name, file.filesize,
-                                     file.filehash, file.package_version_tag,
+                                     file.filehash, file.package_tag,
+                                     file.package_version_tag,
                                      file.py_version_tag, file.abi_tag,
                                      'linux_armv6l')
                 new_file.verified()

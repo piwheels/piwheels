@@ -15,11 +15,13 @@ class FileState:
     :attr:`transferred`.
     """
 
-    def __init__(self, filename, filesize, filehash, package_version_tag,
-                 py_version_tag, abi_tag, platform_tag, transferred=False):
+    def __init__(self, filename, filesize, filehash, package_tag,
+                 package_version_tag, py_version_tag, abi_tag, platform_tag,
+                 transferred=False):
         self._filename = filename
         self._filesize = filesize
         self._filehash = filehash
+        self._package_tag = package_tag
         self._package_version_tag = package_version_tag
         self._py_version_tag = py_version_tag
         self._abi_tag = abi_tag
@@ -27,19 +29,20 @@ class FileState:
         self._transferred = transferred
 
     def __len__(self):
-        return 8
+        return 9
 
     def __getitem__(self, index):
-        return {
-            0: self._filename,
-            1: self._filesize,
-            2: self._filehash,
-            3: self._package_version_tag,
-            4: self._py_version_tag,
-            5: self._abi_tag,
-            6: self._platform_tag,
-            7: self._transferred,
-        }[index]
+        return [
+            self._filename,
+            self._filesize,
+            self._filehash,
+            self._package_tag,
+            self._package_version_tag,
+            self._py_version_tag,
+            self._abi_tag,
+            self._platform_tag,
+            self._transferred,
+        ][index]
 
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
@@ -107,16 +110,16 @@ class BuildState:
         return 8
 
     def __getitem__(self, index):
-        return {
-            0: self._slave_id,
-            1: self._package,
-            2: self._version,
-            3: self._status,
-            4: self._duration,
-            5: self._output,
-            6: self._files,
-            7: self._build_id,
-        }[index]
+        return [
+            self._slave_id,
+            self._package,
+            self._version,
+            self._status,
+            self._duration,
+            self._output,
+            self._files,
+            self._build_id,
+        ][index]
 
     def __repr__(self):
         return "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".format(

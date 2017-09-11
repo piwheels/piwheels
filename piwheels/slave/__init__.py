@@ -86,6 +86,7 @@ class PiWheelsSlave(TerminalApplication):
                             pkg.filename: (
                                 pkg.filesize,
                                 pkg.filehash,
+                                pkg.package_tag,
                                 pkg.package_version_tag,
                                 pkg.py_version_tag,
                                 pkg.abi_tag,

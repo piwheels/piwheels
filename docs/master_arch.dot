@@ -8,19 +8,19 @@ digraph piwheels {
     subgraph cluster_db_server {
         graph [label="db-server"];
 
-        cloud_gazer [label="{<db>REQ|<t>cloud_gazer}"];
-        the_oracle [label="{<t>the_oracle|<db>REP}"];
-        the_architect [label="{<t>the_architect|<builds>PUSH}"];
+        cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
+        the_oracle [label="{<db>REP|<t>the_oracle}"];
+        the_architect [label="{<builds>PUSH|<t>the_architect}"];
         db [label="piwheels\ndatabase", shape=folder];
 
-        db->the_oracle:t [dir=both];
-        db->the_architect:t;
+        the_oracle:t->db [dir=both];
+        the_architect:t->db [dir=back];
     }
 
     subgraph cluster_file_server {
         graph [label="file-server"];
 
-        file_juggler [label="{{<transfers>REP|<slaves>ROUTER}|<t>file_juggler}"];
+        file_juggler [label="{{<transfers>REP|<slaves>ROUTER}|<t>file_juggler|{<indexes>PUSH}}"];
         index_scribe [label="{{<db>REQ|<indexes>PULL}|<t>index_scribe}"];
         fs [label="www\nfilesystem", shape=folder];
 
@@ -33,7 +33,7 @@ digraph piwheels {
 
         high_priest [label="{{<int_status>PULL}|high_priest|{<control>PULL|<ext_status>PUB}}"];
         big_brother [label="{<t>big_brother|{<int_status>PUSH|<transfers>REQ}}"];
-        slave_driver [label="{{<db>REQ|<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<indexes>PUSH|<transfers>REQ}}"];
+        slave_driver [label="{{<db>REQ|<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<transfers>REQ}}"];
 
         big_brother:int_status->high_priest:int_status;
         slave_driver:int_status->high_priest:int_status;
@@ -66,7 +66,7 @@ digraph piwheels {
 
     the_architect:builds->slave_driver:builds;
     cloud_gazer:db->the_oracle:db [dir=both];
-    slave_driver:indexes->index_scribe:indexes;
+    file_juggler:indexes->index_scribe:indexes;
     index_scribe:db->the_oracle:db [dir=both];
     big_brother:transfers->file_juggler:transfers [dir=both];
     slave_driver:transfers->file_juggler:transfers [dir=both];
