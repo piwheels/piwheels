@@ -79,8 +79,9 @@ class TheOracle(DatabaseMixin, Task):
         self.db.set_pypi_serial(serial)
 
 
-class OracleClient:
+class DbClient:
     def __init__(self, **config):
+        self.ctx = zmq.Context.instance()
         self.db_queue = self.ctx.socket(zmq.REP)
         self.db_queue.hwm = 1
         self.db_queue.connect(config['db_queue'])

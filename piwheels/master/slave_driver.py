@@ -7,7 +7,7 @@ from zmq.utils import jsonapi
 
 from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
-from .the_oracle import OracleClient
+from .the_oracle import DbClient
 
 
 class SlaveDriver(Task):
@@ -37,13 +37,10 @@ class SlaveDriver(Task):
         self.build_queue = self.ctx.socket(zmq.PULL)
         self.build_queue.hwm = 1
         self.build_queue.connect(config['build_queue'])
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.bind(config['index_queue'])
         self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config['fs_queue'])
-        self.db = OracleClient(**config)
+        self.db = DbClient(**config)
 
     def close(self):
         self.build_queue.close()
@@ -162,6 +159,7 @@ class SlaveDriver(Task):
                     slave.build.version)
             self.db.log_build(slave.build)
             if slave.build.status:
+                self.fs.expect(slave.build.next_file)
                 return ['SEND', slave.build.next_file]
             else:
                 return ['DONE']
@@ -177,7 +175,7 @@ class SlaveDriver(Task):
                 'Slave %d: Internal error; no transfer to verify',
                 slave.slave_id)
             return
-        elif slave.transfer.verify(slave.build):
+        elif slave.transfer.verify(slave):
             logging.info(
                 'Slave %d: Verified transfer of %s',
                 slave.slave_id, slave.reply[1])

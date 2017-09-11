@@ -1,10 +1,8 @@
-import os
 import hashlib
 import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
-from collections import namedtuple
 
 from .ranges import exclude, intersect
 
@@ -27,6 +25,21 @@ class FileState:
         self._abi_tag = abi_tag
         self._platform_tag = platform_tag
         self._transferred = transferred
+
+    def __len__(self):
+        return 8
+
+    def __getitem__(self, index):
+        return {
+            0: self._filename,
+            1: self._filesize,
+            2: self._filehash,
+            3: self._package_version_tag,
+            4: self._py_version_tag,
+            5: self._abi_tag,
+            6: self._platform_tag,
+            7: self._transferred,
+        }[index]
 
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
@@ -89,6 +102,21 @@ class BuildState:
         self._output = output
         self._files = files
         self._build_id = build_id
+
+    def __len__(self):
+        return 8
+
+    def __getitem__(self, index):
+        return {
+            0: self._slave_id,
+            1: self._package,
+            2: self._version,
+            3: self._status,
+            4: self._duration,
+            5: self._output,
+            6: self._files,
+            7: self._build_id,
+        }[index]
 
     def __repr__(self):
         return "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".format(
@@ -301,24 +329,30 @@ class TransferState:
     pipeline_size = 10
     output_path = Path('.')
 
-    def __init__(self, filesize):
+    def __init__(self, file_state):
+        self._file_state = file_state
         self._file = tempfile.NamedTemporaryFile(
             dir=str(self.output_path / 'simple'), delete=False)
-        self._file.seek(filesize)
+        self._file.seek(self._file_state.filesize)
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = max(1, min(self.pipeline_size, filesize // self.chunk_size))
+        self._credit = max(1, min(self.pipeline_size,
+                                  self._file_state.filesize // self.chunk_size))
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
         # file we have yet to received; this is manipulated by chunk()
         self._offset = 0
-        self._map = [range(filesize)]
+        self._map = [range(self._file_state.filesize)]
 
     def __repr__(self):
         return "<TransferState: offset={offset} map={_map}>".format(
             offset=self._offset, _map=self._map)
+
+    @property
+    def file_state(self):
+        return self._file_state
 
     @property
     def done(self):
@@ -360,7 +394,7 @@ class TransferState:
         else:
             logging.warning('Transfer still has credit; no need for reset')
 
-    def verify(self, filehash):
+    def verify(self):
         # XXX Would be nicer to construct the hash from the transferred chunks
         # with a tree, but this potentially costs quite a bit of memory
         self._file.seek(0)
@@ -372,18 +406,19 @@ class TransferState:
             else:
                 break
         self._file.close()
-        p = Path(self._file.name)
-        if m.hexdigest().lower() == file_state.filehash:
-            p.chmod(0o644)
-            try:
-                p.with_name(build.package).mkdir()
-            except FileExistsError:
-                pass
-            pkg_name = p.with_name(build.package) / file_state.filename
-            p.rename(pkg_name)
-            file_state.verified()
-            return True
-        else:
-            p.unlink()
-            return False
+        if m.hexdigest().lower() != self._file_state.filehash:
+            raise IOError('failed to verify transfer at %s' % self._file.name)
 
+    def commit(self, package):
+        p = Path(self._file.name)
+        p.chmod(0o644)
+        try:
+            p.with_name(package).mkdir()
+        except FileExistsError:
+            pass
+        final_name = p.with_name(package) / self._file_state.filename
+        p.rename(final_name)
+        self._file_state.verified()
+
+    def rollback(self):
+        Path(self._file.name).unlink()

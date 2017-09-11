@@ -1,9 +1,11 @@
+import os
+import posix
 import logging
 
 import zmq
 
 from .tasks import Task, TaskQuit
-from .states import TransferState
+from .states import FileState, TransferState
 
 
 class TransferError(Exception):
@@ -42,11 +44,15 @@ class FileJuggler(Task):
         self.fs_queue = self.ctx.socket(zmq.REP)
         self.fs_queue.hwm = 1
         self.fs_queue.bind(config['fs_queue'])
+        self.index_queue = self.ctx.socket(zmq.PUSH)
+        self.index_queue.hwm = 10
+        self.index_queue.connect(config['index_queue'])
         self.transfers = {}
-        self.incoming = {}
 
     def close(self):
         self.file_queue.close()
+        self.fs_queue.close()
+        self.index_queue.close()
         super().close()
 
     def run(self):
@@ -75,12 +81,27 @@ class FileJuggler(Task):
 
     def handle_fs_request(self):
         msg, *args = self.fs_queue.recv_json()
-        if msg == 'INCOMING':
-            pass
+        if msg == 'EXPECT':
+            slave_id, *args = args
+            file_state = FileState(*args)
+            self.transfers[slave_id] = TransferState(file_state)
+            self.fs_queue.send_json(['OK'])
         elif msg == 'VERIFY':
-            pass
+            slave_id, package = args
+            transfer = self.transfers[slave_id]
+            try:
+                transfer.verify()
+            except IOError as e:
+                transfer.rollback()
+                self.fs_queue.send_json(['ERR', str(e)])
+            else:
+                transfer.commit(package)
+                self.fs_queue.send_json(['OK'])
         elif msg == 'STATVFS':
-            pass
+            stat = os.statvfs(str(self.output_path))
+            self.fs_queue.send_json(['OK', {
+                field: value for field, value in zip(stat._fields, stat)
+            }])
         else:
             logging.error('Invalid fs request: %s', msg)
 
@@ -144,6 +165,30 @@ class FileJuggler(Task):
             # XXX Remove transfer from slave?
 
 
-class FileClient:
+class FsClient:
     def __init__(self, **config):
-        pass
+        self.ctx = zmq.Context.instance()
+        self.fs_queue = self.ctx.socket(zmq.REP)
+        self.fs_queue.hwm = 1
+        self.fs_queue.connect(config['fs_queue'])
+
+    def close(self):
+        self.fs_queue.close()
+
+    def _execute(self, msg):
+        self.fs_queue.send_json(msg)
+        status, result = self.fs_queue.recv_json()
+        if status == 'OK':
+            if result:
+                return result
+        else:
+            raise IOError(result)
+
+    def expect(self, file_state):
+        self._execute(['EXPECT', file_state])
+
+    def verify(self, build_state):
+        return self._execute(['VERIFY', build_state.slave_id, build_state.package])
+
+    def statvfs(self):
+        return posix(**self._execute(['STATVFS']))

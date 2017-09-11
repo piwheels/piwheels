@@ -1,15 +1,13 @@
-import os
-import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 
 import zmq
-from pkg_resources import resource_string, resource_stream
 
-from .tasks import PauseableTask, DatabaseMixin, TaskQuit
+from .tasks import PauseableTask, TaskQuit
+from .file_juggler import FsClient
+from .the_oracle import DbClient
 
 
-class BigBrother(DatabaseMixin, PauseableTask):
+class BigBrother(PauseableTask):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the
@@ -20,32 +18,26 @@ class BigBrother(DatabaseMixin, PauseableTask):
     """
     def __init__(self, **config):
         super().__init__(**config)
-        self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
-        self.output_path = Path(config['output_path'])
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 1
         self.status_queue.connect(config['int_status_queue'])
-        self.setup_output_path()
+        self.index_queue = self.ctx.socket(zmq.PUSH)
+        self.index_queue.hwm = 10
+        self.index_queue.connect(config['index_queue'])
+        self.fs = FsClient(**config)
+        self.db = DbClient(**config)
 
-    def setup_output_path(self):
-        try:
-            self.output_path.mkdir()
-        except FileExistsError:
-            pass
-        try:
-            (self.output_path / 'simple').mkdir()
-        except FileExistsError:
-            pass
-        for filename in ('raspberry-pi-logo.svg', 'python-logo.svg'):
-            with (self.output_path / filename).open('wb') as f:
-                source = resource_stream(__name__, filename)
-                f.write(source.read())
-                source.close()
+    def close(self):
+        self.db.close()
+        self.fs.close()
+        self.index_queue.close()
+        self.status_queue.close()
+        super().close()
 
     def run(self):
         try:
             while True:
-                stat = os.statvfs(str(self.output_path))
+                stat = self.fs.statvfs()
                 rec = self.db.get_statistics()
                 status_info = {
                         'packages_count':   rec.packages_count,
@@ -60,31 +52,13 @@ class BigBrother(DatabaseMixin, PauseableTask):
                         'disk_free':        stat.f_frsize * stat.f_bavail,
                         'disk_size':        stat.f_frsize * stat.f_blocks,
                     }
-                self.write_homepage(status_info)
+                self.index_queue.send_json(status_info)
                 self.status_queue.send_json([
                     -1,
                     datetime.utcnow().timestamp(),
                     'STATUS',
                     status_info
                 ])
-                self.handle_control(int_control_queue, 10000)
+                self.handle_control(10000)
         except TaskQuit:
             pass
-
-    def write_homepage(self, status_info):
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
-                                         delete=False) as index:
-            try:
-                index.file.write(self.homepage_template.format(
-                    packages_built=status_info['packages_built'],
-                    versions_built=status_info['versions_built'],
-                    builds_time=timedelta(seconds=status_info['builds_time']),
-                    builds_size=status_info['builds_size'] // 1048576
-                ))
-            except:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o664)
-                os.replace(index.name, str(self.output_path / 'index.html'))
-

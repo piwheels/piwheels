@@ -1,8 +1,10 @@
 import os
 import tempfile
 from pathlib import Path
+from datetime import timedelta
 
 import zmq
+from pkg_resources import resource_string, resource_stream
 
 from .html import tag
 from .tasks import PauseableTask, DatabaseMixin, TaskQuit
@@ -25,14 +27,31 @@ class IndexScribe(DatabaseMixin, PauseableTask):
     """
     def __init__(self, **config):
         super().__init__(**config)
+        self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
         self.output_path = Path(config['output_path'])
         self.index_queue = self.ctx.socket(zmq.PULL)
         self.index_queue.hwm = 10
-        self.index_queue.connect(config['index_queue'])
+        self.index_queue.bind(config['index_queue'])
+        self.setup_output_path()
 
     def close(self):
         self.index_queue.close()
         super().close()
+
+    def setup_output_path(self):
+        try:
+            self.output_path.mkdir()
+        except FileExistsError:
+            pass
+        try:
+            (self.output_path / 'simple').mkdir()
+        except FileExistsError:
+            pass
+        for filename in ('raspberry-pi-logo.svg', 'python-logo.svg'):
+            with (self.output_path / filename).open('wb') as f:
+                source = resource_stream(__name__, filename)
+                f.write(source.read())
+                source.close()
 
     def run(self):
         try:
@@ -56,6 +75,23 @@ class IndexScribe(DatabaseMixin, PauseableTask):
                 self.write_package_index(package, self.db.get_package_files(package))
         except TaskQuit:
             pass
+
+    def write_homepage(self, status_info):
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
+                                         delete=False) as index:
+            try:
+                index.file.write(self.homepage_template.format(
+                    packages_built=status_info['packages_built'],
+                    versions_built=status_info['versions_built'],
+                    builds_time=timedelta(seconds=status_info['builds_time']),
+                    builds_size=status_info['builds_size'] // 1048576
+                ))
+            except:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o664)
+                os.replace(index.name, str(self.output_path / 'index.html'))
 
     def write_root_index(self, packages):
         with tempfile.NamedTemporaryFile(
