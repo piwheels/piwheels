@@ -2,9 +2,6 @@ from threading import Thread
 
 import zmq
 
-from .db import Database
-from .pypi import PyPI
-
 
 class TaskQuit(Exception):
     """
@@ -45,23 +42,3 @@ class PauseableTask(Task):
                         raise TaskQuit
                     elif msg == 'RESUME':
                         break
-
-
-class DatabaseMixin():
-    def __init__(self, **config):
-        super().__init__(**config)
-        self.db = Database(config['database'])
-
-    def close(self):
-        super().close()
-        self.db.close()
-
-
-class PyPIMixin():
-    def __init__(self, **config):
-        super().__init__(**config)
-        self.pypi = PyPI(config['pypi_root'])
-
-    def close(self):
-        super().close()
-        self.pypi.close()

@@ -3,11 +3,12 @@ from datetime import timedelta
 
 import zmq
 
-from .tasks import Task, DatabaseMixin, TaskQuit
+from .tasks import Task, TaskQuit
 from .states import BuildState, FileState
+from .db import Database
 
 
-class TheOracle(DatabaseMixin, Task):
+class TheOracle(Task):
     """
     This task provides an RPC-like interface to the database; it handles
     requests such as registering a new package, version, or build, and answering
@@ -19,8 +20,10 @@ class TheOracle(DatabaseMixin, Task):
         self.db_queue = self.ctx.socket(zmq.REP)
         self.db_queue.hwm = 10
         self.db_queue.bind(config['db_queue'])
+        self.db = Database(config['database'])
 
     def close(self):
+        self.db.close()
         self.db_queue.close()
         super().close()
 

@@ -1,9 +1,10 @@
 import zmq
 
-from .tasks import PauseableTask, DatabaseMixin, TaskQuit
+from .tasks import PauseableTask, TaskQuit
+from .db import Database
 
 
-class TheArchitect(DatabaseMixin, PauseableTask):
+class TheArchitect(PauseableTask):
     """
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It places a
@@ -15,8 +16,10 @@ class TheArchitect(DatabaseMixin, PauseableTask):
         self.build_queue = self.ctx.socket(zmq.PUSH)
         self.build_queue.hwm = 1
         self.build_queue.bind(config['build_queue'])
+        self.db = Database(config['database'])
 
     def close(self):
+        self.db.close()
         self.build_queue.close()
         super().close()
 

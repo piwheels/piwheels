@@ -81,29 +81,37 @@ class FileJuggler(Task):
 
     def handle_fs_request(self):
         msg, *args = self.fs_queue.recv_json()
-        if msg == 'EXPECT':
-            slave_id, *args = args
-            file_state = FileState(*args)
-            self.transfers[slave_id] = TransferState(file_state)
-            self.fs_queue.send_json(['OK'])
-        elif msg == 'VERIFY':
-            slave_id, package = args
-            transfer = self.transfers[slave_id]
-            try:
-                transfer.verify()
-            except IOError as e:
-                transfer.rollback()
-                self.fs_queue.send_json(['ERR', str(e)])
-            else:
-                transfer.commit(package)
-                self.fs_queue.send_json(['OK'])
-        elif msg == 'STATVFS':
-            stat = os.statvfs(str(self.output_path))
-            self.fs_queue.send_json(['OK', {
-                field: value for field, value in zip(stat._fields, stat)
-            }])
+        try:
+            handler = getattr(self, 'do_%s' % msg)
+            result = handler(*args)
+        except Exception as e:
+            logging.error('Error handling db request: %s', msg)
+            # REP *must* send a reply even when stuff goes wrong
+            # otherwise the send/recv cycle that REQ/REP depends
+            # upon breaks
+            self.db_queue.send_json(['ERR', str(e)])
         else:
-            logging.error('Invalid fs request: %s', msg)
+            self.db_queue.send_json(['OK', result])
+
+    def do_EXPECT(self, slave_id, *file_state):
+        file_state = FileState(*file_state)
+        self.transfers[slave_id] = TransferState(file_state)
+
+    def do_VERIFY(self, slave_id, package):
+        transfer = self.transfers[slave_id]
+        try:
+            transfer.verify()
+        except IOError as e:
+            transfer.rollback()
+            raise
+        else:
+            transfer.commit(package)
+
+    def do_STATVFS(self):
+        stat = os.statvfs(str(self.output_path))
+        return {
+            field: value for field, value in zip(stat._fields, stat)
+        }
 
     def handle_file(self):
         address, msg, *args = self.file_queue.recv_multipart()

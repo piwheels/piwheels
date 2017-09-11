@@ -7,10 +7,11 @@ import zmq
 from pkg_resources import resource_string, resource_stream
 
 from .html import tag
-from .tasks import PauseableTask, DatabaseMixin, TaskQuit
+from .tasks import PauseableTask, TaskQuit
+from .the_oracle import DbClient
 
 
-class IndexScribe(DatabaseMixin, PauseableTask):
+class IndexScribe(PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It reads
     the names of packages off the internal "indexes" queue and rebuilds the
@@ -32,6 +33,7 @@ class IndexScribe(DatabaseMixin, PauseableTask):
         self.index_queue = self.ctx.socket(zmq.PULL)
         self.index_queue.hwm = 10
         self.index_queue.bind(config['index_queue'])
+        self.db = DbClient(**config)
         self.setup_output_path()
 
     def close(self):
