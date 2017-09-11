@@ -37,6 +37,7 @@ class IndexScribe(PauseableTask):
         self.setup_output_path()
 
     def close(self):
+        self.db.close()
         self.index_queue.close()
         super().close()
 
@@ -56,6 +57,7 @@ class IndexScribe(PauseableTask):
                 source.close()
 
     def run(self):
+        poller = zmq.Poller()
         try:
             # Build the initial index from the set of directories that exist
             # under the output path (this is much faster than querying the
@@ -66,15 +68,18 @@ class IndexScribe(PauseableTask):
                 if d.is_dir()
             }
 
+            poller.register(self.control_queue, zmq.POLLIN)
+            poller.register(self.index_queue, zmq.POLLIN)
             while True:
-                self.handle_control()
-                if not self.index_queue.poll(1000):
-                    continue
-                package = self.index_queue.recv_string()
-                if package not in packages:
-                    packages.add(package)
-                    self.write_root_index(packages)
-                self.write_package_index(package, self.db.get_package_files(package))
+                socks = dict(poller.poll(1000))
+                if self.control_queue in socks:
+                    self.handle_control()
+                if self.index_queue in socks:
+                    package = self.index_queue.recv_string()
+                    if package not in packages:
+                        packages.add(package)
+                        self.write_root_index(packages)
+                    self.write_package_index(package, self.db.get_package_files(package))
         except TaskQuit:
             pass
 
