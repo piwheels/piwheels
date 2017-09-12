@@ -1,3 +1,5 @@
+import zmq
+
 from .tasks import PauseableTask, TaskQuit
 from .pypi import PyPI
 from .the_oracle import DbClient
@@ -20,18 +22,21 @@ class CloudGazer(PauseableTask):
         super().close()
 
     def run(self):
+        poller = zmq.Poller()
         try:
+            poller.register(self.control_queue, zmq.POLLIN)
             self.pypi.last_serial = self.db.get_pypi_serial()
             while True:
                 for package, version in self.pypi:
-                    self.handle_control()
                     if version is None:
                         self.db.add_new_package(package)
                     else:
                         self.db.add_new_package_version(package, version)
-                self.handle_control(10000)
+                    if poller.poll():
+                        self.handle_control()
+                if poller.poll(10000):
+                    self.handle_control()
         except TaskQuit:
             pass
         finally:
             self.db.set_pypi_serial(self.pypi.last_serial)
-

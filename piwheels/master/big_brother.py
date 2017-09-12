@@ -35,8 +35,12 @@ class BigBrother(PauseableTask):
         super().close()
 
     def run(self):
+        poller = zmq.Poller()
         try:
+            poller.register(self.control_queue, zmq.POLLIN)
             while True:
+                # The big brother task is not reactive; it just pumps out stats
+                # continually
                 stat = self.fs.statvfs()
                 rec = self.db.get_statistics()
                 status_info = {
@@ -59,6 +63,8 @@ class BigBrother(PauseableTask):
                     'STATUS',
                     status_info
                 ])
-                self.handle_control(10000)
+                # Then waits 10 seconds to be told to pause/quit
+                if poller.poll(10000):
+                    self.handle_control()
         except TaskQuit:
             pass

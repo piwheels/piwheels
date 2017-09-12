@@ -2,9 +2,6 @@ import re
 import logging
 import xmlrpc.client
 from collections import namedtuple, deque
-from time import sleep
-
-import requests
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -51,7 +48,6 @@ class PyPI():
         # (very sensibly) limits the number of entries in a result set (to
         # 50000 at the time of writing)
         for (package, version, timestamp, action, serial) in self.client.changelog_since_serial(self.last_serial):
-            delay = True
             # If we've never seen the package before, report it as a new
             # one
             if package not in self.packages:
@@ -70,4 +66,3 @@ class PyPI():
         self.packages = None
         self.cache = None
         self.client = None
-

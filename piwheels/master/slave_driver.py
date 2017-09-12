@@ -65,15 +65,14 @@ class SlaveDriver(Task):
         except TaskQuit:
             pass
 
-    def handle_control(self, timeout=0):
-        if self.control_queue.poll(timeout):
-            msg, *args = self.control_queue.recv_string()
-            if msg == 'QUIT':
-                raise TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                self.paused = False
+    def handle_control(self):
+        msg, *args = self.control_queue.recv_string()
+        if msg == 'QUIT':
+            raise TaskQuit
+        elif msg == 'PAUSE':
+            self.paused = True
+        elif msg == 'RESUME':
+            self.paused = False
 
     def handle_slave(self):
         try:

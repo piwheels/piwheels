@@ -24,15 +24,19 @@ class TheArchitect(PauseableTask):
         super().close()
 
     def run(self):
+        poller = zmq.Poller()
         try:
+            poller.register(self.control_queue, zmq.POLLIN)
+            poller.register(self.build_queue, zmq.POLLOUT)
             while True:
                 for package, version in self.db.get_build_queue():
                     while True:
-                        self.handle_control()
-                        if self.build_queue.poll(1000, zmq.POLLOUT):
+                        socks = poller.poll(1000)
+                        if self.control_queue in socks:
+                            self.handle_control()
+                        if self.build_queue in socks:
                             self.build_queue.send_json((package, version))
                             break
-                self.handle_control(60000)
         except TaskQuit:
             pass
 

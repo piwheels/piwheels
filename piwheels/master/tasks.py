@@ -22,23 +22,21 @@ class Task(Thread):
         self.join()
         self.control_queue.close()
 
-    def handle_control(self, timeout=0):
-        if self.control_queue.poll(timeout):
-            msg, *args = self.control_queue.recv_json()
-            if msg == 'QUIT':
-                raise TaskQuit
+    def handle_control(self):
+        msg, *args = self.control_queue.recv_json()
+        if msg == 'QUIT':
+            raise TaskQuit
 
 
 class PauseableTask(Task):
-    def handle_control(self, timeout=0):
-        if self.control_queue.poll(timeout):
-            msg, *args = self.control_queue.recv_json()
-            if msg == 'QUIT':
-                raise TaskQuit
-            elif msg == 'PAUSE':
-                while True:
-                    msg, *args = self.control_queue.recv_json()
-                    if msg == 'QUIT':
-                        raise TaskQuit
-                    elif msg == 'RESUME':
-                        break
+    def handle_control(self):
+        msg, *args = self.control_queue.recv_json()
+        if msg == 'QUIT':
+            raise TaskQuit
+        elif msg == 'PAUSE':
+            while True:
+                msg, *args = self.control_queue.recv_json()
+                if msg == 'QUIT':
+                    raise TaskQuit
+                elif msg == 'RESUME':
+                    break
