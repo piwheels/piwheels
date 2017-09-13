@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta
 
 from sqlalchemy import MetaData, Table, select, func, text, distinct, create_engine
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from . import pypi
 
@@ -54,7 +54,7 @@ class Database():
                     self.packages.insert(),
                     package=package
                 )
-            except DBAPIError:
+            except IntegrityError:
                 pass
             else:
                 logging.info('Added package %s', package)
@@ -70,7 +70,7 @@ class Database():
                     self.versions.insert(),
                     package=package, version=version
                 )
-            except DBAPIError:
+            except IntegrityError:
                 pass
             else:
                 logging.info('Added package %s version %s', package, version)
@@ -114,7 +114,7 @@ class Database():
                         abi_tag=file.abi_tag,
                         platform_tag=file.platform_tag
                     )
-            except DBAPIError:
+            except IntegrityError:
                 self.conn.execute(
                     self.files.update().
                     where(self.files.c.filename == file.filename),
@@ -154,7 +154,19 @@ class Database():
         Returns a list of all known package names
         """
         with self.conn.begin():
-            return [rec.package for rec in self.conn.execute(select([self.packages]))]
+            return [
+                rec.package for rec in self.conn.execute(select([self.packages]))
+            ]
+
+    def get_all_package_versions(self):
+        """
+        Returns a list of all known (package, version) tuples
+        """
+        with self.conn.begin():
+            return [
+                (rec.package, rec.version)
+                for rec in self.conn.execute(select([self.versions]))
+            ]
 
     def get_build_queue(self):
         """

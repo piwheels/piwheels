@@ -21,6 +21,8 @@ class CloudGazer(PauseableTask):
         super().__init__(**config)
         self.pypi = PyPI(config['pypi_root'])
         self.db = DbClient(**config)
+        self.packages = set()
+        self.versions = set()
 
     def close(self):
         super().close()
@@ -34,12 +36,18 @@ class CloudGazer(PauseableTask):
         try:
             poller.register(self.control_queue, zmq.POLLIN)
             self.pypi.last_serial = self.db.get_pypi_serial()
+            packages = set(self.db.get_all_packages())
+            versions = set(self.db.get_all_package_versions())
             while True:
                 for package, version in self.pypi:
                     if version is None:
-                        self.db.add_new_package(package)
+                        if package not in packages:
+                            self.db.add_new_package(package)
+                            packages.add(package)
                     else:
-                        self.db.add_new_package_version(package, version)
+                        if (package, version) not in versions:
+                            self.db.add_new_package_version(package, version)
+                            versions.add((package, version))
                     if poller.poll(0):
                         self.handle_control()
                 self.db.set_pypi_serial(self.pypi.last_serial)

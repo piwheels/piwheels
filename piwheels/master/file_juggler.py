@@ -199,10 +199,10 @@ class FsClient:
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.fs_queue.send_json(msg, flags=zmq.NOBLOCK)
         if not self.fs_queue.poll(30000):
-            raise IOError(errno.EAGAIN, "timed out waiting for fs response")
+            raise zmq.error.Again()
         status, result = self.fs_queue.recv_json()
         if status == 'OK':
-            if result:
+            if result is not None:
                 return result
         else:
             raise IOError(result)

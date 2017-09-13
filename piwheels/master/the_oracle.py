@@ -63,6 +63,12 @@ class TheOracle(Task):
         else:
             self.db_queue.send_json(['OK', result])
 
+    def do_ALLPKGS(self):
+        return self.db.get_all_packages()
+
+    def do_ALLVERS(self):
+        return self.db.get_all_package_versions()
+
     def do_NEWPKG(self, package):
         self.db.add_new_package(package)
 
@@ -113,14 +119,21 @@ class DbClient:
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.db_queue.send_json(msg, flags=zmq.NOBLOCK)
-        if not self.db_queue.poll(30000):
-            raise IOError(errno.EAGAIN, "timed out waiting for db response")
+        if not self.db_queue.poll(60000):
+            raise zmq.error.Again()
         status, result = self.db_queue.recv_json()
         if status == 'OK':
-            if result:
+            if result is not None:
                 return result
         else:
             raise IOError(result)
+
+    def get_all_packages(self):
+        return self._execute(['ALLPKGS'])
+
+    def get_all_package_versions(self):
+        # Repackage [p, v] as (p, v)
+        return [(p, v) for p, v in self._execute(['ALLVERS'])]
 
     def add_new_package(self, package):
         self._execute(['NEWPKG', package])
