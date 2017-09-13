@@ -44,6 +44,10 @@ class TheArchitect(PauseableTask):
                         if self.build_queue in socks:
                             self.build_queue.send_json((package, version))
                             break
+                # Wait a minute between iterations of the build queue
+                socks = dict(poller.poll(60000))
+                if self.control_queue in socks:
+                    self.handle_control()
         except TaskQuit:
             pass
 
