@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import zmq
+import zmq.error
 
 from .tasks import Task, TaskQuit
 from .states import FileState, TransferState
@@ -193,7 +194,9 @@ class FsClient:
         self.fs_queue.close()
 
     def _execute(self, msg):
-        self.fs_queue.send_json(msg)
+        # If sending blocks this either means we're shutting down, or
+        # something's gone horribly wrong (either way, raising EAGAIN is fine)
+        self.fs_queue.send_json(msg, flags=zmq.NOBLOCK)
         status, result = self.fs_queue.recv_json()
         if status == 'OK':
             if result:

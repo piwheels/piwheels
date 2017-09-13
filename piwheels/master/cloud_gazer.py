@@ -1,5 +1,7 @@
 import logging
+
 import zmq
+import zmq.error
 
 from .tasks import PauseableTask, TaskQuit
 from .pypi import PyPI
@@ -38,10 +40,17 @@ class CloudGazer(PauseableTask):
                         self.db.add_new_package(package)
                     else:
                         self.db.add_new_package_version(package, version)
-                    if poller.poll():
+                    if poller.poll(0):
                         self.handle_control()
                 self.db.set_pypi_serial(self.pypi.last_serial)
                 if poller.poll(10000):
                     self.handle_control()
+        except zmq.error.Again:
+            try:
+                self.handle_control()
+            except TaskQuit:
+                pass
+            else:
+                raise
         except TaskQuit:
             pass

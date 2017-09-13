@@ -3,6 +3,7 @@ from datetime import timedelta
 from collections import namedtuple
 
 import zmq
+import zmq.error
 
 from .tasks import Task, TaskQuit
 from .states import BuildState, FileState
@@ -108,7 +109,9 @@ class DbClient:
         self.db_queue.close()
 
     def _execute(self, msg):
-        self.db_queue.send_json(msg)
+        # If sending blocks this either means we're shutting down, or
+        # something's gone horribly wrong (either way, raising EAGAIN is fine)
+        self.db_queue.send_json(msg, flags=zmq.NOBLOCK)
         status, result = self.db_queue.recv_json()
         if status == 'OK':
             if result:

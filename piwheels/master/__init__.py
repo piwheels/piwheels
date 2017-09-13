@@ -83,10 +83,10 @@ class PiWheelsMaster(TerminalApplication):
         try:
             tasks[0].join()
         except SystemExit:
-            logging.warning('Shutting down on SIGTERM')
+            logger.warning('Shutting down on SIGTERM')
             self.send_quit(ctx, config)
         except KeyboardInterrupt:
-            logging.warning('Shutting down on Ctrl+C')
+            logger.warning('Shutting down on Ctrl+C')
             self.send_quit(ctx, config)
         finally:
             logger.info('closing tasks')
