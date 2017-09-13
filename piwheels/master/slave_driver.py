@@ -185,8 +185,6 @@ class SlaveDriver(Task):
                 'slave %d: Verified transfer of %s',
                 slave.slave_id, slave.reply[1])
             if slave.build.transfers_done:
-                self.build_armv6l_hack(slave.build)
-                self.index_queue.send_string(slave.build.package)
                 return ['DONE']
             else:
                 return ['SEND', slave.build.next_file]

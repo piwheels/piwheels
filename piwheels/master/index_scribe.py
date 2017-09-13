@@ -38,6 +38,7 @@ class IndexScribe(PauseableTask):
         self.index_queue.hwm = 10
         self.index_queue.bind(config['index_queue'])
         self.db = DbClient(**config)
+        self.package_cache = set()
         self.setup_output_path()
 
     def setup_output_path(self):
@@ -69,7 +70,7 @@ class IndexScribe(PauseableTask):
             # Build the initial index from the set of directories that exist
             # under the output path (this is much faster than querying the
             # database for the same info)
-            packages = {
+            self.package_cache = {
                 str(d.relative_to(self.output_path / 'simple'))
                 for d in (self.output_path / 'simple').iterdir()
                 if d.is_dir()
@@ -82,13 +83,23 @@ class IndexScribe(PauseableTask):
                 if self.control_queue in socks:
                     self.handle_control()
                 if self.index_queue in socks:
-                    package = self.index_queue.recv_string()
-                    if package not in packages:
-                        packages.add(package)
-                        self.write_root_index(packages)
-                    self.write_package_index(package, self.db.get_package_files(package))
+                    self.handle_index()
         except TaskQuit:
             pass
+
+    def handle_index(self):
+        msg, *args = self.index_queue.recv_json()
+        if msg == 'PKG':
+            package = args[0]
+            if package not in self.package_cache:
+                self.package_cache.add(package)
+                self.write_root_index()
+            self.write_package_index(package, self.db.get_package_files(package))
+        elif msg == 'HOME':
+            status_info = args[0]
+            self.write_homepage(status_info)
+        else:
+            logging.error('invalid index_queue message: %s', msg)
 
     def write_homepage(self, status_info):
         logger.info('regenerating homepage')
@@ -108,7 +119,7 @@ class IndexScribe(PauseableTask):
                 os.fchmod(index.file.fileno(), 0o664)
                 os.replace(index.name, str(self.output_path / 'index.html'))
 
-    def write_root_index(self, packages):
+    def write_root_index(self):
         logger.info('regenerating package index')
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(self.output_path / 'simple'),
@@ -123,7 +134,7 @@ class IndexScribe(PauseableTask):
                         ),
                         tag.body(
                             (tag.a(package, href=package), tag.br())
-                            for package in packages
+                            for package in self.package_cache
                         )
                     )
                 )

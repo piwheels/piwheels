@@ -130,6 +130,7 @@ class FileJuggler(Task):
                 self.current_transfer(transfer, msg, *args)
             except TransferDone:
                 self.file_queue.send_multipart([address, b'DONE'])
+                self.index_queue.send_json(['PKG', slave.build.package])
                 del self.transfers[address]
                 raise
 
@@ -200,7 +201,12 @@ class FsClient:
         self._execute(['EXPECT', file_state])
 
     def verify(self, build_state):
-        return self._execute(['VERIFY', build_state.slave_id, build_state.package])
+        try:
+            self._execute(['VERIFY', build_state.slave_id, build_state.package])
+        except IOError:
+            return False
+        else:
+            return True
 
     def statvfs(self):
         return os.statvfs_result(self._execute(['STATVFS']))

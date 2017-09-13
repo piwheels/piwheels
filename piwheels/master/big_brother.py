@@ -62,7 +62,7 @@ class BigBrother(PauseableTask):
                         'disk_free':        stat.f_frsize * stat.f_bavail,
                         'disk_size':        stat.f_frsize * stat.f_blocks,
                     }
-                self.index_queue.send_json(status_info)
+                self.index_queue.send_json(['HOME', status_info])
                 self.status_queue.send_json([
                     -1,
                     datetime.utcnow().timestamp(),

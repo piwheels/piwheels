@@ -17,7 +17,7 @@ locale.setlocale(locale.LC_ALL, '')
 # adornments. This will be used for logging messages sent before we "properly"
 # configure logging according to the user's preferences
 _CONSOLE = logging.StreamHandler(sys.stderr)
-_CONSOLE.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+_CONSOLE.setFormatter(logging.Formatter('%(name)-22s: %(message)s'))
 _CONSOLE.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(_CONSOLE)
 
