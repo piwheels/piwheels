@@ -47,7 +47,8 @@ class PyPI():
         # NOTE: starting at serial 0 doesn't return *all* records as PyPI
         # (very sensibly) limits the number of entries in a result set (to
         # 50000 at the time of writing)
-        for (package, version, timestamp, action, serial) in self.client.changelog_since_serial(self.last_serial):
+        events = self.client.changelog_since_serial(self.last_serial)
+        for (package, version, timestamp, action, serial) in events:
             # If we've never seen the package before, report it as a new
             # one
             if package not in self.packages:

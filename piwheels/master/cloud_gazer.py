@@ -40,9 +40,8 @@ class CloudGazer(PauseableTask):
                         self.db.add_new_package_version(package, version)
                     if poller.poll():
                         self.handle_control()
+                self.db.set_pypi_serial(self.pypi.last_serial)
                 if poller.poll(10000):
                     self.handle_control()
         except TaskQuit:
             pass
-        finally:
-            self.db.set_pypi_serial(self.pypi.last_serial)

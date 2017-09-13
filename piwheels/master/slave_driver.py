@@ -98,7 +98,7 @@ class SlaveDriver(Task):
             handler = getattr(self, 'do_%s' % msg, None)
             if handler is None:
                 logger.error(
-                    'slave %d: Protocol error (%s)',
+                    'slave %d: protocol error (%s)',
                     slave.slave_id, msg)
             else:
                 reply = handler(slave)
@@ -112,26 +112,27 @@ class SlaveDriver(Task):
                     logger.debug('TX: %r', reply)
 
     def do_HELLO(self, slave):
-        logger.warning('slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
+        logger.warning('slave %d: hello (timeout=%s, abi=%s, platform=%s)',
                        slave.slave_id, slave.timeout,
                        slave.native_abi, slave.native_platform)
         self.slaves[slave.address] = slave
         return ['HELLO', slave.slave_id]
 
     def do_BYE(self, slave):
-        logger.warning('slave shutdown: %d', slave.slave_id)
+        logger.warning('slave %d: shutdown', slave.slave_id)
         del self.slaves[slave.address]
         return None
 
     def do_IDLE(self, slave):
         if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
             logger.error(
-                'slave %d: Protocol error (IDLE after %s)',
+                'slave %d: protocol error (IDLE after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif slave.terminated:
             return ['BYE']
         elif self.paused:
+            logger.info('slave %d: sleeping because master is paused')
             return ['SLEEP']
         else:
             while True:
@@ -140,31 +141,36 @@ class SlaveDriver(Task):
                     package, version = self.build_queue.recv_json()
                     if (package, version) in self.active_builds():
                         continue
+                    logger.info(
+                        'slave %d: build %s %s', slave.slave_id, package, version)
                     return ['BUILD', package, version]
                 else:
+                    logger.info('slave %d: sleeping because no builds')
                     return ['SLEEP']
 
     def do_BUILT(self, slave):
         if slave.reply[0] != 'BUILD':
             logger.error(
-                'slave %d: Protocol error (BUILD after %s)',
+                'slave %d: protocol error (BUILD after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif slave.reply[1] != slave.build.package:
             logger.error(
-                'slave %d: Protocol error (BUILT %s instead of %s)',
+                'slave %d: protocol error (BUILT %s instead of %s)',
                 slave.slave_id, slave.build.package, slave.reply[1])
             return ['BYE']
         else:
             if slave.reply[2] != slave.build.version:
                 logger.warning(
-                    'slave %d: Build version mismatch: %s != %s',
+                    'slave %d: build version mismatch: %s != %s',
                     slave.slave_id, slave.reply[2],
                     slave.build.version)
             self.build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
             if slave.build.status:
                 self.fs.expect(slave.build.files[slave.build.next_file])
+                logger.info(
+                    'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
             else:
                 return ['DONE']
@@ -172,23 +178,27 @@ class SlaveDriver(Task):
     def do_SENT(self, slave, *args):
         if slave.reply[0] != 'SEND':
             logger.error(
-                'slave %d: Protocol error (SENT after %s)',
+                'slave %d: protocol error (SENT after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif not slave.transfer:
             logger.error(
-                'slave %d: Internal error; no transfer to verify',
+                'slave %d: internal error; no transfer to verify',
                 slave.slave_id)
             return
         elif slave.transfer.verify(slave):
             logger.info(
-                'slave %d: Verified transfer of %s',
+                'slave %d: verified transfer of %s',
                 slave.slave_id, slave.reply[1])
             if slave.build.transfers_done:
                 return ['DONE']
             else:
+                logger.info(
+                    'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
         else:
+            logger.info(
+                'slave %d: send %s', slave.slave_id, slave.build.next_file)
             return ['SEND', slave.build.next_file]
 
     def active_builds(self):

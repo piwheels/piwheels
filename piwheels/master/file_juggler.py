@@ -103,6 +103,7 @@ class FileJuggler(Task):
     def do_EXPECT(self, slave_id, *file_state):
         file_state = FileState(*file_state)
         self.transfers[slave_id] = TransferState(file_state)
+        logging.info('expecting transfer: %s', file_state.filename)
 
     def do_VERIFY(self, slave_id, package):
         transfer = self.transfers[slave_id]
@@ -110,9 +111,11 @@ class FileJuggler(Task):
             transfer.verify()
         except IOError as e:
             transfer.rollback()
+            logging.warning('verification failed: %s', transfer.file_state.filename)
             raise
         else:
             transfer.commit(package)
+            logging.info('verified: %s', transfer.file_state.filename)
 
     def do_STATVFS(self):
         return list(os.statvfs(str(self.output_path)))
@@ -129,8 +132,9 @@ class FileJuggler(Task):
             try:
                 self.current_transfer(transfer, msg, *args)
             except TransferDone:
+                logging.info('transfer complete: %s', transfer.file_state.filename)
                 self.file_queue.send_multipart([address, b'DONE'])
-                self.index_queue.send_json(['PKG', slave.build.package])
+                self.index_queue.send_json(['PKG', transfer.file_state.package_tag])
                 del self.transfers[address]
                 raise
 
