@@ -1,4 +1,5 @@
 import os
+import errno
 import logging
 from pathlib import Path
 
@@ -197,6 +198,8 @@ class FsClient:
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.fs_queue.send_json(msg, flags=zmq.NOBLOCK)
+        if not self.fs_queue.poll(30000):
+            raise IOError(errno.EAGAIN, "timed out waiting for fs response")
         status, result = self.fs_queue.recv_json()
         if status == 'OK':
             if result:

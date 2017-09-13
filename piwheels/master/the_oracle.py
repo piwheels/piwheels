@@ -1,3 +1,4 @@
+import errno
 import logging
 from datetime import timedelta
 from collections import namedtuple
@@ -112,6 +113,8 @@ class DbClient:
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.db_queue.send_json(msg, flags=zmq.NOBLOCK)
+        if not self.db_queue.poll(30000):
+            raise IOError(errno.EAGAIN, "timed out waiting for db response")
         status, result = self.db_queue.recv_json()
         if status == 'OK':
             if result:
