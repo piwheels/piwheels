@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from collections import namedtuple
 
 import zmq
 
@@ -29,10 +30,10 @@ class TheOracle(Task):
         super().close()
         self.db.close()
         self.db_queue.close()
-        logging.info('closed')
+        logger.info('closed')
 
     def run(self):
-        logging.info('starting')
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)
@@ -52,7 +53,7 @@ class TheOracle(Task):
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
         except Exception as e:
-            logging.error('Error handling db request: %s', msg)
+            logger.error('Error handling db request: %s', msg)
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
@@ -86,8 +87,17 @@ class TheOracle(Task):
     def do_SETPYPI(self, serial):
         self.db.set_pypi_serial(serial)
 
+    def do_GETSTATS(self):
+        rec = self.db.get_statistics()
+        return [
+            (k, v if not isinstance(v, timedelta) else v.total_seconds())
+            for k, v in zip(rec.keys(), rec.values())
+        ]
+
 
 class DbClient:
+    StatsType = None
+
     def __init__(self, **config):
         self.ctx = zmq.Context.instance()
         self.db_queue = self.ctx.socket(zmq.REQ)
@@ -133,3 +143,12 @@ class DbClient:
 
     def set_pypi_serial(self, serial):
         self._execute(['SETPYPI', serial])
+
+    def get_statistics(self):
+        rec = self._execute(['GETSTATS'])
+        if self.StatsType is None:
+            self.StatsType = namedtuple('Statistics', tuple(k for k, v in rec))
+        return self.StatsType(*(
+            v if i != 7 else timedelta(seconds=v)
+            for i, (k, v) in enumerate(rec)
+        ))

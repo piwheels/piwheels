@@ -1,5 +1,4 @@
 import os
-import posix
 import logging
 from pathlib import Path
 
@@ -204,4 +203,4 @@ class FsClient:
         return self._execute(['VERIFY', build_state.slave_id, build_state.package])
 
     def statvfs(self):
-        return posix.statvfs_result(*self._execute(['STATVFS']))
+        return os.statvfs_result(self._execute(['STATVFS']))
