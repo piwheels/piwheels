@@ -6,6 +6,9 @@ import zmq
 from .tasks import TaskQuit
 
 
+logger = logging.getLogger('master.high_priest')
+
+
 class HighPriest(Thread):  # NOTE: not a Task descendant
     """
     The high priest is responsible for reporting the state of the system, and
@@ -32,12 +35,14 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
 
     def close(self):
         self.join()
-        self.int_control_queue.close()
         self.ext_status_queue.close()
-        self.int_status_queue.close()
         self.ext_control_queue.close()
+        self.int_status_queue.close()
+        self.int_control_queue.close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.ext_control_queue, zmq.POLLIN)
@@ -49,14 +54,14 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
                 if self.ext_control_queue in socks:
                     msg, *args = self.ext_control_queue.recv_json()
                     if msg == 'QUIT':
-                        logging.warning('Shutting down on QUIT message')
+                        logger.warning('shutting down on QUIT message')
                         raise TaskQuit
                     elif msg == 'KILL':
-                        logging.warning('Killing slave %d', args[0])
+                        logger.warning('killing slave %d', args[0])
                     elif msg == 'PAUSE':
-                        logging.warning('Pausing operations')
+                        logger.warning('pausing operations')
                     elif msg == 'RESUME':
-                        logging.warning('Resuming operations')
+                        logger.warning('resuming operations')
                     self.int_control_queue.send_json([msg] + args)
         except TaskQuit:
             pass

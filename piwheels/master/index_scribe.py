@@ -1,5 +1,6 @@
 import os
 import tempfile
+import logging
 from pathlib import Path
 from datetime import timedelta
 
@@ -9,6 +10,9 @@ from pkg_resources import resource_string, resource_stream
 from .html import tag
 from .tasks import PauseableTask, TaskQuit
 from .the_oracle import DbClient
+
+
+logger = logging.getLogger('master.index_scribe')
 
 
 class IndexScribe(PauseableTask):
@@ -36,12 +40,8 @@ class IndexScribe(PauseableTask):
         self.db = DbClient(**config)
         self.setup_output_path()
 
-    def close(self):
-        self.db.close()
-        self.index_queue.close()
-        super().close()
-
     def setup_output_path(self):
+        logger.info('setting up output path')
         try:
             self.output_path.mkdir()
         except FileExistsError:
@@ -56,7 +56,14 @@ class IndexScribe(PauseableTask):
                 f.write(source.read())
                 source.close()
 
+    def close(self):
+        super().close()
+        self.db.close()
+        self.index_queue.close()
+        logger.info('closed')
+
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             # Build the initial index from the set of directories that exist
@@ -84,6 +91,7 @@ class IndexScribe(PauseableTask):
             pass
 
     def write_homepage(self, status_info):
+        logger.info('regenerating homepage')
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
                                          delete=False) as index:
             try:
@@ -101,6 +109,7 @@ class IndexScribe(PauseableTask):
                 os.replace(index.name, str(self.output_path / 'index.html'))
 
     def write_root_index(self, packages):
+        logger.info('regenerating package index')
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(self.output_path / 'simple'),
                 delete=False) as index:
@@ -126,6 +135,7 @@ class IndexScribe(PauseableTask):
                 os.replace(index.name, str(self.output_path / 'simple' / 'index.html'))
 
     def write_package_index(self, package, files):
+        logger.info('generating index for %s', package)
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(self.output_path / 'simple' / package),
                 delete=False) as index:

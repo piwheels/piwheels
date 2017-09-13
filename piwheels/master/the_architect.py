@@ -1,7 +1,12 @@
+import logging
+
 import zmq
 
 from .tasks import PauseableTask, TaskQuit
 from .db import Database
+
+
+logger = logging.getLogger('master.the_architect')
 
 
 class TheArchitect(PauseableTask):
@@ -19,11 +24,13 @@ class TheArchitect(PauseableTask):
         self.db = Database(config['database'])
 
     def close(self):
+        super().close()
         self.db.close()
         self.build_queue.close()
-        super().close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)
@@ -31,7 +38,7 @@ class TheArchitect(PauseableTask):
             while True:
                 for package, version in self.db.get_build_queue():
                     while True:
-                        socks = poller.poll(1000)
+                        socks = dict(poller.poll(1000))
                         if self.control_queue in socks:
                             self.handle_control()
                         if self.build_queue in socks:

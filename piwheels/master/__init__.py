@@ -17,6 +17,9 @@ from .index_scribe import IndexScribe
 from .cloud_gazer import CloudGazer
 
 
+logger = logging.getLogger('master')
+
+
 class PiWheelsMaster(TerminalApplication):
     def __init__(self):
         super().__init__(__version__, __doc__)
@@ -43,20 +46,22 @@ class PiWheelsMaster(TerminalApplication):
         parser.add_section('master')
         parser.add_section('slave')
         if args.configuration is not None:
-            parser.read(args.configuration)
+            config_files = parser.read(args.configuration)
         else:
-            parser.read([
+            config_files = parser.read([
                 '/etc/piwheels.conf',
                 '/usr/local/etc/piwheels.conf',
                 os.path.expanduser('~/.config/piwheels/piwheels.conf'),
             ])
+        for f in config_files:
+            logger.info('read configuration from %s', f)
         # Expand any ~ in output_path
         parser['master']['output_path'] = os.path.expanduser(parser['master']['output_path'])
         return parser['master']
 
     def main(self, args):
         signal.signal(signal.SIGTERM, self.sig_term)
-        logging.info('PiWheels Master version {}'.format(__version__))
+        logger.info('PiWheels Master version {}'.format(__version__))
         config = self.load_configuration(args)
         ctx = zmq.Context.instance()
         tasks = [
@@ -72,6 +77,7 @@ class PiWheelsMaster(TerminalApplication):
                 SlaveDriver,
             )
         ]
+        logger.info('starting tasks')
         for task in tasks:
             task.start()
         try:
@@ -83,7 +89,8 @@ class PiWheelsMaster(TerminalApplication):
             logging.warning('Shutting down on Ctrl+C')
             self.send_quit(ctx, config)
         finally:
-            for task in tasks:
+            logger.info('closing tasks')
+            for task in reversed(tasks):
                 task.close()
             ctx.term()
 

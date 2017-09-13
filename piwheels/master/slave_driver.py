@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from pathlib import Path
 
 import zmq
 from zmq.utils import jsonapi
@@ -8,6 +7,9 @@ from zmq.utils import jsonapi
 from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
 from .the_oracle import DbClient
+
+
+logger = logging.getLogger('master.slave_driver')
 
 
 class SlaveDriver(Task):
@@ -25,7 +27,6 @@ class SlaveDriver(Task):
     """
     def __init__(self, **config):
         super().__init__(**config)
-        self.output_path = Path(config['output_path'])
         self.paused = False
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
@@ -43,15 +44,17 @@ class SlaveDriver(Task):
         self.db = DbClient(**config)
 
     def close(self):
+        super().close()
         self.build_queue.close()
         self.slave_queue.close()
         self.status_queue.close()
         self.fs_queue.close()
         self.db.close()
         SlaveState.status_queue = None
-        super().close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)
@@ -66,7 +69,7 @@ class SlaveDriver(Task):
             pass
 
     def handle_control(self):
-        msg, *args = self.control_queue.recv_string()
+        msg, *args = self.control_queue.recv_json()
         if msg == 'QUIT':
             raise TaskQuit
         elif msg == 'PAUSE':
@@ -78,23 +81,24 @@ class SlaveDriver(Task):
         try:
             address, empty, msg = self.slave_queue.recv_multipart()
         except ValueError:
-            logging.error('Invalid message structure from slave')
+            logger.error('invalid message structure from slave')
         else:
             msg, *args = jsonapi.loads(msg)
+            logger.debug('RX: %s %r', msg, args)
 
             try:
                 slave = self.slaves[address]
             except KeyError:
                 if msg != 'HELLO':
-                    logging.error('Invalid first message from slave: %s', msg)
+                    logger.error('invalid first message from slave: %s', msg)
                     return
                 slave = SlaveState(*args)
             slave.request = [msg] + args
 
             handler = getattr(self, 'do_%s' % msg, None)
             if handler is None:
-                logging.error(
-                    'Slave %d: Protocol error (%s)',
+                logger.error(
+                    'slave %d: Protocol error (%s)',
                     slave.slave_id, msg)
             else:
                 reply = handler(slave)
@@ -105,23 +109,24 @@ class SlaveDriver(Task):
                         empty,
                         jsonapi.dumps(reply)
                     ])
+                    logger.debug('TX: %r', reply)
 
     def do_HELLO(self, slave):
-        logging.warning('Slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
-                        slave.slave_id, slave.timeout,
-                        slave.native_abi, slave.native_platform)
+        logger.warning('slave %d: Hello (timeout=%s, abi=%s, platform=%s)',
+                       slave.slave_id, slave.timeout,
+                       slave.native_abi, slave.native_platform)
         self.slaves[slave.address] = slave
         return ['HELLO', slave.slave_id]
 
     def do_BYE(self, slave):
-        logging.warning('Slave shutdown: %d', slave.slave_id)
+        logger.warning('slave shutdown: %d', slave.slave_id)
         del self.slaves[slave.address]
         return None
 
     def do_IDLE(self, slave):
         if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
-            logging.error(
-                'Slave %d: Protocol error (IDLE after %s)',
+            logger.error(
+                'slave %d: Protocol error (IDLE after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif slave.terminated:
@@ -141,21 +146,22 @@ class SlaveDriver(Task):
 
     def do_BUILT(self, slave):
         if slave.reply[0] != 'BUILD':
-            logging.error(
-                'Slave %d: Protocol error (BUILD after %s)',
+            logger.error(
+                'slave %d: Protocol error (BUILD after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif slave.reply[1] != slave.build.package:
-            logging.error(
-                'Slave %d: Protocol error (BUILT %s instead of %s)',
+            logger.error(
+                'slave %d: Protocol error (BUILT %s instead of %s)',
                 slave.slave_id, slave.build.package, slave.reply[1])
             return ['BYE']
         else:
             if slave.reply[2] != slave.build.version:
-                logging.warning(
-                    'Slave %d: Build version mismatch: %s != %s',
+                logger.warning(
+                    'slave %d: Build version mismatch: %s != %s',
                     slave.slave_id, slave.reply[2],
                     slave.build.version)
+            self.build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
             if slave.build.status:
                 self.fs.expect(slave.build.files[slave.build.next_file])
@@ -165,18 +171,18 @@ class SlaveDriver(Task):
 
     def do_SENT(self, slave, *args):
         if slave.reply[0] != 'SEND':
-            logging.error(
-                'Slave %d: Protocol error (SENT after %s)',
+            logger.error(
+                'slave %d: Protocol error (SENT after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif not slave.transfer:
-            logging.error(
-                'Slave %d: Internal error; no transfer to verify',
+            logger.error(
+                'slave %d: Internal error; no transfer to verify',
                 slave.slave_id)
             return
         elif slave.transfer.verify(slave):
-            logging.info(
-                'Slave %d: Verified transfer of %s',
+            logger.info(
+                'slave %d: Verified transfer of %s',
                 slave.slave_id, slave.reply[1])
             if slave.build.transfers_done:
                 self.build_armv6l_hack(slave.build)
@@ -193,26 +199,14 @@ class SlaveDriver(Task):
                 if slave.last_seen + slave.timeout > datetime.utcnow():
                     yield (slave.reply[1], slave.reply[2])
 
-    def build_armv6l_hack(self, db, build):
+    def build_armv6l_hack(self, build):
         # NOTE: dirty hack; if the build contains any arch-specific wheels for
-        # armv7l, link armv6l name to the armv7l file and stick some entries
-        # in the database for them.
+        # armv7l, generate equivalent armv6l entries from them
         for file in list(build.files.values()):
             if file.platform_tag == 'linux_armv7l':
-                arm7_path = (
-                    self.output_path / 'simple' / build.package /
-                    file.filename)
-                arm6_path = arm7_path.with_name(
-                    arm7_path.name[:-16] + 'linux_armv6l.whl')
-                new_file = FileState(arm6_path.name, file.filesize,
-                                     file.filehash, file.package_tag,
-                                     file.package_version_tag,
-                                     file.py_version_tag, file.abi_tag,
-                                     'linux_armv6l')
-                new_file.verified()
-                build.files[new_file.filename] = new_file
-                db.log_file(build, new_file)
-                try:
-                    arm6_path.symlink_to(arm7_path.name)
-                except FileExistsError:
-                    pass
+                arm7_name = file.filename
+                arm6_name = arm7_name[:-16] + 'linux_armv6l.whl'
+                build.files[arm6_name] = FileState(
+                    arm6_name, file.filesize, file.filehash, file.package_tag,
+                    file.package_version_tag, file.py_version_tag, file.abi_tag,
+                    'linux_armv6l', True)

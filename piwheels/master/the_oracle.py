@@ -8,6 +8,9 @@ from .states import BuildState, FileState
 from .db import Database
 
 
+logger = logging.getLogger('master.the_oracle')
+
+
 class TheOracle(Task):
     """
     This task provides an RPC-like interface to the database; it handles
@@ -23,11 +26,13 @@ class TheOracle(Task):
         self.db = Database(config['database'])
 
     def close(self):
+        super().close()
         self.db.close()
         self.db_queue.close()
-        super().close()
+        logging.info('closed')
 
     def run(self):
+        logging.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)

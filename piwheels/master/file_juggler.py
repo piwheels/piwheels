@@ -1,11 +1,15 @@
 import os
 import posix
 import logging
+from pathlib import Path
 
 import zmq
 
 from .tasks import Task, TaskQuit
 from .states import FileState, TransferState
+
+
+logger = logging.getLogger('master.file_juggler')
 
 
 class TransferError(Exception):
@@ -37,6 +41,7 @@ class FileJuggler(Task):
     """
     def __init__(self, **config):
         super().__init__(**config)
+        self.output_path = Path(config['output_path'])
         self.file_queue = self.ctx.socket(zmq.ROUTER)
         self.file_queue.ipv6 = True
         self.file_queue.hwm = TransferState.pipeline_size * 50
@@ -47,22 +52,25 @@ class FileJuggler(Task):
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config['index_queue'])
+        TransferState.output_path = self.output_path
         self.transfers = {}
 
     def close(self):
+        super().close()
         self.file_queue.close()
         self.fs_queue.close()
         self.index_queue.close()
-        super().close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)
             poller.register(self.file_queue, zmq.POLLIN)
             poller.register(self.fs_queue, zmq.POLLIN)
             while True:
-                socks = poller.poll(1000)
+                socks = dict(poller.poll(1000))
                 if self.control_queue in socks:
                     self.handle_control()
                 if self.fs_queue in socks:
@@ -71,11 +79,11 @@ class FileJuggler(Task):
                     try:
                         self.handle_file()
                     except TransferIgnoreChunk as e:
-                        logging.debug(str(e))
-                    except TransferDone:
-                        logging.info(str(e))
+                        logger.debug(str(e))
+                    except TransferDone as e:
+                        logger.info(str(e))
                     except TransferError as e:
-                        logging.error(str(e))
+                        logger.error(str(e))
         except TaskQuit:
             pass
 
@@ -85,13 +93,13 @@ class FileJuggler(Task):
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
         except Exception as e:
-            logging.error('Error handling db request: %s', msg)
+            logger.error('error handling fs request: %s', msg)
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            self.db_queue.send_json(['ERR', str(e)])
+            self.fs_queue.send_json(['ERR', str(e)])
         else:
-            self.db_queue.send_json(['OK', result])
+            self.fs_queue.send_json(['OK', result])
 
     def do_EXPECT(self, slave_id, *file_state):
         file_state = FileState(*file_state)
@@ -108,10 +116,7 @@ class FileJuggler(Task):
             transfer.commit(package)
 
     def do_STATVFS(self):
-        stat = os.statvfs(str(self.output_path))
-        return {
-            field: value for field, value in zip(stat._fields, stat)
-        }
+        return list(os.statvfs(str(self.output_path)))
 
     def handle_file(self):
         address, msg, *args = self.file_queue.recv_multipart()
@@ -199,4 +204,4 @@ class FsClient:
         return self._execute(['VERIFY', build_state.slave_id, build_state.package])
 
     def statvfs(self):
-        return posix.statvfs_result(**self._execute(['STATVFS']))
+        return posix.statvfs_result(*self._execute(['STATVFS']))

@@ -421,6 +421,15 @@ class TransferState:
             pass
         final_name = p.with_name(package) / self._file_state.filename
         p.rename(final_name)
+        if self._file_state.platform_tag == 'linux_armv7l':
+            # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name; the
+            # slave_driver task expects us to have done this
+            arm6_name = final_name.with_name(
+                final_name.name[:-16] + 'linux_armv6l.whl')
+            try:
+                arm6_name.symlink_to(final_name.name)
+            except FileExistsError:
+                pass
         self._file_state.verified()
 
     def rollback(self):

@@ -1,8 +1,12 @@
+import logging
 import zmq
 
 from .tasks import PauseableTask, TaskQuit
 from .pypi import PyPI
 from .the_oracle import DbClient
+
+
+logger = logging.getLogger('master.cloud_gazer')
 
 
 class CloudGazer(PauseableTask):
@@ -17,11 +21,13 @@ class CloudGazer(PauseableTask):
         self.db = DbClient(**config)
 
     def close(self):
+        super().close()
         self.db.close()
         self.pypi.close()
-        super().close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)

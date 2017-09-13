@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import zmq
@@ -5,6 +6,9 @@ import zmq
 from .tasks import PauseableTask, TaskQuit
 from .file_juggler import FsClient
 from .the_oracle import DbClient
+
+
+logger = logging.getLogger('master.big_brother')
 
 
 class BigBrother(PauseableTask):
@@ -28,13 +32,15 @@ class BigBrother(PauseableTask):
         self.db = DbClient(**config)
 
     def close(self):
+        super().close()
         self.db.close()
         self.fs.close()
         self.index_queue.close()
         self.status_queue.close()
-        super().close()
+        logger.info('closed')
 
     def run(self):
+        logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.control_queue, zmq.POLLIN)
