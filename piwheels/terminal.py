@@ -17,7 +17,7 @@ locale.setlocale(locale.LC_ALL, '')
 # adornments. This will be used for logging messages sent before we "properly"
 # configure logging according to the user's preferences
 _CONSOLE = logging.StreamHandler(sys.stderr)
-_CONSOLE.setFormatter(logging.Formatter('%(message)s'))
+_CONSOLE.setFormatter(logging.Formatter('%(name)s: %(message)s'))
 _CONSOLE.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(_CONSOLE)
 
@@ -42,6 +42,7 @@ class TerminalApplication:
         super(TerminalApplication, self).__init__()
         if description is None:
             description = self.__doc__
+        self.logger = logging.getLogger()
         self.parser = argparse.ArgumentParser(
             description=description,
             fromfile_prefix_chars='@')
@@ -89,13 +90,13 @@ class TerminalApplication:
         if args.log_file:
             log_file = logging.FileHandler(args.log_file)
             log_file.setFormatter(
-                logging.Formatter('%(asctime)s, %(levelname)s, %(message)s'))
+                logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s'))
             log_file.setLevel(logging.DEBUG)
-            logging.getLogger().addHandler(log_file)
+            self.logger.addHandler(log_file)
         if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
+            self.logger.setLevel(logging.DEBUG)
         else:
-            logging.getLogger().setLevel(logging.INFO)
+            self.logger.setLevel(logging.INFO)
 
     def handle(self, exc_type, exc_value, exc_trace):
         "Global application exception handler"
@@ -108,21 +109,21 @@ class TerminalApplication:
         elif issubclass(exc_type, (argparse.ArgumentError,)):
             # For option parser errors output the error along with a message
             # indicating how the help page can be displayed
-            logging.critical(str(exc_value))
-            logging.critical('Try the --help option for more information.')
+            self.logger.critical(str(exc_value))
+            self.logger.critical('Try the --help option for more information.')
             return 2
         elif issubclass(exc_type, (IOError,)):
             # For simple errors like IOError just output the message which
             # should be sufficient for the end user (no need to confuse them
             # with a full stack trace)
-            logging.critical(str(exc_value))
+            self.logger.critical(str(exc_value))
             return 1
         else:
             # Otherwise, log the stack trace and the exception into the log
             # file for debugging purposes
             for line in traceback.format_exception(exc_type, exc_value, exc_trace):
                 for msg in line.rstrip().split('\n'):
-                    logging.critical(msg.replace('%', '%%'))
+                    self.logger.critical(msg.replace('%', '%%'))
             return 1
 
     def main(self, args):
