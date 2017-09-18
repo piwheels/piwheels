@@ -58,8 +58,8 @@ class FileJuggler(Task):
 
     def close(self):
         super().close()
-        self.file_queue.close()
-        self.fs_queue.close()
+        self.file_queue.close(linger=1000)
+        self.fs_queue.close(linger=1000)
         self.index_queue.close()
         logger.info('closed')
 
@@ -198,8 +198,6 @@ class FsClient:
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.fs_queue.send_json(msg, flags=zmq.NOBLOCK)
-        if not self.fs_queue.poll(30000):
-            raise zmq.error.Again()
         status, result = self.fs_queue.recv_json()
         if status == 'OK':
             if result is not None:

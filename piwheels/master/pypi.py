@@ -2,6 +2,7 @@ import re
 import logging
 import xmlrpc.client
 from collections import namedtuple, deque
+from time import sleep
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -29,6 +30,7 @@ class PyPI():
     """
 
     def __init__(self, pypi_root='https://pypi.python.org/pypi'):
+        self.retries = 3
         self.last_serial = 0
         self.packages = set()
         # Keep a list of the last 100 (package, version) tuples so we can make
@@ -38,16 +40,27 @@ class PyPI():
 
     def __iter__(self):
         # First seed a list of all packages; there doesn't seem to be a specific
-        # action for registering a new package on PyPI, just package versions
-        # but that's okay
+        # action for registering a new package on PyPI (or rather, there is,
+        # but it seems uploads for a package can occur before the create event,
+        # so it's more reliable to just keep a cache of the packages we've
+        # seen and figure out new ones from there)
         if not self.packages:
             self.packages = set(self.client.list_packages())
             for package in self.packages:
                 yield PackageVersion(package, None)
         # NOTE: starting at serial 0 doesn't return *all* records as PyPI
         # (very sensibly) limits the number of entries in a result set (to
-        # 50000 at the time of writing)
-        events = self.client.changelog_since_serial(self.last_serial)
+        # 50000 at the time of writing). Also on rare occasions we get some
+        # form of HTTP improper state, so allow retries
+        for retry in range(self.retries, -1, -1):
+            try:
+                events = self.client.changelog_since_serial(self.last_serial)
+                break
+            except http.client.ImproperConnectionState:
+                if retry:
+                    sleep(5)
+                else:
+                    raise
         for (package, version, timestamp, action, serial) in events:
             # If we've never seen the package before, report it as a new
             # one

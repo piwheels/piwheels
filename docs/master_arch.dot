@@ -10,7 +10,7 @@ digraph piwheels {
 
         cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
         the_oracle [label="{<db>REP|<t>the_oracle}"];
-        the_architect [label="{<builds>PUSH|<t>the_architect}"];
+        the_architect [label="{<builds>REP|<t>the_architect}"];
         db [label="piwheels\ndatabase", shape=folder];
 
         the_oracle:t->db [dir=both];
@@ -33,7 +33,7 @@ digraph piwheels {
 
         high_priest [label="{{<int_status>PULL}|high_priest|{<control>PULL|<ext_status>PUB}}"];
         big_brother [label="{<t>big_brother|{<int_status>PUSH|<transfers>REQ}}"];
-        slave_driver [label="{{<db>REQ|<builds>PULL|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<transfers>REQ}}"];
+        slave_driver [label="{{<db>REQ|<builds>REQ|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<transfers>REQ}}"];
 
         big_brother:int_status->high_priest:int_status;
         slave_driver:int_status->high_priest:int_status;

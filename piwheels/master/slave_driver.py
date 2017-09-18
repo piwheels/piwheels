@@ -46,7 +46,7 @@ class SlaveDriver(Task):
     def close(self):
         super().close()
         self.build_queue.close()
-        self.slave_queue.close()
+        self.slave_queue.close(linger=1000)
         self.status_queue.close()
         self.fs_queue.close()
         self.db.close()

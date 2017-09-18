@@ -21,7 +21,7 @@ class PiWheelsPackage:
                 else:
                     break
         self.filehash = m.hexdigest().lower()
-        tags = self.filename.split('-')
+        tags = path.stem.split('-')
         self.package_tag = tags[0]
         self.package_version_tag = tags[1]
         self.platform_tag = tags[-1]

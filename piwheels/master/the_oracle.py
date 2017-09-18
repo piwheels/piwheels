@@ -23,15 +23,15 @@ class TheOracle(Task):
     """
     def __init__(self, **config):
         super().__init__(**config)
+        self.db = Database(config['database'])
         self.db_queue = self.ctx.socket(zmq.REP)
         self.db_queue.hwm = 10
         self.db_queue.bind(config['db_queue'])
-        self.db = Database(config['database'])
 
     def close(self):
         super().close()
+        self.db_queue.close(linger=1000)
         self.db.close()
-        self.db_queue.close()
         logger.info('closed')
 
     def run(self):
@@ -42,10 +42,10 @@ class TheOracle(Task):
             poller.register(self.db_queue, zmq.POLLIN)
             while True:
                 socks = dict(poller.poll(1000))
-                if self.control_queue in socks:
-                    self.handle_control()
                 if self.db_queue in socks:
                     self.handle_db_request()
+                if self.control_queue in socks:
+                    self.handle_control()
         except TaskQuit:
             pass
 
@@ -119,8 +119,6 @@ class DbClient:
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.db_queue.send_json(msg, flags=zmq.NOBLOCK)
-        if not self.db_queue.poll(60000):
-            raise zmq.error.Again()
         status, result = self.db_queue.recv_json()
         if status == 'OK':
             if result is not None:
