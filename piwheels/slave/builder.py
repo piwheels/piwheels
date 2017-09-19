@@ -26,6 +26,9 @@ class PiWheelsPackage:
         self.package_version_tag = tags[1]
         self.platform_tag = tags[-1]
         self.abi_tag = tags[-2]
+        # Fix up retired tags (noabi->none)
+        if self.abi_tag == 'noabi':
+            self.abi_tag = 'none'
         self.py_version_tag = tags[-3]
         self.build_tag = tags[2] if len(tags) == 6 else None
 
@@ -76,14 +79,14 @@ class PiWheelsBuilder:
                 proc = Popen(
                     args,
                     stdin=DEVNULL,     # ensure stdin is /dev/null; this causes
-                                    # anything silly enough to use input() in
-                                    # its setup.py to fail immediately
+                                       # anything silly enough to use input() in
+                                       # its setup.py to fail immediately
                     stdout=DEVNULL,    # also ignore all output
                     stderr=DEVNULL,
                     env=env
                 )
-                # If the build times out attempt to kill it with SIGTERM; if that
-                # hasn't worked after 10 seconds, resort to SIGKILL
+                # If the build times out attempt to kill it with SIGTERM; if
+                # that hasn't worked after 10 seconds, resort to SIGKILL
                 try:
                     proc.wait(timeout)
                 except TimeoutExpired:

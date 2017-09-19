@@ -139,5 +139,8 @@ GRANT SELECT ON statistics TO piwheels;
 UPDATE files
     SET platform_tag = regexp_replace(platform_tag, '^(.*)\.whl$', E'\\1')
     WHERE platform_tag ~ '\.whl$';
+UPDATE files
+    SET abi_tag = 'none'
+    WHERE abi_tag = 'noabi';
 
 COMMIT;
