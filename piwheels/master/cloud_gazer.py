@@ -1,14 +1,6 @@
-import logging
-
-import zmq
-import zmq.error
-
-from .tasks import PauseableTask, TaskQuit
+from .tasks import PauseableTask
 from .pypi import PyPI
 from .the_oracle import DbClient
-
-
-logger = logging.getLogger('master.cloud_gazer')
 
 
 class CloudGazer(PauseableTask):
@@ -17,6 +9,8 @@ class CloudGazer(PauseableTask):
     of those packages. This information is written into the backend database for
     :class:`QueueStuffer` to use.
     """
+    name = 'master.cloud_gazer'
+
     def __init__(self, **config):
         super().__init__(**config)
         self.pypi = PyPI(config['pypi_root'])
@@ -28,30 +22,24 @@ class CloudGazer(PauseableTask):
         super().close()
         self.db.close()
         self.pypi.close()
-        logger.info('closed')
+
+    def loop(self):
+        for package, version in self.pypi:
+            if version is None:
+                if package not in self.packages:
+                    self.db.add_new_package(package)
+                    self.packages.add(package)
+            else:
+                if (package, version) not in self.versions:
+                    self.db.add_new_package_version(package, version)
+                    self.versions.add((package, version))
+            self.poll(0)
+        self.db.set_pypi_serial(self.pypi.last_serial)
 
     def run(self):
-        logger.info('starting')
-        poller = zmq.Poller()
-        try:
-            poller.register(self.control_queue, zmq.POLLIN)
-            self.pypi.last_serial = self.db.get_pypi_serial()
-            packages = set(self.db.get_all_packages())
-            versions = set(self.db.get_all_package_versions())
-            while True:
-                for package, version in self.pypi:
-                    if version is None:
-                        if package not in packages:
-                            self.db.add_new_package(package)
-                            packages.add(package)
-                    else:
-                        if (package, version) not in versions:
-                            self.db.add_new_package_version(package, version)
-                            versions.add((package, version))
-                    if poller.poll(0):
-                        self.handle_control()
-                self.db.set_pypi_serial(self.pypi.last_serial)
-                if poller.poll(10000):
-                    self.handle_control()
-        except TaskQuit:
-            pass
+        self.logger.info('retrieving current state')
+        self.pypi.last_serial = self.db.get_pypi_serial()
+        self.packages = set(self.db.get_all_packages())
+        self.versions = set(self.db.get_all_package_versions())
+        self.logger.info('querying upstream')
+        super().run()

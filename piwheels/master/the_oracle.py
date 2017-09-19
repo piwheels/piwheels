@@ -1,17 +1,12 @@
-import errno
-import logging
 from datetime import timedelta
 from collections import namedtuple
 
 import zmq
 import zmq.error
 
-from .tasks import Task, TaskQuit
+from .tasks import Task
 from .states import BuildState, FileState
 from .db import Database
-
-
-logger = logging.getLogger('master.the_oracle')
 
 
 class TheOracle(Task):
@@ -21,47 +16,33 @@ class TheOracle(Task):
     queries about the hashes of files. The primary clients of this class are
     :class:`SlaveDriver`, :class:`IndexScribe`, and :class:`CloudGazer`.
     """
+    name = 'master.the_oracle'
+
     def __init__(self, **config):
         super().__init__(**config)
         self.db = Database(config['database'])
-        self.db_queue = self.ctx.socket(zmq.REP)
-        self.db_queue.hwm = 10
-        self.db_queue.bind(config['db_queue'])
+        db_queue = self.ctx.socket(zmq.REP)
+        db_queue.hwm = 10
+        db_queue.bind(config['db_queue'])
+        self.register(db_queue, self.handle_db_request)
 
     def close(self):
         super().close()
-        self.db_queue.close(linger=1000)
         self.db.close()
-        logger.info('closed')
 
-    def run(self):
-        logger.info('starting')
-        poller = zmq.Poller()
-        try:
-            poller.register(self.control_queue, zmq.POLLIN)
-            poller.register(self.db_queue, zmq.POLLIN)
-            while True:
-                socks = dict(poller.poll(1000))
-                if self.db_queue in socks:
-                    self.handle_db_request()
-                if self.control_queue in socks:
-                    self.handle_control()
-        except TaskQuit:
-            pass
-
-    def handle_db_request(self):
-        msg, *args = self.db_queue.recv_pyobj()
+    def handle_db_request(self, q):
+        msg, *args = q.recv_pyobj()
         try:
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
         except Exception as e:
-            logger.error('Error handling db request: %s', msg)
+            self.logger.error('Error handling db request: %s', msg)
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            self.db_queue.send_pyobj(['ERR', str(e)])
+            q.send_pyobj(['ERR', str(e)])
         else:
-            self.db_queue.send_pyobj(['OK', result])
+            q.send_pyobj(['OK', result])
 
     def do_ALLPKGS(self):
         return self.db.get_all_packages()
@@ -170,4 +151,4 @@ class DbClient:
         rec = self._execute(['GETSTATS'])
         if self.StatsType is None:
             self.StatsType = namedtuple('Statistics', tuple(k for k, v in rec))
-        return self.StatsType(**rec)
+        return self.StatsType(**{k: v for k, v in rec})

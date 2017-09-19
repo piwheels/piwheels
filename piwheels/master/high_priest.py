@@ -6,9 +6,6 @@ import zmq
 from .tasks import TaskQuit
 
 
-logger = logging.getLogger('master.high_priest')
-
-
 class HighPriest(Thread):  # NOTE: not a Task descendant
     """
     The high priest is responsible for reporting the state of the system, and
@@ -17,9 +14,12 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
     external control queue and relaying those orders to the internal control
     queue.
     """
+    name = 'master.high_priest'
+
     def __init__(self, **config):
         super().__init__()
         self.ctx = zmq.Context.instance()
+        self.logger = logging.getLogger(self.name)
         self.int_control_queue = self.ctx.socket(zmq.PUB)
         self.int_control_queue.hwm = 1
         self.int_control_queue.bind(config['int_control_queue'])
@@ -39,10 +39,10 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
         self.ext_control_queue.close()
         self.int_status_queue.close()
         self.int_control_queue.close()
-        logger.info('closed')
+        self.logger.info('closed')
 
     def run(self):
-        logger.info('starting')
+        self.logger.info('starting')
         poller = zmq.Poller()
         try:
             poller.register(self.ext_control_queue, zmq.POLLIN)
@@ -54,14 +54,14 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
                 if self.ext_control_queue in socks:
                     msg, *args = self.ext_control_queue.recv_pyobj()
                     if msg == 'QUIT':
-                        logger.warning('shutting down on QUIT message')
+                        self.logger.warning('shutting down on QUIT message')
                         raise TaskQuit
                     elif msg == 'KILL':
-                        logger.warning('killing slave %d', args[0])
+                        self.logger.warning('killing slave %d', args[0])
                     elif msg == 'PAUSE':
-                        logger.warning('pausing operations')
+                        self.logger.warning('pausing operations')
                     elif msg == 'RESUME':
-                        logger.warning('resuming operations')
+                        self.logger.warning('resuming operations')
                     self.int_control_queue.send_pyobj([msg] + args)
         except TaskQuit:
             pass

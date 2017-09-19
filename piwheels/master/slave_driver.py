@@ -25,16 +25,19 @@ class SlaveDriver(Task):
     Also, the internal "indexes" queue is informed of any packages that need web
     page indexes re-building (as a result of a successful build).
     """
+    name = 'master.slave_driver'
+
     def __init__(self, **config):
         super().__init__(**config)
         self.paused = False
+        slave_queue = self.ctx.socket(zmq.ROUTER)
+        slave_queue.ipv6 = True
+        slave_queue.bind(config['slave_queue'])
+        self.register(slave_queue, self.handle_slave)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
         self.status_queue.connect(config['int_status_queue'])
         SlaveState.status_queue = self.status_queue
-        self.slave_queue = self.ctx.socket(zmq.ROUTER)
-        self.slave_queue.ipv6 = True
-        self.slave_queue.bind(config['slave_queue'])
         self.build_queue = self.ctx.socket(zmq.PULL)
         self.build_queue.hwm = 1
         self.build_queue.connect(config['build_queue'])
@@ -46,30 +49,13 @@ class SlaveDriver(Task):
     def close(self):
         super().close()
         self.build_queue.close()
-        self.slave_queue.close(linger=1000)
         self.status_queue.close()
         self.fs_queue.close()
         self.db.close()
         SlaveState.status_queue = None
-        logger.info('closed')
 
-    def run(self):
-        logger.info('starting')
-        poller = zmq.Poller()
-        try:
-            poller.register(self.control_queue, zmq.POLLIN)
-            poller.register(self.slave_queue, zmq.POLLIN)
-            while True:
-                socks = dict(poller.poll(1000))
-                if self.control_queue in socks:
-                    self.handle_control()
-                if self.slave_queue in socks:
-                    self.handle_slave()
-        except TaskQuit:
-            pass
-
-    def handle_control(self):
-        msg, *args = self.control_queue.recv_pyobj()
+    def handle_control(self, q):
+        msg, *args = q.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
         elif msg == 'PAUSE':
@@ -77,11 +63,11 @@ class SlaveDriver(Task):
         elif msg == 'RESUME':
             self.paused = False
 
-    def handle_slave(self):
+    def handle_slave(self, q):
         try:
-            address, empty, msg = self.slave_queue.recv_multipart()
+            address, empty, msg = q.recv_multipart()
         except ValueError:
-            logger.error('invalid message structure from slave')
+            self.logger.error('invalid message structure from slave')
         else:
             msg, *args = jsonapi.loads(msg)
             logger.debug('RX: %s %r', msg, args)
@@ -90,7 +76,7 @@ class SlaveDriver(Task):
                 slave = self.slaves[address]
             except KeyError:
                 if msg != 'HELLO':
-                    logger.error('invalid first message from slave: %s', msg)
+                    self.logger.error('invalid first message from slave: %s', msg)
                     return
                 slave = SlaveState(*args)
             slave.request = [msg] + args
@@ -104,28 +90,28 @@ class SlaveDriver(Task):
                 reply = handler(slave)
                 if reply is not None:
                     slave.reply = reply
-                    self.slave_queue.send_multipart([
+                    q.send_multipart([
                         address,
                         empty,
                         jsonapi.dumps(reply)
                     ])
-                    logger.debug('TX: %r', reply)
+                    self.logger.debug('TX: %r', reply)
 
     def do_HELLO(self, slave):
-        logger.warning('slave %d: hello (timeout=%s, abi=%s, platform=%s)',
-                       slave.slave_id, slave.timeout,
-                       slave.native_abi, slave.native_platform)
+        self.logger.warning('slave %d: hello (timeout=%s, abi=%s, platform=%s)',
+                            slave.slave_id, slave.timeout,
+                            slave.native_abi, slave.native_platform)
         self.slaves[slave.address] = slave
         return ['HELLO', slave.slave_id]
 
     def do_BYE(self, slave):
-        logger.warning('slave %d: shutdown', slave.slave_id)
+        self.logger.warning('slave %d: shutdown', slave.slave_id)
         del self.slaves[slave.address]
         return None
 
     def do_IDLE(self, slave):
         if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
-            logger.error(
+            self.logger.error(
                 'slave %d: protocol error (IDLE after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
@@ -141,27 +127,27 @@ class SlaveDriver(Task):
                     package, version = self.build_queue.recv_pyobj()
                     if (package, version) in self.active_builds():
                         continue
-                    logger.info(
+                    self.logger.info(
                         'slave %d: build %s %s', slave.slave_id, package, version)
                     return ['BUILD', package, version]
                 else:
-                    logger.info('slave %d: sleeping because no builds')
+                    self.logger.info('slave %d: sleeping because no builds')
                     return ['SLEEP']
 
     def do_BUILT(self, slave):
         if slave.reply[0] != 'BUILD':
-            logger.error(
+            self.logger.error(
                 'slave %d: protocol error (BUILD after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif slave.reply[1] != slave.build.package:
-            logger.error(
+            self.logger.error(
                 'slave %d: protocol error (BUILT %s instead of %s)',
                 slave.slave_id, slave.build.package, slave.reply[1])
             return ['BYE']
         else:
             if slave.reply[2] != slave.build.version:
-                logger.warning(
+                self.logger.warning(
                     'slave %d: build version mismatch: %s != %s',
                     slave.slave_id, slave.reply[2],
                     slave.build.version)
@@ -169,7 +155,7 @@ class SlaveDriver(Task):
             self.db.log_build(slave.build)
             if slave.build.status:
                 self.fs.expect(slave.build.files[slave.build.next_file])
-                logger.info(
+                self.logger.info(
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
             else:
@@ -177,23 +163,23 @@ class SlaveDriver(Task):
 
     def do_SENT(self, slave, *args):
         if slave.reply[0] != 'SEND':
-            logger.error(
+            self.logger.error(
                 'slave %d: protocol error (SENT after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif not slave.transfer:
-            logger.error(
+            self.logger.error(
                 'slave %d: internal error; no transfer to verify',
                 slave.slave_id)
             return
         elif slave.transfer.verify(slave):
-            logger.info(
+            self.logger.info(
                 'slave %d: verified transfer of %s',
                 slave.slave_id, slave.reply[1])
             if slave.build.transfers_done:
                 return ['DONE']
             else:
-                logger.info(
+                self.logger.info(
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
         else:

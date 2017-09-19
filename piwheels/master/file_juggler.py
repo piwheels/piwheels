@@ -1,16 +1,11 @@
 import os
-import errno
-import logging
 from pathlib import Path
 
 import zmq
 import zmq.error
 
-from .tasks import Task, TaskQuit
+from .tasks import Task
 from .states import FileState, TransferState
-
-
-logger = logging.getLogger('master.file_juggler')
 
 
 class TransferError(Exception):
@@ -40,72 +35,48 @@ class FileJuggler(Task):
     transfer and either retries it (when verification fails) or sends back
     "DONE" indicating the slave can wipe the source file.
     """
+    name = 'master.file_juggler'
+
     def __init__(self, **config):
         super().__init__(**config)
         self.output_path = Path(config['output_path'])
-        self.file_queue = self.ctx.socket(zmq.ROUTER)
-        self.file_queue.ipv6 = True
-        self.file_queue.hwm = TransferState.pipeline_size * 50
-        self.file_queue.bind(config['file_queue'])
-        self.fs_queue = self.ctx.socket(zmq.REP)
-        self.fs_queue.hwm = 1
-        self.fs_queue.bind(config['fs_queue'])
+        TransferState.output_path = self.output_path
+        self.transfers = {}
+        file_queue = self.ctx.socket(zmq.ROUTER)
+        file_queue.ipv6 = True
+        file_queue.hwm = TransferState.pipeline_size * 50
+        file_queue.bind(config['file_queue'])
+        fs_queue = self.ctx.socket(zmq.REP)
+        fs_queue.hwm = 1
+        fs_queue.bind(config['fs_queue'])
+        self.register(file_queue, self.handle_file)
+        self.register(fs_queue, self.handle_fs_request)
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config['index_queue'])
-        TransferState.output_path = self.output_path
-        self.transfers = {}
 
     def close(self):
         super().close()
-        self.file_queue.close(linger=1000)
-        self.fs_queue.close(linger=1000)
         self.index_queue.close()
-        logger.info('closed')
 
-    def run(self):
-        logger.info('starting')
-        poller = zmq.Poller()
-        try:
-            poller.register(self.control_queue, zmq.POLLIN)
-            poller.register(self.file_queue, zmq.POLLIN)
-            poller.register(self.fs_queue, zmq.POLLIN)
-            while True:
-                socks = dict(poller.poll(1000))
-                if self.control_queue in socks:
-                    self.handle_control()
-                if self.fs_queue in socks:
-                    self.handle_fs_request()
-                if self.file_queue in socks:
-                    try:
-                        self.handle_file()
-                    except TransferIgnoreChunk as e:
-                        logger.debug(str(e))
-                    except TransferDone as e:
-                        logger.info(str(e))
-                    except TransferError as e:
-                        logger.error(str(e))
-        except TaskQuit:
-            pass
-
-    def handle_fs_request(self):
-        msg, *args = self.fs_queue.recv_pyobj()
+    def handle_fs_request(self, q):
+        msg, *args = q.recv_pyobj()
         try:
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
         except Exception as e:
-            logger.error('error handling fs request: %s', msg)
+            self.logger.error('error handling fs request: %s', msg)
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            self.fs_queue.send_pyobj(['ERR', str(e)])
+            q.send_pyobj(['ERR', str(e)])
         else:
-            self.fs_queue.send_pyobj(['OK', result])
+            q.send_pyobj(['OK', result])
 
     def do_EXPECT(self, slave_id, *file_state):
         file_state = FileState(*file_state)
         self.transfers[slave_id] = TransferState(file_state)
-        logging.info('expecting transfer: %s', file_state.filename)
+        self.logger.info('expecting transfer: %s', file_state.filename)
 
     def do_VERIFY(self, slave_id, package):
         transfer = self.transfers[slave_id]
@@ -113,41 +84,43 @@ class FileJuggler(Task):
             transfer.verify()
         except IOError as e:
             transfer.rollback()
-            logging.warning('verification failed: %s', transfer.file_state.filename)
+            self.logger.warning('verification failed: %s', transfer.file_state.filename)
             raise
         else:
             transfer.commit(package)
-            logging.info('verified: %s', transfer.file_state.filename)
+            self.logger.info('verified: %s', transfer.file_state.filename)
 
     def do_STATVFS(self):
         return list(os.statvfs(str(self.output_path)))
 
-    def handle_file(self):
-        address, msg, *args = self.file_queue.recv_multipart()
-
+    def handle_file(self, q):
+        address, msg, *args = q.recv_multipart()
         try:
-            transfer = self.transfers[address]
-        except KeyError:
-            transfer = self.new_transfer(msg, *args)
-            self.transfers[address] = transfer
-        else:
             try:
+                transfer = self.transfers[address]
+            except KeyError:
+                transfer = self.new_transfer(msg, *args)
+                self.transfers[address] = transfer
+            else:
                 self.current_transfer(transfer, msg, *args)
-            except TransferDone:
-                logging.info('transfer complete: %s', transfer.file_state.filename)
-                self.file_queue.send_multipart([address, b'DONE'])
-                self.index_queue.send_pyobj(['PKG', transfer.file_state.package_tag])
-                del self.transfers[address]
-                raise
-
-        fetch_range = transfer.fetch()
-        while fetch_range:
-            self.file_queue.send_multipart([
-                address, b'FETCH',
-                str(fetch_range.start).encode('ascii'),
-                str(len(fetch_range)).encode('ascii')
-            ])
+        except TransferDone:
+            self.logger.info('transfer complete: %s', transfer.file_state.filename)
+            q.send_multipart([address, b'DONE'])
+            self.index_queue.send_pyobj(['PKG', transfer.file_state.package_tag])
+            del self.transfers[address]
+        except TransferIgnoreChunk as e:
+            self.logger.debug(str(e))
+        except TransferError as e:
+            self.logger.error(str(e))
+        else:
             fetch_range = transfer.fetch()
+            while fetch_range:
+                q.send_multipart([
+                    address, b'FETCH',
+                    str(fetch_range.start).encode('ascii'),
+                    str(len(fetch_range)).encode('ascii')
+                ])
+                fetch_range = transfer.fetch()
 
     def new_transfer(self, msg, *args):
         if msg == b'CHUNK':

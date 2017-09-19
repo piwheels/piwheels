@@ -1,18 +1,13 @@
 import os
 import tempfile
-import logging
 from pathlib import Path
-from datetime import timedelta
 
 import zmq
 from pkg_resources import resource_string, resource_stream
 
 from .html import tag
-from .tasks import PauseableTask, TaskQuit
+from .tasks import PauseableTask
 from .the_oracle import DbClient
-
-
-logger = logging.getLogger('master.index_scribe')
 
 
 class IndexScribe(PauseableTask):
@@ -30,19 +25,22 @@ class IndexScribe(PauseableTask):
         re-built, hashes are *never* re-calculated from the disk files (they are
         always read from the database).
     """
+    name = 'master.index_scribe'
+
     def __init__(self, **config):
         super().__init__(**config)
         self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
         self.output_path = Path(config['output_path'])
-        self.index_queue = self.ctx.socket(zmq.PULL)
-        self.index_queue.hwm = 10
-        self.index_queue.bind(config['index_queue'])
+        index_queue = self.ctx.socket(zmq.PULL)
+        index_queue.hwm = 10
+        index_queue.bind(config['index_queue'])
+        self.register(index_queue, self.handle_index)
         self.db = DbClient(**config)
         self.package_cache = set()
         self.setup_output_path()
 
     def setup_output_path(self):
-        logger.info('setting up output path')
+        self.logger.info('setting up output path')
         try:
             self.output_path.mkdir()
         except FileExistsError:
@@ -60,35 +58,21 @@ class IndexScribe(PauseableTask):
     def close(self):
         super().close()
         self.db.close()
-        self.index_queue.close()
-        logger.info('closed')
 
     def run(self):
-        logger.info('starting')
-        poller = zmq.Poller()
-        try:
-            # Build the initial index from the set of directories that exist
-            # under the output path (this is much faster than querying the
-            # database for the same info)
-            self.package_cache = {
-                str(d.relative_to(self.output_path / 'simple'))
-                for d in (self.output_path / 'simple').iterdir()
-                if d.is_dir()
-            }
+        # Build the initial index from the set of directories that exist
+        # under the output path (this is much faster than querying the
+        # database for the same info)
+        self.logger.info('building package cache')
+        self.package_cache = {
+            str(d.relative_to(self.output_path / 'simple'))
+            for d in (self.output_path / 'simple').iterdir()
+            if d.is_dir()
+        }
+        super().run()
 
-            poller.register(self.control_queue, zmq.POLLIN)
-            poller.register(self.index_queue, zmq.POLLIN)
-            while True:
-                socks = dict(poller.poll(1000))
-                if self.control_queue in socks:
-                    self.handle_control()
-                if self.index_queue in socks:
-                    self.handle_index()
-        except TaskQuit:
-            pass
-
-    def handle_index(self):
-        msg, *args = self.index_queue.recv_json()
+    def handle_index(self, q):
+        msg, *args = q.recv_pyobj()
         if msg == 'PKG':
             package = args[0]
             if package not in self.package_cache:
@@ -99,17 +83,17 @@ class IndexScribe(PauseableTask):
             status_info = args[0]
             self.write_homepage(status_info)
         else:
-            logging.error('invalid index_queue message: %s', msg)
+            self.logger.error('invalid index_queue message: %s', msg)
 
     def write_homepage(self, status_info):
-        logger.info('regenerating homepage')
+        self.logger.info('writing homepage')
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
                                          delete=False) as index:
             try:
                 index.file.write(self.homepage_template.format(
                     packages_built=status_info['packages_built'],
                     versions_built=status_info['versions_built'],
-                    builds_time=timedelta(seconds=status_info['builds_time']),
+                    builds_time=status_info['builds_time'],
                     builds_size=status_info['builds_size'] // 1048576
                 ))
             except:
@@ -120,7 +104,7 @@ class IndexScribe(PauseableTask):
                 os.replace(index.name, str(self.output_path / 'index.html'))
 
     def write_root_index(self):
-        logger.info('regenerating package index')
+        self.logger.info('writing package index')
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(self.output_path / 'simple'),
                 delete=False) as index:
@@ -146,7 +130,7 @@ class IndexScribe(PauseableTask):
                 os.replace(index.name, str(self.output_path / 'simple' / 'index.html'))
 
     def write_package_index(self, package, files):
-        logger.info('generating index for %s', package)
+        self.logger.info('writing index for %s', package)
         with tempfile.NamedTemporaryFile(
                 mode='w', dir=str(self.output_path / 'simple' / package),
                 delete=False) as index:
