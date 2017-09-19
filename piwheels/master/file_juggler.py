@@ -89,7 +89,7 @@ class FileJuggler(Task):
             pass
 
     def handle_fs_request(self):
-        msg, *args = self.fs_queue.recv_json()
+        msg, *args = self.fs_queue.recv_pyobj()
         try:
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
@@ -98,9 +98,9 @@ class FileJuggler(Task):
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            self.fs_queue.send_json(['ERR', str(e)])
+            self.fs_queue.send_pyobj(['ERR', str(e)])
         else:
-            self.fs_queue.send_json(['OK', result])
+            self.fs_queue.send_pyobj(['OK', result])
 
     def do_EXPECT(self, slave_id, *file_state):
         file_state = FileState(*file_state)
@@ -136,7 +136,7 @@ class FileJuggler(Task):
             except TransferDone:
                 logging.info('transfer complete: %s', transfer.file_state.filename)
                 self.file_queue.send_multipart([address, b'DONE'])
-                self.index_queue.send_json(['PKG', transfer.file_state.package_tag])
+                self.index_queue.send_pyobj(['PKG', transfer.file_state.package_tag])
                 del self.transfers[address]
                 raise
 
@@ -197,8 +197,8 @@ class FsClient:
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
-        self.fs_queue.send_json(msg, flags=zmq.NOBLOCK)
-        status, result = self.fs_queue.recv_json()
+        self.fs_queue.send_pyobj(msg, flags=zmq.NOBLOCK)
+        status, result = self.fs_queue.recv_pyobj()
         if status == 'OK':
             if result is not None:
                 return result

@@ -52,7 +52,7 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
                 if self.int_status_queue in socks:
                     self.ext_status_queue.send(self.int_status_queue.recv())
                 if self.ext_control_queue in socks:
-                    msg, *args = self.ext_control_queue.recv_json()
+                    msg, *args = self.ext_control_queue.recv_pyobj()
                     if msg == 'QUIT':
                         logger.warning('shutting down on QUIT message')
                         raise TaskQuit
@@ -62,8 +62,8 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
                         logger.warning('pausing operations')
                     elif msg == 'RESUME':
                         logger.warning('resuming operations')
-                    self.int_control_queue.send_json([msg] + args)
+                    self.int_control_queue.send_pyobj([msg] + args)
         except TaskQuit:
             pass
         finally:
-            self.int_control_queue.send_json(['QUIT'])
+            self.int_control_queue.send_pyobj(['QUIT'])

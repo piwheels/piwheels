@@ -311,8 +311,8 @@ class SlaveState:
         self._reply = value
         if value[0] == 'DONE':
             self._build = None
-        SlaveState.status_queue.send_json(
-            [self._slave_id, self._last_seen.timestamp()] + value)
+        SlaveState.status_queue.send_pyobj(
+            [self._slave_id, self._last_seen] + value)
 
 
 class TransferState:

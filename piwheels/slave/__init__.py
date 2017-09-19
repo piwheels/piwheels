@@ -44,8 +44,8 @@ class PiWheelsSlave(TerminalApplication):
         try:
             request = ['HELLO', timeout] + list(pep425tags.get_supported()[0])
             while True:
-                queue.send_json(request)
-                reply, *args = queue.recv_json()
+                queue.send_pyobj(request)
+                reply, *args = queue.recv_pyobj()
 
                 if reply == 'HELLO':
                     assert slave_id is None, 'Duplicate hello'
@@ -126,7 +126,7 @@ class PiWheelsSlave(TerminalApplication):
                 else:
                     assert False, 'Invalid message from master'
         finally:
-            queue.send_json(['BYE'])
+            queue.send_pyobj(['BYE'])
             queue.close()
             ctx.term()
 

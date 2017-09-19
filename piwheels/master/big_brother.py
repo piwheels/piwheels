@@ -57,15 +57,15 @@ class BigBrother(PauseableTask):
                         'builds_count':     rec.builds_count,
                         'builds_last_hour': rec.builds_count_last_hour,
                         'builds_success':   rec.builds_count_success,
-                        'builds_time':      rec.builds_time.total_seconds(),
+                        'builds_time':      rec.builds_time,
                         'builds_size':      rec.builds_size,
                         'disk_free':        stat.f_frsize * stat.f_bavail,
                         'disk_size':        stat.f_frsize * stat.f_blocks,
                     }
-                self.index_queue.send_json(['HOME', status_info])
-                self.status_queue.send_json([
+                self.index_queue.send_pyobj(['HOME', status_info])
+                self.status_queue.send_pyobj([
                     -1,
-                    datetime.utcnow().timestamp(),
+                    datetime.utcnow(),
                     'STATUS',
                     status_info
                 ])

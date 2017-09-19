@@ -50,7 +50,7 @@ class TheOracle(Task):
             pass
 
     def handle_db_request(self):
-        msg, *args = self.db_queue.recv_json()
+        msg, *args = self.db_queue.recv_pyobj()
         try:
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
@@ -59,9 +59,9 @@ class TheOracle(Task):
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            self.db_queue.send_json(['ERR', str(e)])
+            self.db_queue.send_pyobj(['ERR', str(e)])
         else:
-            self.db_queue.send_json(['OK', result])
+            self.db_queue.send_pyobj(['OK', result])
 
     def do_ALLPKGS(self):
         return self.db.get_all_packages()
@@ -77,8 +77,8 @@ class TheOracle(Task):
 
     def do_LOGBUILD(self, slave_id, package, version, status, duration, output,
                     files):
-        build = BuildState(slave_id, package, version, status,
-                           timedelta(seconds=duration), output, files={
+        build = BuildState(slave_id, package, version, status, duration, output,
+                           files={
                                filename: FileState(filename, *filestate)
                                for filename, filestate in files.items()
                            })
@@ -118,8 +118,8 @@ class DbClient:
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
-        self.db_queue.send_json(msg, flags=zmq.NOBLOCK)
-        status, result = self.db_queue.recv_json()
+        self.db_queue.send_pyobj(msg, flags=zmq.NOBLOCK)
+        status, result = self.db_queue.recv_pyobj()
         if status == 'OK':
             if result is not None:
                 return result
@@ -142,8 +142,7 @@ class DbClient:
     def log_build(self, build):
         build_id = self._execute([
             'LOGBUILD', build.slave_id, build.package, build.version,
-            build.status, build.duration.total_seconds(),
-            build.output, {
+            build.status, build.duration, build.output, {
                 f.filename: [
                     f.filename, f.filesize, f.filehash, f.package_version_tag,
                     f.py_version_tag, f.abi_tag, f.platform_tag
@@ -165,7 +164,4 @@ class DbClient:
         rec = self._execute(['GETSTATS'])
         if self.StatsType is None:
             self.StatsType = namedtuple('Statistics', tuple(k for k, v in rec))
-        return self.StatsType(*(
-            v if i != 7 else timedelta(seconds=v)
-            for i, (k, v) in enumerate(rec)
-        ))
+        return self.StatsType(**rec)

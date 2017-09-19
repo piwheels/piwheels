@@ -69,7 +69,7 @@ class SlaveDriver(Task):
             pass
 
     def handle_control(self):
-        msg, *args = self.control_queue.recv_json()
+        msg, *args = self.control_queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
         elif msg == 'PAUSE':
@@ -138,7 +138,7 @@ class SlaveDriver(Task):
             while True:
                 events = self.build_queue.poll(0)
                 if events:
-                    package, version = self.build_queue.recv_json()
+                    package, version = self.build_queue.recv_pyobj()
                     if (package, version) in self.active_builds():
                         continue
                     logger.info(

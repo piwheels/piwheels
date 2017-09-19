@@ -97,7 +97,7 @@ class PiWheelsMaster(TerminalApplication):
     def send_quit(self, ctx, config):
         q = ctx.socket(zmq.PUSH)
         q.connect(config['ext_control_queue'])
-        q.send_json(['QUIT'])
+        q.send_pyobj(['QUIT'])
         q.close()
 
     def sig_term(signo, stack_frame):
