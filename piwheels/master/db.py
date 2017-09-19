@@ -5,6 +5,7 @@ from datetime import timedelta
 from sqlalchemy import MetaData, Table, select, func, text, distinct, create_engine
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from .. import __version__
 from . import pypi
 
 
@@ -23,10 +24,17 @@ class Database():
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         self.configuration = Table('configuration', self.meta, autoload=True)
+        with self.conn.begin():
+            db_version = self.conn.scalar(select([self.configuration.c.version]))
+            if db_version != __version__:
+                raise RuntimeError('Database version (%s) does not match '
+                                   'software version (%s)' %
+                                   (db_version, __version__))
         self.packages = Table('packages', self.meta, autoload=True)
         self.versions = Table('versions', self.meta, autoload=True)
         self.builds = Table('builds', self.meta, autoload=True)
         self.files = Table('files', self.meta, autoload=True)
+        self.build_abis = Table('build_abis', self.meta, autoload=True)
         # The following are views on the tables above
         self.builds_pending = Table('builds_pending', self.meta, autoload=True)
         self.statistics = Table('statistics', self.meta, autoload=True)
@@ -128,6 +136,16 @@ class Database():
                     platform_tag=file.platform_tag
                 )
 
+    def get_build_abis(self):
+        """
+        Return the set of ABIs that the master should attempt to build
+        """
+        with self.conn.begin():
+            return [
+                rec.abi_tag
+                for rec in self.conn.execute(select([self.build_abis]))
+            ]
+
     def get_pypi_serial(self):
         """
         Return the serial number of the last PyPI event
@@ -168,14 +186,19 @@ class Database():
                 for rec in self.conn.execute(select([self.versions]))
             ]
 
-    def get_build_queue(self):
+    def get_build_queue(self, abi_tag):
         """
-        Generator yielding package/version tuples of all package versions
-        requiring building
+        Returns a list of package/version tuples of all package versions
+        requiring building for the given ABI
         """
         with self.conn.begin():
-            for rec in self.conn.execute(select([self.builds_pending])):
-                yield rec.package, rec.version
+            return [
+                (rec.package, rec.version)
+                for rec in self.conn.execute(
+                    select([self.builds_pending]).
+                    where(self.builds_pending.c.abi_tag == abi_tag)
+                )
+            ]
 
     def get_statistics(self):
         """

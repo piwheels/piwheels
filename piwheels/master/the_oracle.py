@@ -89,6 +89,9 @@ class TheOracle(Task):
         files = self.db.get_package_files(package)
         return list(files)
 
+    def do_GETABIS(self):
+        return self.db.get_build_abis()
+
     def do_GETPYPI(self):
         return self.db.get_pypi_serial()
 
@@ -153,6 +156,9 @@ class DbClient:
 
     def get_package_files(self, package):
         return self._execute(['PKGFILES', package])
+
+    def get_build_abis(self):
+        return self._execute(['GETABIS'])
 
     def get_pypi_serial(self):
         return self._execute(['GETPYPI'])

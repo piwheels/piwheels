@@ -2,7 +2,7 @@ import logging
 
 import zmq
 
-from .tasks import PauseableTask, TaskQuit
+from .tasks import Task, TaskQuit
 from .db import Database
 
 
@@ -18,10 +18,10 @@ class TheArchitect(Task):
     """
     def __init__(self, **config):
         super().__init__(**config)
+        self.db = Database(config['database'])
         self.build_queue = self.ctx.socket(zmq.REP)
         self.build_queue.hwm = 1
         self.build_queue.bind(config['build_queue'])
-        self.db = Database(config['database'])
 
     def close(self):
         super().close()
@@ -45,4 +45,4 @@ class TheArchitect(Task):
             pass
 
     def handle_build(self):
-        pyver = self.build_queue.recv_json(flags=zmq.NOBLOCK)
+        pyver = self.build_queue.recv_json()

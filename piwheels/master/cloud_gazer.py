@@ -53,12 +53,5 @@ class CloudGazer(PauseableTask):
                 self.db.set_pypi_serial(self.pypi.last_serial)
                 if poller.poll(10000):
                     self.handle_control()
-        except zmq.error.Again:
-            try:
-                self.handle_control()
-            except TaskQuit:
-                pass
-            else:
-                raise
         except TaskQuit:
             pass
