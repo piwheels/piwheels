@@ -1,9 +1,10 @@
 import os
 import logging
+import warnings
 from datetime import timedelta
 
 from sqlalchemy import MetaData, Table, select, func, text, distinct, create_engine
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SAWarning
 
 from .. import __version__
 from . import pypi
@@ -23,21 +24,26 @@ class Database():
             Database.engines[dsn] = engine
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
-        self.configuration = Table('configuration', self.meta, autoload=True)
-        with self.conn.begin():
-            db_version = self.conn.scalar(select([self.configuration.c.version]))
-            if db_version != __version__:
-                raise RuntimeError('Database version (%s) does not match '
-                                   'software version (%s)' %
-                                   (db_version, __version__))
-        self.packages = Table('packages', self.meta, autoload=True)
-        self.versions = Table('versions', self.meta, autoload=True)
-        self.builds = Table('builds', self.meta, autoload=True)
-        self.files = Table('files', self.meta, autoload=True)
-        self.build_abis = Table('build_abis', self.meta, autoload=True)
-        # The following are views on the tables above
-        self.builds_pending = Table('builds_pending', self.meta, autoload=True)
-        self.statistics = Table('statistics', self.meta, autoload=True)
+        with warnings.catch_warnings():
+            # Ignore warnings about partial indexes (SQLAlchemy doesn't know how
+            # to reflect them but that doesn't matter for our purposes as we're
+            # not doing DDL translation)
+            warnings.simplefilter('ignore', category=SAWarning)
+            self.configuration = Table('configuration', self.meta, autoload=True)
+            with self.conn.begin():
+                db_version = self.conn.scalar(select([self.configuration.c.version]))
+                if db_version != __version__:
+                    raise RuntimeError('Database version (%s) does not match '
+                                    'software version (%s)' %
+                                    (db_version, __version__))
+            self.packages = Table('packages', self.meta, autoload=True)
+            self.versions = Table('versions', self.meta, autoload=True)
+            self.builds = Table('builds', self.meta, autoload=True)
+            self.files = Table('files', self.meta, autoload=True)
+            self.build_abis = Table('build_abis', self.meta, autoload=True)
+            # The following are views on the tables above
+            self.builds_pending = Table('builds_pending', self.meta, autoload=True)
+            self.statistics = Table('statistics', self.meta, autoload=True)
 
     def __enter__(self):
         return self
