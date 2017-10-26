@@ -8,7 +8,6 @@ digraph piwheels {
     subgraph cluster_db_server {
         graph [label="db-server"];
 
-        cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
         the_oracle [label="{<db>REP|<t>the_oracle}"];
         the_architect [label="{<builds>REP|<t>the_architect}"];
         db [label="piwheels\ndatabase", shape=folder];
@@ -20,7 +19,7 @@ digraph piwheels {
     subgraph cluster_file_server {
         graph [label="file-server"];
 
-        file_juggler [label="{{<transfers>REP|<slaves>ROUTER}|<t>file_juggler|{<indexes>PUSH}}"];
+        file_juggler [label="{{<fs>REP|<slaves>ROUTER}|<t>file_juggler|{<indexes>PUSH}}"];
         index_scribe [label="{{<db>REQ|<indexes>PULL}|<t>index_scribe}"];
         fs [label="www\nfilesystem", shape=folder];
 
@@ -31,9 +30,10 @@ digraph piwheels {
     subgraph cluster_master {
         graph [label="master"];
 
+        cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
         high_priest [label="{{<int_status>PULL}|high_priest|{<control>PULL|<ext_status>PUB}}"];
-        big_brother [label="{<t>big_brother|{<int_status>PUSH|<transfers>REQ}}"];
-        slave_driver [label="{{<db>REQ|<builds>REQ|<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<transfers>REQ}}"];
+        big_brother [label="{<t>big_brother|{<int_status>PUSH|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
+        slave_driver [label="{{<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<db>REQ|<builds>REQ|<fs>REQ}}"];
 
         big_brother:int_status->high_priest:int_status;
         slave_driver:int_status->high_priest:int_status;
@@ -66,9 +66,11 @@ digraph piwheels {
 
     cloud_gazer:db->the_oracle:db [dir=both];
     file_juggler:indexes->index_scribe:indexes;
+    big_brother:indexes->index_scribe:indexes;
     index_scribe:db->the_oracle:db [dir=both];
-    big_brother:transfers->file_juggler:transfers [dir=both];
-    slave_driver:transfers->file_juggler:transfers [dir=both];
+    big_brother:db->the_oracle:db [dir=both];
+    big_brother:fs->file_juggler:fs [dir=both];
+    slave_driver:fs->file_juggler:fs [dir=both];
     slave_driver:db->the_oracle:db [dir=both];
     slave_driver:builds->the_architect:builds [dir=both];
 }
