@@ -8,6 +8,7 @@ from pkg_resources import resource_string, resource_stream
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
+from .states import canonicalize_name
 
 
 class IndexScribe(PauseableTask):
@@ -76,7 +77,7 @@ class IndexScribe(PauseableTask):
         if msg == 'PKG':
             package = args[0]
             if package not in self.package_cache:
-                self.package_cache.add(package)
+                self.package_cache.add(canonicalize_name(package))
                 self.write_root_index()
             self.write_package_index(package, self.db.get_package_files(package))
         elif msg == 'HOME':
@@ -132,7 +133,7 @@ class IndexScribe(PauseableTask):
     def write_package_index(self, package, files):
         self.logger.info('writing index for %s', package)
         with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(self.output_path / 'simple' / package),
+                mode='w', dir=str(self.output_path / 'simple' / canonicalize_name(package)),
                 delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')

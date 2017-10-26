@@ -38,7 +38,7 @@ class SlaveDriver(Task):
         self.status_queue.hwm = 10
         self.status_queue.connect(config['int_status_queue'])
         SlaveState.status_queue = self.status_queue
-        self.build_queue = self.ctx.socket(zmq.PULL)
+        self.build_queue = self.ctx.socket(zmq.REQ)
         self.build_queue.hwm = 1
         self.build_queue.connect(config['build_queue'])
         self.fs_queue = self.ctx.socket(zmq.REQ)
@@ -121,18 +121,15 @@ class SlaveDriver(Task):
             logger.info('slave %d: sleeping because master is paused')
             return ['SLEEP']
         else:
-            while True:
-                events = self.build_queue.poll(0)
-                if events:
-                    package, version = self.build_queue.recv_pyobj()
-                    if (package, version) in self.active_builds():
-                        continue
+            self.build_queue.send_pyobj(slave.native_abi)
+            task = self.build_queue.recv_pyobj()
+            if task is not None:
+                if task not in self.active_builds():
                     self.logger.info(
-                        'slave %d: build %s %s', slave.slave_id, package, version)
-                    return ['BUILD', package, version]
-                else:
-                    self.logger.info('slave %d: sleeping because no builds')
-                    return ['SLEEP']
+                        'slave %d: build %s %s', slave.slave_id, task[0], task[1])
+                    return ['BUILD'] + task
+            self.logger.info('slave %d: sleeping because no builds')
+            return ['SLEEP']
 
     def do_BUILT(self, slave):
         if slave.reply[0] != 'BUILD':

@@ -64,11 +64,11 @@ digraph piwheels {
     high_priest:ext_status->monitor:status;
     monitor:control->high_priest:control;
 
-    the_architect:builds->slave_driver:builds;
     cloud_gazer:db->the_oracle:db [dir=both];
     file_juggler:indexes->index_scribe:indexes;
     index_scribe:db->the_oracle:db [dir=both];
     big_brother:transfers->file_juggler:transfers [dir=both];
     slave_driver:transfers->file_juggler:transfers [dir=both];
     slave_driver:db->the_oracle:db [dir=both];
+    slave_driver:builds->the_architect:builds [dir=both];
 }

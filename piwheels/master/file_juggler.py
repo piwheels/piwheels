@@ -31,7 +31,7 @@ class FileJuggler(Task):
     :class:`SlaveDriver` task. That task replies with a "SEND" instruction to
     the slave (including a filename). The slave then initiates the transfer with
     a "HELLO" message to this task. Once transfers are complete the slave sends
-    a "SENT" message to the :meth:`slave_driver` task which verifies the
+    a "SENT" message to the :class:`SlaveDriver` task which verifies the
     transfer and either retries it (when verification fails) or sends back
     "DONE" indicating the slave can wipe the source file.
     """
