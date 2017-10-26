@@ -15,7 +15,7 @@ class TaskQuit(Exception):
 class Task(Thread):
     name = 'Task'
 
-    def __init__(self, **config):
+    def __init__(self, config):
         super().__init__()
         self.ctx = zmq.Context.instance()
         # Use an ordered dictionary to ensure the control queue is always

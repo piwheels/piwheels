@@ -11,10 +11,10 @@ class CloudGazer(PauseableTask):
     """
     name = 'master.cloud_gazer'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.pypi = PyPI(config['pypi_root'])
-        self.db = DbClient(**config)
+        self.db = DbClient(config)
         self.packages = set()
         self.versions = set()
 

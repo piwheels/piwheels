@@ -13,8 +13,8 @@ class TheArchitect(Task):
     """
     name = 'master.the_architect'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.db = Database(config['database'])
         build_queue = self.ctx.socket(zmq.REP)
         build_queue.hwm = 1

@@ -65,7 +65,7 @@ class PiWheelsMaster(TerminalApplication):
         config = self.load_configuration(args)
         ctx = zmq.Context.instance()
         tasks = [
-            task(**config)
+            task(config)
             for task in (
                 HighPriest,
                 TheOracle,

@@ -18,8 +18,8 @@ class TheOracle(Task):
     """
     name = 'master.the_oracle'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.db = Database(config['database'])
         db_queue = self.ctx.socket(zmq.REP)
         db_queue.hwm = 10
@@ -90,7 +90,7 @@ class TheOracle(Task):
 class DbClient:
     StatsType = None
 
-    def __init__(self, **config):
+    def __init__(self, config):
         self.ctx = zmq.Context.instance()
         self.db_queue = self.ctx.socket(zmq.REQ)
         self.db_queue.hwm = 1

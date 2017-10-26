@@ -16,7 +16,7 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
     """
     name = 'master.high_priest'
 
-    def __init__(self, **config):
+    def __init__(self, config):
         super().__init__()
         self.ctx = zmq.Context.instance()
         self.logger = logging.getLogger(self.name)

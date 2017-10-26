@@ -37,8 +37,8 @@ class FileJuggler(Task):
     """
     name = 'master.file_juggler'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.output_path = Path(config['output_path'])
         TransferState.output_path = self.output_path
         self.transfers = {}
@@ -158,7 +158,7 @@ class FileJuggler(Task):
 
 
 class FsClient:
-    def __init__(self, **config):
+    def __init__(self, config):
         self.ctx = zmq.Context.instance()
         self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1

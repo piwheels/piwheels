@@ -27,8 +27,8 @@ class SlaveDriver(Task):
     """
     name = 'master.slave_driver'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.paused = False
         slave_queue = self.ctx.socket(zmq.ROUTER)
         slave_queue.ipv6 = True
@@ -44,7 +44,7 @@ class SlaveDriver(Task):
         self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config['fs_queue'])
-        self.db = DbClient(**config)
+        self.db = DbClient(config)
 
     def close(self):
         super().close()

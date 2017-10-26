@@ -18,16 +18,16 @@ class BigBrother(PauseableTask):
     """
     name = 'master.big_brother'
 
-    def __init__(self, **config):
-        super().__init__(**config)
+    def __init__(self, config):
+        super().__init__(config)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 1
         self.status_queue.connect(config['int_status_queue'])
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config['index_queue'])
-        self.fs = FsClient(**config)
-        self.db = DbClient(**config)
+        self.fs = FsClient(config)
+        self.db = DbClient(config)
 
     def close(self):
         super().close()
