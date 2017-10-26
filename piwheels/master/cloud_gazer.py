@@ -16,7 +16,6 @@ class CloudGazer(PauseableTask):
         self.pypi = PyPI(config['pypi_root'])
         self.db = DbClient(config)
         self.packages = set()
-        self.versions = set()
 
     def close(self):
         super().close()
@@ -30,9 +29,8 @@ class CloudGazer(PauseableTask):
                     self.db.add_new_package(package)
                     self.packages.add(package)
             else:
-                if (package, version) not in self.versions:
-                    self.db.add_new_package_version(package, version)
-                    self.versions.add((package, version))
+                self.db.add_new_package_version(package, version)
+                self.versions.add((package, version))
             self.poll(0)
         self.db.set_pypi_serial(self.pypi.last_serial)
 
@@ -40,6 +38,5 @@ class CloudGazer(PauseableTask):
         self.logger.info('retrieving current state')
         self.pypi.last_serial = self.db.get_pypi_serial()
         self.packages = set(self.db.get_all_packages())
-        self.versions = set(self.db.get_all_package_versions())
         self.logger.info('querying upstream')
         super().run()
