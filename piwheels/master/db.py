@@ -1,13 +1,11 @@
-import os
 import logging
 import warnings
 from datetime import timedelta
 
-from sqlalchemy import MetaData, Table, select, func, text, distinct, create_engine
-from sqlalchemy.exc import DBAPIError, IntegrityError, SAWarning
+from sqlalchemy import MetaData, Table, select, create_engine
+from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__
-from . import pypi
 
 
 class Database():
@@ -34,8 +32,8 @@ class Database():
                 db_version = self.conn.scalar(select([self.configuration.c.version]))
                 if db_version != __version__:
                     raise RuntimeError('Database version (%s) does not match '
-                                    'software version (%s)' %
-                                    (db_version, __version__))
+                                       'software version (%s)' %
+                                       (db_version, __version__))
             self.packages = Table('packages', self.meta, autoload=True)
             self.versions = Table('versions', self.meta, autoload=True)
             self.builds = Table('builds', self.meta, autoload=True)
@@ -258,4 +256,3 @@ class Database():
                 order_by(self.versions.c.version)
             )
             return [rec.version for rec in result]
-
