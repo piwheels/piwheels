@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import zmq
 
@@ -20,44 +20,52 @@ class BigBrother(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        self.status_queue = self.ctx.socket(zmq.PUSH)
-        self.status_queue.hwm = 1
-        self.status_queue.connect(config['int_status_queue'])
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.connect(config['index_queue'])
+        status_queue = self.ctx.socket(zmq.PUSH)
+        status_queue.hwm = 1
+        status_queue.connect(config['int_status_queue'])
+        index_queue = self.ctx.socket(zmq.PUSH)
+        index_queue.hwm = 1
+        index_queue.connect(config['index_queue'])
+        self.register(status_queue, self.handle_status, zmq.POLLOUT)
+        self.register(index_queue, self.handle_index, zmq.POLLOUT)
         self.fs = FsClient(config)
         self.db = DbClient(config)
+        self.timestamp = datetime.utcnow() - timedelta(seconds=30)
+        self.status_info1 = None
+        self.status_info2 = None
 
     def close(self):
         super().close()
         self.db.close()
         self.fs.close()
-        self.index_queue.close()
-        self.status_queue.close()
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
-        # continually
-        stat = self.fs.statvfs()
-        rec = self.db.get_statistics()
-        status_info = {
-                'packages_count':   rec.packages_count,
-                'packages_built':   rec.packages_built,
-                'versions_count':   rec.versions_count,
-                'versions_built':   rec.versions_built,
-                'builds_count':     rec.builds_count,
-                'builds_last_hour': rec.builds_count_last_hour,
-                'builds_success':   rec.builds_count_success,
-                'builds_time':      rec.builds_time,
-                'builds_size':      rec.builds_size,
-                'disk_free':        stat.f_frsize * stat.f_bavail,
-                'disk_size':        stat.f_frsize * stat.f_blocks,
-            }
-        self.index_queue.send_pyobj(['HOME', status_info])
-        self.status_queue.send_pyobj([
-            -1,
-            datetime.utcnow(),
-            'STATUS',
-            status_info
-        ])
+        # every 30 seconds (at most)
+        if datetime.utcnow() - self.timestamp > timedelta(seconds=30):
+            self.timestamp = datetime.utcnow()
+            stat = self.fs.statvfs()
+            rec = self.db.get_statistics()
+            self.status_info1 = self.status_info2 = {
+                    'packages_count':   rec.packages_count,
+                    'packages_built':   rec.packages_built,
+                    'versions_count':   rec.versions_count,
+                    'versions_built':   rec.versions_built,
+                    'builds_count':     rec.builds_count,
+                    'builds_last_hour': rec.builds_count_last_hour,
+                    'builds_success':   rec.builds_count_success,
+                    'builds_time':      rec.builds_time,
+                    'builds_size':      rec.builds_size,
+                    'disk_free':        stat.f_frsize * stat.f_bavail,
+                    'disk_size':        stat.f_frsize * stat.f_blocks,
+                }
+
+    def handle_index(self, q):
+        if self.status_info1 is not None:
+            q.send_pyobj(['HOME', self.status_info1])
+            self.status_info1 = None
+
+    def handle_status(self, q):
+        if self.status_info2 is not None:
+            q.send_pyobj([-1, self.timestamp, 'STATUS', self.status_info2])
+            self.status_info2 = None
