@@ -2,7 +2,7 @@ import re
 import logging
 import xmlrpc.client
 from collections import namedtuple, deque
-from time import sleep
+from time import sleep, time
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -31,6 +31,7 @@ class PyPI():
 
     def __init__(self, pypi_root='https://pypi.python.org/pypi'):
         self.retries = 3
+        self.next_read = 0
         self.last_serial = 0
         self.packages = set()
         # Keep a list of the last 100 (package, version) tuples so we can make
@@ -48,33 +49,41 @@ class PyPI():
             self.packages = set(self.client.list_packages())
             for package in self.packages:
                 yield PackageVersion(package, None)
-        # NOTE: starting at serial 0 doesn't return *all* records as PyPI
-        # (very sensibly) limits the number of entries in a result set (to
-        # 50000 at the time of writing). Also on rare occasions we get some
-        # form of HTTP improper state, so allow retries
-        for retry in range(self.retries, -1, -1):
-            try:
-                events = self.client.changelog_since_serial(self.last_serial)
-                break
-            except http.client.ImproperConnectionState:
-                if retry:
-                    sleep(5)
-                else:
-                    raise
-        for (package, version, timestamp, action, serial) in events:
-            # If we've never seen the package before, report it as a new
-            # one
-            if package not in self.packages:
-                self.packages.add(package)
-                yield PackageVersion(package, None)
-            # If the event is adding a file, report a new version (we're
-            # only interested in versions with associated file releases)
-            if re.search('^add [^ ]+ file', action):
-                rec = PackageVersion(package, version)
-                if rec not in self.cache:
-                    self.cache.append(rec)
-                    yield rec
-            self.last_serial = serial
+        # The next_read flag is used to delay reads to PyPI once we get to the
+        # end of tthe event log entries
+        if time() > self.next_read:
+            # NOTE: starting at serial 0 doesn't return *all* records as PyPI
+            # (very sensibly) limits the number of entries in a result set (to
+            # 50000 at the time of writing). Also on rare occasions we get some
+            # form of HTTP improper state, so allow retries
+            for retry in range(self.retries, -1, -1):
+                try:
+                    events = self.client.changelog_since_serial(self.last_serial)
+                    break
+                except http.client.ImproperConnectionState:
+                    if retry:
+                        sleep(5)
+                    else:
+                        raise
+            if events:
+                for (package, version, timestamp, action, serial) in events:
+                    # If we've never seen the package before, report it as a new
+                    # one
+                    if package not in self.packages:
+                        self.packages.add(package)
+                        yield PackageVersion(package, None)
+                    # If the event is adding a file, report a new version (we're
+                    # only interested in versions with associated file releases)
+                    if re.search('^add [^ ]+ file', action):
+                        rec = PackageVersion(package, version)
+                        if rec not in self.cache:
+                            self.cache.append(rec)
+                            yield rec
+                    self.last_serial = serial
+            else:
+                # If the read is empty we've reached the end of the event log;
+                # make sure we don't bother PyPI for another 10 seconds
+                self.next_read = time() + 10
 
     def close(self):
         self.packages = None
