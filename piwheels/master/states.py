@@ -65,6 +65,10 @@ class FileState:
         return self._filehash
 
     @property
+    def package_tag(self):
+        return self._package_tag
+
+    @property
     def package_version_tag(self):
         return self._package_version_tag
 

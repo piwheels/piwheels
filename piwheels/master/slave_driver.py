@@ -44,6 +44,7 @@ class SlaveDriver(Task):
         self.build_queue.connect(config['build_queue'])
         self.db = DbClient(config)
         self.fs = FsClient(config)
+        self.slaves = {}
 
     def close(self):
         super().close()
@@ -151,7 +152,7 @@ class SlaveDriver(Task):
             self.build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
             if slave.build.status:
-                self.fs.expect(slave.build.files[slave.build.next_file])
+                self.fs.expect(slave.slave_id, slave.build.files[slave.build.next_file])
                 self.logger.info(
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
@@ -164,18 +165,14 @@ class SlaveDriver(Task):
                 'slave %d: protocol error (SENT after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
-        elif not slave.transfer:
-            self.logger.error(
-                'slave %d: internal error; no transfer to verify',
-                slave.slave_id)
-            return
-        elif self.fs.verify(slave.build):
+        elif self.fs.verify(slave.slave_id, slave.build.package):
             self.logger.info(
                 'slave %d: verified transfer of %s',
                 slave.slave_id, slave.reply[1])
             if slave.build.transfers_done:
                 return ['DONE']
             else:
+                self.fs.expect(slave.slave_id, slave.build.files[slave.build.next_file])
                 self.logger.info(
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]

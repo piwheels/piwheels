@@ -41,6 +41,7 @@ class FileJuggler(Task):
         super().__init__(config)
         self.output_path = Path(config['output_path'])
         TransferState.output_path = self.output_path
+        self.incoming = {}
         self.transfers = {}
         file_queue = self.ctx.socket(zmq.ROUTER)
         file_queue.ipv6 = True
@@ -66,15 +67,12 @@ class FileJuggler(Task):
             result = handler(*args)
         except Exception as e:
             self.logger.error('error handling fs request: %s', msg)
-            # REP *must* send a reply even when stuff goes wrong
-            # otherwise the send/recv cycle that REQ/REP depends
-            # upon breaks
             q.send_pyobj(['ERR', str(e)])
         else:
             q.send_pyobj(['OK', result])
 
     def do_EXPECT(self, slave_id, file_state):
-        self.transfers[slave_id] = TransferState(file_state)
+        self.incoming[slave_id] = TransferState(file_state)
         self.logger.info('expecting transfer: %s', file_state.filename)
 
     def do_VERIFY(self, slave_id, package):
@@ -128,7 +126,7 @@ class FileJuggler(Task):
             raise TransferError('Invalid start transfer from slave: %s' % msg)
         try:
             slave_id = int(args[0])
-            transfer = TransferState(self.incoming.pop(slave_id))
+            transfer = self.incoming.pop(slave_id)
         except ValueError:
             raise TransferError('Invalid slave id: %s' % args[0])
         except KeyError:
@@ -177,12 +175,12 @@ class FsClient:
         else:
             raise IOError(result)
 
-    def expect(self, file_state):
-        self._execute(['EXPECT', file_state])
+    def expect(self, slave_id, file_state):
+        self._execute(['EXPECT', slave_id, file_state])
 
-    def verify(self, build_state):
+    def verify(self, slave_id, package):
         try:
-            self._execute(['VERIFY', build_state.slave_id, build_state.package])
+            self._execute(['VERIFY', slave_id, package])
         except IOError:
             return False
         else:

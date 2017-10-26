@@ -20,6 +20,10 @@ from .cloud_gazer import CloudGazer
 logger = logging.getLogger('master')
 
 
+class TaskFailure(RuntimeError):
+    pass
+
+
 class PiWheelsMaster(TerminalApplication):
     def __init__(self):
         super().__init__(__version__, __doc__)
@@ -81,7 +85,18 @@ class PiWheelsMaster(TerminalApplication):
         for task in tasks:
             task.start()
         try:
-            tasks[0].join()
+            while True:
+                for task in tasks:
+                    task.join(1)
+                    if not task.is_alive():
+                        # As soon as any task dies, terminate
+                        raise TaskFailure(task.name)
+        except TaskFailure as e:
+            # This isn't logged as a warning because it's normal: when QUIT is
+            # sent (e.g. by the external monitor) tasks will start to close and
+            # the loop above terminates
+            logger.info('Shutting down on %s task termination', task.name)
+            self.send_quit(ctx, config)
         except SystemExit:
             logger.warning('Shutting down on SIGTERM')
             self.send_quit(ctx, config)
@@ -92,15 +107,18 @@ class PiWheelsMaster(TerminalApplication):
             logger.info('closing tasks')
             for task in reversed(tasks):
                 task.close()
+            ctx.destroy(linger=0)
             ctx.term()
 
     def send_quit(self, ctx, config):
         q = ctx.socket(zmq.PUSH)
-        q.connect(config['ext_control_queue'])
-        q.send_pyobj(['QUIT'])
-        q.close()
+        try:
+            q.connect(config['ext_control_queue'])
+            q.send_pyobj(['QUIT'])
+        finally:
+            q.close(linger=0)
 
-    def sig_term(signo, stack_frame):
+    def sig_term(self, signo, stack_frame):
         raise SystemExit(0)
 
 

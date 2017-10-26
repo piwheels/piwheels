@@ -124,7 +124,7 @@ class DbClient:
             'LOGBUILD', build.slave_id, build.package, build.version,
             build.status, build.duration, build.output, {
                 f.filename: [
-                    f.filename, f.filesize, f.filehash, f.package_version_tag,
+                    f.filesize, f.filehash, f.package_tag, f.package_version_tag,
                     f.py_version_tag, f.abi_tag, f.platform_tag
                 ]
                 for f in build.files.values()
