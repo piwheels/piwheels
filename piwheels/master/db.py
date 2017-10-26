@@ -198,13 +198,11 @@ class Database():
         requiring building for the given ABI
         """
         with self.conn.begin():
-            return [
-                (rec.package, rec.version)
-                for rec in self.conn.execute(
-                    select([self.builds_pending]).
-                    where(self.builds_pending.c.abi_tag == abi_tag)
-                )
-            ]
+            for rec in self.conn.execute(
+                select([self.builds_pending]).
+                where(self.builds_pending.c.abi_tag == abi_tag)
+            ):
+                yield rec.package, rec.version
 
     def get_statistics(self):
         """

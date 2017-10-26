@@ -19,20 +19,20 @@ class TheArchitect(Task):
         build_queue = self.ctx.socket(zmq.REP)
         build_queue.hwm = 1
         build_queue.bind(config['build_queue'])
-        self.abi_queues = {}
+        self.abi_queries = {}
         self.register(build_queue, self.handle_build)
-
-    def close(self):
-        super().close()
-        self.db.close()
 
     def handle_build(self, q):
         abi = q.recv_pyobj()
         try:
-            q.send_pyobj(self.abi_queues[abi].pop())
-        except (KeyError, IndexError):
-            # If the queue is exhausted or doesn't exist yet, send back None
-            # immediately (to indicate there's nothing to do *this time round*)
-            # then (re-)build the queue for the specified ABI
+            query = self.abi_queries[abi]
+        except KeyError:
+            query = self.db.get_build_queue(abi)
+            self.abi_queries[abi] = query
+        try:
+            q.send_pyobj(next(query))
+        except StopIteration:
+            # Return None to indicate there's nothing *currently* in the queue
+            # for this abi, but set up a new query for next time
             q.send_pyobj(None)
-            self.abi_queues[abi] = self.db.get_build_queue(abi)
+            self.abi_queries[abi] = self.db.get_build_queue(abi)
