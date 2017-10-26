@@ -7,6 +7,7 @@ from zmq.utils import jsonapi
 from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
 from .the_oracle import DbClient
+from .file_juggler import FsClient
 
 
 logger = logging.getLogger('master.slave_driver')
@@ -41,16 +42,14 @@ class SlaveDriver(Task):
         self.build_queue = self.ctx.socket(zmq.REQ)
         self.build_queue.hwm = 1
         self.build_queue.connect(config['build_queue'])
-        self.fs_queue = self.ctx.socket(zmq.REQ)
-        self.fs_queue.hwm = 1
-        self.fs_queue.connect(config['fs_queue'])
         self.db = DbClient(config)
+        self.fs = FsClient(config)
 
     def close(self):
         super().close()
         self.build_queue.close()
         self.status_queue.close()
-        self.fs_queue.close()
+        self.fs.close()
         self.db.close()
         SlaveState.status_queue = None
 
@@ -125,9 +124,10 @@ class SlaveDriver(Task):
             task = self.build_queue.recv_pyobj()
             if task is not None:
                 if task not in self.active_builds():
+                    package, version = task
                     self.logger.info(
-                        'slave %d: build %s %s', slave.slave_id, task[0], task[1])
-                    return ['BUILD'] + task
+                        'slave %d: build %s %s', slave.slave_id, package, version)
+                    return ['BUILD', package, version]
             self.logger.info('slave %d: sleeping because no builds')
             return ['SLEEP']
 
@@ -169,7 +169,7 @@ class SlaveDriver(Task):
                 'slave %d: internal error; no transfer to verify',
                 slave.slave_id)
             return
-        elif slave.transfer.verify(slave):
+        elif self.fs.verify(slave.build):
             self.logger.info(
                 'slave %d: verified transfer of %s',
                 slave.slave_id, slave.reply[1])

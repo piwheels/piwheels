@@ -30,7 +30,6 @@ class CloudGazer(PauseableTask):
                     self.packages.add(package)
             else:
                 self.db.add_new_package_version(package, version)
-                self.versions.add((package, version))
             self.poll(0)
         self.db.set_pypi_serial(self.pypi.last_serial)
 

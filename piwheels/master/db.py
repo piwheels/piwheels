@@ -20,6 +20,7 @@ class Database():
         except KeyError:
             engine = create_engine(dsn)
             Database.engines[dsn] = engine
+        self.logger = logging.getLogger('master.db')
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         with warnings.catch_warnings():
@@ -69,7 +70,7 @@ class Database():
             except IntegrityError:
                 pass
             else:
-                logging.info('Added package %s', package)
+                self.logger.info('Added package %s', package)
 
     def add_new_package_version(self, package, version):
         """
@@ -85,7 +86,7 @@ class Database():
             except IntegrityError:
                 pass
             else:
-                logging.info('Added package %s version %s', package, version)
+                self.logger.info('Added package %s version %s', package, version)
 
     def log_build(self, build):
         """

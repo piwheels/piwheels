@@ -5,7 +5,7 @@ import zmq
 import zmq.error
 
 from .tasks import Task
-from .states import FileState, TransferState
+from .states import TransferState
 
 
 class TransferError(Exception):
@@ -73,8 +73,7 @@ class FileJuggler(Task):
         else:
             q.send_pyobj(['OK', result])
 
-    def do_EXPECT(self, slave_id, *file_state):
-        file_state = FileState(*file_state)
+    def do_EXPECT(self, slave_id, file_state):
         self.transfers[slave_id] = TransferState(file_state)
         self.logger.info('expecting transfer: %s', file_state.filename)
 
