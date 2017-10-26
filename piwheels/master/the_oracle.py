@@ -80,11 +80,7 @@ class TheOracle(Task):
         self.db.set_pypi_serial(serial)
 
     def do_GETSTATS(self):
-        rec = self.db.get_statistics()
-        return [
-            (k, v if not isinstance(v, timedelta) else v.total_seconds())
-            for k, v in zip(rec.keys(), rec.values())
-        ]
+        return self.db.get_statistics().items()
 
 
 class DbClient:

@@ -1,5 +1,6 @@
 import re
 import logging
+import http.client
 import xmlrpc.client
 from collections import namedtuple, deque
 from time import sleep, time
@@ -39,6 +40,20 @@ class PyPI():
         self.cache = deque(maxlen=100)
         self.client = xmlrpc.client.ServerProxy(pypi_root)
 
+    def _get_events(self):
+        # NOTE: starting at serial 0 doesn't return *all* records as PyPI (very
+        # sensibly) limits the number of entries in a result set (to 50000 at
+        # the time of writing). Also on rare occasions we get some form of HTTP
+        # improper state, so allow retries
+        for retry in range(self.retries, -1, -1):
+            try:
+                return self.client.changelog_since_serial(self.last_serial)
+            except http.client.ImproperConnectionState:
+                if retry:
+                    sleep(5)
+                else:
+                    raise
+
     def __iter__(self):
         # First seed a list of all packages; there doesn't seem to be a specific
         # action for registering a new package on PyPI (or rather, there is,
@@ -52,19 +67,7 @@ class PyPI():
         # The next_read flag is used to delay reads to PyPI once we get to the
         # end of tthe event log entries
         if time() > self.next_read:
-            # NOTE: starting at serial 0 doesn't return *all* records as PyPI
-            # (very sensibly) limits the number of entries in a result set (to
-            # 50000 at the time of writing). Also on rare occasions we get some
-            # form of HTTP improper state, so allow retries
-            for retry in range(self.retries, -1, -1):
-                try:
-                    events = self.client.changelog_since_serial(self.last_serial)
-                    break
-                except http.client.ImproperConnectionState:
-                    if retry:
-                        sleep(5)
-                    else:
-                        raise
+            events = self._get_events()
             if events:
                 for (package, version, timestamp, action, serial) in events:
                     # If we've never seen the package before, report it as a new

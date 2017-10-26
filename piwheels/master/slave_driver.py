@@ -1,8 +1,8 @@
 import logging
+import pickle
 from datetime import datetime
 
 import zmq
-from zmq.utils import jsonapi
 
 from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
@@ -68,7 +68,7 @@ class SlaveDriver(Task):
         except ValueError:
             self.logger.error('invalid message structure from slave')
         else:
-            msg, *args = jsonapi.loads(msg)
+            msg, *args = pickle.loads(msg)
             logger.debug('RX: %s %r', msg, args)
 
             try:
@@ -77,7 +77,7 @@ class SlaveDriver(Task):
                 if msg != 'HELLO':
                     self.logger.error('invalid first message from slave: %s', msg)
                     return
-                slave = SlaveState(*args)
+                slave = SlaveState(address, *args)
             slave.request = [msg] + args
 
             handler = getattr(self, 'do_%s' % msg, None)
@@ -92,7 +92,7 @@ class SlaveDriver(Task):
                     q.send_multipart([
                         address,
                         empty,
-                        jsonapi.dumps(reply)
+                        pickle.dumps(reply)
                     ])
                     self.logger.debug('TX: %r', reply)
 

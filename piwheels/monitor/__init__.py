@@ -153,7 +153,7 @@ class PiWheelsMonitor(TerminalApplication):
             '{} pkgs/hour'.format(status_info['builds_last_hour']))
         self.build_size_label.set_text(
             '{} Mbytes'.format(status_info['builds_size'] // 1048576))
-        time = timedelta(seconds=status_info['builds_time'])
+        time = status_info['builds_time']
         time -= timedelta(microseconds=time.microseconds)
         self.build_time_label.set_text('{}'.format(time))
 
