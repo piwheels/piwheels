@@ -157,6 +157,7 @@ class SlaveDriver(Task):
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
                 return ['SEND', slave.build.next_file]
             else:
+                self.logger.info('slave %d: build failed', slave.slave_id)
                 return ['DONE']
 
     def do_SENT(self, slave, *args):
@@ -166,6 +167,7 @@ class SlaveDriver(Task):
                 slave.slave_id, slave.reply[0])
             return ['BYE']
         elif self.fs.verify(slave.slave_id, slave.build.package):
+            slave.build.files[slave.build.next_file].verified()
             self.logger.info(
                 'slave %d: verified transfer of %s',
                 slave.slave_id, slave.reply[1])

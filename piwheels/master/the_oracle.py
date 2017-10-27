@@ -51,10 +51,10 @@ class TheOracle(Task):
         return self.db.get_all_package_versions()
 
     def do_NEWPKG(self, package):
-        self.db.add_new_package(package)
+        return self.db.add_new_package(package)
 
     def do_NEWVER(self, package, version):
-        self.db.add_new_package_version(package, version)
+        return self.db.add_new_package_version(package, version)
 
     def do_LOGBUILD(self, slave_id, package, version, status, duration, output,
                     files):
@@ -114,10 +114,10 @@ class DbClient:
         return [(p, v) for p, v in self._execute(['ALLVERS'])]
 
     def add_new_package(self, package):
-        self._execute(['NEWPKG', package])
+        return self._execute(['NEWPKG', package])
 
     def add_new_package_version(self, package, version):
-        self._execute(['NEWVER', package, version])
+        return self._execute(['NEWVER', package, version])
 
     def log_build(self, build):
         build_id = self._execute([

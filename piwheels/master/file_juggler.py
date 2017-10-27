@@ -41,8 +41,6 @@ class FileJuggler(Task):
         super().__init__(config)
         self.output_path = Path(config['output_path'])
         TransferState.output_path = self.output_path
-        self.incoming = {}
-        self.transfers = {}
         file_queue = self.ctx.socket(zmq.ROUTER)
         file_queue.ipv6 = True
         file_queue.hwm = TransferState.pipeline_size * 50
@@ -55,6 +53,9 @@ class FileJuggler(Task):
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config['index_queue'])
+        self.pending = {}   # keyed by slave_id
+        self.active = {}    # keyed by slave address
+        self.complete = {}  # keyed by slave_id
 
     def close(self):
         super().close()
@@ -72,11 +73,11 @@ class FileJuggler(Task):
             q.send_pyobj(['OK', result])
 
     def do_EXPECT(self, slave_id, file_state):
-        self.incoming[slave_id] = TransferState(file_state)
+        self.pending[slave_id] = TransferState(slave_id, file_state)
         self.logger.info('expecting transfer: %s', file_state.filename)
 
     def do_VERIFY(self, slave_id, package):
-        transfer = self.transfers[slave_id]
+        transfer = self.complete.pop(slave_id)
         try:
             transfer.verify()
         except IOError as e:
@@ -85,6 +86,7 @@ class FileJuggler(Task):
             raise
         else:
             transfer.commit(package)
+            self.index_queue.send_pyobj(['PKG', package])
             self.logger.info('verified: %s', transfer.file_state.filename)
 
     def do_STATVFS(self):
@@ -94,17 +96,17 @@ class FileJuggler(Task):
         address, msg, *args = q.recv_multipart()
         try:
             try:
-                transfer = self.transfers[address]
+                transfer = self.active[address]
             except KeyError:
                 transfer = self.new_transfer(msg, *args)
-                self.transfers[address] = transfer
+                self.active[address] = transfer
             else:
                 self.current_transfer(transfer, msg, *args)
-        except TransferDone:
-            self.logger.info('transfer complete: %s', transfer.file_state.filename)
+        except TransferDone as e:
+            self.logger.info(str(e))
+            del self.active[address]
+            self.complete[transfer.slave_id] = transfer
             q.send_multipart([address, b'DONE'])
-            self.index_queue.send_pyobj(['PKG', transfer.file_state.package_tag])
-            del self.transfers[address]
         except TransferIgnoreChunk as e:
             self.logger.debug(str(e))
         except TransferError as e:
@@ -121,24 +123,23 @@ class FileJuggler(Task):
 
     def new_transfer(self, msg, *args):
         if msg == b'CHUNK':
-            raise TransferIgnoreChunk('Ignoring redundant CHUNK from prior transfer')
+            raise TransferIgnoreChunk('ignoring redundant CHUNK from prior transfer')
         elif msg != b'HELLO':
-            raise TransferError('Invalid start transfer from slave: %s' % msg)
+            raise TransferError('invalid start transfer from slave: %s' % msg)
         try:
             slave_id = int(args[0])
-            transfer = self.incoming.pop(slave_id)
+            transfer = self.pending.pop(slave_id)
         except ValueError:
-            raise TransferError('Invalid slave id: %s' % args[0])
+            raise TransferError('invalid slave id: %s' % args[0])
         except KeyError:
-            raise TransferError('No active transfer for slave: %d' % slave_id)
+            raise TransferError('no pending transfer for slave: %d' % slave_id)
         return transfer
 
     def current_transfer(self, transfer, msg, *args):
         if msg == b'CHUNK':
             transfer.chunk(int(args[0].decode('ascii')), args[1])
             if transfer.done:
-                raise TransferDone('File transfer complete')
-
+                raise TransferDone('transfer complete: %s' % transfer.file_state.filename)
         elif msg == b'HELLO':
             # This only happens if we've dropped a *lot* of packets,
             # and the slave's timed out waiting for another FETCH.
@@ -147,9 +148,8 @@ class FileJuggler(Task):
             # XXX Should check slave ID reported in HELLO matches
             # the slave retrieved from the cache
             transfer.reset_credit()
-
         else:
-            raise TransferError('Invalid chunk header from slave: %s' % msg)
+            raise TransferError('invalid chunk header from slave: %s' % msg)
             # XXX Delete the transfer object?
             # XXX Remove transfer from slave?
 

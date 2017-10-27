@@ -337,7 +337,8 @@ class TransferState:
     pipeline_size = 10
     output_path = Path('.')
 
-    def __init__(self, file_state):
+    def __init__(self, slave_id, file_state):
+        self._slave_id = slave_id
         self._file_state = file_state
         self._file = tempfile.NamedTemporaryFile(
             dir=str(self.output_path / 'simple'), delete=False)
@@ -357,6 +358,10 @@ class TransferState:
     def __repr__(self):
         return "<TransferState: offset={offset} map={_map}>".format(
             offset=self._offset, _map=self._map)
+
+    @property
+    def slave_id(self):
+        return self._slave_id
 
     @property
     def file_state(self):

@@ -76,8 +76,9 @@ class IndexScribe(PauseableTask):
         msg, *args = q.recv_pyobj()
         if msg == 'PKG':
             package = args[0]
-            if package not in self.package_cache:
-                self.package_cache.add(canonicalize_name(package))
+            package_canon = canonicalize_name(package)
+            if package_canon not in self.package_cache:
+                self.package_cache.add(package_canon)
                 self.write_root_index()
             self.write_package_index(package, self.db.get_package_files(package))
         elif msg == 'HOME':
@@ -132,8 +133,9 @@ class IndexScribe(PauseableTask):
 
     def write_package_index(self, package, files):
         self.logger.info('writing index for %s', package)
+        package_canon = canonicalize_name(package)
         with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(self.output_path / 'simple' / canonicalize_name(package)),
+                mode='w', dir=str(self.output_path / 'simple' / package_canon),
                 delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
@@ -158,4 +160,7 @@ class IndexScribe(PauseableTask):
                 raise
             else:
                 os.fchmod(index.file.fileno(), 0o644)
-                os.replace(index.name, str(self.output_path / 'simple' / package / 'index.html'))
+                os.replace(
+                    index.name,
+                    str(self.output_path / 'simple' / package_canon / 'index.html')
+                )
