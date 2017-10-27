@@ -118,7 +118,8 @@ class SlaveDriver(Task):
         elif slave.terminated:
             return ['BYE']
         elif self.paused:
-            logger.info('slave %d: sleeping because master is paused')
+            logger.info(
+                'slave %d: sleeping because master is paused', slave.slave_id)
             return ['SLEEP']
         else:
             self.build_queue.send_pyobj(slave.native_abi)
@@ -129,7 +130,8 @@ class SlaveDriver(Task):
                     self.logger.info(
                         'slave %d: build %s %s', slave.slave_id, package, version)
                     return ['BUILD', package, version]
-            self.logger.info('slave %d: sleeping because no builds')
+            self.logger.info(
+                'slave %d: sleeping because no builds', slave.slave_id)
             return ['SLEEP']
 
     def do_BUILT(self, slave):

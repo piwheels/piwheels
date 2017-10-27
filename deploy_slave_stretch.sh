@@ -2,6 +2,7 @@
 
 set -eu
 
+rm -f /etc/pip.conf
 apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng-dev \
