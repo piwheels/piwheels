@@ -38,8 +38,9 @@ if [ -d piwheels ]; then
 else
   git clone https://github.com/bennuttall/piwheels
   cd piwheels
+  git checkout separate-tasks
 fi
-pip install .
+pip3 install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
     dd if=/dev/zero of=/swapfile bs=1M count=1024
     chmod 0600 /swapfile
