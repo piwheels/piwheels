@@ -1,4 +1,3 @@
-import re
 import hashlib
 import logging
 import tempfile
@@ -425,11 +424,15 @@ class TransferState:
     def commit(self, package):
         p = Path(self._file.name)
         p.chmod(0o644)
+        pkg_dir = p.with_name(package)
         try:
-            p.with_name(canonicalize_name(package)).mkdir()
+            pkg_dir.mkdir()
         except FileExistsError:
-            pass
-        final_name = p.with_name(canonicalize_name(package)) / self._file_state.filename
+            # See notes in IndexScribe.write_package_index
+            if pkg_dir.is_symlink():
+                pkg_dir.unlink()
+                pkg_dir.mkdir()
+        final_name = pkg_dir / self._file_state.filename
         p.rename(final_name)
         if self._file_state.platform_tag == 'linux_armv7l':
             # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name; the
@@ -444,10 +447,3 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
-
-
-# From pip/_vendor/packaging/utils.py
-_canonicalize_regex = re.compile(r"[-_.]+")
-def canonicalize_name(name):
-    # This is taken from PEP 503.
-    return _canonicalize_regex.sub("-", name).lower()

@@ -1,3 +1,4 @@
+import re
 import os
 import tempfile
 from pathlib import Path
@@ -8,7 +9,6 @@ from pkg_resources import resource_string, resource_stream
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
-from .states import canonicalize_name
 
 
 class IndexScribe(PauseableTask):
@@ -69,6 +69,7 @@ class IndexScribe(PauseableTask):
             str(d.relative_to(self.output_path / 'simple'))
             for d in (self.output_path / 'simple').iterdir()
             if d.is_dir()
+            and not d.is_symlink()
         }
         super().run()
 
@@ -76,9 +77,8 @@ class IndexScribe(PauseableTask):
         msg, *args = q.recv_pyobj()
         if msg == 'PKG':
             package = args[0]
-            package_canon = canonicalize_name(package)
-            if package_canon not in self.package_cache:
-                self.package_cache.add(package_canon)
+            if package not in self.package_cache:
+                self.package_cache.add(package)
                 self.write_root_index()
             self.write_package_index(package, self.db.get_package_files(package))
         elif msg == 'HOME':
@@ -133,10 +133,8 @@ class IndexScribe(PauseableTask):
 
     def write_package_index(self, package, files):
         self.logger.info('writing index for %s', package)
-        package_canon = canonicalize_name(package)
-        with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(self.output_path / 'simple' / package_canon),
-                delete=False) as index:
+        pkg_dir = self.output_path / 'simple' / package
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir), delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
                 index.file.write(
@@ -160,7 +158,34 @@ class IndexScribe(PauseableTask):
                 raise
             else:
                 os.fchmod(index.file.fileno(), 0o644)
-                os.replace(
-                    index.name,
-                    str(self.output_path / 'simple' / package_canon / 'index.html')
-                )
+                os.replace(index.name, str(pkg_dir / 'index.html'))
+                try:
+                    # Workaround for #20: after constructing the index for a
+                    # package attempt to symlink the "canonicalized" package
+                    # name to the actual package directory. The reasons for
+                    # doing things this way are rather complex...
+                    #
+                    # The older package name must exist for the benefit of older
+                    # versions of pip. If the symlink already exists *or is a
+                    # directory* we ignore it. Yes, it's possible to have two
+                    # packages which both have the same canonicalized name, and
+                    # for each to have different contents. I don't quite know
+                    # how PyPI handle this but their XML and JSON APIs already
+                    # include such situations (in a small number of cases). This
+                    # setup is designed to create canonicalized links where
+                    # possible but not to clobber "real" packages if they exist.
+                    #
+                    # What about new packages that want to take the place of a
+                    # canonicalized symlink? TransferState.commit handles that
+                    # by removing the symlink and making a directory in its
+                    # place.
+                    pkg_dir.with_name(canonicalize_name(pkg_dir.name)).symlink_to(pkg_dir.name)
+                except FileExistsError:
+                    pass
+
+
+# From pip/_vendor/packaging/utils.py
+_canonicalize_regex = re.compile(r"[-_.]+")
+def canonicalize_name(name):
+    # This is taken from PEP 503.
+    return _canonicalize_regex.sub("-", name).lower()
