@@ -1,4 +1,3 @@
-import logging
 import warnings
 from datetime import timedelta
 
@@ -20,7 +19,6 @@ class Database():
         except KeyError:
             engine = create_engine(dsn)
             Database.engines[dsn] = engine
-        self.logger = logging.getLogger('master.db')
         self.conn = engine.connect()
         self.meta = MetaData(bind=self.conn)
         with warnings.catch_warnings():
@@ -68,9 +66,9 @@ class Database():
                     package=package
                 )
             except IntegrityError:
-                pass
+                return False
             else:
-                self.logger.info('Added package %s', package)
+                return True
 
     def add_new_package_version(self, package, version):
         """
@@ -84,9 +82,9 @@ class Database():
                     package=package, version=version
                 )
             except IntegrityError:
-                pass
+                return False
             else:
-                self.logger.info('Added package %s version %s', package, version)
+                return True
 
     def log_build(self, build):
         """

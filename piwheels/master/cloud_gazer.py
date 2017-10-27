@@ -26,10 +26,12 @@ class CloudGazer(PauseableTask):
         for package, version in self.pypi:
             if version is None:
                 if package not in self.packages:
-                    self.db.add_new_package(package)
-                    self.packages.add(package)
+                    if self.db.add_new_package(package):
+                        self.packages.add(package)
+                        self.logger.info('added package %s', package)
             else:
-                self.db.add_new_package_version(package, version)
+                if self.db.add_new_package_version(package, version):
+                    self.logger.info('added package %s version %s', package, version)
             self.poll(0)
         self.db.set_pypi_serial(self.pypi.last_serial)
 
