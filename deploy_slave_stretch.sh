@@ -38,7 +38,6 @@ if [ -d piwheels ]; then
 else
   git clone https://github.com/bennuttall/piwheels
   cd piwheels
-  git checkout separate-tasks
 fi
 pip3 install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
