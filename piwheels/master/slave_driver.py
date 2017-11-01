@@ -153,7 +153,7 @@ class SlaveDriver(Task):
                     slave.build.version)
             self.build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
-            if slave.build.status:
+            if slave.build.status and not slave.build.transfers_done:
                 self.fs.expect(slave.slave_id, slave.build.files[slave.build.next_file])
                 self.logger.info(
                     'slave %d: send %s', slave.slave_id, slave.build.next_file)
