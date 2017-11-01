@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id) VALUES (1);
+INSERT INTO configuration(id) VALUES (1, '0.7');
 GRANT UPDATE ON configuration TO piwheels;
 
 -- packages
@@ -198,17 +198,36 @@ CREATE VIEW builds_pending AS
 
     UNION ALL
 
-    SELECT DISTINCT
-        b.package,
-        b.version,
-        a.abi_tag
-    FROM
-        builds AS b
-        JOIN files AS f
-            ON b.build_id = f.build_id
-        CROSS JOIN build_abis AS a
-    WHERE f.abi_tag <> 'none'
-    AND   f.abi_tag <> a.abi_tag;
+    (
+        SELECT
+            p.package,
+            p.version,
+            b.abi_tag
+        FROM
+            (
+                SELECT DISTINCT
+                    b.package,
+                    b.version
+                FROM
+                    builds AS b
+                    JOIN files AS f
+                        ON b.build_id = f.build_id
+                WHERE f.abi_tag <> 'none'
+            ) AS p
+            CROSS JOIN build_abis AS b
+
+        EXCEPT
+
+        SELECT
+            b.package,
+            b.version,
+            f.abi_tag
+        FROM
+            builds AS b
+            JOIN files AS f
+                ON b.build_id = f.build_id
+        WHERE f.abi_tag <> 'none'
+    );
 
 GRANT SELECT ON builds_pending TO piwheels;
 
