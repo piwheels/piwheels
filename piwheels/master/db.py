@@ -1,10 +1,29 @@
 import warnings
 from datetime import timedelta
+from itertools import chain
 
 from sqlalchemy import MetaData, Table, select, create_engine
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__
+
+
+CONTROL_CHARS = {
+    c: '?'
+    for c in chain(
+        range(0x00, 0x09),
+        range(0x0e, 0x20),
+        [0x0b, 0x7f]
+    )
+}
+
+
+def sanitize(s):
+    """
+    A small routine for sanitizing the sometimes crazy stuff that winds up in
+    build log output...
+    """
+    return s.translate(CONTROL_CHARS)
 
 
 class Database():
@@ -98,7 +117,7 @@ class Database():
                 version=build.version,
                 built_by=build.slave_id,
                 duration=timedelta(seconds=build.duration),
-                output=build.output,
+                output=sanitize(build.output),
                 status=build.status
             ))
             if build.status:
