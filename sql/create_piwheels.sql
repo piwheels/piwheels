@@ -3,15 +3,51 @@ DROP TABLE IF EXISTS
 DROP VIEW IF EXISTS
     statistics, builds_pending;
 
+-- configuration
+-------------------------------------------------------------------------------
+-- This table contains a single row persisting configuration information. The
+-- id column is redundant other than providing a key. The version column
+-- contains a string indicating which version of the software the structure of
+-- the database is designed for. Finally, pypi_serial contains the last serial
+-- number the master retrieved from PyPI.
+-------------------------------------------------------------------------------
+
+CREATE TABLE configuration (
+    id INTEGER DEFAULT 1 NOT NULL,
+    version VARCHAR(16) DEFAULT '0.6' NOT NULL,
+    pypi_serial BIGINT DEFAULT 0 NOT NULL,
+
+    CONSTRAINT config_pk PRIMARY KEY (id)
+);
+
+INSERT INTO configuration(id) VALUES (1, '0.7');
+GRANT UPDATE ON configuration TO piwheels;
+
+-- packages
+-------------------------------------------------------------------------------
+-- The "packages" table defines all available packages on PyPI, derived from
+-- the list_packages() API. The "skip" column defaults to "false" but can be
+-- set to "true" to prevent all versions (and any future versions) of a package
+-- from being built.
+-------------------------------------------------------------------------------
+
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,
     skip    BOOLEAN DEFAULT false NOT NULL,
 
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
-GRANT SELECT,INSERT ON packages TO piwheels;
 
-CREATE INDEX packages_skip ON packages(skip);
+GRANT SELECT,INSERT ON packages TO piwheels;
+CREATE INDEX packages_skip ON packages(package) WHERE NOT skip;
+
+-- versions
+-------------------------------------------------------------------------------
+-- The "versions" table defines all versions of packages *with files* on PyPI;
+-- note that versions without released files (a common occurrence) are
+-- excluded. Like the "packages" table, the "skip" column can be set to "true"
+-- to prevent particular versions from being built.
+-------------------------------------------------------------------------------
 
 CREATE TABLE versions (
     package VARCHAR(200) NOT NULL,
@@ -22,9 +58,47 @@ CREATE TABLE versions (
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
         REFERENCES packages ON DELETE RESTRICT
 );
-GRANT SELECT,INSERT ON versions TO piwheels;
 
-CREATE INDEX versions_skip ON versions(skip);
+GRANT SELECT,INSERT,DELETE ON versions TO piwheels;
+CREATE INDEX versions_package ON versions(package);
+CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
+
+-- build_abis
+-------------------------------------------------------------------------------
+-- The "build_abis" table defines the set of CPython ABIs that the master
+-- should attempt to build. This table must be populated with rows for anything
+-- to be built. In addition, there must be at least one slave for each defined
+-- ABI. Typical values are "cp34m", "cp35m", etc. Special ABIs like "none" must
+-- NOT be included in the table.
+-------------------------------------------------------------------------------
+
+CREATE TABLE build_abis (
+    abi_tag         VARCHAR(100) NOT NULL,
+
+    CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
+    CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
+);
+
+GRANT SELECT ON build_abis TO piwheels;
+
+-- builds
+-------------------------------------------------------------------------------
+-- The "builds" table tracks all builds attempted by the system, successful or
+-- otherwise. As builds of a given version can be attempted multiple times, the
+-- table is keyed by a straight-forward auto-incrementing integer. The package
+-- and version columns reference the "versions" table.
+--
+-- The "built_by" column is an integer indicating which build slave attempted
+-- the build; note that slave IDs can be re-assigned by a master restart, and
+-- slaves that are restarted are assigned new numbers so this is not a reliable
+-- method of discovering exactly which slave built something. It is more useful
+-- as a means of determining the distribution of builds over time.
+--
+-- The "built_at" and "duration" columns simply track when the build started
+-- and how long it took, "status" specifies whether or not the build succeeded
+-- (true for success, false otherwise), and "output" contains the complete
+-- build log.
+-------------------------------------------------------------------------------
 
 CREATE TABLE builds (
     build_id        SERIAL NOT NULL,
@@ -42,17 +116,32 @@ CREATE TABLE builds (
         REFERENCES versions ON DELETE CASCADE,
     CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
 );
-GRANT SELECT,INSERT ON builds TO piwheels;
 
+GRANT SELECT,INSERT ON builds TO piwheels;
 CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
+CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
+
+-- files
+-------------------------------------------------------------------------------
+-- The "files" table tracks each file generated by a build. The "filename"
+-- column is the primary key, and "build_id" is a foreign key referencing the
+-- "builds" table above. The "filesize" and "filehash" columns contain the size
+-- in bytes and SHA256 hash of the contents respectively.
+--
+-- The various "*_tag" columns are derived from the "filename" column;
+-- effectively these are redundant but are split out as the information is
+-- required for things like the build-queue, and indexing of (some of) them is
+-- needed for performance.
+-------------------------------------------------------------------------------
 
 CREATE TABLE files (
     filename            VARCHAR(255) NOT NULL,
     build_id            INTEGER NOT NULL,
     filesize            INTEGER NOT NULL,
     filehash            CHAR(64) NOT NULL,
-    package_version_tag VARCHAR(100) NOT NULL,
+    package_tag         VARCHAR(200) NOT NULL,
+    package_version_tag VARCHAR(200) NOT NULL,
     py_version_tag      VARCHAR(100) NOT NULL,
     abi_tag             VARCHAR(100) NOT NULL,
     platform_tag        VARCHAR(100) NOT NULL,
@@ -61,74 +150,155 @@ CREATE TABLE files (
     CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
-GRANT SELECT,INSERT,UPDATE ON files TO piwheels;
 
+GRANT SELECT,INSERT,UPDATE ON files TO piwheels;
 CREATE INDEX files_builds ON files(build_id);
-CREATE INDEX files_size ON files(filesize);
+CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
+CREATE INDEX files_abi ON files(build_id, abi_tag) WHERE abi_tag <> 'none';
+
+-- builds_pending
+-------------------------------------------------------------------------------
+-- The "builds_pending" view is the basis of the build queue in the master. The
+-- "packages", "versions" and "build_abis" tables form the basis of what needs
+-- to be built. The "builds" and "files" tables define what's been attempted,
+-- what's succeeded, and for which ABIs. This view combines all this
+-- information and returns "package", "version", "abi" tuples defining what
+-- requires building next.
+--
+-- There are some things to note about the behaviour of the queue. When no
+-- builds of a package have been attempted, only the "lowest" ABI is attempted.
+-- This is because most packages wind up with the "none" ABI which is
+-- compatible with everything. The "lowest" is attempted just in case
+-- dependencies in later Python versions are incompatible with earlier
+-- versions. Once a package has a file with the "none" ABI, no further builds
+-- are attempted (naturally). Only if the initial build generated something
+-- with a specific ABI (something other than "none") are builds for the other
+-- ABIs listed in "build_abis" attempted.
+-------------------------------------------------------------------------------
 
 CREATE VIEW builds_pending AS
-SELECT
-    v.package,
-    v.version
-FROM
-    packages p
-    JOIN versions v ON v.package = p.package
-    LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
-WHERE b.package IS NULL
-    AND NOT v.skip
-    AND NOT p.skip;
+    SELECT
+        v.package,
+        v.version,
+        a.abi_tag
+    FROM
+        packages AS p
+        JOIN versions AS v
+            ON v.package = p.package
+        LEFT JOIN builds AS b
+            ON  v.package = b.package
+            AND v.version = b.version
+        CROSS JOIN (
+            SELECT MIN(abi_tag) AS abi_tag
+            FROM build_abis
+        ) AS a
+    WHERE b.version IS NULL
+    AND   NOT v.skip
+    AND   NOT p.skip
+
+    UNION ALL
+
+    (
+        SELECT
+            p.package,
+            p.version,
+            b.abi_tag
+        FROM
+            (
+                SELECT DISTINCT
+                    b.package,
+                    b.version
+                FROM
+                    builds AS b
+                    JOIN files AS f
+                        ON b.build_id = f.build_id
+                WHERE f.abi_tag <> 'none'
+            ) AS p
+            CROSS JOIN build_abis AS b
+
+        EXCEPT
+
+        SELECT
+            b.package,
+            b.version,
+            f.abi_tag
+        FROM
+            builds AS b
+            JOIN files AS f
+                ON b.build_id = f.build_id
+        WHERE f.abi_tag <> 'none'
+    );
 
 GRANT SELECT ON builds_pending TO piwheels;
 
+-- statistics
+-------------------------------------------------------------------------------
+-- The "statistics" view generates various statistics from the tables in the
+-- system. It is used by the big_brother task to report the status of the
+-- system to the monitor.
+--
+-- The view is broken up into numerous CTEs for performance purposes. Normally
+-- CTEs aren't much good for performance in PostgreSQL but as each one only
+-- returns a single row here they work well.
+-------------------------------------------------------------------------------
+
 CREATE VIEW statistics AS
-WITH package_stats AS (
-    SELECT COUNT(*) AS packages_count
-    FROM packages
-    WHERE NOT skip
-),
-version_stats AS (
-    SELECT COUNT(*) AS versions_count
-    FROM packages p JOIN versions v ON p.package = v.package
-    WHERE NOT p.skip AND NOT v.skip
-),
-build_stats AS (
-    SELECT
-        COUNT(DISTINCT b.package) AS packages_built,
-        COUNT(DISTINCT (b.package, b.version)) AS versions_built,
-        COUNT(*) AS builds_count,
-        SUM(CASE b.status WHEN true THEN 1 ELSE 0 END) AS builds_count_success,
-        SUM(CASE WHEN b.built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour' THEN 1 ELSE 0 END) AS builds_count_last_hour,
-        COALESCE(SUM(b.duration), INTERVAL '0') AS builds_time
-    FROM
-        packages p
-        JOIN versions v ON v.package = p.package
-        LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
-),
-file_stats AS (
-    SELECT
-        COALESCE(SUM(filesize), 0) AS builds_size
-    FROM
-        files
-    WHERE
+    WITH package_stats AS (
+        SELECT COUNT(*) AS packages_count
+        FROM packages
+        WHERE NOT skip
+    ),
+    version_stats AS (
+        SELECT COUNT(*) AS versions_count
+        FROM packages p JOIN versions v ON p.package = v.package
+        WHERE NOT p.skip AND NOT v.skip
+    ),
+    build_pkgs AS (
+        SELECT COUNT(*) AS packages_built
+        FROM (SELECT DISTINCT package FROM builds) AS t
+    ),
+    build_vers AS (
+        SELECT COUNT(*) AS versions_built
+        FROM (SELECT DISTINCT package, version FROM builds) AS t
+    ),
+    build_stats AS (
+        SELECT
+            COUNT(*) AS builds_count,
+            COUNT(*) FILTER (WHERE status) AS builds_count_success,
+            COALESCE(SUM(duration), INTERVAL '0') AS builds_time
+        FROM
+            builds
+    ),
+    build_latest AS (
+        SELECT COUNT(*) AS builds_count_last_hour
+        FROM builds
+        WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+    ),
+    file_stats AS (
         -- Exclude armv6l packages as they're just hard-links to armv7l packages
         -- and thus don't really count towards space used
-        platform_tag <> 'linux_armv6l'
-)
-SELECT
-    p.packages_count,
-    b.packages_built,
-    v.versions_count,
-    b.versions_built,
-    b.builds_count,
-    b.builds_count_success,
-    b.builds_count_last_hour,
-    b.builds_time,
-    f.builds_size
-FROM
-    package_stats p,
-    version_stats v,
-    build_stats b,
-    file_stats f;
+        SELECT COALESCE(SUM(filesize), 0) AS builds_size
+        FROM files
+        WHERE platform_tag <> 'linux_armv6l'
+    )
+    SELECT
+        p.packages_count,
+        bp.packages_built,
+        v.versions_count,
+        bv.versions_built,
+        bs.builds_count,
+        bs.builds_count_success,
+        bl.builds_count_last_hour,
+        bs.builds_time,
+        f.builds_size
+    FROM
+        package_stats p,
+        version_stats v,
+        build_pkgs bp,
+        build_vers bv,
+        build_stats bs,
+        build_latest bl,
+        file_stats f;
 
 GRANT SELECT ON statistics TO piwheels;
 

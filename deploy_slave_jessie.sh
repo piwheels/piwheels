@@ -2,6 +2,7 @@
 
 set -eu
 
+rm -f /etc/pip.conf
 apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
@@ -39,7 +40,7 @@ else
   git clone https://github.com/bennuttall/piwheels
   cd piwheels
 fi
-pip install .
+pip3 install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
     dd if=/dev/zero of=/swapfile bs=1M count=1024
     chmod 0600 /swapfile

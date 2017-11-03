@@ -1,10 +1,8 @@
-import os
 import hashlib
 import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
-from collections import namedtuple
 
 from .ranges import exclude, intersect
 
@@ -17,16 +15,34 @@ class FileState:
     :attr:`transferred`.
     """
 
-    def __init__(self, filename, filesize, filehash, package_version_tag,
-                 py_version_tag, abi_tag, platform_tag, transferred=False):
+    def __init__(self, filename, filesize, filehash, package_tag,
+                 package_version_tag, py_version_tag, abi_tag, platform_tag,
+                 transferred=False):
         self._filename = filename
         self._filesize = filesize
         self._filehash = filehash
+        self._package_tag = package_tag
         self._package_version_tag = package_version_tag
         self._py_version_tag = py_version_tag
         self._abi_tag = abi_tag
         self._platform_tag = platform_tag
         self._transferred = transferred
+
+    def __len__(self):
+        return 9
+
+    def __getitem__(self, index):
+        return [
+            self._filename,
+            self._filesize,
+            self._filehash,
+            self._package_tag,
+            self._package_version_tag,
+            self._py_version_tag,
+            self._abi_tag,
+            self._platform_tag,
+            self._transferred,
+        ][index]
 
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
@@ -46,6 +62,10 @@ class FileState:
     @property
     def filehash(self):
         return self._filehash
+
+    @property
+    def package_tag(self):
+        return self._package_tag
 
     @property
     def package_version_tag(self):
@@ -89,6 +109,21 @@ class BuildState:
         self._output = output
         self._files = files
         self._build_id = build_id
+
+    def __len__(self):
+        return 8
+
+    def __getitem__(self, index):
+        return [
+            self._slave_id,
+            self._package,
+            self._version,
+            self._status,
+            self._duration,
+            self._output,
+            self._files,
+            self._build_id,
+        ][index]
 
     def __repr__(self):
         return "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".format(
@@ -196,8 +231,9 @@ class SlaveState:
     counter = 0
     status_queue = None
 
-    def __init__(self, timeout, native_py_version, native_abi, native_platform):
+    def __init__(self, address, timeout, native_py_version, native_abi, native_platform):
         SlaveState.counter += 1
+        self._address = address
         self._slave_id = SlaveState.counter
         self._timeout = timedelta(seconds=timeout)
         self._native_py_version = native_py_version
@@ -207,7 +243,6 @@ class SlaveState:
         self._request = None
         self._reply = None
         self._build = None
-        self._transfer = None
         self._terminated = False
 
     def __repr__(self):
@@ -224,6 +259,10 @@ class SlaveState:
     @property
     def terminated(self):
         return self._terminated
+
+    @property
+    def address(self):
+        return self._address
 
     @property
     def slave_id(self):
@@ -254,10 +293,6 @@ class SlaveState:
         return self._build
 
     @property
-    def transfer(self):
-        return self._transfer
-
-    @property
     def request(self):
         return self._request
 
@@ -278,13 +313,10 @@ class SlaveState:
     @reply.setter
     def reply(self, value):
         self._reply = value
-        if value[0] == 'SEND':
-            self._transfer = TransferState(self._build.files[value[1]].filesize)
-        elif value[0] == 'DONE':
+        if value[0] == 'DONE':
             self._build = None
-            self._transfer = None
-        SlaveState.status_queue.send_json(
-            [self._slave_id, self._last_seen.timestamp()] + value)
+        SlaveState.status_queue.send_pyobj(
+            [self._slave_id, self._last_seen] + value)
 
 
 class TransferState:
@@ -304,24 +336,35 @@ class TransferState:
     pipeline_size = 10
     output_path = Path('.')
 
-    def __init__(self, filesize):
+    def __init__(self, slave_id, file_state):
+        self._slave_id = slave_id
+        self._file_state = file_state
         self._file = tempfile.NamedTemporaryFile(
             dir=str(self.output_path / 'simple'), delete=False)
-        self._file.seek(filesize)
+        self._file.seek(self._file_state.filesize)
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = max(1, min(self.pipeline_size, filesize // self.chunk_size))
+        self._credit = max(1, min(self.pipeline_size,
+                                  self._file_state.filesize // self.chunk_size))
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
         # file we have yet to received; this is manipulated by chunk()
         self._offset = 0
-        self._map = [range(filesize)]
+        self._map = [range(self._file_state.filesize)]
 
     def __repr__(self):
         return "<TransferState: offset={offset} map={_map}>".format(
             offset=self._offset, _map=self._map)
+
+    @property
+    def slave_id(self):
+        return self._slave_id
+
+    @property
+    def file_state(self):
+        return self._file_state
 
     @property
     def done(self):
@@ -363,8 +406,7 @@ class TransferState:
         else:
             logging.warning('Transfer still has credit; no need for reset')
 
-    def verify(self, build):
-        file_state = build.files[build.next_file]
+    def verify(self):
         # XXX Would be nicer to construct the hash from the transferred chunks
         # with a tree, but this potentially costs quite a bit of memory
         self._file.seek(0)
@@ -376,18 +418,32 @@ class TransferState:
             else:
                 break
         self._file.close()
+        if m.hexdigest().lower() != self._file_state.filehash:
+            raise IOError('failed to verify transfer at %s' % self._file.name)
+
+    def commit(self, package):
         p = Path(self._file.name)
-        if m.hexdigest().lower() == file_state.filehash:
-            p.chmod(0o644)
+        p.chmod(0o644)
+        pkg_dir = p.with_name(package)
+        try:
+            pkg_dir.mkdir()
+        except FileExistsError:
+            # See notes in IndexScribe.write_package_index
+            if pkg_dir.is_symlink():
+                pkg_dir.unlink()
+                pkg_dir.mkdir()
+        final_name = pkg_dir / self._file_state.filename
+        p.rename(final_name)
+        if self._file_state.platform_tag == 'linux_armv7l':
+            # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name; the
+            # slave_driver task expects us to have done this
+            arm6_name = final_name.with_name(
+                final_name.name[:-16] + 'linux_armv6l.whl')
             try:
-                p.with_name(build.package).mkdir()
+                arm6_name.symlink_to(final_name.name)
             except FileExistsError:
                 pass
-            pkg_name = p.with_name(build.package) / file_state.filename
-            p.rename(pkg_name)
-            file_state.verified()
-            return True
-        else:
-            p.unlink()
-            return False
+        self._file_state.verified()
 
+    def rollback(self):
+        Path(self._file.name).unlink()

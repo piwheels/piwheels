@@ -93,7 +93,7 @@ class PiWheelsMonitor(TerminalApplication):
         return self.frame, widgets.palette
 
     def status_message(self):
-        slave_id, timestamp, msg, *args = self.status_queue.recv_json()
+        slave_id, timestamp, msg, *args = self.status_queue.recv_pyobj()
         if msg == 'STATUS':
             self.update_status(args[0])
         else:
@@ -153,7 +153,7 @@ class PiWheelsMonitor(TerminalApplication):
             '{} pkgs/hour'.format(status_info['builds_last_hour']))
         self.build_size_label.set_text(
             '{} Mbytes'.format(status_info['builds_size'] // 1048576))
-        time = timedelta(seconds=status_info['builds_time'])
+        time = status_info['builds_time']
         time -= timedelta(microseconds=time.microseconds)
         self.build_time_label.set_text('{}'.format(time))
 
@@ -161,10 +161,10 @@ class PiWheelsMonitor(TerminalApplication):
         raise widgets.ExitMainLoop()
 
     def pause(self, widget=None):
-        self.ctrl_queue.send_json(('PAUSE',))
+        self.ctrl_queue.send_pyobj(['PAUSE'])
 
     def resume(self, widget=None):
-        self.ctrl_queue.send_json(('RESUME',))
+        self.ctrl_queue.send_pyobj(['RESUME'])
 
     def kill_slave(self, widget=None):
         try:
@@ -189,7 +189,7 @@ class PiWheelsMonitor(TerminalApplication):
         self.close_popup()
         slave = self.slave_list.slaves[self.slave_to_kill]
         slave.terminated = True
-        self.ctrl_queue.send_json(('KILL', self.slave_to_kill))
+        self.ctrl_queue.send_pyobj(['KILL', self.slave_to_kill])
         self.slave_to_kill = None
 
     def terminate_master(self, widget=None):
@@ -202,7 +202,7 @@ class PiWheelsMonitor(TerminalApplication):
         self.show_popup(dialog)
 
     def _terminate_master(self, widget=None):
-        self.ctrl_queue.send_json(('QUIT',))
+        self.ctrl_queue.send_pyobj(['QUIT'])
         raise widgets.ExitMainLoop()
 
 
@@ -273,7 +273,7 @@ class SlaveState:
 
     def update(self, timestamp, msg, *args):
         self.last_msg = msg
-        self.last_seen = datetime.fromtimestamp(timestamp)
+        self.last_seen = timestamp
         if msg == 'HELLO':
             self.status = 'Initializing'
         elif msg == 'SLEEP':

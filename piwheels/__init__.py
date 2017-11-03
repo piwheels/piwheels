@@ -1,5 +1,5 @@
 __project__      = 'piwheels'
-__version__      = '0.5'
+__version__      = '0.7'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
@@ -10,7 +10,7 @@ __requires__ = ['pyzmq']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
-    'master':  ['sqlalchemy', 'requests'],
+    'master':  ['pip', 'wheel', 'sqlalchemy'],
     'slave':   ['pip', 'wheel'],
     'test':    ['pytest'],
     }
