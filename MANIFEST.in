@@ -1,2 +1,2 @@
-include piwheels/master/*.svg
+recursive-include piwheels/master/static *
 include piwheels/master/*.html
