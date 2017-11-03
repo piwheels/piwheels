@@ -33,6 +33,9 @@ p {
   text-align: justify;
   font-size: 11pt;
 }
+ul li, ol li {
+  font-size: 11pt;
+}
 a {
   color: #222;
   text-decoration: underline;

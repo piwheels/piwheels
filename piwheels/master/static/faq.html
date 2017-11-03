@@ -30,9 +30,9 @@ follow the Raspbian Stretch instructions.</p>
 <h3>How do I install a package from piwheels within a virtual environment?</h3>
 
 <p>If you had to upgrade pip to 9.0.1 you may also need to upgrade pip within
-the virtual environment with <tt>pip install pip --upgrade</tt>. If not
-(e.g. in Raspbian Stretch), pip should honour your /etc/pip.config file and use
-piwheels as configured.</p>
+the virtual environment with <tt>pip install pip --upgrade</tt>. If not (e.g.
+in Raspbian Stretch), pip should honour your <tt>/etc/pip.conf</tt> file and
+use piwheels as configured.</p>
 
 
 <h3>How do I install a package from piwheels without changing my pip
@@ -52,14 +52,14 @@ pip to fall back to PyPI if the requested package (or one of its dependencies)
 is not available on piwheels, by using the <tt>--extra-index-url</tt>
 option, for example:</p>
 
-<pre><code>$ sudo pip3 install numpy -extra-index-url https://www.piwheels.hostedpi.com/simple</code></pre>
+<pre><code>$ sudo pip3 install numpy --extra-index-url https://www.piwheels.hostedpi.com/simple</code></pre>
 
 
 <h3>How do I install a package from PyPI (not from piwheels)?</h3>
 
 <p>If your pip is configured to use piwheels, but you want to use PyPI instead,
-you can either remove the <code>extra-index-url</code> configuration in
-<code>/etc/pip.conf</code> to avoid piwheels permanently, or you can explicitly
+you can either remove the <tt>extra-index-url</tt> configuration in
+<tt>/etc/pip.conf</tt> to avoid piwheels permanently, or you can explicitly
 request PyPI in the installation command, for example:</p>
 
 <pre><code>$ sudo pip3 install numpy -i https://pypi.python.org/simple</code></pre>
@@ -79,7 +79,7 @@ only a small amount of time is saved.</p>
 automatically processed by the piwheels project.</p>
 
 
-<h3>Why is a package I maintain is not available on piwheels?</h3>
+<h3>Why is a package I maintain not available on piwheels?</h3>
 
 <p>Some packages fail to build, for various reasons. If you would like to
 investigate, try building the package yourself on a Raspberry Pi 3 with a
@@ -133,7 +133,7 @@ Raspberry Pi 3 hardware.</p>
 <h3>Which Raspberry Pi models are supported by packages provided by
 piwheels?</h3>
 
-<p>All curent Raspberry Pi models (as of September 2017) are supported:</p>
+<p>All current Raspberry Pi models (as of September 2017) are supported:</p>
 
 <ul>
 <li>Raspberry Pi 3
