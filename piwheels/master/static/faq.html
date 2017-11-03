@@ -57,18 +57,26 @@ option, for example:</p>
 
 <h3>How do I install a package from PyPI (not from piwheels)?</h3>
 
-<p>If your pip is configured to use piwheels, but you want to use PyPI instead, you can either remove the <code>extra-index-url</code> configuration in <code>/etc/pip.conf</code> to avoid piwheels permanently, or you can explicitly request PyPI in the installation command, for example:</p>
+<p>If your pip is configured to use piwheels, but you want to use PyPI instead,
+you can either remove the <code>extra-index-url</code> configuration in
+<code>/etc/pip.conf</code> to avoid piwheels permanently, or you can explicitly
+request PyPI in the installation command, for example:</p>
+
 <pre><code>$ sudo pip3 install numpy -i https://pypi.python.org/simple</code></pre>
 
 
 <h3>How much time does piwheels save?</h3>
 
-<p>Time saved depends on the package requested, and the Raspberry Pi model used. Some packages usually require significant build time, which is avoided by using piwheels. Many packages are usually quite quick to install anyway, and only a small amount of time is saved.</p>
+<p>Time saved depends on the package requested, and the Raspberry Pi model
+used. Some packages usually require significant build time, which is avoided by
+using piwheels. Many packages are usually quite quick to install anyway, and
+only a small amount of time is saved.</p>
 
 
 <h3>I maintain a package on PyPI. How do I publish it on piwheels?</h3>
 
-<p>You don't need to do anything. All package releases on PyPI are automatically processed by the piwheels project.</p>
+<p>You don't need to do anything. All package releases on PyPI are
+automatically processed by the piwheels project.</p>
 
 
 <h3>Why is a package I maintain is not available on piwheels?</h3>
@@ -91,12 +99,29 @@ piwheels. While some versions of a given package may be available, others may
 not have been built successfully. If you maintain the package or otherwise have
 a solution for the build, please <a
 href="https://github.com/bennuttall/piwheels/issues/new">open an issue on
-github</a> and we'll try to resolve it.</p>
+github</a> and we'll try to resolve it.
 
 
-<h3>How long does it take for a new release to become available on piwheels?</h3>
+<h3>How long does it take for a new release to become available on
+  piwheels?</h3>
 
-<p>???</p>
+<p>piwheels should notice the registration of a new package or version within
+about 10 seconds. How long it takes for that version to be built then depends
+on two factors:</p>
+
+<ul>
+  <li><em>Available build slaves</em>. At the time of writing, we're working
+    through a big backlog of 3.5 builds so builds may take a few days to
+    appear. Once that backlog is cleared it'll depend on &hellip;
+  <li><em>Build time</em>. If the package is pure python it should build within
+    a few seconds and appear very quickly. Alternatively if it's a big chunk of
+    C++ with lots of generics it can take hours to compile (the longest compile
+    time for a successful build is currently over 3 hours).
+</ul>
+
+<p>So ultimately the time for a new release to appear can be anything from
+about 10 seconds up to several hours (for complex to build packages) or several
+days (when piwheels has a large backlog of packages to work through).</p>
 
 
 <h3>Does piwheels use cross-compilation?</h3>
