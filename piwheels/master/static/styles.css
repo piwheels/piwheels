@@ -1,0 +1,58 @@
+body {
+  font-family: "Roboto", sans;
+  color: #222;
+  max-width: 50em;
+  margin: 0 auto;
+}
+h1 {
+  background:
+    url('raspberry-pi-logo.svg') no-repeat top 8px right / 20%,
+    url('python-logo.svg') no-repeat bottom left 8px / 20%,
+    linear-gradient(60deg, #15bcac, #c51a4a);
+  color: white;
+  text-align: center;
+  padding: 1em;
+  margin: 0;
+  border-bottom: 4px solid black;
+}
+h2 {
+  margin: 0;
+  padding: 1em 0 0 0;
+  color: #77777a;
+}
+#faq h3 {
+  margin-bottom: 0;
+}
+#faq h4 {
+  color: #77777a;
+  margin-bottom: 0;
+}
+p {
+  margin: 0;
+  padding: 0 0 0.25em 0;
+  text-align: justify;
+  font-size: 11pt;
+}
+a {
+  color: #222;
+  text-decoration: underline;
+}
+table {
+  background: #8addd5;
+  border: 2px solid #15bcac;
+  border-radius: 5px;
+  margin: 1em 2em;
+  padding: 1em;
+}
+th, td {
+  text-align: left;
+  font-size: 11pt;
+}
+pre {
+  background: #ffdead;
+  border: 2px solid #ffbd5c;
+  border-radius: 5px;
+  margin: 1em 2em;
+  padding: 1em;
+}
+

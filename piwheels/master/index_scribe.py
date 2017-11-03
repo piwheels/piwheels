@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 import zmq
-from pkg_resources import resource_string, resource_stream
+from pkg_resources import resource_string, resource_stream, resource_listdir
 
 from .html import tag
 from .tasks import PauseableTask
@@ -50,9 +50,9 @@ class IndexScribe(PauseableTask):
             (self.output_path / 'simple').mkdir()
         except FileExistsError:
             pass
-        for filename in ('raspberry-pi-logo.svg', 'python-logo.svg'):
+        for filename in resource_listdir(__name__, 'static'):
             with (self.output_path / filename).open('wb') as f:
-                source = resource_stream(__name__, filename)
+                source = resource_stream(__name__, 'static/' + filename)
                 f.write(source.read())
                 source.close()
 
@@ -92,12 +92,7 @@ class IndexScribe(PauseableTask):
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
                                          delete=False) as index:
             try:
-                index.file.write(self.homepage_template.format(
-                    packages_built=status_info['packages_built'],
-                    versions_built=status_info['versions_built'],
-                    builds_time=status_info['builds_time'],
-                    builds_size=status_info['builds_size'] // 1048576
-                ))
+                index.file.write(self.homepage_template.format(**status_info))
             except:
                 index.delete = True
                 raise

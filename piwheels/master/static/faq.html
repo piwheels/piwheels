@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>piwheels FAQ</title>
+<link rel="stylesheet" href="styles.css" type="text/css"/>
+</head>
+<body>
+
+<h1>FAQ</h1>
+
+<p><a href="index.html">&lt; Homepage</a><p>
+
+<div id="faq">
+<h3>How do I install packages from piwheels?</h3>
+
+<h4>Raspbian Stretch:</h4>
+<p>Simply add the following to <tt>/etc/pip.conf</tt>:</p>
+
+<pre><code>[global]
+extra-index-url=https://www.piwheels.hostedpi.com/simple</code></pre>
+
+<h4>Raspbian Jessie:</h4>
+<p>Upgrade pip to 9.0.1 using <tt>sudo pip3 install pip --upgrade</tt> and
+follow the Raspbian Stretch instructions.</p>
+
+<h4>Other operating systems:</h4>
+<p>Install pip 9.0.1, and follow the Raspbian Stretch instructions.</p>
+
+
+<h3>How do I install a package from piwheels within a virtual environment?</h3>
+
+<p>If you had to upgrade pip to 9.0.1 you may also need to upgrade pip within
+the virtual environment with <tt>pip install pip --upgrade</tt>. If not
+(e.g. in Raspbian Stretch), pip should honour your /etc/pip.config file and use
+piwheels as configured.</p>
+
+
+<h3>How do I install a package from piwheels without changing my pip
+configuration?</h3>
+
+<p>To explicitly use piwheels, simply use the <tt>-i</tt> or
+<tt>--index-url</tt> option, for example:</p>
+
+<pre><code>$ sudo pip3 install numpy -i https://www.piwheels.hostedpi.com/simple</code></pre>
+
+<p>or</p>
+
+<pre><code>$ sudo pip3 install numpy --index-url https://www.piwheels.hostedpi.com/simple</code></pre>
+
+<p>Alternatively, you can use piwheels as an additional index, which will allow
+pip to fall back to PyPI if the requested package (or one of its dependencies)
+is not available on piwheels, by using the <tt>--extra-index-url</tt>
+option, for example:</p>
+
+<pre><code>$ sudo pip3 install numpy -extra-index-url https://www.piwheels.hostedpi.com/simple</code></pre>
+
+
+<h3>How do I install a package from PyPI (not from piwheels)?</h3>
+
+<p>If your pip is configured to use piwheels, but you want to use PyPI instead, you can either remove the <code>extra-index-url</code> configuration in <code>/etc/pip.conf</code> to avoid piwheels permanently, or you can explicitly request PyPI in the installation command, for example:</p>
+<pre><code>$ sudo pip3 install numpy -i https://pypi.python.org/simple</code></pre>
+
+
+<h3>How much time does piwheels save?</h3>
+
+<p>Time saved depends on the package requested, and the Raspberry Pi model used. Some packages usually require significant build time, which is avoided by using piwheels. Many packages are usually quite quick to install anyway, and only a small amount of time is saved.</p>
+
+
+<h3>I maintain a package on PyPI. How do I publish it on piwheels?</h3>
+
+<p>You don't need to do anything. All package releases on PyPI are automatically processed by the piwheels project.</p>
+
+
+<h3>Why is a package I maintain is not available on piwheels?</h3>
+
+<p>Some packages fail to build, for various reasons. If you would like to
+investigate, try building the package yourself on a Raspberry Pi 3 with a
+Raspbian Lite image by running <code>pip3 wheel &lt;package&gt;</code>. If you
+find you are able to successfully build the package (for example, by installing
+some build dependencies), please <a
+href="https://github.com/bennuttall/piwheels/issues/new">open an issue on
+github</a> and we'll try to resolve it.</p>
+
+
+<h3>Why are some versions of a package available on piwheels and other versions
+are not?</h3>
+
+<p>piwheels attempts to build every release of every package on PyPI. Some
+build attempts are unsuccessful, and these versions will not be available on
+piwheels. While some versions of a given package may be available, others may
+not have been built successfully. If you maintain the package or otherwise have
+a solution for the build, please <a
+href="https://github.com/bennuttall/piwheels/issues/new">open an issue on
+github</a> and we'll try to resolve it.</p>
+
+
+<h3>How long does it take for a new release to become available on piwheels?</h3>
+
+<p>???</p>
+
+
+<h3>Does piwheels use cross-compilation?</h3>
+
+<p>No. All wheels are built natively on the Raspbian operating system on
+Raspberry Pi 3 hardware.</p>
+
+
+<h3>Which Raspberry Pi models are supported by packages provided by
+piwheels?</h3>
+
+<p>All curent Raspberry Pi models (as of September 2017) are supported:</p>
+
+<ul>
+<li>Raspberry Pi 3
+<li>Raspberry Pi 2
+<li>Raspberry Pi 1
+<li>Raspberry Pi Zero
+</ul>
+
+<p>Please also observe answers to questions relating to operating systems and
+Python versions.</p>
+
+
+<h3>I installed a package from piwheels and it doesn't work as expected</h3>
+
+<p>Some packages build differently depending on the tools available. For
+example, if the package <tt>matplotlib</tt> is built with <tt>pyqt</tt>
+installed, the wheel will depend on the user also having <tt>pyqt</tt>
+installed. If it is built without <tt>pyqt</tt>, the user can use
+<tt>matplotlib</tt> without <tt>pyqt</tt>.</p>
+
+<p>If you find an issue with a package installed from piwheels, please <a
+href="https://github.com/bennuttall/piwheels/issues/new">submit an issue on
+github</a>.</p>
+
+
+<h3>Which Python versions does piwheels support?</h3>
+
+<p>Currently, piwheels supports Python 3 only. While most packages available
+will work in any version of Python 3, but some packages are only compatible
+with the minor version with which they were built.</p>
+
+<p>Currently supported:</p>
+
+<ul>
+<li>Python 3.4</li>
+<li>Python 3.5</li>
+</ul>
+
+<p>Planned support:</p>
+
+<ul>
+<li>Python 3.6</li>
+<li>Python 2.7</li>
+</ul>
+
+
+<h3>Where can I find the piwheels source code?</h3>
+
+<p>The source code for the piwheels project can be found on GitHub at <a
+href="https://github.com/bennuttall/piwheels">github.com/bennuttall/piwheels</a>.</p>
+
+
+<h3>What infrastructure does the piwheels project use?</h3>
+
+<p>The piwheels project is hosted on a cluster of Raspberry Pi 3s provided by
+<a href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts</a>.</p>
+
+<p>The original build run was completed by a total of 20 Raspberry Pis, and now
+a smaller cluster (fewer than 5 Pis) remains active, continuing to build new
+package releases.</p>
+
+
+<h3>The package I installed took a long time to install, despite being
+available on piwheels.</h3>
+
+<p>First of all: check your pip configuration and confirm that piwheels is in
+fact being used. You should see <tt>downloading from
+https://www.piwheels.hostedpi.com</tt>.</p>
+
+<p>If you are definitely using piwheels, it could be that while the package you
+installed was available on piwheels, perhaps one of its dependencies is not
+available, and requires downloading from PyPI and building from source.</p>
+
+
+<h3>Why are the wheel files are tagged with ARMv6 and ARMv7? What about
+ARMv8?</h3>
+
+<p>While the hardware in Raspberry Pi 1 and Zero is ARMv6, Pi 2 is ARMv7, Pi 3
+is ARMv8, the Raspbian operating system images provided on raspberrypi.org are
+made to support all three architectures (and are compatible with all Raspberry
+Pi products to date) by operating in ARMv6 userland.</p>
+
+<p>However, wheels built on a Raspberry Pi 2 or 3 are tagged
+<tt>armv7l</tt>. Since wheels built on a Raspberry Pi 3 will work on a Pi
+2, 1 or Zero, we simply provide Pi 3-built wheels renamed
+<tt>armv6l</tt>.</p>
+
+
+<h3>Will wheels provided on piwheels work on other ARM platforms?</h3>
+
+<p>Some wheels may work on other ARM platforms, but we can't guarantee this.
+Pure Python wheels will certainly work, but there's a much smaller speed
+increase installing from wheels over source distribution. ARM platform wheels
+on piwheels are tagged <tt>armv6l</tt> and <tt>armv7l</tt> but actually
+both contain ARMv6-compatible code, which may not work on true ARMv7
+platforms.</p>
+
+
+<h3>Does piwheels work for the Raspberry Pi Desktop operating system for
+x86?</h3>
+
+<p>See the following answer.</p>
+
+
+<h3>Can I install packages from piwheels on my PC/Mac to speed up
+installations?</h3>
+
+<p>Pure Python wheels will certainly work, but there's a much smaller speed
+increase installing from wheels over source distribution. Packages requiring
+compilation are built for a specific architecture, so they will not be useful
+on non-ARM platforms and will be ignored. Assuming your pip configuration is
+set to fall back to PyPI, installation will continue from there, which may
+involve building from source.</p>
+
+
+<h3>Are you going to upload all the wheels to PyPI?</h3>
+
+<p>No - we can't. Only package maintainers can upload files to PyPI.</p>
+
+
+<h3>I'm a package maintainer. Can I upload an ARM wheel to PyPI?</h3>
+
+<p>The current PyPI website does not allow ARM wheels to be uploaded. The
+next-generation PyPI project (pypi.org) does allow uploading ARMv6 and ARMv7
+wheels (by setting <tt>repository=https://upload.pypi.io/legacy/</tt> for PyPI
+in your <tt>~/.pypirc</tt> file) but it should be noted that wheels built on a
+Raspberry Pi 3, although tagged <tt>armv7l</tt> are not truly ARMv7, and may be
+incompatible with other ARM platforms. If your package is made exclusively for
+the Raspberry Pi platform, there is no harm in uploading ARM wheels to PyPI,
+and this will speed up the installation for users who do not have pip
+configured to use piwheels.</p>
+
+<p>If you intend for your package to be installed by users in multiple ARM
+platforms, you may be best not to upload ARM wheels to PyPI and instead leave
+Raspberry Pi users to get a wheel from piwheels, and leave other ARM platform
+users to build from source.</p>
+
+</div>
+</body>
+</html>
