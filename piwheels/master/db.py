@@ -210,17 +210,17 @@ class Database():
                 for rec in self.conn.execute(select([self.versions]))
             ]
 
-    def get_build_queue(self, abi_tag):
+    def get_build_queue(self):
         """
-        Returns a list of package/version tuples of all package versions
-        requiring building for the given ABI
+        Returns a generator covering the entire builds_pending view; streaming
+        results are activated for this query as it's more important to get the
+        first result quickly than it is to retrieve the entire set.
         """
         with self.conn.begin():
-            for rec in self.conn.execute(
-                select([self.builds_pending]).
-                where(self.builds_pending.c.abi_tag == abi_tag)
-            ):
-                yield rec.package, rec.version
+            for row in self.conn.\
+                    execution_options(stream_results=True).\
+                    execute(self.builds_pending.select()):
+                yield row
 
     def get_statistics(self):
         """
@@ -229,7 +229,7 @@ class Database():
         for more information.
         """
         with self.conn.begin():
-            for rec in self.conn.execute(select([self.statistics])):
+            for rec in self.conn.execute(self.statistics.select()):
                 return rec
 
     def get_build(self, build_id):
@@ -238,7 +238,7 @@ class Database():
         """
         with self.conn.begin():
             return self.conn.execute(
-                select([self.builds]).
+                self.builds.select().
                 where(self.builds.c.build_id == build_id)
             )
 
@@ -248,7 +248,7 @@ class Database():
         """
         with self.conn.begin():
             return self.conn.execute(
-                select([self.files]).
+                self.files.select().
                 where(self.files.c.build_id == build_id)
             )
 
