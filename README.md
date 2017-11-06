@@ -1,76 +1,58 @@
 # piwheels
 
-piwheels is Python package repository providing [wheels](https://packaging.python.org/wheel_egg/) (pre-built binaries) for the armv6 and armv7 architectures used by [Raspberry Pi](https://www.raspberrypi.org/).
+piwheels is Python package repository providing [wheels](https://packaging.python.org/wheel_egg/)
+(pre-built binaries) for the ARMv6 and ARMv7 architectures used by
+[Raspberry Pi](https://www.raspberrypi.org/).
 
-This repository contains the source code for building armv6 and armv7 wheels for packages found on [PyPI](https://pypi.python.org/pypi), and the project's future will be discussed in [GitHub issues](https://github.com/bennuttall/piwheels/issues).
+This repository contains the source code for building armv6 and armv7 wheels
+for packages found on [PyPI](https://pypi.python.org/pypi), and the project's
+future will be discussed in [GitHub issues](https://github.com/bennuttall/piwheels/issues).
 
-A repository is hosted at [www.piwheels.hostedpi.com](http://www.piwheels.hostedpi.com/). This is available for testing.
-
-## Why?
-
-When you try to `pip install` a Python package which is implemented in C, it requires building for your computer's architecture, such as x86 or x86_64. Some package maintainers provide wheels for these common architectures, which means you don't have to build the package yourself to install it. However, PyPI does not allow uploading ARM wheels.
-
-Some packages can take a long time to build, especially on ARMv6-based Raspberry Pi models (Pi 1 and Pi Zero). If a wheel is available (for your architecture), this makes it much easier to install, as pip simply downloads the wheel and installs it, no building required.
-
-While Debian packages are available for some Python libraries, they are often older versions than available from PyPI, and if you're using a virtualenv, you need to `pip install` modules.
-
-## Who?
-
-I'm Ben Nuttall, Raspberry Pi's Community Manager. I'm [@ben_nuttall](https://twitter.com/ben_nuttall/) on Twitter.
+The piwheels service is hosted at [www.piwheels.hostedpi.com](https://www.piwheels.hostedpi.com/).
 
 ## Usage
 
-To install a package from piwheels, you supply the repository URL using the `i` or `--index-url` flag to the `pip install` command:
+[Raspbian Stretch](https://www.raspberrypi.org/downloads/raspbian/) includes
+configuration for pip to use piwheels by default. If you're using an alternate
+distribution, make sure you have pip v9, and you can use piwheels by placing
+the following lines in `etc/pip.conf`:
 
-```bash
-pip install <package> -i http://www.piwheels.hostedpi.com/
+```
+[global]
+extra-index-url=https://www.piwheels.hostedpi.com/simple
 ```
 
-or to use as an "extra" index:
+Alternatively, install from piwheels explicitly with `-i` or `--index-url`:
 
-```bash
-pip install <package> --extra-index-url http://www.piwheels.hostedpi.com/
+```
+sudo pip3 install numpy -i https://www.piwheels.hostedpi.com/simple
 ```
 
-Note the original build test is located at [piwheels.bennuttall.com](http://piwheels.bennuttall.com/) and the ongoing production repository is located at [www.piwheels.hostedpi.com](http://www.piwheels.hostedpi.com/).
+or:
 
-Note also that since these servers do not support HTTPS currently, a warning (or maybe a fatal error) will occur with the above usage, so instead use:
-
-```bash
-pip install <package> -i http://www.piwheels.hostedpi.com/ --trusted-host=www.piwheels.hostedpi.com
+```
+sudo pip3 install numpy --index-url https://www.piwheels.hostedpi.com/simple
 ```
 
-## Current status
+Or as an additional index:
 
-In May 2017, as a proof-of-concept, I ran through the list of packages on PyPI and built the latest version of each one, logging the results in a database. There were 106,589 packages at the time. 76% built successfully, and the build run took 10 days on a single Raspberry Pi 3 in my house. The repository is still running and can be found at [piwheels.bennuttall.com](http://piwheels.bennuttall.com/). The results of the build can be found in [Issue #2](https://github.com/bennuttall/piwheels/issues/2).
-
-In July 2017 I completed a refactoring of the code and added functionality to build every version of every package (and continuously update the build queue as new packages and versions are released), and kicked off the build again, this time on a cluster of hosted Raspberry Pi 3s using a [service provided by Mythic Beasts](https://www.mythic-beasts.com/order/rpi).
-
-At the end of July, the project completed its first build run. Read all about the project and the results at http://bennuttall.com/piwheels-building-a-faster-python-package-repository-for-raspberry-pi-users/
-
-## Failed packages
-
-If you see a failed package you would like to be provided, I would appreciate any effort you can make to help. Start by trying to build the package yourself on a Raspberry Pi 3. If it failed due to a build dependency, perhaps this is something we can fix. Please [open an issue](https://github.com/bennuttall/piwheels/issues/new/) to discuss resolving the build failure.
-
-## Uploading wheels to PyPI
-
-PyPI does not currently support uploading ARM wheels. The [next generation](https://pypi.org/) of PyPI [will support ARM wheels](https://github.com/pypa/warehouse/issues/2003). Package maintainers can upload ARM wheels to the next generation service, and they will be available on the current service. Do this by adding the following to your `.pypirc` file:
-
-```bash
-repository=https://upload.pypi.io/legacy/
+```
+sudo pip3 install numpy --extra-index-url https://www.piwheels.hostedpi.com/simple
 ```
 
-Wheels generated by this project can be downloaded, and uploaded to PyPI by their maintainers.
+## Support
 
-## Developers
+piwheels provides wheels which are compatible with all Raspberry Pi models
+(Pi 3, Pi 2, Pi 1 and Pi Zero), for Python 3.4 and 3.5. We plan to add support
+for Python 3.6 and 2.7.
 
-To develop on this project, follow the [developing instructions](developing.md). To set up your own piwheels server on a Raspberry Pi, follow the [installation instructions](install.md). Please report any documentation issues you find on [GitHub](https://github.com/bennuttall/piwheels/issues).
+## Issues
+
+If you find any issues with packages installed from piwheels, please post an
+issue on [GitHub](https://github.com/bennuttall/piwheels/issues), providing as
+much detail as possible.
 
 ## Contributing
-
-Any help you can provide would be much appreciated! Please see the [issue tracker](https://github.com/bennuttall/piwheels/issues) to see where you can help.
-
-Pull requests welcome. It might be best to post an issue before starting work on a PR.
 
 See the [contributing guidelines](CONTRIBUTING.md) for more information.
 
@@ -81,3 +63,4 @@ See the [contributing guidelines](CONTRIBUTING.md) for more information.
 - [PEP 425 -- Compatibility Tags for Built Distributions](https://www.python.org/dev/peps/pep-0425/)
 - [pip wheel documentation](https://pip.pypa.io/en/stable/reference/pip_wheel/)
 - [Hosting your Own Simple Repository](https://packaging.python.org/self_hosted_repository/)
+- [piwheels: building a faster Python package repository for Raspberry Pi users](http://bennuttall.com/piwheels-building-a-faster-python-package-repository-for-raspberry-pi-users/)
