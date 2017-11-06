@@ -1,4 +1,4 @@
-from datetime import timedelta
+import pickle
 from collections import namedtuple
 
 import zmq
@@ -17,21 +17,26 @@ class TheOracle(Task):
     :class:`SlaveDriver`, :class:`IndexScribe`, and :class:`CloudGazer`.
     """
     name = 'master.the_oracle'
+    instance = 0
 
     def __init__(self, config):
+        TheOracle.instance += 1
+        self.name = '%s_%d' % (TheOracle.name, TheOracle.instance)
         super().__init__(config)
         self.db = Database(config['database'])
-        db_queue = self.ctx.socket(zmq.REP)
+        db_queue = self.ctx.socket(zmq.REQ)
         db_queue.hwm = 10
-        db_queue.bind(config['db_queue'])
+        db_queue.connect(config['oracle_queue'])
         self.register(db_queue, self.handle_db_request)
+        db_queue.send(b'READY')
 
     def close(self):
         super().close()
         self.db.close()
 
     def handle_db_request(self, q):
-        msg, *args = q.recv_pyobj()
+        address, empty, msg = q.recv_multipart()
+        msg, *args = pickle.loads(msg)
         try:
             handler = getattr(self, 'do_%s' % msg)
             result = handler(*args)
@@ -40,9 +45,9 @@ class TheOracle(Task):
             # REP *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends
             # upon breaks
-            q.send_pyobj(['ERR', str(e)])
+            q.send_multipart([address, empty, pickle.dumps(['ERR', str(e)])])
         else:
-            q.send_pyobj(['OK', result])
+            q.send_multipart([address, empty, pickle.dumps(['OK', result])])
 
     def do_ALLPKGS(self):
         return self.db.get_all_packages()

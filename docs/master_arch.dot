@@ -4,15 +4,24 @@ digraph piwheels {
     edge [fontname=Sans, fontsize=8];
 
     pypi [label="PyPI", shape=egg];
+    users [label="Users", shape=egg];
 
     subgraph cluster_db_server {
         graph [label="db-server"];
 
-        the_oracle [label="{<db>REP|<t>the_oracle}"];
+        the_oracle1 [label="{<seraph>REQ|<t>the_oracle}"];
+        the_oracle2 [label="{<seraph>REQ|<t>the_oracle}"];
+        the_oracle3 [label="{<seraph>REQ|<t>the_oracle}"];
         the_architect [label="{<builds>REP|<t>the_architect}"];
+        seraph [label="{<db>ROUTER|<t>seraph|<oracle>ROUTER}"];
         db [label="piwheels\ndatabase", shape=folder];
 
-        the_oracle:t->db [dir=both];
+        seraph:oracle->the_oracle1:seraph [dir=both];
+        seraph:oracle->the_oracle2:seraph [dir=both];
+        seraph:oracle->the_oracle3:seraph [dir=both];
+        the_oracle1:t->db [dir=both];
+        the_oracle2:t->db [dir=both];
+        the_oracle3:t->db [dir=both];
         the_architect:t->db [dir=back];
     }
 
@@ -20,11 +29,13 @@ digraph piwheels {
         graph [label="file-server"];
 
         file_juggler [label="{{<fs>REP|<slaves>ROUTER}|<t>file_juggler|{<indexes>PUSH}}"];
-        index_scribe [label="{{<db>REQ|<indexes>PULL}|<t>index_scribe}"];
+        index_scribe [label="{{<indexes>PULL|<db>REQ}|<t>index_scribe}"];
         fs [label="www\nfilesystem", shape=folder];
+        apache;
 
         index_scribe:t->fs;
         file_juggler:t->fs [dir=both];
+        fs->apache;
     }
 
     subgraph cluster_master {
@@ -46,7 +57,7 @@ digraph piwheels {
 
     subgraph cluster_slave1 {
         graph [label="slave1"];
-        slave1 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
+        slave1 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
     }
 
     subgraph cluster_slave2 {
@@ -64,13 +75,14 @@ digraph piwheels {
     high_priest:ext_status->monitor:status;
     monitor:control->high_priest:control;
 
-    cloud_gazer:db->the_oracle:db [dir=both];
+    cloud_gazer:db->seraph:db [dir=both];
     file_juggler:indexes->index_scribe:indexes;
     big_brother:indexes->index_scribe:indexes;
-    index_scribe:db->the_oracle:db [dir=both];
-    big_brother:db->the_oracle:db [dir=both];
+    index_scribe:db->seraph:db [dir=both];
+    big_brother:db->seraph:db [dir=both];
     big_brother:fs->file_juggler:fs [dir=both];
     slave_driver:fs->file_juggler:fs [dir=both];
-    slave_driver:db->the_oracle:db [dir=both];
+    slave_driver:db->seraph:db [dir=both];
     slave_driver:builds->the_architect:builds [dir=both];
+    apache->users;
 }

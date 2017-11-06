@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import zmq
 
 from .tasks import PauseableTask
+from .db import Database
 from .file_juggler import FsClient
-from .the_oracle import DbClient
 
 
 class BigBrother(PauseableTask):
@@ -29,7 +29,7 @@ class BigBrother(PauseableTask):
         self.register(status_queue, self.handle_status, zmq.POLLOUT)
         self.register(index_queue, self.handle_index, zmq.POLLOUT)
         self.fs = FsClient(config)
-        self.db = DbClient(config)
+        self.db = Database(config['database'])
         self.timestamp = datetime.utcnow() - timedelta(seconds=30)
         self.status_info1 = None
         self.status_info2 = None

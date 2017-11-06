@@ -11,6 +11,7 @@ from .high_priest import HighPriest
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
 from .the_oracle import TheOracle
+from .seraph import Seraph
 from .slave_driver import SlaveDriver
 from .file_juggler import FileJuggler
 from .index_scribe import IndexScribe
@@ -42,6 +43,7 @@ class PiWheelsMaster(TerminalApplication):
             'build_queue':       'inproc://builds',
             'fs_queue':          'inproc://fs',
             'db_queue':          'inproc://db',
+            'oracle_queue':      'inproc://oracle',
             'ext_control_queue': 'ipc:///tmp/piw-control',
             'ext_status_queue':  'ipc:///tmp/piw-status',
             'slave_queue':       'tcp://*:5555',
@@ -72,12 +74,15 @@ class PiWheelsMaster(TerminalApplication):
             task(config)
             for task in (
                 HighPriest,
+                Seraph,
                 TheOracle,
+                TheOracle,
+                TheOracle,
+                TheArchitect,
                 IndexScribe,
                 FileJuggler,
                 BigBrother,
                 CloudGazer,
-                TheArchitect,
                 SlaveDriver,
             )
         ]
