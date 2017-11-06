@@ -2,7 +2,6 @@
 
 set -eu
 
-rm -f /etc/pip.conf
 apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
@@ -51,3 +50,5 @@ mkswap /dev/loop0\
 swapon /dev/loop0\
 ' /etc/rc.local
 fi
+
+rm -f /etc/pip.conf
