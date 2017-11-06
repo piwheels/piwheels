@@ -35,8 +35,6 @@ class Task(Thread):
     def close(self):
         self.logger.info('closing')
         self.join()
-        for q in self.handlers:
-            q.close(linger=1000)
 
     def handle_control(self, q):
         msg, *args = q.recv_pyobj()

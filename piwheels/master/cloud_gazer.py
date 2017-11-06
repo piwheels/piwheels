@@ -17,11 +17,6 @@ class CloudGazer(PauseableTask):
         self.db = DbClient(config)
         self.packages = set()
 
-    def close(self):
-        super().close()
-        self.db.close()
-        self.pypi.close()
-
     def loop(self):
         for package, version in self.pypi:
             if version is None:

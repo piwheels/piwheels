@@ -56,10 +56,6 @@ class IndexScribe(PauseableTask):
                 f.write(source.read())
                 source.close()
 
-    def close(self):
-        super().close()
-        self.db.close()
-
     def run(self):
         # Build the initial index from the set of directories that exist
         # under the output path (this is much faster than querying the

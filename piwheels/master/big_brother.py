@@ -34,11 +34,6 @@ class BigBrother(PauseableTask):
         self.status_info1 = None
         self.status_info2 = None
 
-    def close(self):
-        super().close()
-        self.db.close()
-        self.fs.close()
-
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
         # every 30 seconds (at most)

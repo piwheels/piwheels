@@ -87,8 +87,3 @@ class PyPI():
                 # If the read is empty we've reached the end of the event log;
                 # make sure we don't bother PyPI for another 10 seconds
                 self.next_read = time() + 10
-
-    def close(self):
-        self.packages = None
-        self.cache = None
-        self.client = None

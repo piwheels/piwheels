@@ -57,10 +57,6 @@ class FileJuggler(Task):
         self.active = {}    # keyed by slave address
         self.complete = {}  # keyed by slave_id
 
-    def close(self):
-        super().close()
-        self.index_queue.close()
-
     def handle_fs_request(self, q):
         msg, *args = q.recv_pyobj()
         try:
@@ -160,9 +156,6 @@ class FsClient:
         self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config['fs_queue'])
-
-    def close(self):
-        self.fs_queue.close()
 
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or

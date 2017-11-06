@@ -48,10 +48,6 @@ class SlaveDriver(Task):
 
     def close(self):
         super().close()
-        self.build_queue.close()
-        self.status_queue.close()
-        self.fs.close()
-        self.db.close()
         SlaveState.status_queue = None
 
     def handle_control(self, q):
