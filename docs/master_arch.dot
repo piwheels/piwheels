@@ -44,7 +44,7 @@ digraph piwheels {
         cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
         main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
         big_brother [label="{<t>big_brother|{<int_status>PUSH|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
-        slave_driver [label="{{<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<db>REQ|<builds>REQ|<fs>REQ}}"];
+        slave_driver [label="{{<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<db>REQ|<builds>REQ|<fs>REQ|<indexes>PUSH}}"];
 
         big_brother:int_status->main:int_status;
         slave_driver:int_status->main:int_status;
@@ -78,6 +78,7 @@ digraph piwheels {
     cloud_gazer:db->seraph:db [dir=both];
     file_juggler:indexes->index_scribe:indexes;
     big_brother:indexes->index_scribe:indexes;
+    slave_driver:indexes->index_scribe:indexes;
     index_scribe:db->seraph:db [dir=both];
     big_brother:db->seraph:db [dir=both];
     big_brother:fs->file_juggler:fs [dir=both];

@@ -42,6 +42,9 @@ class SlaveDriver(Task):
         self.build_queue = self.ctx.socket(zmq.REQ)
         self.build_queue.hwm = 1
         self.build_queue.connect(config['build_queue'])
+        self.index_queue = self.ctx.socket(zmq.PUSH)
+        self.index_queue.hwm = 10
+        self.index_queue.connect(config['index_queue'])
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.slaves = {}
@@ -171,6 +174,7 @@ class SlaveDriver(Task):
                 return ['SEND', slave.build.next_file]
             else:
                 self.logger.info('slave %d: build failed', slave.slave_id)
+                self.index_queue.send_pyobj(['PKG', slave.build.package])
                 return ['DONE']
 
     def do_SENT(self, slave, *args):
