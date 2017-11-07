@@ -53,11 +53,17 @@ class SlaveDriver(Task):
     def handle_control(self, q):
         msg, *args = q.recv_pyobj()
         if msg == 'QUIT':
+            # TODO Kill all slaves...
             raise TaskQuit
         elif msg == 'PAUSE':
             self.paused = True
         elif msg == 'RESUME':
             self.paused = False
+        elif msg == 'KILL':
+            for slave in self.slaves.values():
+                if slave.slave_id == args[0]:
+                    slave.kill()
+                    break
 
     def handle_slave(self, q):
         try:

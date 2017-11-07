@@ -60,9 +60,9 @@ class PiWheelsMonitor(TerminalApplication):
         )
         self.builds_bar = widgets.ProgressBar('todo', 'done', satt='todo_smooth')
         self.disk_bar = widgets.ProgressBar('todo', 'done', satt='todo_smooth')
-        self.build_rate_label = widgets.Text('0 pkgs/hour')
-        self.build_time_label = widgets.Text('0:00:00')
-        self.build_size_label = widgets.Text('0 bytes')
+        self.build_rate_label = widgets.Text('- pkgs/hour')
+        self.build_time_label = widgets.Text('-:--:--')
+        self.build_size_label = widgets.Text('- bytes')
         status_box = widgets.AttrMap(
             widgets.Pile([
                 widgets.Columns([

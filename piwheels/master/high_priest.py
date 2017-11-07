@@ -24,7 +24,7 @@ class HighPriest(Thread):  # NOTE: not a Task descendant
         self.int_control_queue.hwm = 10
         self.int_control_queue.bind(config['int_control_queue'])
         self.ext_control_queue = self.ctx.socket(zmq.PULL)
-        self.ext_control_queue.hwm = 1
+        self.ext_control_queue.hwm = 10
         self.ext_control_queue.bind(config['ext_control_queue'])
         self.int_status_queue = self.ctx.socket(zmq.PULL)
         self.int_status_queue.hwm = 10

@@ -66,7 +66,6 @@ class PiWheelsMaster(TerminalApplication):
         return parser['master']
 
     def main(self, args):
-        signal.signal(signal.SIGTERM, self.sig_term)
         logger.info('PiWheels Master version {}'.format(__version__))
         config = self.load_configuration(args)
         ctx = zmq.Context.instance()
@@ -90,6 +89,8 @@ class PiWheelsMaster(TerminalApplication):
         for task in tasks:
             task.start()
         try:
+            logger.info('started all tasks')
+            signal.signal(signal.SIGTERM, self.sig_term)
             while True:
                 for task in tasks:
                     task.join(1)
@@ -100,28 +101,26 @@ class PiWheelsMaster(TerminalApplication):
             # This isn't logged as a warning because it's normal: when QUIT is
             # sent (e.g. by the external monitor) tasks will start to close and
             # the loop above terminates
-            logger.info('Shutting down on %s task termination', task.name)
+            logger.info('shutting down on %s task failure', str(e))
             self.send_quit(ctx, config)
         except SystemExit:
-            logger.warning('Shutting down on SIGTERM')
+            logger.warning('shutting down on SIGTERM')
             self.send_quit(ctx, config)
         except KeyboardInterrupt:
-            logger.warning('Shutting down on Ctrl+C')
+            logger.warning('shutting down on Ctrl+C')
             self.send_quit(ctx, config)
         finally:
             logger.info('closing tasks')
             for task in reversed(tasks):
                 task.close()
+            logger.info('closed all tasks')
             ctx.destroy(linger=0)
             ctx.term()
 
     def send_quit(self, ctx, config):
         q = ctx.socket(zmq.PUSH)
-        try:
-            q.connect(config['ext_control_queue'])
-            q.send_pyobj(['QUIT'])
-        finally:
-            q.close(linger=0)
+        q.connect(config['ext_control_queue'])
+        q.send_pyobj(['QUIT'])
 
     def sig_term(self, signo, stack_frame):
         raise SystemExit(0)
