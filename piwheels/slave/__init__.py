@@ -1,9 +1,9 @@
-import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import sleep
 
 import zmq
+import dateutil.parser
 from wheel import pep425tags
 
 from .builder import PiWheelsBuilder
@@ -11,9 +11,8 @@ from ..terminal import TerminalApplication
 from .. import __version__
 
 
-def timeout(arg):
-    d = datetime.strptime(arg, '%H:%M:%S')
-    return timedelta(hours=d.hour, minutes=d.minute, seconds=d.second)
+def duration(s):
+    return dateutil.parser.parse(s, default=datetime(1, 1, 1)) - datetime(1, 1, 1)
 
 
 class PiWheelsSlave(TerminalApplication):
@@ -21,28 +20,40 @@ class PiWheelsSlave(TerminalApplication):
         super().__init__(__version__)
         self.parser.add_argument(
             '-m', '--master', metavar='HOST',
-            default=os.environ.get('PW_MASTER', 'localhost'),
-            help='The IP address or hostname of the master server; defaults to '
-            'the value of the PW_MASTER env-var (%(default)s)')
+            help='The IP address or hostname of the master server; overrides '
+            'the [slave]/master entry in the configuration file')
         self.parser.add_argument(
-            '-t', '--timeout', metavar='TIME', type=timeout,
-            default=os.environ.get('PW_TIMEOUT', '03:00:00'),
+            '-t', '--timeout', metavar='TIME', type=duration,
             help='The time to wait before assuming a build has failed; '
-            'defaults to the value of the PW_TIMEOUT env-var (%(default)s)')
+            'overrides the [slave]/timeout entry in the configuration file')
 
-    def main(self, args):
+    def load_configuration(self, args):
+        config = super().load_configuration(args, default={
+            'slave': {
+                'master':  'localhost',
+                'timeout': '3h',
+            },
+        })
+        config = dict(config['slave'])
+        if args.master is not None:
+            config['master'] = args.master
+        if args.timeout is not None:
+            config['timeout'] = args.timeout
+        # Expand any ~ in output_path
+        config['timeout'] = duration(config['timeout']).total_seconds()
+        return config
+
+    def main(self, args, config):
         logging.info('PiWheels Slave version {}'.format(__version__))
         ctx = zmq.Context.instance()
-        master = args.master
-        timeout = args.timeout.total_seconds()
         slave_id = None
         builder = None
         queue = ctx.socket(zmq.REQ)
         queue.hwm = 1
         queue.ipv6 = True
-        queue.connect('tcp://{master}:5555'.format(master=master))
+        queue.connect('tcp://{master}:5555'.format(master=config['master']))
         try:
-            request = ['HELLO', timeout] + list(pep425tags.get_supported()[0])
+            request = ['HELLO', config['timeout']] + list(pep425tags.get_supported()[0])
             while True:
                 queue.send_pyobj(request)
                 reply, *args = queue.recv_pyobj()
@@ -52,7 +63,7 @@ class PiWheelsSlave(TerminalApplication):
                     assert len(args) == 1, 'Invalid HELLO message'
                     slave_id = int(args[0])
                     logging.info('Slave %d: Advertising new slave to master at %s',
-                                 slave_id, master)
+                                 slave_id, config['master'])
                     request = ['IDLE']
 
                 elif reply == 'SLEEP':
@@ -71,7 +82,7 @@ class PiWheelsSlave(TerminalApplication):
                     logging.warning('Slave %d: Building package %s version %s',
                                     slave_id, package, version)
                     builder = PiWheelsBuilder(package, version)
-                    if builder.build(timeout):
+                    if builder.build(config['timeout']):
                         logging.info('Slave %d: Build succeeded', slave_id)
                     else:
                         logging.warning('Slave %d: Build failed', slave_id)
@@ -105,7 +116,7 @@ class PiWheelsSlave(TerminalApplication):
                     pkg = [f for f in builder.files if f.filename == args[0]][0]
                     logging.info('Slave %d: Sending %s to master',
                                  slave_id, pkg.filename)
-                    self.transfer(master, slave_id, pkg)
+                    self.transfer(config['master'], slave_id, pkg)
                     request = ['SENT']
 
                 elif reply == 'DONE':

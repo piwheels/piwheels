@@ -4,6 +4,8 @@ import locale
 import logging
 import argparse
 import traceback
+from configparser import ConfigParser
+
 try:
     import argcomplete
 except ImportError:
@@ -24,7 +26,7 @@ logging.getLogger().addHandler(_CONSOLE)
 
 class TerminalApplication:
     """
-    Base class for command line applications.
+    Base class for piwheels applications.
 
     This class provides command line parsing, file globbing, response file
     handling and common logging configuration for command line utilities.
@@ -56,6 +58,9 @@ class TerminalApplication:
             self.parser.add_argument(
                 '-v', '--verbose', dest='log_level', action='store_const',
                 const=logging.INFO, help='produce more console output')
+        self.parser.add_argument(
+            '-c', '--configuration', metavar='FILE', default=None,
+            help='Specify a configuration file to load')
         arg = self.parser.add_argument(
             '-l', '--log-file', metavar='FILE',
             help='log messages to the specified file')
@@ -75,15 +80,16 @@ class TerminalApplication:
         sys.excepthook = self.handle
         args = self.parser.parse_args(args)
         self.configure_logging(args)
+        config = self.load_configuration(args)
         if args.debug:
             try:
                 import pudb
             except ImportError:
                 pudb = None
                 import pdb
-            return (pudb or pdb).runcall(self.main, args)
+            return (pudb or pdb).runcall(self.main, args, config)
         else:
-            return self.main(args) or 0
+            return self.main(args, config) or 0
 
     def configure_logging(self, args):
         _CONSOLE.setLevel(args.log_level)
@@ -126,8 +132,25 @@ class TerminalApplication:
                     self.logger.critical(msg.replace('%', '%%'))
             return 1
 
-    def main(self, args):
+    def load_configuration(self, args, default=None):
+        parser = ConfigParser(interpolation=None)
+        if default is None:
+            default = {}
+        for section, section_items in default.items():
+            parser.add_section(section)
+            parser[section].update(section_items)
+        if args.configuration is not None:
+            config_files = parser.read(args.configuration)
+        else:
+            config_files = parser.read([
+                '/etc/piwheels.conf',
+                '/usr/local/etc/piwheels.conf',
+                os.path.expanduser('~/.config/piwheels/piwheels.conf'),
+            ])
+        for f in config_files:
+            self.logger.info('read configuration from %s', f)
+        return parser
+
+    def main(self, args, config):
         "Called as the main body of the utility"
         raise NotImplementedError
-
-

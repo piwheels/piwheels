@@ -45,6 +45,8 @@ palette = [
     ('footer',      'light gray',      'dark blue'),
     ('dialog',      'light gray',      'dark blue'),
     ('button',      'light gray',      'dark blue'),
+    ('coltrans',    'dark cyan',       'dark blue'),
+    ('colheader',   'black',           'dark cyan'),
     ('inv_dialog',  'dark blue',       'light gray'),
     ('inv_normal',  'black',           'light gray'),
     ('inv_hotkey',  'dark cyan',       'light gray'),

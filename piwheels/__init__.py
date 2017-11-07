@@ -11,7 +11,7 @@ __requires__ = ['pyzmq']
 __extra_requires__ = {
     'monitor': ['urwid'],
     'master':  ['pip', 'wheel', 'sqlalchemy'],
-    'slave':   ['pip', 'wheel'],
+    'slave':   ['pip', 'wheel', 'python-dateutil'],
     'test':    ['pytest'],
     }
 

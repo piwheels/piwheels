@@ -46,6 +46,12 @@ class SlaveDriver(Task):
         self.fs = FsClient(config)
         self.slaves = {}
 
+    def list_slaves(self):
+        self._ctrl(['HELLO'])
+
+    def kill_slave(self, id):
+        self._ctrl(['KILL', id])
+
     def close(self):
         super().close()
         SlaveState.status_queue = None
@@ -64,6 +70,9 @@ class SlaveDriver(Task):
                 if slave.slave_id == args[0]:
                     slave.kill()
                     break
+        elif msg == 'HELLO':
+            for slave in self.slaves.values():
+                slave.hello()
 
     def handle_slave(self, q):
         try:

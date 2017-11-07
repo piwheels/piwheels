@@ -1,13 +1,12 @@
 import os
 import signal
 import logging
-from configparser import ConfigParser
 
 import zmq
 
 from .. import __version__
 from ..terminal import TerminalApplication
-from .high_priest import HighPriest
+from .tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
 from .the_oracle import TheOracle
@@ -18,9 +17,6 @@ from .index_scribe import IndexScribe
 from .cloud_gazer import CloudGazer
 
 
-logger = logging.getLogger('master')
-
-
 class TaskFailure(RuntimeError):
     pass
 
@@ -28,51 +24,49 @@ class TaskFailure(RuntimeError):
 class PiWheelsMaster(TerminalApplication):
     def __init__(self):
         super().__init__(__version__, __doc__)
-        self.parser.add_argument(
-            '-c', '--configuration', metavar='FILE', default=None,
-            help='Specify a configuration file to load')
+        self.logger = logging.getLogger('master')
 
     def load_configuration(self, args):
-        parser = ConfigParser(interpolation=None, defaults={
-            'database':          'postgres:///piwheels',
-            'pypi_root':         'https://pypi.python.org/pypi',
-            'output_path':       '/var/www',
-            'int_control_queue': 'inproc://control',
-            'int_status_queue':  'inproc://status',
-            'index_queue':       'inproc://indexes',
-            'build_queue':       'inproc://builds',
-            'fs_queue':          'inproc://fs',
-            'db_queue':          'inproc://db',
-            'oracle_queue':      'inproc://oracle',
-            'ext_control_queue': 'ipc:///tmp/piw-control',
-            'ext_status_queue':  'ipc:///tmp/piw-status',
-            'slave_queue':       'tcp://*:5555',
-            'file_queue':        'tcp://*:5556',
+        config = super().load_configuration(args, default={
+            'master': {
+                'database':          'postgres:///piwheels',
+                'pypi_root':         'https://pypi.python.org/pypi',
+                'output_path':       '/var/www',
+                'int_status_queue':  'inproc://status',
+                'index_queue':       'inproc://indexes',
+                'build_queue':       'inproc://builds',
+                'fs_queue':          'inproc://fs',
+                'db_queue':          'inproc://db',
+                'oracle_queue':      'inproc://oracle',
+                'control_queue':     'ipc:///tmp/piw-control',
+                'ext_status_queue':  'ipc:///tmp/piw-status',
+                'slave_queue':       'tcp://*:5555',
+                'file_queue':        'tcp://*:5556',
+            },
         })
-        parser.add_section('master')
-        parser.add_section('slave')
-        if args.configuration is not None:
-            config_files = parser.read(args.configuration)
-        else:
-            config_files = parser.read([
-                '/etc/piwheels.conf',
-                '/usr/local/etc/piwheels.conf',
-                os.path.expanduser('~/.config/piwheels/piwheels.conf'),
-            ])
-        for f in config_files:
-            logger.info('read configuration from %s', f)
-        # Expand any ~ in output_path
-        parser['master']['output_path'] = os.path.expanduser(parser['master']['output_path'])
-        return parser['master']
+        config = dict(config['master'])
+        # Expand any ~ in paths
+        config['output_path'] = os.path.expanduser(config['output_path'])
+        for item, value in list(config.items()):
+            if item.endswith('_queue') and value.startswith('ipc://'):
+                config[item] = os.path.expanduser(value)
+        return config
 
-    def main(self, args):
-        logger.info('PiWheels Master version {}'.format(__version__))
-        config = self.load_configuration(args)
+    def main(self, args, config):
+        self.logger.info('PiWheels Master version {}'.format(__version__))
         ctx = zmq.Context.instance()
-        tasks = [
+        self.control_queue = ctx.socket(zmq.PULL)
+        self.control_queue.hwm = 10
+        self.control_queue.bind(config['control_queue'])
+        self.int_status_queue = ctx.socket(zmq.PULL)
+        self.int_status_queue.hwm = 10
+        self.int_status_queue.bind(config['int_status_queue'])
+        self.ext_status_queue = ctx.socket(zmq.PUB)
+        self.ext_status_queue.hwm = 10
+        self.ext_status_queue.bind(config['ext_status_queue'])
+        self.tasks = [
             task(config)
             for task in (
-                HighPriest,
                 Seraph,
                 TheOracle,
                 TheOracle,
@@ -85,42 +79,70 @@ class PiWheelsMaster(TerminalApplication):
                 SlaveDriver,
             )
         ]
-        logger.info('starting tasks')
-        for task in tasks:
+        self.logger.info('starting tasks')
+        for task in self.tasks:
             task.start()
+        self.logger.info('started all tasks')
+        signal.signal(signal.SIGTERM, self.sig_term)
         try:
-            logger.info('started all tasks')
-            signal.signal(signal.SIGTERM, self.sig_term)
-            while True:
-                for task in tasks:
-                    task.join(1)
-                    if not task.is_alive():
-                        # As soon as any task dies, terminate
-                        raise TaskFailure(task.name)
-        except TaskFailure as e:
-            # This isn't logged as a warning because it's normal: when QUIT is
-            # sent (e.g. by the external monitor) tasks will start to close and
-            # the loop above terminates
-            logger.info('shutting down on %s task failure', str(e))
-            self.send_quit(ctx, config)
+            self.main_loop()
+        except TaskQuit:
+            pass
         except SystemExit:
-            logger.warning('shutting down on SIGTERM')
-            self.send_quit(ctx, config)
+            self.logger.warning('shutting down on SIGTERM')
         except KeyboardInterrupt:
-            logger.warning('shutting down on Ctrl+C')
-            self.send_quit(ctx, config)
+            self.logger.warning('shutting down on Ctrl+C')
         finally:
-            logger.info('closing tasks')
-            for task in reversed(tasks):
+            self.logger.info('closing tasks')
+            for task in reversed(self.tasks):
+                task.quit()
                 task.close()
-            logger.info('closed all tasks')
+            self.logger.info('closed all tasks')
             ctx.destroy(linger=0)
             ctx.term()
 
-    def send_quit(self, ctx, config):
-        q = ctx.socket(zmq.PUSH)
-        q.connect(config['ext_control_queue'])
-        q.send_pyobj(['QUIT'])
+    def main_loop(self):
+        poller = zmq.Poller()
+        poller.register(self.control_queue, zmq.POLLIN)
+        poller.register(self.int_status_queue, zmq.POLLIN)
+        while True:
+            socks = dict(poller.poll())
+            if self.int_status_queue in socks:
+                self.ext_status_queue.send(self.int_status_queue.recv())
+            if self.control_queue in socks:
+                msg, *args = self.control_queue.recv_pyobj()
+                try:
+                    handler = getattr(self, 'do_%s' % msg)
+                except AttributeError:
+                    self.logger.error('ignoring invalid %s message', msg)
+                else:
+                    handler(args)
+
+    def do_QUIT(self, args):
+        self.logger.warning('shutting down on QUIT message')
+        raise TaskQuit
+
+    def do_KILL(self, args):
+        self.logger.warning('killing slave %d', args[0])
+        for task in self.tasks:
+            if isinstance(task, SlaveDriver):
+                task.kill_slave(args[0])
+
+    def do_PAUSE(self, args):
+        self.logger.warning('pausing operations')
+        for task in self.tasks:
+            task.pause()
+
+    def do_RESUME(self, args):
+        self.logger.warning('resuming operations')
+        for task in self.tasks:
+            task.resume()
+
+    def do_HELLO(self, args):
+        self.logger.warning('sending status to new monitor')
+        for task in self.tasks:
+            if isinstance(task, SlaveDriver):
+                task.list_slaves()
 
     def sig_term(self, signo, stack_frame):
         raise SystemExit(0)

@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 
 import zmq
@@ -9,16 +10,31 @@ from .. import __version__
 
 class PiWheelsMonitor(TerminalApplication):
     def __init__(self):
-        super().__init__(__version__, log_params=False)
+        super().__init__(__version__, __doc__, log_params=False)
 
-    def main(self, args):
+    def load_configuration(self, args):
+        config = super().load_configuration(args, default={
+            'monitor': {
+                'ext_control_queue': 'ipc:///tmp/piw-control',
+                'ext_status_queue':  'ipc:///tmp/piw-status',
+            },
+        })
+        config = dict(config['monitor'])
+        # Expand any ~ in paths
+        for item, value in list(config.items()):
+            if item.endswith('_queue') and value.startswith('ipc://'):
+                config[item] = os.path.expanduser(value)
+        return config
+
+    def main(self, args, config):
         ctx = zmq.Context()
         self.status_queue = ctx.socket(zmq.SUB)
         self.status_queue.hwm = 10
-        self.status_queue.connect('ipc:///tmp/piw-status')
+        self.status_queue.connect(config['ext_status_queue'])
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         self.ctrl_queue = ctx.socket(zmq.PUSH)
-        self.ctrl_queue.connect('ipc:///tmp/piw-control')
+        self.ctrl_queue.connect(config['ext_control_queue'])
+        self.ctrl_queue.send_pyobj(['HELLO'])
         try:
             self.loop = widgets.MainLoop(
                 *self.build_ui(),
@@ -47,7 +63,10 @@ class PiWheelsMonitor(TerminalApplication):
         list_box = widgets.ListBox(self.slave_list)
         actions_box = widgets.AttrMap(
             widgets.Pile([
-                widgets.Divider('\N{UPPER HALF BLOCK}'),
+                widgets.AttrMap(
+                    widgets.Divider('\N{UPPER HALF BLOCK}'),
+                    'coltrans'
+                ),
                 widgets.Columns([
                     self.build_button('Pause', self.pause),
                     self.build_button('Resume', self.resume),
@@ -81,7 +100,21 @@ class PiWheelsMonitor(TerminalApplication):
                         self.build_size_label,
                     ]),
                 ]),
-                widgets.Divider('\N{LOWER HALF BLOCK}')
+                widgets.AttrMap(
+                    widgets.Divider('\N{LOWER HALF BLOCK}'),
+                    'coltrans'
+                ),
+                widgets.AttrMap(
+                    widgets.Columns([
+                        (2, widgets.Text('S')),
+                        (3, widgets.Text(' #')),
+                        (9, widgets.Text('  UpTime')),
+                        (9, widgets.Text('TaskTime')),
+                        (6, widgets.Text('ABI')),
+                        widgets.Text('Task'),
+                    ]),
+                    'colheader'
+                ),
             ]),
             'header'
         )
@@ -176,11 +209,12 @@ class PiWheelsMonitor(TerminalApplication):
                 if slave.widget == widget:
                     self.slave_to_kill = slave_id
                     break
-            dialog = widgets.YesNoDialog('Kill Slave',
-                                 'Are you sure you wish to shutdown slave {}?\n\n'
-                                 'NOTE: this will only request shutdown after '
-                                 'current task finishes; it will not terminate '
-                                 'a "stuck" slave'.format(self.slave_to_kill))
+            dialog = widgets.YesNoDialog(
+                'Kill Slave',
+                'Are you sure you wish to shutdown slave {}?\n\n'
+                'NOTE: this will only request shutdown after '
+                'current task finishes; it will not terminate '
+                'a "stuck" slave'.format(self.slave_to_kill))
             widgets.connect_signal(dialog, 'yes', self._kill_slave)
             widgets.connect_signal(dialog, 'no', self.close_popup)
             self.show_popup(dialog)
@@ -193,10 +227,11 @@ class PiWheelsMonitor(TerminalApplication):
         self.slave_to_kill = None
 
     def terminate_master(self, widget=None):
-        dialog = widgets.YesNoDialog('Terminate Master',
-                             'Are you sure you wish to shutdown the master?\n\n'
-                             'NOTE: this will also request shutdown of all '
-                             'slaves, and exit this application')
+        dialog = widgets.YesNoDialog(
+            'Terminate Master',
+            'Are you sure you wish to shutdown the master?\n\n'
+            'NOTE: this will also request shutdown of all '
+            'slaves, and exit this application')
         widgets.connect_signal(dialog, 'yes', self._terminate_master)
         widgets.connect_signal(dialog, 'no', self.close_popup)
         self.show_popup(dialog)
@@ -210,8 +245,8 @@ class SlaveListWalker(widgets.ListWalker):
     def __init__(self):
         super().__init__()
         self.focus = None
-        self.slaves = {} # maps slave ID to SlaveState
-        self.widgets = [] # list of SlaveState.widget objects in list order
+        self.slaves = {}   # maps slave ID to SlaveState
+        self.widgets = []  # list of SlaveState.widget objects in list order
 
     def __getitem__(self, position):
         return self.widgets[position]
@@ -227,9 +262,9 @@ class SlaveListWalker(widgets.ListWalker):
         return position - 1
 
     def set_focus(self, position):
-        if position < 0: # don't permit negative indexes for focus
+        if position < 0:  # don't permit negative indexes for focus
             raise IndexError
-        self.widgets[position] # raises IndexError if position is invalid
+        self.widgets[position]  # raises IndexError if position is invalid
         self.focus = position
         self._modified()
 
@@ -237,7 +272,7 @@ class SlaveListWalker(widgets.ListWalker):
         try:
             state = self.slaves[slave_id]
         except KeyError:
-            state = SlaveState()
+            state = SlaveState(slave_id)
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
         state.update(timestamp, msg, *args)
@@ -261,13 +296,18 @@ class SlaveListWalker(widgets.ListWalker):
 
 
 class SlaveState:
-    def __init__(self):
+    def __init__(self, slave_id):
         self.widget = widgets.AttrMap(
             widgets.SelectableIcon(''), None,
             focus_map={'status': 'inv_status'}
         )
         self.terminated = False
+        self.slave_id = slave_id
         self.last_msg = ''
+        self.py_version = '-'
+        self.abi = '-'
+        self.platform = '-'
+        self.first_seen = None
         self.last_seen = None
         self.status = ''
 
@@ -276,6 +316,10 @@ class SlaveState:
         self.last_seen = timestamp
         if msg == 'HELLO':
             self.status = 'Initializing'
+            self.first_seen = timestamp
+            self.py_version = args[0]
+            self.abi = args[1]
+            self.platform = args[2]
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
         elif msg == 'BYE':
@@ -289,17 +333,35 @@ class SlaveState:
             self.status = 'Cleaning up after build'
         self.tick()
 
+    @property
+    def state(self):
+        if self.last_msg == 'SLEEP':
+            return 'idle'
+        if self.last_seen is not None:
+            if datetime.utcnow() - self.last_seen > timedelta(minutes=10):
+                return 'silent'
+        return 'busy'
+
     def tick(self):
         self.widget.original_widget.set_text([
-            ('idle' if self.last_msg == 'SLEEP' else
-             'silent' if datetime.utcnow() - self.last_seen > timedelta(minutes=10) else
-             'busy', '*'),
-            ('time', ' '),
-            # Annoyingly, timedelta doesn't have a __format__ method...
-            ('time', str(datetime.utcnow().replace(microsecond=0) - self.last_seen.replace(microsecond=0))),
-            ('time', ' '),
+            (self.state, '* '),
+            ('status', '%2s' % self.slave_id),
+            ('status', ' '),
+            ('status', since(self.first_seen)),
+            ('status', ' '),
+            ('status', since(self.last_seen)),
+            ('status', ' '),
+            ('status', '%-5s' % self.abi),
+            ('status', ' '),
             ('status', self.status),
         ])
+
+
+def since(dt, template='%8s'):
+    if dt is None:
+        return template % '-'
+    else:
+        return template % (datetime.utcnow().replace(microsecond=0) - dt.replace(microsecond=0))
 
 
 main = PiWheelsMonitor()

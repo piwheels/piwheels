@@ -239,6 +239,7 @@ class SlaveState:
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
+        self._first_seen = datetime.utcnow()
         self._last_seen = None
         self._request = None
         self._reply = None
@@ -252,6 +253,15 @@ class SlaveState:
             reply='none' if self.reply is None else self.reply[0],
             alive='killed' if self.terminated else 'alive'
         )
+
+    def hello(self):
+        SlaveState.status_queue.send_pyobj(
+            [self._slave_id, self._first_seen, 'HELLO',
+             self._native_py_version, self._native_abi, self._native_platform,
+             ])
+        if self._reply is not None:
+            SlaveState.status_queue.send_pyobj(
+                [self._slave_id, self._last_seen] + self._reply)
 
     def kill(self):
         self._terminated = True
@@ -285,6 +295,10 @@ class SlaveState:
         return self._native_py_version
 
     @property
+    def first_seen(self):
+        return self._first_seen
+
+    @property
     def last_seen(self):
         return self._last_seen
 
@@ -315,8 +329,11 @@ class SlaveState:
         self._reply = value
         if value[0] == 'DONE':
             self._build = None
-        SlaveState.status_queue.send_pyobj(
-            [self._slave_id, self._last_seen] + value)
+        if value[0] == 'HELLO':
+            self.hello()
+        else:
+            SlaveState.status_queue.send_pyobj(
+                [self._slave_id, self._last_seen] + value)
 
 
 class TransferState:

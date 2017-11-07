@@ -23,14 +23,31 @@ class Task(Thread):
         self.handlers = OrderedDict()
         self.poller = zmq.Poller()
         self.logger = logging.getLogger(self.name)
-        control_queue = self.ctx.socket(zmq.SUB)
-        control_queue.connect(config['int_control_queue'])
-        control_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        control_queue = self.ctx.socket(zmq.PULL)
+        control_queue.hwm = 10
+        control_queue.bind('inproc://ctrl-%s' % self.name)
+        self.quit_queue = self.ctx.socket(zmq.PUSH)
+        self.quit_queue.connect(config['control_queue'])
         self.register(control_queue, self.handle_control)
 
     def register(self, queue, handler, flags=zmq.POLLIN):
         self.poller.register(queue, flags)
         self.handlers[queue] = handler
+
+    def _ctrl(self, msg):
+        q = self.ctx.socket(zmq.PUSH)
+        q.connect('inproc://ctrl-%s' % self.name)
+        q.send_pyobj(msg)
+        q.close()
+
+    def pause(self):
+        self._ctrl(['PAUSE'])
+
+    def resume(self):
+        self._ctrl(['RESUME'])
+
+    def quit(self):
+        self._ctrl(['QUIT'])
 
     def close(self):
         self.logger.info('closing')
@@ -62,6 +79,9 @@ class Task(Thread):
                 self.poll()
             except TaskQuit:
                 break
+            except:
+                self.quit_queue.send_pyobj(['QUIT'])
+                raise
 
 
 class PauseableTask(Task):
