@@ -259,7 +259,7 @@ class SlaveState:
             [self._slave_id, self._first_seen, 'HELLO',
              self._native_py_version, self._native_abi, self._native_platform,
              ])
-        if self._reply is not None:
+        if self._reply is not None and self._reply[0] != 'HELLO':
             SlaveState.status_queue.send_pyobj(
                 [self._slave_id, self._last_seen] + self._reply)
 
