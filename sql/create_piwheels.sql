@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id) VALUES (1, '0.7');
+INSERT INTO configuration(id) VALUES (1, '0.8');
 GRANT UPDATE ON configuration TO piwheels;
 
 -- packages
@@ -253,12 +253,8 @@ CREATE VIEW statistics AS
         FROM packages p JOIN versions v ON p.package = v.package
         WHERE NOT p.skip AND NOT v.skip
     ),
-    build_pkgs AS (
-        SELECT COUNT(*) AS packages_built
-        FROM (SELECT DISTINCT package FROM builds) AS t
-    ),
     build_vers AS (
-        SELECT COUNT(*) AS versions_built
+        SELECT COUNT(*) AS versions_tried
         FROM (SELECT DISTINCT package, version FROM builds) AS t
     ),
     build_stats AS (
@@ -274,6 +270,18 @@ CREATE VIEW statistics AS
         FROM builds
         WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
     ),
+    build_pkgs AS (
+        SELECT COUNT(*) AS packages_built
+        FROM (
+            SELECT DISTINCT package
+            FROM builds b JOIN files f ON b.build_id = f.build_id
+            WHERE b.status
+        ) AS t
+    ),
+    file_count AS (
+        SELECT COUNT(*) AS files_count
+        FROM files
+    ),
     file_stats AS (
         -- Exclude armv6l packages as they're just hard-links to armv7l packages
         -- and thus don't really count towards space used
@@ -285,12 +293,13 @@ CREATE VIEW statistics AS
         p.packages_count,
         bp.packages_built,
         v.versions_count,
-        bv.versions_built,
+        bv.versions_tried,
         bs.builds_count,
         bs.builds_count_success,
         bl.builds_count_last_hour,
         bs.builds_time,
-        f.builds_size
+        fc.files_count,
+        fs.builds_size
     FROM
         package_stats p,
         version_stats v,
@@ -298,7 +307,8 @@ CREATE VIEW statistics AS
         build_vers bv,
         build_stats bs,
         build_latest bl,
-        file_stats f;
+        file_count fc,
+        file_stats fs;
 
 GRANT SELECT ON statistics TO piwheels;
 

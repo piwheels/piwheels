@@ -15,7 +15,7 @@ class PiWheelsMonitor(TerminalApplication):
     def load_configuration(self, args):
         config = super().load_configuration(args, default={
             'monitor': {
-                'ext_control_queue': 'ipc:///tmp/piw-control',
+                'control_queue': 'ipc:///tmp/piw-control',
                 'ext_status_queue':  'ipc:///tmp/piw-status',
             },
         })
@@ -33,7 +33,7 @@ class PiWheelsMonitor(TerminalApplication):
         self.status_queue.connect(config['ext_status_queue'])
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         self.ctrl_queue = ctx.socket(zmq.PUSH)
-        self.ctrl_queue.connect(config['ext_control_queue'])
+        self.ctrl_queue.connect(config['control_queue'])
         self.ctrl_queue.send_pyobj(['HELLO'])
         try:
             self.loop = widgets.MainLoop(
@@ -178,7 +178,7 @@ class PiWheelsMonitor(TerminalApplication):
 
     def update_status(self, status_info):
         self.builds_bar.set_completion(
-            (status_info['versions_built'] * 100 / status_info['versions_count'])
+            (status_info['versions_tried'] * 100 / status_info['versions_count'])
             if status_info['versions_count'] else 0)
         self.disk_bar.set_completion(
             status_info['disk_free'] * 100 / status_info['disk_size'])

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import zmq
 
 from .tasks import PauseableTask
-from .db import Database
+from .the_oracle import DbClient
 from .file_juggler import FsClient
 
 
@@ -29,7 +29,7 @@ class BigBrother(PauseableTask):
         self.register(status_queue, self.handle_status, zmq.POLLOUT)
         self.register(index_queue, self.handle_index, zmq.POLLOUT)
         self.fs = FsClient(config)
-        self.db = Database(config['database'])
+        self.db = DbClient(config)
         self.timestamp = datetime.utcnow() - timedelta(seconds=30)
         self.status_info1 = None
         self.status_info2 = None
@@ -45,12 +45,13 @@ class BigBrother(PauseableTask):
                     'packages_count':   rec.packages_count,
                     'packages_built':   rec.packages_built,
                     'versions_count':   rec.versions_count,
-                    'versions_built':   rec.versions_built,
+                    'versions_tried':   rec.versions_tried,
                     'builds_count':     rec.builds_count,
                     'builds_last_hour': rec.builds_count_last_hour,
                     'builds_success':   rec.builds_count_success,
                     'builds_time':      rec.builds_time,
                     'builds_size':      rec.builds_size,
+                    'files_count':      rec.files_count,
                     'disk_free':        stat.f_frsize * stat.f_bavail,
                     'disk_size':        stat.f_frsize * stat.f_blocks,
                 }
