@@ -33,7 +33,7 @@ class IndexScribe(PauseableTask):
         self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
         self.output_path = Path(config['output_path'])
         index_queue = self.ctx.socket(zmq.PULL)
-        index_queue.hwm = 10
+        index_queue.hwm = 100
         index_queue.bind(config['index_queue'])
         self.register(index_queue, self.handle_index)
         self.db = DbClient(config)
@@ -57,16 +57,8 @@ class IndexScribe(PauseableTask):
                 source.close()
 
     def run(self):
-        # Build the initial index from the set of directories that exist
-        # under the output path (this is much faster than querying the
-        # database for the same info)
         self.logger.info('building package cache')
-        self.package_cache = {
-            str(d.relative_to(self.output_path / 'simple'))
-            for d in (self.output_path / 'simple').iterdir()
-            if d.is_dir()
-            and not d.is_symlink()
-        }
+        self.package_cache = set(self.db.get_all_packages())
         super().run()
 
     def handle_index(self, q):
@@ -125,6 +117,13 @@ class IndexScribe(PauseableTask):
     def write_package_index(self, package, files):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
+        try:
+            pkg_dir.mkdir()
+        except FileExistsError:
+            # See notes below
+            if pkg_dir.is_symlink():
+                pkg_dir.unlink()
+                pkg_dir.mkdir()
         with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir), delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
@@ -167,9 +166,9 @@ class IndexScribe(PauseableTask):
                     # possible but not to clobber "real" packages if they exist.
                     #
                     # What about new packages that want to take the place of a
-                    # canonicalized symlink? TransferState.commit handles that
-                    # by removing the symlink and making a directory in its
-                    # place.
+                    # canonicalized symlink? We (and TransferState.commit)
+                    # handle that by removing the symlink and making a directory
+                    # in its place.
                     pkg_dir.with_name(canonicalize_name(pkg_dir.name)).symlink_to(pkg_dir.name)
                 except FileExistsError:
                     pass
