@@ -1,3 +1,5 @@
+"Defines the :class:`CloudGazer` task; see class for more details"
+
 from .tasks import PauseableTask
 from .pypi import PyPI
 from .the_oracle import DbClient
@@ -6,8 +8,8 @@ from .the_oracle import DbClient
 class CloudGazer(PauseableTask):
     """
     This task scrapes PyPI for the list of available packages, and the versions
-    of those packages. This information is written into the backend database for
-    :class:`QueueStuffer` to use.
+    of those packages. This information is written into the backend database
+    for :class:`QueueStuffer` to use.
     """
     name = 'master.cloud_gazer'
 
@@ -26,7 +28,8 @@ class CloudGazer(PauseableTask):
                         self.logger.info('added package %s', package)
             else:
                 if self.db.add_new_package_version(package, version):
-                    self.logger.info('added package %s version %s', package, version)
+                    self.logger.info('added package %s version %s',
+                                     package, version)
             self.poll(0)
         self.db.set_pypi_serial(self.pypi.last_serial)
 

@@ -1,3 +1,9 @@
+"""
+Implements the base classes (:class:`Task` and its derivative
+:class:`PauseableTask`) which form the basis of all the tasks in the piwheels
+master.
+"""
+
 import logging
 from threading import Thread
 from collections import OrderedDict
@@ -13,6 +19,13 @@ class TaskQuit(Exception):
 
 
 class Task(Thread):
+    """
+    The :class:`Task` class is a :class:`~threading.Thread` derivative which is
+    the base for all tasks in the piwheels master. The :meth:`run` method is
+    overridden to perform a simple task loop which calls :meth:`loop` once a
+    cycle, and :meth:`poll` to react to any messages arriving into queues.
+    Queues are associated with handlers via the :meth:`register` method.
+    """
     name = 'Task'
 
     def __init__(self, config):
@@ -31,53 +44,100 @@ class Task(Thread):
         self.register(control_queue, self.handle_control)
 
     def register(self, queue, handler, flags=zmq.POLLIN):
+        """
+        Register *queue* to be polled on each cycle of the task. Any messages
+        with the relevant *flags* (defaults to ``POLLIN``) will trigger the
+        specified *handler* method which is expected to take a single argument
+        which will be *queue*.
+
+        :param zmq.Socket queue:
+            The queue to poll.
+
+        :param handler:
+            The function or method to call when a message with matching *flags*
+            arrives in *queue*.
+
+        :param int flags:
+            The flags to match in the queue poller (defaults to ``POLLIN``).
+        """
         self.poller.register(queue, flags)
         self.handlers[queue] = handler
 
     def _ctrl(self, msg):
-        q = self.ctx.socket(zmq.PUSH)
-        q.connect('inproc://ctrl-%s' % self.name)
-        q.send_pyobj(msg)
-        q.close()
+        queue = self.ctx.socket(zmq.PUSH)
+        queue.connect('inproc://ctrl-%s' % self.name)
+        queue.send_pyobj(msg)
+        queue.close()
 
     def pause(self):
+        """
+        Requests that the task pause itself. This is an idempotent method; it's
+        always safe to call repeatedly and even if the task isn't pauseable
+        it'll simply be ignored.
+        """
         self._ctrl(['PAUSE'])
 
     def resume(self):
+        """
+        Requests that the task resume itself. This is an idempotent method;
+        it's safe to call repeatedly and even if the task isn't pauseable it'll
+        simply be ignored.
+        """
         self._ctrl(['RESUME'])
 
     def quit(self):
+        """
+        Requests that the task terminate at its earliest convenience. To wait
+        until the task has actually closed, call :meth:`join` afterwards.
+        """
         self._ctrl(['QUIT'])
 
-    def close(self):
-        self.logger.info('closing')
-        self.join()
-
-    def handle_control(self, q):
-        msg, *args = q.recv_pyobj()
+    def handle_control(self, queue):
+        """
+        Default handler for the internal control queue. In this base
+        implementation it simply handles the "QUIT" message by raising TaskQuit
+        (which the :meth:`run` method will catch and use as a signal to end).
+        """
+        msg, *args = queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
 
     def loop(self):
+        """
+        This method is called once per loop of the task's :meth:`run` method.
+        If the task needs to do some work periodically, this is the place to do
+        it.
+        """
         pass
 
     def poll(self, timeout=1000):
+        """
+        This method is called once per loop of the task's :meth:`run` method.
+        It polls all registered queues and calls their associated handlers if
+        the poll is successful.
+        """
         while True:
             socks = dict(self.poller.poll(timeout))
             try:
-                for q in socks:
-                    self.handlers[q](q)
+                for queue in socks:
+                    self.handlers[queue](queue)
             except zmq.error.Again:
                 continue
             break
 
     def run(self):
+        """
+        This method is the main task loop. Override this to perform one-off
+        startup processing within the task's background thread, and to perform
+        any finalization required.
+        """
         self.logger.info('starting')
         while True:
             try:
                 self.loop()
                 self.poll()
             except TaskQuit:
+                self.logger.info('closing')
                 break
             except:
                 self.quit_queue.send_pyobj(['QUIT'])
@@ -85,6 +145,14 @@ class Task(Thread):
 
 
 class PauseableTask(Task):
+    """
+    Derivative of :class:`Task` that implements a rudimentary pausing
+    mechanism.  When the "PAUSE" message is received on the internal control
+    queue, the task will enter a loop which simply polls the control queue
+    waiting for "RESUME" or "QUIT". No other work will be done
+    (:meth:`Task.loop` and :meth:`Task.poll` will not be called) until the task
+    is resumed (or terminated).
+    """
     def handle_control(self, q):
         msg, *args = q.recv_pyobj()
         if msg == 'QUIT':

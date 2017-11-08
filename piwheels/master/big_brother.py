@@ -1,3 +1,5 @@
+"Defines the :class:`BigBrother` task; see class for more details"
+
 from datetime import datetime, timedelta
 
 import zmq
@@ -42,26 +44,37 @@ class BigBrother(PauseableTask):
             stat = self.fs.statvfs()
             rec = self.db.get_statistics()
             self.status_info1 = self.status_info2 = {
-                    'packages_count':   rec.packages_count,
-                    'packages_built':   rec.packages_built,
-                    'versions_count':   rec.versions_count,
-                    'versions_tried':   rec.versions_tried,
-                    'builds_count':     rec.builds_count,
-                    'builds_last_hour': rec.builds_count_last_hour,
-                    'builds_success':   rec.builds_count_success,
-                    'builds_time':      rec.builds_time,
-                    'builds_size':      rec.builds_size,
-                    'files_count':      rec.files_count,
-                    'disk_free':        stat.f_frsize * stat.f_bavail,
-                    'disk_size':        stat.f_frsize * stat.f_blocks,
-                }
+                'packages_count':   rec.packages_count,
+                'packages_built':   rec.packages_built,
+                'versions_count':   rec.versions_count,
+                'versions_tried':   rec.versions_tried,
+                'builds_count':     rec.builds_count,
+                'builds_last_hour': rec.builds_count_last_hour,
+                'builds_success':   rec.builds_count_success,
+                'builds_time':      rec.builds_time,
+                'builds_size':      rec.builds_size,
+                'files_count':      rec.files_count,
+                'disk_free':        stat.f_frsize * stat.f_bavail,
+                'disk_size':        stat.f_frsize * stat.f_blocks,
+            }
 
-    def handle_index(self, q):
+    def handle_index(self, queue):
+        """
+        Handler for the index_queue. Whenever a slot becomes available, and an
+        updated status_info1 package is available, send a message to update the
+        home page.
+        """
         if self.status_info1 is not None:
-            q.send_pyobj(['HOME', self.status_info1])
+            queue.send_pyobj(['HOME', self.status_info1])
             self.status_info1 = None
 
-    def handle_status(self, q):
+    def handle_status(self, queue):
+        """
+        Handler for the internal status queue. Whenever a slot becomes
+        available, and an updated status_info2 package is available, send a
+        message with the latest status (ultimately this winds up going to any
+        attached monitors via the external status queue).
+        """
         if self.status_info2 is not None:
-            q.send_pyobj([-1, self.timestamp, 'STATUS', self.status_info2])
+            queue.send_pyobj([-1, self.timestamp, 'STATUS', self.status_info2])
             self.status_info2 = None

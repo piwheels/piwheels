@@ -1,3 +1,5 @@
+"Defines the :class:`IndexScribe` task; see class for more details"
+
 import re
 import os
 import tempfile
@@ -13,24 +15,25 @@ from .the_oracle import DbClient
 
 class IndexScribe(PauseableTask):
     """
-    This task is responsible for writing web-page ``index.html`` files. It reads
-    the names of packages off the internal "indexes" queue and rebuilds the
-    ``index.html`` for that package and, optionally, the overall ``index.html``
-    if the package is one that wasn't previously present.
+    This task is responsible for writing web-page ``index.html`` files. It
+    reads the names of packages off the internal "indexes" queue and rebuilds
+    the ``index.html`` for that package and, optionally, the overall
+    ``index.html`` if the package is one that wasn't previously present.
 
     .. note::
 
         It is important to note that package names are never pushed into the
         internal "indexes" queue until all file-transfers associated with the
-        build are complete. Furthermore, while the entire index for a package is
-        re-built, hashes are *never* re-calculated from the disk files (they are
-        always read from the database).
+        build are complete. Furthermore, while the entire index for a package
+        is re-built, hashes are *never* re-calculated from the disk files (they
+        are always read from the database).
     """
     name = 'master.index_scribe'
 
     def __init__(self, config):
         super().__init__(config)
-        self.homepage_template = resource_string(__name__, 'index.template.html').decode('utf-8')
+        self.homepage_template = resource_string(
+            __name__, 'index.template.html').decode('utf-8')
         self.output_path = Path(config['output_path'])
         index_queue = self.ctx.socket(zmq.PULL)
         index_queue.hwm = 100
@@ -41,6 +44,10 @@ class IndexScribe(PauseableTask):
         self.setup_output_path()
 
     def setup_output_path(self):
+        """
+        Called on task startup to copy all static resources into the output
+        path (and to make sure the output path exists as a directory).
+        """
         self.logger.info('setting up output path')
         try:
             self.output_path.mkdir()
@@ -61,14 +68,27 @@ class IndexScribe(PauseableTask):
         self.package_cache = set(self.db.get_all_packages())
         super().run()
 
-    def handle_index(self, q):
-        msg, *args = q.recv_pyobj()
+    def handle_index(self, queue):
+        """
+        Handle incoming requests to (re)build index files. These will be in the
+        form of "HOME", a request to write the homepage with some associated
+        statistics, or "PKG", a request to write the index for the specified
+        package.
+
+        .. note::
+
+            In all handlers below, care is taken to ensure clients never see a
+            partially written file and that temporary files are cleaned up in
+            the event of any exceptions.
+        """
+        msg, *args = queue.recv_pyobj()
         if msg == 'PKG':
             package = args[0]
             if package not in self.package_cache:
                 self.package_cache.add(package)
                 self.write_root_index()
-            self.write_package_index(package, self.db.get_package_files(package))
+            self.write_package_index(package,
+                                     self.db.get_package_files(package))
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
@@ -76,6 +96,13 @@ class IndexScribe(PauseableTask):
             self.logger.error('invalid index_queue message: %s', msg)
 
     def write_homepage(self, status_info):
+        """
+        Re-writes the site homepage using the provided statistics in the
+        homepage template (which is effectively a simple Python format string).
+
+        :param tuple status_info:
+            A namedtuple containing statistics obtained by :class:`BigBrother`.
+        """
         self.logger.info('writing homepage')
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
                                          delete=False) as index:
@@ -89,10 +116,15 @@ class IndexScribe(PauseableTask):
                 os.replace(index.name, str(self.output_path / 'index.html'))
 
     def write_root_index(self):
+        """
+        (Re)writes the index of all packages. This is implicitly called when a
+        request to write a package index is received for a package not present
+        in the task's cache.
+        """
         self.logger.info('writing package index')
         with tempfile.NamedTemporaryFile(
-                mode='w', dir=str(self.output_path / 'simple'),
-                delete=False) as index:
+            mode='w', dir=str(self.output_path / 'simple'),
+            delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
                 index.file.write(
@@ -112,9 +144,15 @@ class IndexScribe(PauseableTask):
                 raise
             else:
                 os.fchmod(index.file.fileno(), 0o644)
-                os.replace(index.name, str(self.output_path / 'simple' / 'index.html'))
+                os.replace(index.name,
+                           str(self.output_path / 'simple' / 'index.html'))
 
     def write_package_index(self, package, files):
+        """
+        (Re)writes the index of the specified package. The file meta-data
+        (including the hash) is retrieved from the database, *never* from the
+        file-system.
+        """
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         try:
@@ -124,7 +162,8 @@ class IndexScribe(PauseableTask):
             if pkg_dir.is_symlink():
                 pkg_dir.unlink()
                 pkg_dir.mkdir()
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir), delete=False) as index:
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
+                                         delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
                 index.file.write(
@@ -135,9 +174,10 @@ class IndexScribe(PauseableTask):
                         tag.body(
                             tag.h1('Links for {}'.format(package)),
                             (
-                                (tag.a(rec.filename,
-                                       href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
-                                       rel='internal'), tag.br())
+                                (tag.a(
+                                    rec.filename,
+                                    href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
+                                    rel='internal'), tag.br())
                                 for rec in files
                             )
                         )
@@ -155,20 +195,21 @@ class IndexScribe(PauseableTask):
                     # name to the actual package directory. The reasons for
                     # doing things this way are rather complex...
                     #
-                    # The older package name must exist for the benefit of older
-                    # versions of pip. If the symlink already exists *or is a
-                    # directory* we ignore it. Yes, it's possible to have two
-                    # packages which both have the same canonicalized name, and
-                    # for each to have different contents. I don't quite know
-                    # how PyPI handle this but their XML and JSON APIs already
-                    # include such situations (in a small number of cases). This
-                    # setup is designed to create canonicalized links where
-                    # possible but not to clobber "real" packages if they exist.
+                    # The older package name must exist for the benefit of
+                    # older versions of pip. If the symlink already exists *or
+                    # is a directory* we ignore it. Yes, it's possible to have
+                    # two packages which both have the same canonicalized name,
+                    # and for each to have different contents. I don't quite
+                    # know how PyPI handle this but their XML and JSON APIs
+                    # already include such situations (in a small number of
+                    # cases). This setup is designed to create canonicalized
+                    # links where possible but not to clobber "real" packages
+                    # if they exist.
                     #
                     # What about new packages that want to take the place of a
                     # canonicalized symlink? We (and TransferState.commit)
-                    # handle that by removing the symlink and making a directory
-                    # in its place.
+                    # handle that by removing the symlink and making a
+                    # directory in its place.
                     pkg_dir.with_name(canonicalize_name(pkg_dir.name)).symlink_to(pkg_dir.name)
                 except FileExistsError:
                     pass

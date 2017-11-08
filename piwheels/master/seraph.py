@@ -1,3 +1,5 @@
+"Defines the :class:`Seraph` task; see class for more details"
+
 import zmq
 import zmq.error
 
@@ -22,14 +24,25 @@ class Seraph(Task):
         self.register(self.front_queue, self.handle_front)
         self.register(self.back_queue, self.handle_back)
 
-    def handle_front(self, q):
+    def handle_front(self, queue):
+        """
+        If any workers are currently available, receive :class:`DbClient`
+        requests from the front queue and send it on to the worker including
+        the client's address frame.
+        """
         if self.workers:
-            client, empty, request = q.recv_multipart()
+            client, _, request = queue.recv_multipart()
             worker = self.workers.pop(0)
-            self.back_queue.send_multipart([worker, empty, client, empty, request])
+            self.back_queue.send_multipart([worker, _, client, _, request])
 
-    def handle_back(self, q):
-        worker, empty, *msg = q.recv_multipart()
+    def handle_back(self, queue):
+        """
+        Receive a response from an instance of :class:`TheOracle` on the back
+        queue. Strip off the worker's address frame and add it back to the
+        available queue then send the response back to the client that made the
+        original request.
+        """
+        worker, _, *msg = queue.recv_multipart()
         self.workers.append(worker)
         if msg != [b'READY']:
             self.front_queue.send_multipart(msg)
