@@ -1,3 +1,36 @@
+# The piwheels project
+#   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
+#   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+"""
+Defines :class:`TerminalApplication`, a base class for the console applications
+in the piwheels suite.
+"""
+
 import os
 import sys
 import locale
@@ -92,11 +125,16 @@ class TerminalApplication:
             return self.main(args, config) or 0
 
     def configure_logging(self, args):
+        """
+        Configures handlers for logging to the console and any specified log
+        file. Log level is set according to the specified *args*.
+        """
         _CONSOLE.setLevel(args.log_level)
         if args.log_file:
             log_file = logging.FileHandler(args.log_file)
             log_file.setFormatter(
-                logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s'))
+                logging.Formatter('%(asctime)s %(name)s %(levelname)s: '
+                                  '%(message)s'))
             log_file.setLevel(logging.DEBUG)
             self.logger.addHandler(log_file)
         if args.debug:
@@ -105,7 +143,13 @@ class TerminalApplication:
             self.logger.setLevel(logging.INFO)
 
     def handle(self, exc_type, exc_value, exc_trace):
-        "Global application exception handler"
+        """
+        Global application exception handler. For "basic" errors (I/O errors,
+        keyboard interrupt, etc.) just the error message is printed as there's
+        generally no need to confuse the user with a complete stack trace when
+        it's just a missing file. Other exceptions, however, are logged with
+        the usual full stack trace.
+        """
         if issubclass(exc_type, (SystemExit,)):
             # Exit with 0 ("success") for system exit (as it was intentional)
             return 0
@@ -127,12 +171,18 @@ class TerminalApplication:
         else:
             # Otherwise, log the stack trace and the exception into the log
             # file for debugging purposes
-            for line in traceback.format_exception(exc_type, exc_value, exc_trace):
+            for line in traceback.format_exception(
+                    exc_type, exc_value, exc_trace):
                 for msg in line.rstrip().split('\n'):
                     self.logger.critical(msg.replace('%', '%%'))
             return 1
 
     def load_configuration(self, args, default=None):
+        """
+        Fill the configuration parser from *default* (if any, defaults to
+        ``None``) then load the configuration file specified by *args* (if
+        any).
+        """
         parser = ConfigParser(interpolation=None)
         if default is None:
             default = {}
@@ -152,5 +202,7 @@ class TerminalApplication:
         return parser
 
     def main(self, args, config):
-        "Called as the main body of the utility"
+        """
+        Called as the main body of the utility. Override this in descendents.
+        """
         raise NotImplementedError

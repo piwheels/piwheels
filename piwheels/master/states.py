@@ -1,3 +1,31 @@
+# The piwheels project
+#   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
+#   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 """
 This module defines several classes which permit interested tasks to track the
 state of build slaves (:class:`SlaveState`), file transfers
@@ -543,13 +571,7 @@ class TransferState:
         tmp_file = Path(self._file.name)
         tmp_file.chmod(0o644)
         pkg_dir = tmp_file.with_name(package)
-        try:
-            pkg_dir.mkdir()
-        except FileExistsError:
-            # See notes in IndexScribe.write_package_index
-            if pkg_dir.is_symlink():
-                pkg_dir.unlink()
-                pkg_dir.mkdir()
+        mkdir_override_symlink(pkg_dir)
         final_name = pkg_dir / self._file_state.filename
         tmp_file.rename(final_name)
         if self._file_state.platform_tag == 'linux_armv7l':
@@ -565,3 +587,16 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+def mkdir_override_symlink(pkg_dir):
+    """
+    Make *pkg_dir*, replacing any existing symlink in its place. See the
+    notes in :meth:`IndexScribe.write_package_index` for more information.
+    """
+    try:
+        pkg_dir.mkdir()
+    except FileExistsError:
+        if pkg_dir.is_symlink():
+            pkg_dir.unlink()
+            pkg_dir.mkdir()

@@ -1,3 +1,31 @@
+# The piwheels project
+#   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
+#   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 "Defines the :class:`IndexScribe` task; see class for more details"
 
 import re
@@ -11,6 +39,7 @@ from pkg_resources import resource_string, resource_stream, resource_listdir
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
+from .states import mkdir_override_symlink
 
 
 class IndexScribe(PauseableTask):
@@ -108,7 +137,7 @@ class IndexScribe(PauseableTask):
                                          delete=False) as index:
             try:
                 index.file.write(self.homepage_template.format(**status_info))
-            except:
+            except BaseException:
                 index.delete = True
                 raise
             else:
@@ -122,9 +151,9 @@ class IndexScribe(PauseableTask):
         in the task's cache.
         """
         self.logger.info('writing package index')
-        with tempfile.NamedTemporaryFile(
-            mode='w', dir=str(self.output_path / 'simple'),
-            delete=False) as index:
+        temp_dir = self.output_path / 'simple'
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(temp_dir),
+                                         delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
                 index.file.write(
@@ -139,7 +168,7 @@ class IndexScribe(PauseableTask):
                         )
                     )
                 )
-            except:
+            except BaseException:
                 index.delete = True
                 raise
             else:
@@ -155,13 +184,7 @@ class IndexScribe(PauseableTask):
         """
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
-        try:
-            pkg_dir.mkdir()
-        except FileExistsError:
-            # See notes below
-            if pkg_dir.is_symlink():
-                pkg_dir.unlink()
-                pkg_dir.mkdir()
+        mkdir_override_symlink(pkg_dir)
         with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
                                          delete=False) as index:
             try:
@@ -173,17 +196,15 @@ class IndexScribe(PauseableTask):
                         ),
                         tag.body(
                             tag.h1('Links for {}'.format(package)),
-                            (
-                                (tag.a(
-                                    rec.filename,
-                                    href='{rec.filename}#sha256={rec.filehash}'.format(rec=rec),
-                                    rel='internal'), tag.br())
-                                for rec in files
-                            )
+                            ((tag.a(
+                                f.filename,
+                                href='{f.filename}#sha256={f.filehash}'.format(f=f),  # noqa: E501
+                                rel='internal'), tag.br())
+                             for f in files)
                         )
                     )
                 )
-            except:
+            except BaseException:
                 index.delete = True
                 raise
             else:
@@ -210,13 +231,18 @@ class IndexScribe(PauseableTask):
                     # canonicalized symlink? We (and TransferState.commit)
                     # handle that by removing the symlink and making a
                     # directory in its place.
-                    pkg_dir.with_name(canonicalize_name(pkg_dir.name)).symlink_to(pkg_dir.name)
+                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))  # noqa: E501
+                    canon_dir.symlink_to(pkg_dir.name)
                 except FileExistsError:
                     pass
 
 
 # From pip/_vendor/packaging/utils.py
+# pylint: disable=invalid-name
 _canonicalize_regex = re.compile(r"[-_.]+")
+
+
 def canonicalize_name(name):
+    # pylint: disable=missing-docstring
     # This is taken from PEP 503.
     return _canonicalize_regex.sub("-", name).lower()

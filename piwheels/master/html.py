@@ -1,3 +1,39 @@
+# The piwheels project
+#   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
+#   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+"A simple HTML tag builder based loosely on Genshi's concepts"
+
+# Most of the classes and functions below have slightly odd names as they're
+# aping built-in types like str and/or meant to be used as one would use a
+# function (again, like str).
+# pylint: disable=invalid-name
+
+
 class literal(str):
     "A str sub-class that assumes its content is HTML"
     def __html__(self):
@@ -7,18 +43,18 @@ class literal(str):
 class content(str):
     "A str sub-class which escapes content for inclusion in HTML"
     def __html__(self):
-        return literal(self.\
-                replace('&', '&amp;').\
-                replace('"', '&quot;').\
-                replace('<', '&lt;').\
-                replace('>', '&gt;'))
+        return literal(self.
+                       replace('&', '&amp;').
+                       replace('"', '&quot;').
+                       replace('<', '&lt;').
+                       replace('>', '&gt;'))
 
 
 def html(s):
     "Return s in a form suitable for inclusion in an HTML document"
-    if hasattr(s, '__html__'):
+    try:
         return s.__html__()
-    else:
+    except AttributeError:
         return content(s).__html__()
 
 
@@ -45,9 +81,10 @@ EMPTY_ELEMENTS = (
     'keygen',
     'spacer',
     'wbr',
-    )
+)
 
-class TagFactory():
+
+class TagFactory:
     """
     A factory class for generating XML/HTML elements (or tags).
 
@@ -97,19 +134,22 @@ class TagFactory():
         >>> tag.hr()
         '<hr/>'
     """
+    # The public methods of this class are generated on the fly by __getattr__
+    # pylint: disable=too-few-public-methods
+
     def __init__(self, xml=False):
         self._xml = xml
 
-    def _format(self, content):
-        if isinstance(content, str):
-            return html(content)
-        elif isinstance(content, bytes):
-            return html(content.decode('utf-8'))
+    def _format(self, obj):
+        if isinstance(obj, str):
+            return html(obj)
+        elif isinstance(obj, bytes):
+            return html(obj.decode('utf-8'))
         else:
             try:
-                return literal(''.join(self._format(item) for item in content))
+                return literal(''.join(self._format(item) for item in obj))
             except TypeError:
-                return html(content)
+                return html(obj)
 
     def _generate(self, _tag, *args, **kwargs):
         _tag = _tag.rstrip('_')
@@ -126,13 +166,13 @@ class TagFactory():
                 _tag,
                 ''.join(
                     ' %s="%s"' % (
-                        k, self._format(k if v is True else v)
-                        )
-                    for (_k, v) in kwargs.items()
-                    for k in (_k.rstrip('_').replace('_', '-'),)
-                    if v is not None
-                    and v is not False)
-                )
+                        attr_name, self._format(attr_name if attr_val is True
+                                                else attr_val)
+                    )
+                    for (_name, attr_val) in kwargs.items()
+                    for attr_name in (_name.rstrip('_').replace('_', '-'),)
+                    if attr_val is not None and attr_val is not False)
+            )
             for arg in args:
                 result += self._format(arg)
         if close_tag:
@@ -141,8 +181,10 @@ class TagFactory():
 
     def __getattr__(self, attr):
         def generator(*args, **kwargs):
+            # pylint: disable=missing-docstring
             return self._generate(attr, *args, **kwargs)
         setattr(self, attr, generator)
         return generator
+
 
 tag = TagFactory()
