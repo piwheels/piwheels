@@ -96,8 +96,7 @@ GRANT SELECT ON build_abis TO piwheels;
 --
 -- The "built_at" and "duration" columns simply track when the build started
 -- and how long it took, "status" specifies whether or not the build succeeded
--- (true for success, false otherwise), and "output" contains the complete
--- build log.
+-- (true for success, false otherwise).
 -------------------------------------------------------------------------------
 
 CREATE TABLE builds (
@@ -108,7 +107,8 @@ CREATE TABLE builds (
     built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     duration        INTERVAL NOT NULL,
     status          BOOLEAN DEFAULT true NOT NULL,
-    output          TEXT NOT NULL,
+    py_version_tag  VARCHAR(100) NOT NULL,
+    abi_tag         VARCHAR(100) NOT NULL,
 
     CONSTRAINT builds_pk PRIMARY KEY (build_id),
     CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
@@ -121,6 +121,26 @@ GRANT SELECT,INSERT ON builds TO piwheels;
 CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
+
+-- output
+-------------------------------------------------------------------------------
+-- The "output" table is an optimization designed to separate the (huge)
+-- "output" column out of the "builds" table. The "output" column is rarely
+-- accessed in normal operations but forms the bulk of the database size, hence
+-- it makes sense to keep it isolated from most queries. This table has a
+-- 1-to-1 mandatory relationship with "builds".
+-------------------------------------------------------------------------------
+
+CREATE TABLE output (
+    build_id        INTEGER NOT NULL,
+    output          TEXT NOT NULL,
+
+    CONSTRAINT output_pk PRIMARY KEY (build_id),
+    CONSTRAINT output_builds_fk FOREIGN KEY (build_id)
+        REFERENCES builds (build_id) ON DELETE CASCADE
+);
+
+GRANT INSERT ON output TO piwheels;
 
 -- files
 -------------------------------------------------------------------------------
