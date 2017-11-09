@@ -1,3 +1,10 @@
+"""
+This module defines several classes which permit interested tasks to track the
+state of build slaves (:class:`SlaveState`), file transfers
+(:class:`TransferState`), build attempts (:class:`BuildState`) and build
+artifacts (:class:`FileState`).
+"""
+
 import hashlib
 import logging
 import tempfile
@@ -6,15 +13,58 @@ from datetime import datetime, timedelta
 
 from .ranges import exclude, intersect
 
+# pylint complains about all these classes having too many attributes (and thus
+# their constructors having too many arguments) and about the lack of (entirely
+# pointless) docstrings on the various property getter methods. Most of the
+# classes are tuple-esque; each operates as *mostly* read-only collection of
+# attributes but these classes aren't tuples because in each case there's
+# usually one or two fields that can be twiddled (e.g. when a record gets
+# inserted into the database, or a file transferred, etc).
+
+# pylint: disable=too-many-instance-attributes,too-many-arguments
+# pylint: disable=missing-docstring
+
 
 class FileState:
     """
-    Represents the state of an individual package file including its
-    :attr:`filename`, :attr:`filesize`, the SHA256 :attr:`filehash`, and various
-    tags extracted from the build. Also tracks whether or not the file has been
-    :attr:`transferred`.
-    """
+    Represents the state of an individual build artifact (a package file, or
+    wheel) including its :attr:`filename`, :attr:`filesize`, the SHA256
+    :attr:`filehash`, and various tags extracted from the build. Also tracks
+    whether or not the file has been :attr:`transferred`.
 
+    :param str filename:
+        The original filename of the build artifact.
+
+    :param int filesize:
+        The size of the file in bytes.
+
+    :param str filehash:
+        The SHA256 hash of the file contents.
+
+    :param str package_tag:
+        The package tag extracted from the filename (first "-" separated
+        component).
+
+    :param str package_version_tag:
+        The package version tag extracted from the filename (second "-"
+        separated component).
+
+    :param str py_version_tag:
+        The python version tag extracted from the filename (third from last "-"
+        separated component).
+
+    :param str abi_tag:
+        The python ABI tag extracted from the filename (second from last "-"
+        separated component).
+
+    :param str platform_tag:
+        The platform tag extracted from the filename (last "-" separated
+        component).
+
+    :param bool transferred:
+        ``True`` if the file has been transferred from the build slave that
+        generated it to the file server.
+    """
     def __init__(self, filename, filesize, filehash, package_tag,
                  package_version_tag, py_version_tag, abi_tag, platform_tag,
                  transferred=False):
@@ -32,7 +82,7 @@ class FileState:
         return 9
 
     def __getitem__(self, index):
-        return [
+        return (
             self._filename,
             self._filesize,
             self._filehash,
@@ -42,7 +92,7 @@ class FileState:
             self._abi_tag,
             self._platform_tag,
             self._transferred,
-        ][index]
+        )[index]
 
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
@@ -88,6 +138,10 @@ class FileState:
         return self._transferred
 
     def verified(self):
+        """
+        Called to set :attr:`transferred` to ``True`` after a file transfer has
+        been successfully verified.
+        """
         self._transferred = True
 
 
@@ -97,8 +151,33 @@ class BuildState:
     :attr:`version`, :attr:`status`, build :attr:`duration`, and all the lines
     of :attr:`output`. The :attr:`files` attribute is a mapping containing
     details of each successfully built package file.
-    """
 
+    :param int slave_id:
+        The master's identifier for the build slave.
+
+    :param str package:
+        The name of the package to build.
+
+    :param str version:
+        The version number of the package to build.
+
+    :param bool status:
+        ``True`` if the build succeeded, ``False`` if it failed.
+
+    :param datetime.timedelta duration:
+        The amount of time it took to complete the build.
+
+    :param str output:
+        The log output of the build.
+
+    :param dict files:
+        A mapping of filenames to :class:`FileState` objects for each artifact
+        produced by the build.
+
+    :param int build_id:
+        The integer identifier generated for the build by the database
+        (``None`` until the build has been inserted into the database).
+    """
     def __init__(self, slave_id, package, version, status, duration, output,
                  files, build_id=None):
         self._slave_id = slave_id
@@ -126,13 +205,29 @@ class BuildState:
         ][index]
 
     def __repr__(self):
-        return "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".format(
-            build_id=self.build_id, package=self.package, version=self.version,
-            status='failed' if not self.status else '{count} files'.format(count=len(self.files))
+        return (
+            "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".
+            format(
+                build_id=self.build_id, package=self.package,
+                version=self.version, status=(
+                    'failed' if not self.status else
+                    '{count} files'.format(count=len(self.files))
+                )
+            )
         )
 
     @classmethod
-    def from_db(self, db, build_id):
+    def from_db(cls, db, build_id):
+        """
+        Construct an instance by querying the database for the specified
+        *build_id*.
+
+        :param Database db:
+            A :class:`Database` instance to query.
+
+        :param int build_id:
+            The integer identifier of an attempted build.
+        """
         for brec in db.get_build(build_id):
             return BuildState(
                 brec.built_by,
@@ -146,6 +241,7 @@ class BuildState:
                         frec.filename,
                         frec.filesize,
                         frec.filehash,
+                        frec.package_tag,
                         frec.package_version_tag,
                         frec.py_version_tag,
                         frec.abi_tag,
@@ -227,11 +323,11 @@ class SlaveState:
     :attr:`transfer`). The class also tracks the time a request was last seen
     from the build slave, and includes a :meth:`kill` method.
     """
-
     counter = 0
     status_queue = None
 
-    def __init__(self, address, timeout, native_py_version, native_abi, native_platform):
+    def __init__(self, address, timeout, native_py_version, native_abi,
+                 native_platform):
         SlaveState.counter += 1
         self._address = address
         self._slave_id = SlaveState.counter
@@ -247,18 +343,20 @@ class SlaveState:
         self._terminated = False
 
     def __repr__(self):
-        return "<SlaveState: id={slave_id}, last_seen={last_seen}, last_reply={reply}, {alive}>".format(
-            slave_id=self.slave_id,
-            last_seen=datetime.utcnow() - self.last_seen,
-            reply='none' if self.reply is None else self.reply[0],
-            alive='killed' if self.terminated else 'alive'
+        return (
+            "<SlaveState: id={slave_id}, last_seen={last_seen}, "
+            "last_reply={reply}, {alive}>".format(
+                slave_id=self.slave_id,
+                last_seen=datetime.utcnow() - self.last_seen,
+                reply='none' if self.reply is None else self.reply[0],
+                alive='killed' if self.terminated else 'alive'
+            )
         )
 
     def hello(self):
         SlaveState.status_queue.send_pyobj(
             [self._slave_id, self._first_seen, 'HELLO',
-             self._native_py_version, self._native_abi, self._native_platform,
-             ])
+             self._native_py_version, self._native_abi, self._native_platform])
         if self._reply is not None and self._reply[0] != 'HELLO':
             SlaveState.status_queue.send_pyobj(
                 [self._slave_id, self._last_seen] + self._reply)
@@ -362,8 +460,9 @@ class TransferState:
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = max(1, min(self.pipeline_size,
-                                  self._file_state.filesize // self.chunk_size))
+        self._credit = min(self.pipeline_size,
+                           self._file_state.filesize // self.chunk_size)
+        self._credit = max(1, self._credit)
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
@@ -399,9 +498,11 @@ class TransferState:
                         self._offset = result.stop
                         return result
                     elif map_range.start > fetch_range.start:
-                        fetch_range = range(map_range.start, map_range.start + self.chunk_size)
+                        fetch_range = range(map_range.start,
+                                            map_range.start + self.chunk_size)
                 try:
-                    fetch_range = range(self._map[0].start, self._map[0].start + self.chunk_size)
+                    fetch_range = range(self._map[0].start,
+                                        self._map[0].start + self.chunk_size)
                 except IndexError:
                     return None
 
@@ -427,21 +528,21 @@ class TransferState:
         # XXX Would be nicer to construct the hash from the transferred chunks
         # with a tree, but this potentially costs quite a bit of memory
         self._file.seek(0)
-        m = hashlib.sha256()
+        body = hashlib.sha256()
         while True:
             buf = self._file.read(self.chunk_size)
             if buf:
-                m.update(buf)
+                body.update(buf)
             else:
                 break
         self._file.close()
-        if m.hexdigest().lower() != self._file_state.filehash:
+        if body.hexdigest().lower() != self._file_state.filehash:
             raise IOError('failed to verify transfer at %s' % self._file.name)
 
     def commit(self, package):
-        p = Path(self._file.name)
-        p.chmod(0o644)
-        pkg_dir = p.with_name(package)
+        tmp_file = Path(self._file.name)
+        tmp_file.chmod(0o644)
+        pkg_dir = tmp_file.with_name(package)
         try:
             pkg_dir.mkdir()
         except FileExistsError:
@@ -450,10 +551,10 @@ class TransferState:
                 pkg_dir.unlink()
                 pkg_dir.mkdir()
         final_name = pkg_dir / self._file_state.filename
-        p.rename(final_name)
+        tmp_file.rename(final_name)
         if self._file_state.platform_tag == 'linux_armv7l':
-            # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name; the
-            # slave_driver task expects us to have done this
+            # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name;
+            # the slave_driver task expects us to have done this
             arm6_name = final_name.with_name(
                 final_name.name[:-16] + 'linux_armv6l.whl')
             try:

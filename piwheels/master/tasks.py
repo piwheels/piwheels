@@ -98,6 +98,7 @@ class Task(Thread):
         implementation it simply handles the "QUIT" message by raising TaskQuit
         (which the :meth:`run` method will catch and use as a signal to end).
         """
+        # pylint: disable=no-self-use,unused-variable
         msg, *args = queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
@@ -153,13 +154,14 @@ class PauseableTask(Task):
     (:meth:`Task.loop` and :meth:`Task.poll` will not be called) until the task
     is resumed (or terminated).
     """
-    def handle_control(self, q):
-        msg, *args = q.recv_pyobj()
+    def handle_control(self, queue):
+        # pylint: disable=unused-variable
+        msg, *args = queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
         elif msg == 'PAUSE':
             while True:
-                msg, *args = q.recv_pyobj()
+                msg, *args = queue.recv_pyobj()
                 if msg == 'QUIT':
                     raise TaskQuit
                 elif msg == 'RESUME':

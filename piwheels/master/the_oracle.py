@@ -38,10 +38,6 @@ class TheOracle(Task):
         self.register(db_queue, self.handle_db_request)
         db_queue.send(b'READY')
 
-    def close(self):
-        super().close()
-        self.db.close()
-
     def handle_db_request(self, queue):
         """
         Handle incoming requests from :class:`DbClient` instances.

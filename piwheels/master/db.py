@@ -1,3 +1,9 @@
+"""
+This module defines the low level database API. This is a simple core
+SQLAlchemy affair which runs trivial queries against the PostgreSQL database.
+All the serious logic is defined within views in the database itself.
+"""
+
 import warnings
 from datetime import timedelta
 from itertools import chain
@@ -26,10 +32,13 @@ def sanitize(s):
     return s.translate(CONTROL_CHARS)
 
 
-class Database():
+class Database:
     """
     PiWheels database connection class
     """
+    # pylint: disable=too-many-instance-attributes,no-value-for-parameter
+    # SQLAlchemy does fun things with decorators which screws with pylint's
+    # static analysis
     engines = {}
 
     def __init__(self, dsn):
@@ -38,50 +47,47 @@ class Database():
         except KeyError:
             engine = create_engine(dsn)
             Database.engines[dsn] = engine
-        self.conn = engine.connect()
-        self.meta = MetaData(bind=self.conn)
+        self._conn = engine.connect()
+        self._meta = MetaData(bind=self._conn)
         with warnings.catch_warnings():
-            # Ignore warnings about partial indexes (SQLAlchemy doesn't know how
-            # to reflect them but that doesn't matter for our purposes as we're
-            # not doing DDL translation)
+            # Ignore warnings about partial indexes (SQLAlchemy doesn't know
+            # how to reflect them but that doesn't matter for our purposes as
+            # we're not doing DDL translation)
             warnings.simplefilter('ignore', category=SAWarning)
-            self.configuration = Table('configuration', self.meta, autoload=True)
-            with self.conn.begin():
-                db_version = self.conn.scalar(select([self.configuration.c.version]))
+            self._configuration = Table('configuration', self._meta,
+                                        autoload=True)
+            with self._conn.begin():
+                def close(self):
+                    super().close()
+                    self.db.close()
+
+                db_version = self._conn.scalar(
+                    select([self._configuration.c.version])
+                )
                 if db_version != __version__:
                     raise RuntimeError('Database version (%s) does not match '
                                        'software version (%s)' %
                                        (db_version, __version__))
-            self.packages = Table('packages', self.meta, autoload=True)
-            self.versions = Table('versions', self.meta, autoload=True)
-            self.builds = Table('builds', self.meta, autoload=True)
-            self.files = Table('files', self.meta, autoload=True)
-            self.build_abis = Table('build_abis', self.meta, autoload=True)
+            self._packages = Table('packages', self._meta, autoload=True)
+            self._versions = Table('versions', self._meta, autoload=True)
+            self._builds = Table('builds', self._meta, autoload=True)
+            self._output = Table('output', self._meta, autoload=True)
+            self._files = Table('files', self._meta, autoload=True)
+            self._build_abis = Table('build_abis', self._meta, autoload=True)
             # The following are views on the tables above
-            self.builds_pending = Table('builds_pending', self.meta, autoload=True)
-            self.statistics = Table('statistics', self.meta, autoload=True)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.close()
-
-    def close(self):
-        """
-        Explicitly close the database connection
-        """
-        self.conn.close()
+            self._builds_pending = Table('builds_pending', self._meta,
+                                         autoload=True)
+            self._statistics = Table('statistics', self._meta, autoload=True)
 
     def add_new_package(self, package):
         """
         Insert a new package record into the database. Key violations are
         ignored as packages is effectively an append-only table.
         """
-        with self.conn.begin():
+        with self._conn.begin():
             try:
-                self.conn.execute(
-                    self.packages.insert(),
+                self._conn.execute(
+                    self._packages.insert(),
                     package=package
                 )
             except IntegrityError:
@@ -94,10 +100,10 @@ class Database():
         Insert a new package version record into the database. Key violations
         are ignored as versions is effectively an append-only table.
         """
-        with self.conn.begin():
+        with self._conn.begin():
             try:
-                self.conn.execute(
-                    self.versions.insert(),
+                self._conn.execute(
+                    self._versions.insert(),
                     package=package, version=version
                 )
             except IntegrityError:
@@ -110,9 +116,9 @@ class Database():
         Log a build attempt in the database, including build output and wheel
         info if successful
         """
-        with self.conn.begin():
-            build.logged(self.conn.scalar(
-                self.builds.insert().returning(self.builds.c.build_id),
+        with self._conn.begin():
+            build.logged(self._conn.scalar(
+                self._builds.insert().returning(self._builds.c.build_id),
                 package=build.package,
                 version=build.version,
                 built_by=build.slave_id,
@@ -129,11 +135,11 @@ class Database():
         Log a pending file transfer in the database, including file-size, hash,
         and various tags
         """
-        with self.conn.begin():
+        with self._conn.begin():
             try:
-                with self.conn.begin_nested():
-                    self.conn.execute(
-                        self.files.insert(),
+                with self._conn.begin_nested():
+                    self._conn.execute(
+                        self._files.insert(),
 
                         filename=file.filename,
                         build_id=build.build_id,
@@ -146,9 +152,9 @@ class Database():
                         platform_tag=file.platform_tag
                     )
             except IntegrityError:
-                self.conn.execute(
-                    self.files.update().
-                    where(self.files.c.filename == file.filename),
+                self._conn.execute(
+                    self._files.update().
+                    where(self._files.c.filename == file.filename),
 
                     build_id=build.build_id,
                     filesize=file.filesize,
@@ -164,51 +170,52 @@ class Database():
         """
         Return the set of ABIs that the master should attempt to build
         """
-        with self.conn.begin():
-            return [
+        with self._conn.begin():
+            return {
                 rec.abi_tag
-                for rec in self.conn.execute(select([self.build_abis]))
-            ]
+                for rec in self._conn.execute(self._build_abis.select())
+            }
 
     def get_pypi_serial(self):
         """
         Return the serial number of the last PyPI event
         """
-        with self.conn.begin():
-            return self.conn.scalar(
-                select([self.configuration.c.pypi_serial]).
-                where(self.configuration.c.id == 1)
+        with self._conn.begin():
+            return self._conn.scalar(
+                select([self._configuration.c.pypi_serial]).
+                where(self._configuration.c.id == 1)
             )
 
     def set_pypi_serial(self, serial):
         """
         Update the serial number of the last PyPI event
         """
-        with self.conn.begin():
-            self.conn.execute(
-                self.configuration.update().
-                where(self.configuration.c.id == 1),
+        with self._conn.begin():
+            self._conn.execute(
+                self._configuration.update().
+                where(self._configuration.c.id == 1),
                 pypi_serial=serial
             )
 
     def get_all_packages(self):
         """
-        Returns a list of all known package names
+        Returns the set of all known package names
         """
-        with self.conn.begin():
-            return [
-                rec.package for rec in self.conn.execute(select([self.packages]))
-            ]
+        with self._conn.begin():
+            return {
+                rec.package
+                for rec in self._conn.execute(self._packages.select())
+            }
 
     def get_all_package_versions(self):
         """
-        Returns a list of all known (package, version) tuples
+        Returns the set of all known (package, version) tuples
         """
-        with self.conn.begin():
-            return [
+        with self._conn.begin():
+            return {
                 (rec.package, rec.version)
-                for rec in self.conn.execute(select([self.versions]))
-            ]
+                for rec in self._conn.execute(self._versions.select())
+            }
 
     def get_build_queue(self):
         """
@@ -216,10 +223,10 @@ class Database():
         results are activated for this query as it's more important to get the
         first result quickly than it is to retrieve the entire set.
         """
-        with self.conn.begin():
-            for row in self.conn.\
+        with self._conn.begin():
+            for row in self._conn.\
                     execution_options(stream_results=True).\
-                    execute(self.builds_pending.select()):
+                    execute(self._builds_pending.select()):
                 yield row
 
     def get_statistics(self):
@@ -228,28 +235,28 @@ class Database():
         definition of the ``statistics`` view in the database creation script
         for more information.
         """
-        with self.conn.begin():
-            for rec in self.conn.execute(self.statistics.select()):
+        with self._conn.begin():
+            for rec in self._conn.execute(self._statistics.select()):
                 return rec
 
     def get_build(self, build_id):
         """
         Return all details about a given build.
         """
-        with self.conn.begin():
-            return self.conn.execute(
-                self.builds.select().
-                where(self.builds.c.build_id == build_id)
+        with self._conn.begin():
+            return self._conn.execute(
+                self._builds.select().
+                where(self._builds.c.build_id == build_id)
             )
 
     def get_files(self, build_id):
         """
         Return all details about the files generated by a given build.
         """
-        with self.conn.begin():
-            return self.conn.execute(
-                self.files.select().
-                where(self.files.c.build_id == build_id)
+        with self._conn.begin():
+            return self._conn.execute(
+                self._files.select().
+                where(self._files.c.build_id == build_id)
             )
 
     def get_package_files(self, package):
@@ -257,22 +264,22 @@ class Database():
         Returns all details required to build the index.html for the specified
         package.
         """
-        with self.conn.begin():
-            return self.conn.execute(
-                select([self.files.c.filename, self.files.c.filehash]).
-                select_from(self.builds.join(self.files)).
-                where(self.builds.c.status).
-                where(self.builds.c.package == package)
+        with self._conn.begin():
+            return self._conn.execute(
+                select([self._files.c.filename, self._files.c.filehash]).
+                select_from(self._builds.join(self._files)).
+                where(self._builds.c.status).
+                where(self._builds.c.package == package)
             )
 
     def get_package_versions(self, package):
         """
-        Returns a list of all known versions of a given package
+        Returns the set of all known versions of a given package
         """
-        with self.conn.begin():
-            result = self.conn.execute(
-                select([self.versions.c.version]).
-                where(self.versions.c.package == package).
-                order_by(self.versions.c.version)
+        with self._conn.begin():
+            result = self._conn.execute(
+                select([self._versions.c.version]).
+                where(self._versions.c.package == package).
+                order_by(self._versions.c.version)
             )
-            return [rec.version for rec in result]
+            return {rec.version for rec in result}

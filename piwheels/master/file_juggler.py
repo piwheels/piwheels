@@ -217,6 +217,7 @@ class FileJuggler(Task):
             All additional arguments; for CHUNK the first must be the file
             offset and the second the data to write to that offset.
         """
+        # pylint: disable=no-self-use
         if msg == b'CHUNK':
             transfer.chunk(int(args[0].decode('ascii')), args[1])
             if transfer.done:
