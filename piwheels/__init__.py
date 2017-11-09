@@ -67,7 +67,8 @@ __extra_requires__ = {
     'monitor': ['urwid'],
     'master':  ['sqlalchemy'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
-    'test':    ['pytest'],
+    'test':    ['pytest', 'coverage'],
+    'doc':     ['sphinx'],
 }
 
 __classifiers__ = [

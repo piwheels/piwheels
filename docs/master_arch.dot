@@ -1,53 +1,53 @@
 digraph piwheels {
-    graph [nodesep=0.5, ranksep=1, style=filled, fontname=Sans, fontsize=14, fillcolor="#cccccc"];
-    node [shape=record, fontname=Sans, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
+    graph [nodesep=0.5, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc"];
+    node [shape=record, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
     edge [fontname=Sans, fontsize=8];
 
-    pypi [label="PyPI", shape=egg];
-    users [label="Users", shape=egg];
+    PyPI [label="PyPI", shape=egg];
+    Users [label="Users", shape=egg];
 
     subgraph cluster_db_server {
         graph [label="db-server"];
 
-        the_oracle1 [label="{<seraph>REQ|<t>the_oracle}"];
-        the_oracle2 [label="{<seraph>REQ|<t>the_oracle}"];
-        the_oracle3 [label="{<seraph>REQ|<t>the_oracle}"];
-        the_architect [label="{<builds>REP|<t>the_architect}"];
-        seraph [label="{<db>ROUTER|<t>seraph|<oracle>ROUTER}"];
+        TheOracle1 [label="{<Seraph>REQ|<t>TheOracle}"];
+        TheOracle2 [label="{<Seraph>REQ|<t>TheOracle}"];
+        TheOracle3 [label="{<Seraph>REQ|<t>TheOracle}"];
+        TheArchitect [label="{<builds>REP|<t>TheArchitect}"];
+        Seraph [label="{<db>ROUTER|<t>Seraph|<oracle>ROUTER}"];
         db [label="piwheels\ndatabase", shape=folder];
 
-        seraph:oracle->the_oracle1:seraph [dir=both];
-        seraph:oracle->the_oracle2:seraph [dir=both];
-        seraph:oracle->the_oracle3:seraph [dir=both];
-        the_oracle1:t->db [dir=both];
-        the_oracle2:t->db [dir=both];
-        the_oracle3:t->db [dir=both];
-        the_architect:t->db [dir=back];
+        Seraph:oracle->TheOracle1:Seraph [dir=both];
+        Seraph:oracle->TheOracle2:Seraph [dir=both];
+        Seraph:oracle->TheOracle3:Seraph [dir=both];
+        TheOracle1:t->db [dir=both];
+        TheOracle2:t->db [dir=both];
+        TheOracle3:t->db [dir=both];
+        TheArchitect:t->db [dir=back];
     }
 
     subgraph cluster_file_server {
         graph [label="file-server"];
 
-        file_juggler [label="{{<fs>REP|<slaves>ROUTER}|<t>file_juggler|{<indexes>PUSH}}"];
-        index_scribe [label="{{<indexes>PULL|<db>REQ}|<t>index_scribe}"];
+        FileJuggler [label="{{<fs>REP|<slaves>ROUTER}|<t>FileJuggler}"];
+        IndexScribe [label="{{<db>REQ|<indexes>PULL}|<t>IndexScribe}"];
         fs [label="www\nfilesystem", shape=folder];
-        apache;
+        httpd;
 
-        index_scribe:t->fs;
-        file_juggler:t->fs [dir=both];
-        fs->apache;
+        IndexScribe:t->fs;
+        FileJuggler:t->fs [dir=both];
+        fs->httpd;
     }
 
     subgraph cluster_master {
         graph [label="master"];
 
-        cloud_gazer [label="{<t>cloud_gazer|<db>REQ}"];
+        CloudGazer [label="{<t>CloudGazer|<db>REQ}"];
         main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
-        big_brother [label="{<t>big_brother|{<int_status>PUSH|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
-        slave_driver [label="{{<slaves>ROUTER}|<t>slave_driver|{<int_status>PUSH|<db>REQ|<builds>REQ|<fs>REQ|<indexes>PUSH}}"];
+        BigBrother [label="{<t>BigBrother|{<int_status>PUSH|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
+        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<int_status>PUSH|<builds>REQ|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
 
-        big_brother:int_status->main:int_status;
-        slave_driver:int_status->main:int_status;
+        BigBrother:int_status->main:int_status;
+        SlaveDriver:int_status->main:int_status;
     }
 
     subgraph cluster_monitor {
@@ -55,35 +55,34 @@ digraph piwheels {
         monitor [label="{{<control>PUSH|<status>SUB}|<t>main}"];
     }
 
-    subgraph cluster_slave1 {
+    subgraph cluster_Slave1 {
         graph [label="slave1"];
-        slave1 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
+        Slave1 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
     }
 
-    subgraph cluster_slave2 {
+    subgraph cluster_Slave2 {
         graph [label="slave2"];
-        slave2 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
+        Slave2 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
     }
 
-    pypi->cloud_gazer:t;
-    pypi->slave1:t;
-    pypi->slave2:t;
-    slave1:builds->slave_driver:slaves [dir=both];
-    slave2:builds->slave_driver:slaves [dir=both];
-    slave1:files->file_juggler:slaves [dir=both];
-    slave2:files->file_juggler:slaves [dir=both];
+    PyPI->CloudGazer:t;
+    PyPI->Slave1:t;
+    PyPI->Slave2:t;
+    Slave1:builds->SlaveDriver:slaves [dir=both];
+    Slave2:builds->SlaveDriver:slaves [dir=both];
+    Slave1:files->FileJuggler:slaves [dir=both];
+    Slave2:files->FileJuggler:slaves [dir=both];
     main:ext_status->monitor:status;
     monitor:control->main:control;
 
-    cloud_gazer:db->seraph:db [dir=both];
-    file_juggler:indexes->index_scribe:indexes;
-    big_brother:indexes->index_scribe:indexes;
-    slave_driver:indexes->index_scribe:indexes;
-    index_scribe:db->seraph:db [dir=both];
-    big_brother:db->seraph:db [dir=both];
-    big_brother:fs->file_juggler:fs [dir=both];
-    slave_driver:fs->file_juggler:fs [dir=both];
-    slave_driver:db->seraph:db [dir=both];
-    slave_driver:builds->the_architect:builds [dir=both];
-    apache->users;
+    CloudGazer:db->Seraph:db [dir=both];
+    BigBrother:indexes->IndexScribe:indexes;
+    SlaveDriver:indexes->IndexScribe:indexes;
+    IndexScribe:db->Seraph:db [dir=both];
+    BigBrother:db->Seraph:db [dir=both];
+    BigBrother:fs->FileJuggler:fs [dir=both];
+    SlaveDriver:fs->FileJuggler:fs [dir=both];
+    SlaveDriver:db->Seraph:db [dir=both];
+    SlaveDriver:builds->TheArchitect:builds [dir=both];
+    httpd->Users;
 }

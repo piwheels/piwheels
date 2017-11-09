@@ -1,3 +1,19 @@
+# Python stuff
+*.py[cdo]
+
+# Vim stuff
+*.vim
+*.swp
+
+# Miscellaneous
+tags
+
+# Packages
+*.egg
 *.egg-info
 *.pyc
 *.whl
+dist
+build
+man
+docs/_build

@@ -103,10 +103,8 @@ class PiWheelsSlave(TerminalApplication):
         queue.connect('tcp://{master}:5555'.format(
             master=self.config['master']))
         try:
-            request = (
-                ['HELLO', config['timeout']] +
-                list(pep425tags.get_supported()[0])
-            )
+            request = ['HELLO', config['timeout'], pep425tags.get_impl_ver(),
+                       pep425tags.get_abi_tag(), pep425tags.get_platform()]
             while request is not None:
                 queue.send_pyobj(request)
                 reply, *args = queue.recv_pyobj()

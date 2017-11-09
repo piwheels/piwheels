@@ -2,9 +2,16 @@
 
 set -eu
 
+source /etc/os-release
+if [ $VERSION_ID -lt 9 ]; then
+    LIBPNG_DEV=libpng12-dev
+else
+    LIBPNG_DEV=libpng-dev
+fi
+
 apt update
 apt -y upgrade
-apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
+apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     libffi-dev libxml2-dev libgmp-dev libhdf5-dev libldap2-dev libjpeg-dev \
     libusb-dev libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
     libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libgles1-mesa-dev \
@@ -23,7 +30,9 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev libpng12-dev \
     python3-gi-cairo python-cairocffi python3-cairocffi \
     ipython ipython3 git tree byobu htop pkg-config gfortran cmake \
     qt4-qmake qt5-qmake
-pip3 install pip --upgrade
+if [ $VERSION_ID -lt 9 ]; then
+    pip3 install pip --upgrade
+fi
 pip3 install pypandoc
 pip3 install versioneer
 pip3 install kervi

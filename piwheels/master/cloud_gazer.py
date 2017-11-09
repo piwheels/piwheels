@@ -37,7 +37,7 @@ class CloudGazer(PauseableTask):
     """
     This task scrapes PyPI for the list of available packages, and the versions
     of those packages. This information is written into the backend database
-    for :class:`QueueStuffer` to use.
+    for :class:`TheArchitect` to use.
     """
     name = 'master.cloud_gazer'
 
