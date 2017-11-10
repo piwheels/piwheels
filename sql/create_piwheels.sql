@@ -73,10 +73,17 @@ CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
 -------------------------------------------------------------------------------
 
 CREATE TABLE build_abis (
+    py_version_tag  VARCHAR(100) NOT NULL,
     abi_tag         VARCHAR(100) NOT NULL,
 
-    CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
-    CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
+    CONSTRAINT build_abis_pk PRIMARY KEY (py_version_tag, abi_tag),
+    CONSTRAINT build_abis_pyver_ck CHECK (py_version_tag IN ('py2', 'py3')),
+    CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none'),
+    -- Check the major component of py_version_tag matches the major component
+    -- of abi_tag
+    CONSTRAINT build_abis_major_ck CHECK (
+        regexp_replace(py_version_tag, '^[a-z]+([0-9]).*$', '\1') =
+        regexp_replace(abi_tag, '^[a-z]+([0-9]).*$', '\1'))
 );
 
 GRANT SELECT ON build_abis TO piwheels;
