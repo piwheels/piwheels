@@ -93,5 +93,3 @@ SELECT
     'linux_armv6l'
 FROM files
 WHERE platform_tag = 'linux_armv7l';
-
-COMMIT;

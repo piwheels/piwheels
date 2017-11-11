@@ -142,5 +142,3 @@ UPDATE files
 UPDATE files
     SET abi_tag = 'none'
     WHERE abi_tag = 'noabi';
-
-COMMIT;

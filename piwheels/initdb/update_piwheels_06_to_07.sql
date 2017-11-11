@@ -53,5 +53,3 @@ CREATE VIEW builds_pending AS
                 ON b.build_id = f.build_id
         WHERE f.abi_tag <> 'none'
     );
-
-COMMIT;

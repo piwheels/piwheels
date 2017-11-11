@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id) VALUES (1, '0.8');
+INSERT INTO configuration(id) VALUES (1, '0.9');
 GRANT UPDATE ON configuration TO piwheels;
 
 -- packages
@@ -73,17 +73,10 @@ CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
 -------------------------------------------------------------------------------
 
 CREATE TABLE build_abis (
-    py_version_tag  VARCHAR(100) NOT NULL,
     abi_tag         VARCHAR(100) NOT NULL,
 
-    CONSTRAINT build_abis_pk PRIMARY KEY (py_version_tag, abi_tag),
-    CONSTRAINT build_abis_pyver_ck CHECK (py_version_tag IN ('py2', 'py3')),
-    CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none'),
-    -- Check the major component of py_version_tag matches the major component
-    -- of abi_tag
-    CONSTRAINT build_abis_major_ck CHECK (
-        regexp_replace(py_version_tag, '^[a-z]+([0-9]).*$', '\1') =
-        regexp_replace(abi_tag, '^[a-z]+([0-9]).*$', '\1'))
+    CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
+    CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
 );
 
 GRANT SELECT ON build_abis TO piwheels;
@@ -114,7 +107,6 @@ CREATE TABLE builds (
     built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     duration        INTERVAL NOT NULL,
     status          BOOLEAN DEFAULT true NOT NULL,
-    py_version_tag  VARCHAR(100) NOT NULL,
     abi_tag         VARCHAR(100) NOT NULL,
 
     CONSTRAINT builds_pk PRIMARY KEY (build_id),
@@ -203,58 +195,75 @@ CREATE INDEX files_abi ON files(build_id, abi_tag) WHERE abi_tag <> 'none';
 -- ABIs listed in "build_abis" attempted.
 -------------------------------------------------------------------------------
 
-CREATE VIEW builds_pending AS
-    SELECT
-        v.package,
-        v.version,
-        a.abi_tag
-    FROM
-        packages AS p
-        JOIN versions AS v
-            ON v.package = p.package
-        LEFT JOIN builds AS b
-            ON  v.package = b.package
-            AND v.version = b.version
-        CROSS JOIN (
-            SELECT MIN(abi_tag) AS abi_tag
-            FROM build_abis
-        ) AS a
-    WHERE b.version IS NULL
-    AND   NOT v.skip
-    AND   NOT p.skip
+CREATE VIEW build_vers AS
+SELECT
+    'py' || regexp_replace(abi_tag, '^[a-z]+([0-9]).*$', '\1') AS py_version_tag,
+    abi_tag
+FROM build_abis;
 
-    UNION ALL
+CREATE VIEW builds_required AS
+SELECT
+    v.package,
+    v.version,
+    b.abi_tag
+FROM
+    packages AS p
+    JOIN versions AS v ON v.package = p.package
+    CROSS JOIN build_abis AS b
+WHERE
+    NOT v.skip
+    AND NOT p.skip;
 
-    (
-        SELECT
-            p.package,
-            p.version,
-            b.abi_tag
-        FROM
-            (
-                SELECT DISTINCT
-                    b.package,
-                    b.version
-                FROM
-                    builds AS b
-                    JOIN files AS f
-                        ON b.build_id = f.build_id
-                WHERE f.abi_tag <> 'none'
-            ) AS p
-            CROSS JOIN build_abis AS b
+CREATE VIEW builds_failed AS
+SELECT
+    package,
+    version,
+    abi_tag
+FROM
+    builds
+WHERE NOT status;
 
-        EXCEPT
+CREATE VIEW builds_succeeded_with_none AS
+SELECT
+    b.package,
+    b.version,
+    v.abi_tag
+FROM
+    builds b
+    JOIN files f ON b.build_id = f.build_id
+    CROSS JOIN build_abis v
+WHERE
+    b.status
+    AND f.abi_tag = 'none';
 
-        SELECT
-            b.package,
-            b.version,
-            f.abi_tag
-        FROM
-            builds AS b
-            JOIN files AS f
-                ON b.build_id = f.build_id
-        WHERE f.abi_tag <> 'none'
-    );
+CREATE VIEW builds_succeeded_with_some AS
+SELECT
+    b.package,
+    b.version,
+    f.abi_tag
+FROM
+    builds b
+    JOIN files f ON b.build_id = f.build_id
+WHERE
+    b.status
+    AND f.abi_tag <> 'none';
+
+CREATE VIEW builds_done AS
+SELECT
+    b.package,
+    b.version,
+    CASE
+        WHEN f.build_id IS NULL THEN b.abi_tag
+        ELSE
+            CASE f.abi_tag
+                WHEN 'none' THEN v.abi_tag
+                ELSE f.abi_tag
+            END
+    END AS abi_tag
+FROM
+    builds b
+    LEFT JOIN files f ON b.build_id = f.build_id
+    CROSS JOIN build_abis v;
 
 GRANT SELECT ON builds_pending TO piwheels;
 
