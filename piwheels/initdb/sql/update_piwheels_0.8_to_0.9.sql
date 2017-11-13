@@ -46,3 +46,46 @@ WITH build_abi_tags AS (
 UPDATE builds AS b SET abi_tag = d.abi_tag
 FROM build_abi_tags AS d
 WHERE b.build_id = d.build_id;
+
+DROP VIEW builds_pending;
+CREATE VIEW builds_pending AS
+SELECT
+    package,
+    version,
+    MIN(abi_tag) AS abi_tag
+FROM (
+    SELECT
+        v.package,
+        v.version,
+        b.abi_tag
+    FROM
+        packages AS p
+        JOIN versions AS v ON v.package = p.package
+        CROSS JOIN build_abis AS b
+    WHERE
+        NOT v.skip
+        AND NOT p.skip
+
+    EXCEPT
+
+    SELECT
+        b.package,
+        b.version,
+        CASE
+            WHEN f.build_id IS NULL THEN b.abi_tag
+            ELSE
+                CASE f.abi_tag
+                    WHEN 'none' THEN v.abi_tag
+                    ELSE f.abi_tag
+                END
+        END AS abi_tag
+    FROM
+        builds b
+        LEFT JOIN files f ON b.build_id = f.build_id
+        CROSS JOIN build_abis v
+) t
+GROUP BY
+    package,
+    version;
+
+GRANT SELECT ON builds_pending TO piwheels;

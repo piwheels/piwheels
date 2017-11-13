@@ -54,14 +54,14 @@ defined:
 # flake8: noqa
 
 __project__      = 'piwheels'
-__version__      = '0.8'
+__version__      = '0.9'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
 __url__          = 'https://www.piwheels.hostedpi.com/'
 __platforms__    = 'ALL'
 
-__requires__ = ['pyzmq']
+__requires__ = ['configargparse', 'pyzmq']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
@@ -86,5 +86,6 @@ __entry_points__ = {
         'piw-master = piwheels.master:main',
         'piw-slave = piwheels.slave:main',
         'piw-monitor = piwheels.monitor:main',
+        'piw-initdb = piwheels.initdb:main',
     ],
 }
