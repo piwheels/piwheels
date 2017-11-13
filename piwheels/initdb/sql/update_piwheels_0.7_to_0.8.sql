@@ -68,3 +68,5 @@ CREATE VIEW statistics AS
         build_latest bl,
         file_count fc,
         file_stats fs;
+
+GRANT SELECT ON builds_pending TO {username};

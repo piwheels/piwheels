@@ -96,6 +96,7 @@ def main(args=None):
                 logging.warning("Have patience: this can be a long operation!")
             with conn.begin():
                 for statement in parse_statements(script):
+                    statement = statement.format(username=config.user)
                     logging.debug(statement)
                     conn.execute(text(statement))
                     print('.', end='', flush=True)

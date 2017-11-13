@@ -6,7 +6,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 INSERT INTO configuration(id) VALUES (1);
-GRANT UPDATE ON configuration TO piwheels;
+GRANT UPDATE ON configuration TO {username};
 
 DROP INDEX packages_skip;
 CREATE INDEX packages_skip ON packages(package) WHERE NOT skip;
@@ -14,7 +14,7 @@ CREATE INDEX packages_skip ON packages(package) WHERE NOT skip;
 DROP INDEX versions_skip;
 CREATE INDEX versions_package ON versions(package);
 CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
-GRANT DELETE ON versions TO piwheels;
+GRANT DELETE ON versions TO {username};
 
 CREATE TABLE build_abis (
     abi_tag         VARCHAR(100) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE build_abis (
     CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
     CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
 );
-GRANT SELECT ON build_abis TO piwheels;
+GRANT SELECT ON build_abis TO {username};
 
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 
@@ -71,7 +71,7 @@ CREATE VIEW builds_pending AS
     WHERE f.abi_tag <> 'none'
     AND   f.abi_tag <> a.abi_tag;
 
-GRANT SELECT ON builds_pending TO piwheels;
+GRANT SELECT ON builds_pending TO {username};
 
 DROP VIEW statistics;
 CREATE VIEW statistics AS
@@ -132,7 +132,7 @@ CREATE VIEW statistics AS
         build_latest bl,
         file_stats f;
 
-GRANT SELECT ON statistics TO piwheels;
+GRANT SELECT ON statistics TO {username};
 
 -- Data fix-ups
 

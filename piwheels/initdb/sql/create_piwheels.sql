@@ -21,7 +21,7 @@ CREATE TABLE configuration (
 );
 
 INSERT INTO configuration(id) VALUES (1, '0.9');
-GRANT UPDATE ON configuration TO piwheels;
+GRANT UPDATE ON configuration TO {username};
 
 -- packages
 -------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ CREATE TABLE packages (
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
 
-GRANT SELECT,INSERT ON packages TO piwheels;
+GRANT SELECT,INSERT ON packages TO {username};
 CREATE INDEX packages_skip ON packages(package) WHERE NOT skip;
 
 -- versions
@@ -59,7 +59,7 @@ CREATE TABLE versions (
         REFERENCES packages ON DELETE RESTRICT
 );
 
-GRANT SELECT,INSERT,DELETE ON versions TO piwheels;
+GRANT SELECT,INSERT,DELETE ON versions TO {username};
 CREATE INDEX versions_package ON versions(package);
 CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
 
@@ -79,7 +79,7 @@ CREATE TABLE build_abis (
     CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
 );
 
-GRANT SELECT ON build_abis TO piwheels;
+GRANT SELECT ON build_abis TO {username};
 
 -- builds
 -------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ CREATE TABLE builds (
     CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
 );
 
-GRANT SELECT,INSERT ON builds TO piwheels;
+GRANT SELECT,INSERT ON builds TO {username};
 CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
@@ -139,7 +139,7 @@ CREATE TABLE output (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT INSERT ON output TO piwheels;
+GRANT INSERT ON output TO {username};
 
 -- files
 -------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ CREATE TABLE files (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT SELECT,INSERT,UPDATE ON files TO piwheels;
+GRANT SELECT,INSERT,UPDATE ON files TO {username};
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag) WHERE abi_tag <> 'none';
@@ -235,7 +235,7 @@ GROUP BY
     package,
     version;
 
-GRANT SELECT ON builds_pending TO piwheels;
+GRANT SELECT ON builds_pending TO {username};
 
 -- statistics
 -------------------------------------------------------------------------------
@@ -316,6 +316,6 @@ CREATE VIEW statistics AS
         file_count fc,
         file_stats fs;
 
-GRANT SELECT ON statistics TO piwheels;
+GRANT SELECT ON statistics TO {username};
 
 COMMIT;

@@ -1,7 +1,7 @@
-REVOKE UPDATE,DELETE ON packages FROM piwheels;
-REVOKE UPDATE,DELETE ON versions FROM piwheels;
-REVOKE UPDATE,DELETE ON builds FROM piwheels;
-REVOKE DELETE ON files FROM piwheels;
+REVOKE UPDATE,DELETE ON packages FROM {username};
+REVOKE UPDATE,DELETE ON versions FROM {username};
+REVOKE UPDATE,DELETE ON builds FROM {username};
+REVOKE DELETE ON files FROM {username};
 
 DROP INDEX files_pkgver;
 CREATE INDEX files_builds ON files(build_id);
@@ -18,7 +18,7 @@ WHERE b.package IS NULL
     AND NOT v.skip
     AND NOT p.skip;
 
-GRANT SELECT ON builds_pending TO piwheels;
+GRANT SELECT ON builds_pending TO {username};
 
 CREATE VIEW statistics AS
 WITH package_stats AS (
@@ -70,7 +70,7 @@ FROM
     build_stats b,
     file_stats f;
 
-GRANT SELECT ON statistics TO piwheels;
+GRANT SELECT ON statistics TO {username};
 
 INSERT INTO files (
     filename,

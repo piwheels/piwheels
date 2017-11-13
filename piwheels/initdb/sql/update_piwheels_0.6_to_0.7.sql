@@ -53,3 +53,5 @@ CREATE VIEW builds_pending AS
                 ON b.build_id = f.build_id
         WHERE f.abi_tag <> 'none'
     );
+
+GRANT SELECT ON builds_pending TO {username};

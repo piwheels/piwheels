@@ -11,7 +11,7 @@ CREATE TABLE output (
 
 INSERT INTO output SELECT build_id, output FROM builds;
 
-GRANT INSERT ON output TO piwheels;
+GRANT INSERT ON output TO {username};
 
 ALTER TABLE builds
     DROP COLUMN output,
@@ -88,4 +88,4 @@ GROUP BY
     package,
     version;
 
-GRANT SELECT ON builds_pending TO piwheels;
+GRANT SELECT ON builds_pending TO {username};
