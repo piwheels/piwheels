@@ -11,7 +11,7 @@ CREATE TABLE output (
 
 INSERT INTO output SELECT build_id, output FROM builds;
 
-GRANT INSERT ON output TO {username};
+GRANT SELECT,INSERT ON output TO {username};
 
 ALTER TABLE builds
     DROP COLUMN output,

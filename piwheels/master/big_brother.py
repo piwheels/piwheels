@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 
 import zmq
 
+from .. import const
 from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .file_juggler import FsClient
@@ -52,10 +53,10 @@ class BigBrother(PauseableTask):
         super().__init__(config)
         status_queue = self.ctx.socket(zmq.PUSH)
         status_queue.hwm = 1
-        status_queue.connect(config['int_status_queue'])
+        status_queue.connect(const.INT_STATUS_QUEUE)
         index_queue = self.ctx.socket(zmq.PUSH)
         index_queue.hwm = 1
-        index_queue.connect(config['index_queue'])
+        index_queue.connect(config.index_queue)
         self.register(status_queue, self.handle_status, zmq.POLLOUT)
         self.register(index_queue, self.handle_index, zmq.POLLOUT)
         self.fs = FsClient(config)

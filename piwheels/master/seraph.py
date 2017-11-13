@@ -31,6 +31,7 @@
 import zmq
 import zmq.error
 
+from .. import const
 from .tasks import Task
 
 
@@ -44,10 +45,10 @@ class Seraph(Task):
         super().__init__(config)
         self.front_queue = self.ctx.socket(zmq.ROUTER)
         self.front_queue.hwm = 10
-        self.front_queue.bind(config['db_queue'])
+        self.front_queue.bind(config.db_queue)
         self.back_queue = self.ctx.socket(zmq.ROUTER)
         self.back_queue.hwm = 10
-        self.back_queue.bind(config['oracle_queue'])
+        self.back_queue.bind(const.ORACLE_QUEUE)
         self.workers = []
         self.register(self.front_queue, self.handle_front)
         self.register(self.back_queue, self.handle_back)

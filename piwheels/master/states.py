@@ -189,6 +189,9 @@ class BuildState:
     :param str version:
         The version number of the package to build.
 
+    :param str abi_tag:
+        The ABI for which the build was attempted (must not be ``'none'``).
+
     :param bool status:
         ``True`` if the build succeeded, ``False`` if it failed.
 
@@ -206,11 +209,12 @@ class BuildState:
         The integer identifier generated for the build by the database
         (``None`` until the build has been inserted into the database).
     """
-    def __init__(self, slave_id, package, version, status, duration, output,
-                 files, build_id=None):
+    def __init__(self, slave_id, package, version, abi_tag, status, duration,
+                 output, files, build_id=None):
         self._slave_id = slave_id
         self._package = package
         self._version = version
+        self._abi_tag = abi_tag
         self._status = status
         self._duration = duration
         self._output = output
@@ -218,13 +222,14 @@ class BuildState:
         self._build_id = build_id
 
     def __len__(self):
-        return 8
+        return 9
 
     def __getitem__(self, index):
         return [
             self._slave_id,
             self._package,
             self._version,
+            self._abi_tag,
             self._status,
             self._duration,
             self._output,
@@ -234,10 +239,11 @@ class BuildState:
 
     def __repr__(self):
         return (
-            "<BuildState: id={build_id!r}, pkg={package} {version}, {status}>".
+            "<BuildState: id={build_id!r}, pkg={package} {version}, "
+            "abi_tag={abi_tag}, {status}>".
             format(
                 build_id=self.build_id, package=self.package,
-                version=self.version, status=(
+                version=self.version, abi_tag=self.abi_tag, status=(
                     'failed' if not self.status else
                     '{count} files'.format(count=len(self.files))
                 )
@@ -261,6 +267,7 @@ class BuildState:
                 brec.built_by,
                 brec.package,
                 brec.version,
+                brec.abi_tag,
                 brec.status,
                 brec.duration,
                 brec.output,
@@ -297,6 +304,10 @@ class BuildState:
     @property
     def version(self):
         return self._version
+
+    @property
+    def abi_tag(self):
+        return self._abi_tag
 
     @property
     def status(self):
@@ -441,10 +452,14 @@ class SlaveState:
         self._last_seen = datetime.utcnow()
         self._request = value
         if value[0] == 'BUILT':
-            self._build = BuildState(self._slave_id, *value[1:6], files={
-                filename: FileState(filename, *filestate)
-                for filename, filestate in value[-1].items()
-            })
+            status, duration, output, files = value[1:]
+            self._build = BuildState(
+                self._slave_id, self._reply[1], self._reply[2],
+                self.native_abi, status, duration, output, files={
+                    filename: FileState(filename, *filestate)
+                    for filename, filestate in files.items()
+                }
+            )
 
     @property
     def reply(self):

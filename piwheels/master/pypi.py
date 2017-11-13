@@ -67,7 +67,7 @@ class PyPIEvents:
     """
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, pypi_root='https://pypi.python.org/pypi',
+    def __init__(self, pypi_xmlrpc='https://pypi.python.org/pypi',
                  serial=0, retries=3):
         self.retries = retries
         self.next_read = datetime.utcnow()
@@ -75,7 +75,7 @@ class PyPIEvents:
         # Keep a list of the last 100 (package, version) tuples so we can make
         # a vague attempt at reducing duplicate reports
         self.cache = deque(maxlen=100)
-        self.client = xmlrpc.client.ServerProxy(pypi_root)
+        self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc)
 
     def _get_events(self):
         # On rare occasions we get some form of HTTP improper state, so allow

@@ -68,7 +68,7 @@ class Task(Thread):
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(zmq.PUSH)
-        self.quit_queue.connect(config['control_queue'])
+        self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
 
     def register(self, queue, handler, flags=zmq.POLLIN):

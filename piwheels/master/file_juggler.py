@@ -78,15 +78,15 @@ class FileJuggler(Task):
 
     def __init__(self, config):
         super().__init__(config)
-        self.output_path = Path(config['output_path'])
+        self.output_path = Path(config.output_path)
         TransferState.output_path = self.output_path
         file_queue = self.ctx.socket(zmq.ROUTER)
         file_queue.ipv6 = True
         file_queue.hwm = TransferState.pipeline_size * 50
-        file_queue.bind(config['file_queue'])
+        file_queue.bind(config.file_queue)
         fs_queue = self.ctx.socket(zmq.REP)
         fs_queue.hwm = 1
-        fs_queue.bind(config['fs_queue'])
+        fs_queue.bind(config.fs_queue)
         self.register(file_queue, self.handle_file)
         self.register(fs_queue, self.handle_fs_request)
         self.pending = {}   # keyed by slave_id
@@ -99,7 +99,11 @@ class FileJuggler(Task):
         """
         msg, *args = queue.recv_pyobj()
         try:
-            handler = getattr(self, 'do_%s' % msg.lower())
+            handler = {
+                'EXPECT': self.do_expect,
+                'VERIFY': self.do_verify,
+                'STATVFS': self.do_statvfs,
+            }[msg]
             result = handler(*args)
         except Exception as exc:
             self.logger.error('error handling fs request: %s', msg)
@@ -271,7 +275,7 @@ class FsClient:
         self.ctx = zmq.Context.instance()
         self.fs_queue = self.ctx.socket(zmq.REQ)
         self.fs_queue.hwm = 1
-        self.fs_queue.connect(config['fs_queue'])
+        self.fs_queue.connect(config.fs_queue)
 
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or

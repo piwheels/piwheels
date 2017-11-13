@@ -63,10 +63,10 @@ class IndexScribe(PauseableTask):
         super().__init__(config)
         self.homepage_template = resource_string(
             __name__, 'index.template.html').decode('utf-8')
-        self.output_path = Path(config['output_path'])
+        self.output_path = Path(config.output_path)
         index_queue = self.ctx.socket(zmq.PULL)
         index_queue.hwm = 100
-        index_queue.bind(config['index_queue'])
+        index_queue.bind(config.index_queue)
         self.register(index_queue, self.handle_index)
         self.db = DbClient(config)
         self.package_cache = set()

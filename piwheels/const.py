@@ -26,45 +26,28 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`CloudGazer` task; see class for more details"
+"""
+This module defines the default configuration for all applications in the
+piwheels suite. Configuration can be overridden via configuration files, the
+command line or, in certain cases, environment variables.
+"""
 
-from .tasks import PauseableTask
-from .pypi import PyPIEvents
-from .the_oracle import DbClient
+DSN = 'postgres:///piwheels'
+USER = 'piwheels'
+PYPI_ROOT = 'https://pypi.python.org/'
+PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
+PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
+OUTPUT_PATH = '/var/www'
+STATUS_QUEUE  = 'ipc:///tmp/piw-status'
+CONTROL_QUEUE = 'ipc:///tmp/piw-control'
+INDEX_QUEUE = 'inproc://indexes'
+BUILDS_QUEUE = 'inproc://builds'
+DB_QUEUE = 'inproc://db'
+FS_QUEUE = 'inproc://fs'
+SLAVE_QUEUE = 'tcp://*:5555'
+FILE_QUEUE = 'tcp://*:5556'
 
-
-class CloudGazer(PauseableTask):
-    """
-    This task scrapes PyPI for the list of available packages, and the versions
-    of those packages. This information is written into the backend database
-    for :class:`TheArchitect` to use.
-    """
-    name = 'master.cloud_gazer'
-
-    def __init__(self, config):
-        super().__init__(config)
-        self.db = DbClient(config)
-        self.pypi = PyPIEvents(config.pypi_xmlrpc)
-        self.packages = None
-
-    def loop(self):
-        for package, version in self.pypi:
-            if package not in self.packages:
-                if self.db.add_new_package(package):
-                    self.packages.add(package)
-                    self.logger.info('added package %s', package)
-            if self.db.add_new_package_version(package, version):
-                self.logger.info('added package %s version %s',
-                                 package, version)
-            self.poll(0)
-        self.db.set_pypi_serial(self.pypi.serial)
-
-    def run(self):
-        self.logger.info('retrieving current state')
-        self.packages = self.db.get_all_packages()
-        self.pypi.serial = self.db.get_pypi_serial()
-        self.logger.info('querying upstream')
-        try:
-            super().run()
-        finally:
-            self.db.set_pypi_serial(self.pypi.serial)
+# NOTE: The following queues are *not* configurable and should always be an
+# inproc queue
+INT_STATUS_QUEUE = 'inproc://status'
+ORACLE_QUEUE = 'inproc://oracle'

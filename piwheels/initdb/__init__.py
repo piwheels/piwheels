@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # The piwheels project
 #   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
 #   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
@@ -46,7 +48,7 @@ from pkg_resources import resource_listdir, resource_string
 from sqlalchemy import create_engine, text, exc
 from sqlalchemy.engine.url import make_url
 
-from .. import __version__, terminal
+from .. import __version__, terminal, const
 
 
 def main(args=None):
@@ -55,13 +57,14 @@ def main(args=None):
     the piwheels database required by the master or, if it already exists,
     upgrades it to the current version of the application.
     """
+    logging.getLogger().name = 'initdb'
     parser = terminal.configure_parser(__doc__)
     parser.add_argument(
-        '-d', '--dsn', default='postgres:///piwheels',
+        '-d', '--dsn', default=const.DSN,
         help="The database to create or upgrade; this DSN must connect as "
         "the cluster superuser (default: %(default)s)")
     parser.add_argument(
-        '-u', '--user', metavar='NAME', default='piwheels',
+        '-u', '--user', metavar='NAME', default=const.USER,
         help="The name of the ordinary piwheels database user (default: "
         "%(default)s)")
     parser.add_argument(

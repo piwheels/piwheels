@@ -33,6 +33,7 @@ from datetime import datetime
 
 import zmq
 
+from .. import const
 from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
 from .the_oracle import DbClient
@@ -59,21 +60,22 @@ class SlaveDriver(Task):
         self.paused = False
         slave_queue = self.ctx.socket(zmq.ROUTER)
         slave_queue.ipv6 = True
-        slave_queue.bind(config['slave_queue'])
+        slave_queue.bind(config.slave_queue)
         self.register(slave_queue, self.handle_slave)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
-        self.status_queue.connect(config['int_status_queue'])
+        self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
-        self.build_queue = self.ctx.socket(zmq.REQ)
-        self.build_queue.hwm = 1
-        self.build_queue.connect(config['build_queue'])
+        self.builds_queue = self.ctx.socket(zmq.REQ)
+        self.builds_queue.hwm = 1
+        self.builds_queue.connect(config.builds_queue)
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
-        self.index_queue.connect(config['index_queue'])
+        self.index_queue.connect(config.index_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.slaves = {}
+        self.pypi_simple = config.pypi_simple
 
     def list_slaves(self):
         """
@@ -151,8 +153,15 @@ class SlaveDriver(Task):
                 slave = SlaveState(address, *args)
             slave.request = [msg] + args
 
-            handler = getattr(self, 'do_%s' % msg.lower(), None)
-            if handler is None:
+            try:
+                handler = {
+                    'HELLO': self.do_hello,
+                    'BYE': self.do_bye,
+                    'IDLE': self.do_idle,
+                    'BUILT': self.do_built,
+                    'SENT': self.do_sent,
+                }[msg]
+            except KeyError:
                 self.logger.error(
                     'slave %d: protocol error (%s)',
                     slave.slave_id, msg)
@@ -185,7 +194,7 @@ class SlaveDriver(Task):
             slave.slave_id, slave.timeout, slave.native_abi,
             slave.native_platform)
         self.slaves[slave.address] = slave
-        return ['HELLO', slave.slave_id]
+        return ['HELLO', slave.slave_id, self.pypi_simple]
 
     def do_bye(self, slave):
         """
@@ -225,8 +234,8 @@ class SlaveDriver(Task):
                 'slave %d: sleeping because master is paused', slave.slave_id)
             return ['SLEEP']
         else:
-            self.build_queue.send_pyobj(slave.native_abi)
-            task = self.build_queue.recv_pyobj()
+            self.builds_queue.send_pyobj(slave.native_abi)
+            task = self.builds_queue.recv_pyobj()
             if task is not None:
                 if task not in self.active_builds():
                     package, version = task
@@ -256,17 +265,7 @@ class SlaveDriver(Task):
                 'slave %d: protocol error (BUILD after %s)',
                 slave.slave_id, slave.reply[0])
             return ['BYE']
-        elif slave.reply[1] != slave.build.package:
-            self.logger.error(
-                'slave %d: protocol error (BUILT %s instead of %s)',
-                slave.slave_id, slave.build.package, slave.reply[1])
-            return ['BYE']
         else:
-            if slave.reply[2] != slave.build.version:
-                self.logger.warning(
-                    'slave %d: build version mismatch: %s != %s',
-                    slave.slave_id, slave.reply[2],
-                    slave.build.version)
             build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
             if slave.build.status and not slave.build.transfers_done:

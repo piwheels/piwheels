@@ -48,14 +48,14 @@ class TheArchitect(Task):
 
     def __init__(self, config):
         super().__init__(config)
-        self.db = Database(config['database'])
-        build_queue = self.ctx.socket(zmq.REP)
-        build_queue.hwm = 1
-        build_queue.bind(config['build_queue'])
+        self.db = Database(config.dsn)
+        builds_queue = self.ctx.socket(zmq.REP)
+        builds_queue.hwm = 1
+        builds_queue.bind(config.builds_queue)
         self.query = None
         self.timestamp = datetime.utcnow() - timedelta(seconds=30)
         self.abi_queues = defaultdict(lambda: deque(maxlen=1000))
-        self.register(build_queue, self.handle_build)
+        self.register(builds_queue, self.handle_builds)
 
     def loop(self):
         """
@@ -67,7 +67,7 @@ class TheArchitect(Task):
         entries, but that's fine as it'll just be repeated again.
         """
         if self.query is None:
-            # Leave a gap of 30 seconds between query re-runs; the build queue
+            # Leave a gap of 30 seconds between query re-runs; the builds queue
             # query is quite heavy and when we're at the end of a run it's
             # better to let new entries build up for a bit before we squirt
             # them into the queues rather than waste time restarting the query
@@ -82,9 +82,9 @@ class TheArchitect(Task):
                 self.query = None
                 self.timestamp = datetime.utcnow()
 
-    def handle_build(self, queue):
+    def handle_builds(self, queue):
         """
-        Handler for the task's build queue. Whenever a build slave asks
+        Handler for the task's builds queue. Whenever a build slave asks
         :class:`SlaveDriver` for a new task, :class:`SlaveDriver` passes the
         slave's ABI to :class:`TheArchitect` via this queue. We simply pop the
         first entry (if any) off the relevant queue and send it back.

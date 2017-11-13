@@ -158,13 +158,17 @@ class PiWheelsBuilder:
         self.files = []
         self.status = False
 
-    def build(self, timeout=None):
+    def build(self, timeout=None, pypi_index='https://pypi.python.org/simple'):
         """
         Attempt to build the package within the specified *timeout*.
 
         :param float timeout:
             The number of seconds to wait for ``pip`` to finish before raising
             :exc:`subprocess.TimeoutExpired`.
+
+        :param str pypi_index:
+            The URL of the :pep:`503` compliant repository from which to fetch
+            packages for building.
         """
         self.wheel_dir = tempfile.TemporaryDirectory()
         with tempfile.NamedTemporaryFile('w+', dir=self.wheel_dir.name,
@@ -177,6 +181,7 @@ class PiWheelsBuilder:
             env['GIT_ALLOW_PROTOCOL'] = 'file'
             args = [
                 'pip3', 'wheel',
+                '--index-url={}'.format(pypi_index),
                 '--wheel-dir={}'.format(self.wheel_dir.name),
                 '--log={}'.format(log_file.name),
                 '--no-deps',                    # don't build dependencies

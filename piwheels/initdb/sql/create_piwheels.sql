@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id) VALUES (1, '0.9');
+INSERT INTO configuration(id, version) VALUES (1, '0.9');
 GRANT UPDATE ON configuration TO {username};
 
 -- packages
@@ -139,7 +139,7 @@ CREATE TABLE output (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT INSERT ON output TO {username};
+GRANT SELECT,INSERT ON output TO {username};
 
 -- files
 -------------------------------------------------------------------------------

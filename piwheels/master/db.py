@@ -145,11 +145,16 @@ class Database:
                 self._builds.insert().returning(self._builds.c.build_id),
                 package=build.package,
                 version=build.version,
+                abi_tag=build.abi_tag,
                 built_by=build.slave_id,
                 duration=timedelta(seconds=build.duration),
-                output=sanitize(build.output),
                 status=build.status
             ))
+            self._conn.execute(
+                self._output.insert(),
+                build_id=build.build_id,
+                output=sanitize(build.output)
+            )
             if build.status:
                 for f in build.files.values():
                     self.log_file(build, f)
@@ -269,7 +274,17 @@ class Database:
         """
         with self._conn.begin():
             return self._conn.execute(
-                self._builds.select().
+                select([
+                    self._builds.c.build_id,
+                    self._builds.c.built_by,
+                    self._builds.c.package,
+                    self._builds.c.version,
+                    self._builds.c.abi_tag,
+                    self._builds.c.status,
+                    self._builds.c.duration,
+                    self._output.c.output,
+                ]).
+                select_from(self._builds.join(self._output)).
                 where(self._builds.c.build_id == build_id)
             )
 

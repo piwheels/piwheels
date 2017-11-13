@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # The piwheels project
 #   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
 #   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
@@ -26,8 +28,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`PiWheelsSlave` application."
+"""
+The piw-slave script is intended to be run on a standalone machine to build
+packages on behalf of the piw-master script. It is intended to be run as an
+unprivileged user with a clean home-directory. Any build dependencies you wish
+to use must already be installed. The script will run until it is explicitly
+terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
+"""
 
+import sys
 import logging
 from datetime import datetime
 from time import sleep
@@ -36,74 +45,52 @@ import zmq
 import dateutil.parser
 from wheel import pep425tags
 
+from .. import __version__, terminal
 from .builder import PiWheelsBuilder
-from ..terminal import TerminalApplication
-from .. import __version__
 
 
-def duration(s):
+class PiWheelsSlave:
     """
-    Convert *s*, a string representing a duration, into a
-    :class:`datetime.timedelta`.
-    """
-    return (
-        dateutil.parser.parse(s, default=datetime(1, 1, 1)) -
-        datetime(1, 1, 1)
-    )
+    This is the main class for the :program:`piw-slave` script. It connects
+    (over zmq sockets) to a master (see :program:`piw-master`) then loops
+    around the slave protocol (see the :doc:`slaves` chapter). It retrieves
+    source packages directly from `PyPI`_, attempts to build a wheel in a
+    sandbox directory and, if successful, transmits the results to the master.
 
-
-class PiWheelsSlave(TerminalApplication):
-    """
-    This is the main class for the ``piw-slave`` script. It connects (over zmq
-    sockets) to a master (see ``piw-master``) then loops around requesting
-    package versions to build. It retrieves source directly from PyPI, attempts
-    to build a wheel in a sandbox directory and, if successful, transmits the
-    results to the master.
+    .. _PyPI: https://pypi.python.org/
     """
     def __init__(self):
-        super().__init__(__version__)
-        self.parser.add_argument(
-            '-m', '--master', metavar='HOST',
-            help='The IP address or hostname of the master server; overrides '
-            'the [slave]/master entry in the configuration file')
-        self.parser.add_argument(
-            '-t', '--timeout', metavar='TIME', type=duration,
-            help='The time to wait before assuming a build has failed; '
-            'overrides the [slave]/timeout entry in the configuration file')
         self.logger = logging.getLogger('slave')
         self.config = None
         self.slave_id = None
         self.builder = None
+        self.pypi_url = None
 
-    def load_configuration(self, args, default=None):
-        if default is None:
-            default = {
-                'slave': {
-                    'master': 'localhost',
-                    'timeout': '3h',
-                },
-            }
-        config = super().load_configuration(args, default=default)
-        config = dict(config['slave'])
-        if args.master is not None:
-            config['master'] = args.master
-        if args.timeout is not None:
-            config['timeout'] = args.timeout
-        # Convert duration to a simple seconds count
-        config['timeout'] = duration(config['timeout']).total_seconds()
-        return config
+    def __call__(self, args=None):
+        sys.excepthook = terminal.error_handler
+        parser = terminal.configure_parser(__doc__)
+        parser.add_argument(
+            '-m', '--master', env_var='PIW_MASTER', metavar='HOST',
+            default='localhost',
+            help="The IP address or hostname of the master server "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '-t', '--timeout', env_var='PIW_TIMEOUT', metavar='DURATION',
+            default='3h', type=duration,
+            help="The time to wait before assuming a build has failed; "
+            "(default: %(default)s)")
+        self.config = parser.parse_args(args)
+        terminal.configure_logging(self.config.log_level, self.config.log_file)
 
-    def main(self, args, config):
-        logging.info('PiWheels Slave version %s', __version__)
-        self.config = config
+        self.logger.info('PiWheels Slave version %s', __version__)
         ctx = zmq.Context.instance()
         queue = ctx.socket(zmq.REQ)
         queue.hwm = 1
         queue.ipv6 = True
         queue.connect('tcp://{master}:5555'.format(
-            master=self.config['master']))
+            master=self.config.master))
         try:
-            request = ['HELLO', config['timeout'], pep425tags.get_impl_ver(),
+            request = ['HELLO', self.config.timeout, pep425tags.get_impl_ver(),
                        pep425tags.get_abi_tag(), pep425tags.get_platform()]
             while request is not None:
                 queue.send_pyobj(request)
@@ -111,7 +98,7 @@ class PiWheelsSlave(TerminalApplication):
                 request = self.handle_reply(reply, *args)
         finally:
             queue.send_pyobj(['BYE'])
-            queue.close()
+            ctx.destroy(linger=1000)
             ctx.term()
 
     # A general note about the design of the slave: the build slave is
@@ -119,8 +106,8 @@ class PiWheelsSlave(TerminalApplication):
     # die loudly in the event anything happens to go wrong (other than utterly
     # expected failures like wheels occasionally failing to build and file
     # transfers occasionally needing a retry). Hence all the apparently silly
-    # asserts littering the methods below.
-    #
+    # asserts littering the functions below.
+
     # This is in stark constrast to the master which is expected to stay up and
     # carry on running even if a build slave goes bat-shit crazy and starts
     # sending nonsense (in which case it should calmly ignore it and/or attempt
@@ -131,25 +118,34 @@ class PiWheelsSlave(TerminalApplication):
         Dispatch a message from the master to an appropriate handler method.
         """
         try:
-            handler = getattr(self, 'do_%s' % reply.lower())
-        except AttributeError:
-            assert False, 'Invalid message from master'
+            handler = {
+                'HELLO': self.do_hello,
+                'SLEEP': self.do_sleep,
+                'BUILD': self.do_build,
+                'SEND': self.do_send,
+                'DONE': self.do_done,
+                'BYE': self.do_bye,
+            }[reply]
+        except KeyError:
+            assert False, 'Invalid message from master %r' % reply
         else:
             return handler(*args)
 
-    def do_hello(self, slave_id):
+    def do_hello(self, new_id, pypi_url):
         """
-        In response to our initial HELLO (detailing our various PEP425 tags),
-        the master is expected to send HELLO back with an integer identifier.
-        We use the identifier in all future log messages for the ease of the
+        In response to our initial HELLO (detailing our various :pep:`425`
+        tags), the master is expected to send HELLO back with an integer
+        identifier and the URL of the PyPI repository to download from.  We use
+        the identifier in all future log messages for the ease of the
         administrator.
 
         We reply with IDLE to indicate we're ready to accept a build job.
         """
         assert self.slave_id is None, 'Duplicate hello'
-        self.slave_id = int(slave_id)
+        self.slave_id = int(new_id)
+        self.pypi_url = pypi_url
         self.logger = logging.getLogger('slave-%d' % self.slave_id)
-        self.logger.info('Connected to master at %s', self.config['master'])
+        self.logger.info('Connected to master')
         return ['IDLE']
 
     def do_sleep(self):
@@ -165,23 +161,20 @@ class PiWheelsSlave(TerminalApplication):
 
     def do_build(self, package, version):
         """
-        Alternatively, in response to IDLE, the master may send BUILD <package>
-        <version>. We should then attempt to build the specified wheel and send
+        Alternatively, in response to IDLE, the master may send BUILD *package*
+        *version*. We should then attempt to build the specified wheel and send
         back a BUILT message with a full report of the outcome.
         """
         assert self.slave_id is not None, 'Build before hello'
         assert not self.builder, 'Last build still exists'
-        self.logger.warning('Building package %s version %s',
-                            package, version)
+        self.logger.warning('Building package %s version %s', package, version)
         self.builder = PiWheelsBuilder(package, version)
-        if self.builder.build(self.config['timeout']):
+        if self.builder.build(self.config.timeout, self.pypi_url):
             self.logger.info('Build succeeded')
         else:
             self.logger.warning('Build failed')
         return [
             'BUILT',
-            self.builder.package,
-            self.builder.version,
             self.builder.status,
             self.builder.duration,
             self.builder.output,
@@ -202,7 +195,7 @@ class PiWheelsSlave(TerminalApplication):
     def do_send(self, filename):
         """
         If a build succeeds and generates files (detailed in a BUILT message),
-        the master will reply with SEND <filename> indicating we should
+        the master will reply with SEND *filename* indicating we should
         transfer the specified file (this is done on a separate socket with a
         different protocol; see :meth:`transfer` for more details). Once the
         transfers concludes, reply to the master with SENT.
@@ -221,8 +214,8 @@ class PiWheelsSlave(TerminalApplication):
         will reply with DONE indicating we can remove all associated build
         artifacts. We respond with IDLE.
         """
-        assert self.slave_id is not None, 'Okay before hello'
-        assert self.builder, 'Okay before build'
+        assert self.slave_id is not None, 'Done before hello'
+        assert self.builder, 'Done before build'
         self.logger.info('Removing temporary build directories')
         self.builder.clean()
         self.builder = None
@@ -243,11 +236,8 @@ class PiWheelsSlave(TerminalApplication):
     def transfer(self, package):
         """
         Transfer *package* to *master* over the separate file transfer queue.
-        See the ``docs/file_protocol`` chart for a rough overview of the file
-        transfer protocol.
-
-        :param str master:
-            The IP address of the master node.
+        See the :doc:`slaves` chapter for a rough overview of the file transfer
+        protocol.
 
         :param pathlib.Path package:
             The path of the package to transfer.
@@ -258,7 +248,7 @@ class PiWheelsSlave(TerminalApplication):
             queue.ipv6 = True
             queue.hwm = 10
             queue.connect('tcp://{master}:5556'.format(
-                master=self.config['master']))
+                master=self.config.master))
             try:
                 timeout = 0
                 while True:
@@ -284,4 +274,18 @@ class PiWheelsSlave(TerminalApplication):
                 queue.close()
 
 
+def duration(s):
+    """
+    Convert *s*, a string representing a duration, into a
+    :class:`datetime.timedelta`.
+    """
+    return (
+        dateutil.parser.parse(s, default=datetime(1, 1, 1)) -
+        datetime(1, 1, 1)
+    ).total_seconds()
+
+
 main = PiWheelsSlave()  # pylint: disable=invalid-name
+
+if __name__ == '__main__':
+    main()

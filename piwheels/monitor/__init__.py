@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # The piwheels project
 #   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
 #   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
@@ -26,30 +28,35 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`PiWheelsMonitor` application."
+"""
+The piw-monitor application is used to monitor (and optionally control) the
+piw-master script. Upon startup it will request the status of all build slaves
+currently known to the master, and will then continually update its display as
+the slaves progress through builds. The controls at the bottom of the display
+allow the administrator to pause or resume the master script, kill build slaves
+that are having issues (e.g. excessive resource consumption from a huge build)
+or terminate the master itself.
+"""
 
-import os
 from datetime import datetime, timedelta
 
 import zmq
 
+from .. import terminal, const
 from . import widgets
-from ..terminal import TerminalApplication
-from .. import __version__
 
 
-class PiWheelsMonitor(TerminalApplication):
+class PiWheelsMonitor:
     """
-    This is the main class for the ``piw-monitor`` script. It connects to the
-    ``piw-master`` script via the control and external status queues, and
-    displays the real-time status of the master in a nice curses-based UI.
-    Controls are provided for terminating build slaves, and the master itself,
-    as well as pausing and resuming the master's operations.
+    This is the main class for the :program:`piw-monitor` script. It
+    connects to the :program:`piw-master` script via the control and external
+    status queues, and displays the real-time status of the master in a nice
+    curses-based UI.  Controls are provided for terminating build slaves, and
+    the master itself, as well as pausing and resuming the master's operations.
     """
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self):
-        super().__init__(__version__, __doc__, log_params=False)
         self.status_queue = None
         self.ctrl_queue = None
         self.loop = None           # the main event loop
@@ -64,26 +71,27 @@ class PiWheelsMonitor(TerminalApplication):
         self.build_size_label = None
         self.build_time_label = None
 
-    def load_configuration(self, args, default=None):
-        if default is None:
-            default = {
-                'monitor': {
-                    'control_queue': 'ipc:///tmp/piw-control',
-                    'ext_status_queue': 'ipc:///tmp/piw-status',
-                },
-            }
-        config = super().load_configuration(args, default=default)
-        config = dict(config['monitor'])
-        return config
+    def __call__(self, args=None):
+        parser = terminal.configure_parser(__doc__, log_params=False)
+        parser.add_argument(
+            '--status-queue', metavar='ADDR',
+            default=const.STATUS_QUEUE,
+            help="The address of the queue used to report status to monitors "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--control-queue', metavar='ADDR',
+            default=const.CONTROL_QUEUE,
+            help="The address of the queue a monitor can use to control the "
+            "master (default: %(default)s)")
+        config = parser.parse_args(args)
 
-    def main(self, args, config):
         ctx = zmq.Context()
         self.status_queue = ctx.socket(zmq.SUB)
         self.status_queue.hwm = 10
-        self.status_queue.connect(config['ext_status_queue'])
+        self.status_queue.connect(config.status_queue)
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         self.ctrl_queue = ctx.socket(zmq.PUSH)
-        self.ctrl_queue.connect(config['control_queue'])
+        self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_pyobj(['HELLO'])
         try:
             self.loop = widgets.MainLoop(
@@ -95,8 +103,7 @@ class PiWheelsMonitor(TerminalApplication):
             self.loop.event_loop.alarm(1, self.tick)
             self.loop.run()
         finally:
-            self.ctrl_queue.close()
-            self.status_queue.close()
+            ctx.destroy(linger=1000)
             ctx.term()
 
     def build_ui(self):
@@ -570,3 +577,6 @@ def since(timestamp, template='%8s'):
 
 
 main = PiWheelsMonitor()  # pylint: disable=invalid-name
+
+if __name__ == '__main__':
+    main()

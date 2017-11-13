@@ -34,7 +34,6 @@ in the piwheels suite.
 import sys
 import locale
 import logging
-import argparse
 import traceback
 
 import configargparse
@@ -54,16 +53,26 @@ locale.setlocale(locale.LC_ALL, '')
 # adornments. This will be used for logging messages sent before we "properly"
 # configure logging according to the user's preferences
 _CONSOLE = logging.StreamHandler(sys.stderr)
-_CONSOLE.setFormatter(logging.Formatter('%(message)s'))
+_CONSOLE.setFormatter(logging.Formatter('%(name)s: %(message)s'))
 _CONSOLE.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(_CONSOLE)
+
+
+class ArgParser(configargparse.ArgParser):
+    """
+    Overrides the default ArgParser to simply raise an exception in the case
+    of usage error
+    """
+    # pylint: disable=method-hidden
+    def error(self, message):
+        raise configargparse.ArgumentError(None, message)
 
 
 def configure_parser(description, log_params=True):
     """
     Configure an argument parser with some common options and return it.
     """
-    parser = configargparse.ArgParser(
+    parser = ArgParser(
         description=description,
         add_config_file_help=False,
         add_env_var_help=False,
@@ -102,9 +111,8 @@ def configure_logging(log_level, log_filename=None):
     _CONSOLE.setLevel(log_level)
     if log_filename is not None:
         log_file = logging.FileHandler(log_filename)
-        log_file.setFormatter(
-            logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-        )
+        log_file.setFormatter(logging.Formatter(
+            '%(asctime)s %(name)s %(levelname)s: %(message)s'))
         log_file.setLevel(logging.DEBUG)
         logging.getLogger().addHandler(log_file)
     logging.getLogger().setLevel(logging.INFO)
@@ -124,7 +132,7 @@ def error_handler(exc_type, exc_value, exc_trace):
     elif issubclass(exc_type, (KeyboardInterrupt,)):
         # Exit with 2 if the user deliberately terminates with Ctrl+C
         return 2
-    elif issubclass(exc_type, (argparse.ArgumentError,)):
+    elif issubclass(exc_type, (configargparse.ArgumentError,)):
         # For option parser errors output the error along with a message
         # indicating how the help page can be displayed
         logging.critical(str(exc_value))
@@ -139,8 +147,7 @@ def error_handler(exc_type, exc_value, exc_trace):
     else:
         # Otherwise, log the stack trace and the exception into the log
         # file for debugging purposes
-        for line in traceback.format_exception(
-                exc_type, exc_value, exc_trace):
+        for line in traceback.format_exception(exc_type, exc_value, exc_trace):
             for msg in line.rstrip().split('\n'):
                 logging.critical(msg.replace('%', '%%'))
         return 1

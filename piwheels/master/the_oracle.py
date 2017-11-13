@@ -34,6 +34,7 @@ from collections import namedtuple
 import zmq
 import zmq.error
 
+from .. import const
 from .tasks import Task
 from .states import BuildState, FileState
 from .db import Database
@@ -59,10 +60,10 @@ class TheOracle(Task):
         TheOracle.instance += 1
         self.name = '%s_%d' % (TheOracle.name, TheOracle.instance)
         super().__init__(config)
-        self.db = Database(config['database'])
+        self.db = Database(config.dsn)
         db_queue = self.ctx.socket(zmq.REQ)
         db_queue.hwm = 10
-        db_queue.connect(config['oracle_queue'])
+        db_queue.connect(const.ORACLE_QUEUE)
         self.register(db_queue, self.handle_db_request)
         db_queue.send(b'READY')
 
@@ -73,7 +74,18 @@ class TheOracle(Task):
         address, empty, msg = queue.recv_multipart()
         msg, *args = pickle.loads(msg)
         try:
-            handler = getattr(self, 'do_%s' % msg.lower())
+            handler = {
+                'ALLPKGS': self.do_allpkgs,
+                'ALLVERS': self.do_allvers,
+                'NEWPKG': self.do_newpkg,
+                'NEWVER': self.do_newver,
+                'LOGBUILD': self.do_logbuild,
+                'PKGFILES': self.do_pkgfiles,
+                'GETABIS': self.do_getabis,
+                'GETPYPI': self.do_getpypi,
+                'SETPYPI': self.do_setpypi,
+                'GETSTATS': self.do_getstats,
+            }[msg]
             result = handler(*args)
         except Exception as exc:
             self.logger.error('Error handling db request: %s', msg)
@@ -121,8 +133,8 @@ class TheOracle(Task):
         """
         return self.db.add_new_package_version(package, version)
 
-    def do_logbuild(self, slave_id, package, version, status, duration,
-                    output, files):
+    def do_logbuild(self, slave_id, package, version, abi_tag, status,
+                    duration, output, files):
         """
         Message sent by :class:`DbClient` to register a new build result.
 
@@ -132,6 +144,8 @@ class TheOracle(Task):
             The name of the package.
         :param str version:
             The version of the package.
+        :param str abi_tag:
+            The ABI of the slave attempting the build.
         :param bool status:
             Indicates if build succeeded.
         :param datetime.timedelta duration:
@@ -143,8 +157,8 @@ class TheOracle(Task):
             empty for failed builds).
         """
         # pylint: disable=too-many-arguments
-        build = BuildState(slave_id, package, version, status, duration,
-                           output, files={
+        build = BuildState(slave_id, package, version, abi_tag, status,
+                           duration, output, files={
                                filename: FileState(filename, *filestate)
                                for filename, filestate in files.items()
                            })
@@ -201,7 +215,7 @@ class DbClient:
         self.ctx = zmq.Context.instance()
         self.db_queue = self.ctx.socket(zmq.REQ)
         self.db_queue.hwm = 1
-        self.db_queue.connect(config['db_queue'])
+        self.db_queue.connect(config.db_queue)
 
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
@@ -245,7 +259,7 @@ class DbClient:
         """
         build_id = self._execute([
             'LOGBUILD', build.slave_id, build.package, build.version,
-            build.status, build.duration, build.output, {
+            build.abi_tag, build.status, build.duration, build.output, {
                 f.filename: [
                     f.filesize, f.filehash, f.package_tag,
                     f.package_version_tag, f.py_version_tag, f.abi_tag,
@@ -284,7 +298,7 @@ class DbClient:
         See :meth:`TheOracle.do_getstats`.
         """
         rec = self._execute(['GETSTATS'])
-        if DbClient.StatsType is None:
-            DbClient.StatsType = namedtuple('Statistics',
-                                            tuple(k for k, v in rec))
-        return DbClient.StatsType(**{k: v for k, v in rec})
+        if DbClient.stats_type is None:
+            DbClient.stats_type = namedtuple('Statistics',
+                                             tuple(k for k, v in rec))
+        return DbClient.stats_type(**{k: v for k, v in rec})

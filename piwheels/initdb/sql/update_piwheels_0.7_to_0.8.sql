@@ -69,4 +69,4 @@ CREATE VIEW statistics AS
         file_count fc,
         file_stats fs;
 
-GRANT SELECT ON builds_pending TO {username};
+GRANT SELECT ON statistics TO {username};

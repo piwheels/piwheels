@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # The piwheels project
 #   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
 #   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
@@ -26,16 +28,23 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`PiWheelsMaster` application."
+"""
+The piw-master script is intended to be run on the database and file-server
+machine. It is recommended you do not run piw-slave on the same machine as the
+piw-master script. The database specified in the configuration must exist and
+have been configured with the piw-initdb script. It is recommended you run
+piw-master as an ordinary unprivileged user, although obviously it will need
+write access to the output directory.
+"""
 
 import os
+import sys
 import signal
 import logging
 
 import zmq
 
-from .. import __version__
-from ..terminal import TerminalApplication
+from .. import __version__, terminal, const
 from .tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
@@ -47,72 +56,84 @@ from .index_scribe import IndexScribe
 from .cloud_gazer import CloudGazer
 
 
-def sig_term(signo, stack_frame):
+class PiWheelsMaster:
     """
-    Handler for the SIGTERM signal; raises SystemExit which will cause the
-    :meth:`run_forever` method to terminate.
-    """
-    # pylint: disable=unused-argument
-    raise SystemExit(0)
-
-
-class PiWheelsMaster(TerminalApplication):
-    """
-    This is the main class for the ``piw-master`` script. It spawns various
-    worker threads, then spends its time communicating with any attached
-    monitor applications (see ``piw-monitor``) and build slaves (see
-    ``piw-slave``).
+    This is the main class for the :program:`piw-master` script. It spawns
+    various worker threads, then spends its time communicating with any
+    attached monitor applications (see :program:`piw-monitor`) and build slaves
+    (see :program:`piw-slave`).
     """
     def __init__(self):
-        super().__init__(__version__, __doc__)
         self.logger = logging.getLogger('master')
         self.control_queue = None
         self.int_status_queue = None
         self.ext_status_queue = None
         self.tasks = []
 
-    def load_configuration(self, args, default=None):
-        if default is None:
-            default = {
-                'master': {
-                    'database':          'postgres:///piwheels',
-                    'pypi_root':         'https://pypi.python.org/pypi',
-                    'output_path':       '/var/www',
-                    'int_status_queue':  'inproc://status',
-                    'index_queue':       'inproc://indexes',
-                    'build_queue':       'inproc://builds',
-                    'fs_queue':          'inproc://fs',
-                    'db_queue':          'inproc://db',
-                    'oracle_queue':      'inproc://oracle',
-                    'control_queue':     'ipc:///tmp/piw-control',
-                    'ext_status_queue':  'ipc:///tmp/piw-status',
-                    'slave_queue':       'tcp://*:5555',
-                    'file_queue':        'tcp://*:5556',
-                },
-            }
-        config = super().load_configuration(args, default=default)
-        config = dict(config['master'])
-        return config
+    def __call__(self, args=None):
+        sys.excepthook = terminal.error_handler
+        parser = terminal.configure_parser(__doc__)
+        parser.add_argument(
+            '-d', '--dsn', default=const.DSN,
+            help="The database to use; this database must be configured with "
+            "piw-initdb and the user should *not* be a PostgreSQL superuser "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--pypi-xmlrpc', metavar='URL', default=const.PYPI_XMLRPC,
+            help="The URL of the PyPI XML-RPC service (default: %(default)s)")
+        parser.add_argument(
+            '--pypi-simple', metavar='URL', default=const.PYPI_SIMPLE,
+            help="The URL of the PyPI simple API (default: %(default)s)")
+        parser.add_argument(
+            '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
+            help="The path under which the website should be written; must be "
+            "writable by the current user")
+        parser.add_argument(
+            '--index-queue', metavar='ADDR', default=const.INDEX_QUEUE,
+            help="The address of the IndexScribe queue (default: %(default)s)")
+        parser.add_argument(
+            '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
+            help="The address of the queue used to report status to monitors "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--control-queue', metavar='ADDR', default=const.CONTROL_QUEUE,
+            help="The address of the queue a monitor can use to control the "
+            "master (default: %(default)s)")
+        parser.add_argument(
+            '--builds-queue', metavar='ADDR', default=const.BUILDS_QUEUE,
+            help="The address of the queue used to store pending builds "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--db-queue', metavar='ADDR', default=const.DB_QUEUE,
+            help="The address of the queue used to talk to the database "
+            "server (default: %(default)s)")
+        parser.add_argument(
+            '--fs-queue', metavar='ADDR', default=const.FS_QUEUE,
+            help="The address of the queue used to talk to the file-system "
+            "server (default: %(default)s)")
+        parser.add_argument(
+            '--slave-queue', metavar='ADDR', default=const.SLAVE_QUEUE,
+            help="The address of the queue used to talk to the build slaves "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--file-queue', metavar='ADDR', default=const.FILE_QUEUE,
+            help="The address of the queue used to transfer files from slaves "
+            "(default: %(default)s)")
+        config = parser.parse_args(args)
+        config.output_path = os.path.expanduser(config.output_path)
+        terminal.configure_logging(config.log_level, config.log_file)
 
-    def main(self, args, config):
-        """
-        This is the entry point for the ``piw-master`` script (once all
-        arguments and configuration have been parsed / loaded). It spawns all
-        the task threads then hands control to :meth:`run_forever`. If/when
-        that terminates, it handles cleaning up the tasks in reversed spawn
-        order.
-        """
         self.logger.info('PiWheels Master version %s', __version__)
         ctx = zmq.Context.instance()
         self.control_queue = ctx.socket(zmq.PULL)
         self.control_queue.hwm = 10
-        self.control_queue.bind(config['control_queue'])
+        self.control_queue.bind(config.control_queue)
         self.int_status_queue = ctx.socket(zmq.PULL)
         self.int_status_queue.hwm = 10
-        self.int_status_queue.bind(config['int_status_queue'])
+        self.int_status_queue.bind(const.INT_STATUS_QUEUE)
         self.ext_status_queue = ctx.socket(zmq.PUB)
         self.ext_status_queue.hwm = 10
-        self.ext_status_queue.bind(config['ext_status_queue'])
+        self.ext_status_queue.bind(config.status_queue)
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
         # for more information)
@@ -137,7 +158,7 @@ class PiWheelsMaster(TerminalApplication):
         self.logger.info('started all tasks')
         signal.signal(signal.SIGTERM, sig_term)
         try:
-            self.run_forever()
+            self.main_loop()
         except TaskQuit:
             pass
         except SystemExit:
@@ -148,16 +169,16 @@ class PiWheelsMaster(TerminalApplication):
             self.logger.info('closing tasks')
             for task in reversed(self.tasks):
                 task.quit()
-                task.close()
+                task.join()
             self.logger.info('closed all tasks')
-            ctx.destroy(linger=0)
+            ctx.destroy(linger=1000)
             ctx.term()
 
-    def run_forever(self):
+    def main_loop(self):
         """
-        This is the main loop of the ``piw-master`` script. It receives
+        This is the main loop of the :program:`piw-master` script. It receives
         messages from the internal status queue and forwards them onto the
-        external status queue (for any ``piw-monitor`` scripts that are
+        external status queue (for any :program:`piw-monitor` scripts that are
         attached). It also retrieves any messages sent to the control queue and
         dispatches them to a handler.
         """
@@ -169,63 +190,78 @@ class PiWheelsMaster(TerminalApplication):
             if self.int_status_queue in socks:
                 self.ext_status_queue.send(self.int_status_queue.recv())
             if self.control_queue in socks:
-                msg, *args = self.control_queue.recv_pyobj()
                 try:
-                    handler = getattr(self, 'do_%s' % msg.lower())
-                except AttributeError:
+                    msg, *args = self.control_queue.recv_pyobj()
+                    handler = {
+                        'QUIT': self.do_quit,
+                        'KILL': self.do_kill,
+                        'HELLO': self.do_hello,
+                        'PAUSE': self.do_pause,
+                        'RESUME': self.do_resume,
+                    }[msg]
+                except (TypeError, KeyError):
                     self.logger.error('ignoring invalid %s message', msg)
                 else:
-                    handler(args)
+                    handler(*args)
 
-    def do_quit(self, args):
+    def do_quit(self):
         """
         Handler for the QUIT message; this terminates the master.
         """
-        # pylint: disable=unused-argument
+        # pylint: disable=no-self-use
         self.logger.warning('shutting down on QUIT message')
         raise TaskQuit
 
-    def do_kill(self, args):
+    def do_kill(self, slave_id):
         """
         Handler for the KILL message; this terminates the specified build slave
         by its master id.
         """
-        self.logger.warning('killing slave %d', args[0])
+        self.logger.warning('killing slave %d', slave_id)
         for task in self.tasks:
             if isinstance(task, SlaveDriver):
-                task.kill_slave(args[0])
+                task.kill_slave(slave_id)
 
-    def do_pause(self, args):
+    def do_pause(self):
         """
         Handler for the PAUSE message; this requests all tasks pause their
         operations.
         """
-        # pylint: disable=unused-argument
         self.logger.warning('pausing operations')
         for task in self.tasks:
             task.pause()
 
-    def do_resume(self, args):
+    def do_resume(self):
         """
         Handler for the RESUME message; this requests all tasks resume their
         operations.
         """
-        # pylint: disable=unused-argument
         self.logger.warning('resuming operations')
         for task in self.tasks:
             task.resume()
 
-    def do_hello(self, args):
+    def do_hello(self):
         """
         Handler for the HELLO message; this indicates a new monitor has been
         attached and would like all the build slave's HELLO messages replayed
         to it.
         """
-        # pylint: disable=unused-argument
         self.logger.warning('sending status to new monitor')
         for task in self.tasks:
             if isinstance(task, SlaveDriver):
                 task.list_slaves()
 
 
+def sig_term(signo, stack_frame):
+    """
+    Handler for the SIGTERM signal; raises SystemExit which will cause the
+    :meth:`run_forever` method to terminate.
+    """
+    # pylint: disable=unused-argument
+    raise SystemExit(0)
+
+
 main = PiWheelsMaster()  # pylint: disable=invalid-name
+
+if __name__ == '__main__':
+    main()
