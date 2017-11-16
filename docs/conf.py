@@ -36,6 +36,42 @@ on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 import piwheels as _setup
 from datetime import datetime
 
+# Mock out certain modules while building documentation
+class Mock(object):
+    __all__ = []
+
+    def __init__(self, *args, **kw):
+        pass
+
+    def __call__(self, *args, **kw):
+        return Mock()
+
+    def __mul__(self, other):
+        return Mock()
+
+    def __and__(self, other):
+        return Mock()
+
+    def __bool__(self):
+        return False
+
+    def __nonzero__(self):
+        return False
+
+    @classmethod
+    def __getattr__(cls, name):
+        if name in ('__file__', '__path__'):
+            return '/dev/null'
+        else:
+            return Mock()
+
+sys.modules['zmq'] = Mock()
+sys.modules['zmq.error'] = Mock()
+sys.modules['configargparse'] = Mock()
+sys.modules['sqlalchemy'] = Mock()
+sys.modules['sqlalchemy.exc'] = Mock()
+sys.modules['piwheels.terminal'] = Mock()
+
 # -- General configuration ------------------------------------------------
 
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx']
@@ -50,6 +86,7 @@ release = _setup.__version__
 #language = None
 #today_fmt = '%B %d, %Y'
 exclude_patterns = ['_build']
+highlight_language = 'python3'
 #default_role = None
 #add_function_parentheses = True
 #add_module_names = True
@@ -73,14 +110,14 @@ intersphinx_mapping = {
 if on_rtd:
     html_theme = 'sphinx_rtd_theme'
     #html_theme_options = {}
+    #html_theme_path = []
     #html_sidebars = {}
 else:
     html_theme = 'default'
     #html_theme_options = {}
+    #html_theme_path = []
     #html_sidebars = {}
-#html_theme_options = {}
-#html_theme_path = []
-#html_title = None
+html_title = '%s %s Documentation' % (project, version)
 #html_short_title = None
 #html_logo = None
 #html_favicon = None
@@ -88,7 +125,6 @@ html_static_path = ['_static']
 #html_extra_path = []
 #html_last_updated_fmt = '%b %d, %Y'
 #html_use_smartypants = True
-#html_sidebars = {}
 #html_additional_pages = {}
 #html_domain_indices = True
 #html_use_index = True
@@ -107,36 +143,51 @@ def setup(app):
 
 # -- Options for LaTeX output ---------------------------------------------
 
+#latex_engine = 'pdflatex'
+
 latex_elements = {
     'papersize': 'a4paper',
     'pointsize': '10pt',
-    #'preamble': '',
-    }
+    'preamble': r'\def\thempfootnote{\arabic{mpfootnote}}', # workaround sphinx issue #2530
+}
 
 latex_documents = [
     (
         'index',                       # source start file
         '%s.tex' % _setup.__project__, # target filename
-        '%s Documentation' % project,  # title
+        '%s %s Documentation' % (project, version), # title
         _setup.__author__,             # author
         'manual',                      # documentclass
+        True,                          # documents ref'd from toctree only
         ),
-    ]
+]
 
 #latex_logo = None
 #latex_use_parts = False
-#latex_show_pagerefs = False
-#latex_show_urls = False
+latex_show_pagerefs = True
+latex_show_urls = 'footnote'
 #latex_appendices = []
 #latex_domain_indices = True
+
+# -- Options for epub output ----------------------------------------------
+
+epub_basename = _setup.__project__
+#epub_theme = 'epub'
+#epub_title = html_title
+epub_author = _setup.__author__
+epub_identifier = 'https://piwheels.readthedocs.io/'
+#epub_tocdepth = 3
+epub_show_urls = 'no'
+#epub_use_index = True
 
 # -- Options for manual page output ---------------------------------------
 
 man_pages = [
-        ('cpi',      'cpi',          'Compound Pi Client',           [_setup.__author__], 1),
-        ('cpid',     'cpid',         'Compound Pi Daemon',           [_setup.__author__], 1),
-        ('commands', 'cpi-commands', 'Compound Pi Client Commands',  [_setup.__author__], 7),
-        ]
+    ('master',   'piw-master',   'PiWheels Master',              [_setup.__author__], 1),
+    ('slaves',   'piw-slave',    'PiWheels Build Slave',         [_setup.__author__], 1),
+    ('monitor',  'piw-monitor',  'PiWheels Monitor',             [_setup.__author__], 1),
+    ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [_setup.__author__], 1),
+]
 
 #man_show_urls = False
 
@@ -148,3 +199,9 @@ texinfo_documents = []
 #texinfo_domain_indices = True
 #texinfo_show_urls = 'footnote'
 #texinfo_no_detailmenu = False
+
+# -- Options for linkcheck builder ----------------------------------------
+
+linkcheck_retries = 3
+linkcheck_workers = 20
+linkcheck_anchors = True

@@ -231,7 +231,7 @@ class FileJuggler(Task):
         :param str msg:
             The message sent to start the transfer (must be "HELLO")
 
-        :param *args:
+        :param \*args:
             All additional arguments (expected to be an integer slave id).
         """
         if msg == b'CHUNK':
@@ -262,7 +262,7 @@ class FileJuggler(Task):
         :param str msg:
             The message sent during the transfer.
 
-        :param *args:
+        :param \*args:
             All additional arguments; for "CHUNK" the first must be the file
             offset and the second the data to write to that offset.
         """
