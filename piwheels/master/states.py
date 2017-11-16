@@ -31,6 +31,18 @@ This module defines several classes which permit interested tasks to track the
 state of build slaves (:class:`SlaveState`), file transfers
 (:class:`TransferState`), build attempts (:class:`BuildState`) and build
 artifacts (:class:`FileState`).
+
+.. autoclass:: FileState
+    :members:
+
+.. autoclass:: BuildState
+    :members:
+
+.. autoclass:: SlaveState
+    :members:
+
+.. autoclass:: TransferState
+    :members:
 """
 
 import hashlib
@@ -257,7 +269,7 @@ class BuildState:
         *build_id*.
 
         :param Database db:
-            A :class:`Database` instance to query.
+            A :class:`~.db.Database` instance to query.
 
         :param int build_id:
             The integer identifier of an attempted build.

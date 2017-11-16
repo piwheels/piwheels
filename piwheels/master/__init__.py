@@ -29,12 +29,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-The piw-master script is intended to be run on the database and file-server
-machine. It is recommended you do not run piw-slave on the same machine as the
-piw-master script. The database specified in the configuration must exist and
-have been configured with the piw-initdb script. It is recommended you run
-piw-master as an ordinary unprivileged user, although obviously it will need
-write access to the output directory.
+Defines the :class:`PiWheelsMaster` class. An instance of this is the
+entry-point for the :program:`piw-master` script.
+
+.. autoclass:: PiWheelsMaster
+    :members:
+
+.. autofunction:: sig_term
 """
 
 import os
@@ -72,7 +73,14 @@ class PiWheelsMaster:
 
     def __call__(self, args=None):
         sys.excepthook = terminal.error_handler
-        parser = terminal.configure_parser(__doc__)
+        parser = terminal.configure_parser("""
+The piw-master script is intended to be run on the database and file-server
+machine. It is recommended you do not run piw-slave on the same machine as the
+piw-master script. The database specified in the configuration must exist and
+have been configured with the piw-initdb script. It is recommended you run
+piw-master as an ordinary unprivileged user, although obviously it will need
+write access to the output directory.
+""")
         parser.add_argument(
             '-d', '--dsn', default=const.DSN,
             help="The database to use; this database must be configured with "
@@ -254,8 +262,8 @@ class PiWheelsMaster:
 
 def sig_term(signo, stack_frame):
     """
-    Handler for the SIGTERM signal; raises SystemExit which will cause the
-    :meth:`run_forever` method to terminate.
+    Handler for the SIGTERM signal; raises :exc:`SystemExit` which will cause
+    the :meth:`PiWheelsMaster.main_loop` method to terminate.
     """
     # pylint: disable=unused-argument
     raise SystemExit(0)

@@ -29,11 +29,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-The piw-slave script is intended to be run on a standalone machine to build
-packages on behalf of the piw-master script. It is intended to be run as an
-unprivileged user with a clean home-directory. Any build dependencies you wish
-to use must already be installed. The script will run until it is explicitly
-terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
+Defines the :class:`PiWheelsSlave` class. An instance of this is the
+entry-point for the :program:`piw-slave` script.
+
+.. autoclass:: PiWheelsSlave
+    :members:
+
+.. autofunction:: duration
 """
 
 import sys
@@ -68,7 +70,13 @@ class PiWheelsSlave:
 
     def __call__(self, args=None):
         sys.excepthook = terminal.error_handler
-        parser = terminal.configure_parser(__doc__)
+        parser = terminal.configure_parser("""
+The piw-slave script is intended to be run on a standalone machine to build
+packages on behalf of the piw-master script. It is intended to be run as an
+unprivileged user with a clean home-directory. Any build dependencies you wish
+to use must already be installed. The script will run until it is explicitly
+terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
+""")
         parser.add_argument(
             '-m', '--master', env_var='PIW_MASTER', metavar='HOST',
             default='localhost',
@@ -133,13 +141,13 @@ class PiWheelsSlave:
 
     def do_hello(self, new_id, pypi_url):
         """
-        In response to our initial HELLO (detailing our various :pep:`425`
-        tags), the master is expected to send HELLO back with an integer
-        identifier and the URL of the PyPI repository to download from.  We use
+        In response to our initial "HELLO" (detailing our various :pep:`425`
+        tags), the master is expected to send "HELLO" back with an integer
+        identifier and the URL of the PyPI repository to download from. We use
         the identifier in all future log messages for the ease of the
         administrator.
 
-        We reply with IDLE to indicate we're ready to accept a build job.
+        We reply with "IDLE" to indicate we're ready to accept a build job.
         """
         assert self.slave_id is None, 'Duplicate hello'
         self.slave_id = int(new_id)
@@ -150,9 +158,9 @@ class PiWheelsSlave:
 
     def do_sleep(self):
         """
-        If, in response to an IDLE message we receive SLEEP this indicates the
-        master has nothing for us to do currently. Sleep for a little while
-        then try IDLE again.
+        If, in response to an "IDLE" message we receive "SLEEP" this indicates
+        the master has nothing for us to do currently. Sleep for a little while
+        then try "IDLE" again.
         """
         assert self.slave_id is not None, 'Sleep before hello'
         self.logger.info('No available jobs; sleeping')
@@ -161,9 +169,10 @@ class PiWheelsSlave:
 
     def do_build(self, package, version):
         """
-        Alternatively, in response to IDLE, the master may send BUILD *package*
-        *version*. We should then attempt to build the specified wheel and send
-        back a BUILT message with a full report of the outcome.
+        Alternatively, in response to "IDLE", the master may send "BUILD"
+        *package* *version*. We should then attempt to build the specified
+        wheel and send back a "BUILT" message with a full report of the
+        outcome.
         """
         assert self.slave_id is not None, 'Build before hello'
         assert not self.builder, 'Last build still exists'
@@ -194,11 +203,11 @@ class PiWheelsSlave:
 
     def do_send(self, filename):
         """
-        If a build succeeds and generates files (detailed in a BUILT message),
-        the master will reply with SEND *filename* indicating we should
-        transfer the specified file (this is done on a separate socket with a
-        different protocol; see :meth:`transfer` for more details). Once the
-        transfers concludes, reply to the master with SENT.
+        If a build succeeds and generates files (detailed in a "BUILT"
+        message), the master will reply with "SEND" *filename* indicating we
+        should transfer the specified file (this is done on a separate socket
+        with a different protocol; see :meth:`transfer` for more details). Once
+        the transfers concludes, reply to the master with "SENT".
         """
         assert self.slave_id is not None, 'Send before hello'
         assert self.builder, 'Send before build / after failed build'
@@ -211,8 +220,8 @@ class PiWheelsSlave:
     def do_done(self):
         """
         After all files have been sent (and successfully verified), the master
-        will reply with DONE indicating we can remove all associated build
-        artifacts. We respond with IDLE.
+        will reply with "DONE" indicating we can remove all associated build
+        artifacts. We respond with "IDLE".
         """
         assert self.slave_id is not None, 'Done before hello'
         assert self.builder, 'Done before build'
@@ -223,7 +232,7 @@ class PiWheelsSlave:
 
     def do_bye(self):
         """
-        The master may respond with BYE at any time indicating we should
+        The master may respond with "BYE" at any time indicating we should
         immediately terminate (first cleaning up any extant build). We return
         ``None`` to tell the main loop to quit.
         """

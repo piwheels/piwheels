@@ -26,7 +26,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`BigBrother` task; see class for more details"
+"""
+Defines the :class:`BigBrother` task; see class for more details.
+
+.. autoclass:: BigBrother
+    :members:
+"""
 
 from datetime import datetime, timedelta
 
@@ -44,8 +49,8 @@ class BigBrother(PauseableTask):
     various statistics like the number of packages known to the system, the
     number built, the number of packages built in the last hour, the remaining
     file-system space, etc. These statistics are written to the internal
-    "status" queue which :meth:`main` uses to pass statistics to any listening
-    monitors.
+    "status" queue which :meth:`~.PiWheelsMaster.main_loop` uses to pass
+    statistics to any listening monitors.
     """
     name = 'master.big_brother'
 

@@ -26,7 +26,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the classes which use ``pip`` to build wheels"
+"""
+Defines the classes which use ``pip`` to build wheels.
+
+.. autoclass:: PiWheelsPackage
+    :members:
+
+.. autoclass:: PiWheelsBuilder
+    :members:
+"""
 
 import os
 import tempfile
@@ -40,7 +48,7 @@ from pathlib import Path
 class PiWheelsPackage:
     """
     Records the state of a build artifact, i.e. a wheel package. The filename
-    is deconstructed into the fields specified by :pep`425`.
+    is deconstructed into the fields specified by :pep:`425`.
 
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.

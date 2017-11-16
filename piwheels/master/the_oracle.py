@@ -26,7 +26,16 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines :class:`TheOracle` task; see class for more details"
+"""
+Defines :class:`TheOracle` task and the :class:`DbClient` RPC class for talking
+to it.
+
+.. autoclass:: TheOracle
+    :members:
+
+.. autoclass:: DbClient
+    :members:
+"""
 
 import pickle
 from collections import namedtuple
@@ -45,13 +54,14 @@ class TheOracle(Task):
     This task provides an RPC-like interface to the database; it handles
     requests such as registering a new package, version, or build, and
     answering queries about the hashes of files. The primary clients of this
-    class are :class:`SlaveDriver`, :class:`IndexScribe`, and
-    :class:`CloudGazer`.
+    class are :class:`~.slave_driver.SlaveDriver`,
+    :class:`~.index_scribe.IndexScribe`, and :class:`~.cloud_gazer.CloudGazer`.
 
     Note that because database requests are notoriously variable in length the
-    RPC class doesn't *directly* talk to :class:`TheOracle`. Rather, multiple
-    instances of :class:`TheOracle` are spawned and :class:`Seraph` sits in
-    front of these acting as a simple load-sharing router for the RPC clients.
+    client RPC class (:class:`DbClient`) doesn't *directly* talk to
+    :class:`TheOracle`. Rather, multiple instances of :class:`TheOracle` are
+    spawned and :class:`~.seraph.Seraph` sits in front of these acting as a
+    simple load-sharing router for the RPC clients.
     """
     name = 'master.the_oracle'
     instance = 0
@@ -100,21 +110,22 @@ class TheOracle(Task):
 
     def do_allpkgs(self):
         """
-        Message sent by :class:`DbClient` to request the set of all packages
-        define known to the database.
+        Handler for "ALLPKGS" message, sent by :class:`DbClient` to request the
+        set of all packages define known to the database.
         """
         return self.db.get_all_packages()
 
     def do_allvers(self):
         """
-        Message sent by :class:`DbClient` to request the set of all (package,
-        version) tuples known to the database.
+        Handler for "ALLVERS" message, sent by :class:`DbClient` to request the
+        set of all (package, version) tuples known to the database.
         """
         return self.db.get_all_package_versions()
 
     def do_newpkg(self, package):
         """
-        Message sent by :class:`DbClient` to register a new package.
+        Handler for "NEWPKG" message, sent by :class:`DbClient` to register a
+        new package.
 
         :param str package:
             The name of the new package.
@@ -123,8 +134,8 @@ class TheOracle(Task):
 
     def do_newver(self, package, version):
         """
-        Message sent by :class:`DbClient` to register a new (package, version)
-        tuple.
+        Handler for "NEWVER" message, sent by :class:`DbClient` to register a
+        new (package, version) tuple.
 
         :param str package:
             The name of the package with a new version.
@@ -136,7 +147,8 @@ class TheOracle(Task):
     def do_logbuild(self, slave_id, package, version, abi_tag, status,
                     duration, output, files):
         """
-        Message sent by :class:`DbClient` to register a new build result.
+        Handler for "LOGBUILD" message, sent by :class:`DbClient` to register a
+        new build result.
 
         :param int slave_id:
             The identifier of the slave that attempted the build.
@@ -167,8 +179,8 @@ class TheOracle(Task):
 
     def do_pkgfiles(self, package):
         """
-        Message sent by :class:`DbClient` to request details of all wheels
-        assocated with *package*.
+        Handler for "PKGFILES" message, sent by :class:`DbClient` to request
+        details of all wheels assocated with *package*.
 
         :param str package:
             The name of the package to retrieve file details for.
@@ -178,29 +190,30 @@ class TheOracle(Task):
 
     def do_getabis(self):
         """
-        Message sent by :class:`DbClient` to request the list of all ABIs to
-        build for.
+        Handler for "GETABIS" message, sent by :class:`DbClient` to request the
+        list of all ABIs to build for.
         """
         return self.db.get_build_abis()
 
     def do_getpypi(self):
         """
-        Message sent by :class:`DbClient` to request the record of the last
-        serial number from the PyPI changelog.
+        Handler for "GETPYPI" message, sent by :class:`DbClient` to request the
+        record of the last serial number from the PyPI changelog.
         """
         return self.db.get_pypi_serial()
 
     def do_setpypi(self, serial):
         """
-        Message sent by :class:`DbClient` to update the last seen serial number
-        from the PyPI changelog.
+        Handler for "SETPYPI" message, sent by :class:`DbClient` to update the
+        last seen serial number from the PyPI changelog.
         """
         self.db.set_pypi_serial(serial)
 
     def do_getstats(self):
         """
-        Message sent by :class:`DbClient` to request the latest database
-        statistics, returned as a list of (field, value) tuples.
+        Handler for "GETSTATS" message, sent by :class:`DbClient` to request
+        the latest database statistics, returned as a list of (field, value)
+        tuples.
         """
         return self.db.get_statistics().items()
 

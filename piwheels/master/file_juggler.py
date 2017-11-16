@@ -26,7 +26,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`FileJuggler` task; see class for more details"
+"""
+Defines the :class:`FileJuggler` task and the :class:`FsClient` RPC class
+for interacting with it.
+
+.. autoexception:: TransferError
+
+.. autoexception:: TransferIgnoreChunk
+
+.. autoexception:: TransferDone
+
+.. autoclass:: FileJuggler
+    :members:
+
+.. autoclass:: FsClient
+    :members:
+"""
 
 import os
 from pathlib import Path
@@ -63,16 +78,17 @@ class FileJuggler(Task):
     """
     This task handles file transfers from the build slaves. The specifics of
     the file transfer protocol are best understood from the implementation of
-    the :class:`FileState` class.
+    the :class:`~.states.FileState` class.
 
     However, to detail how a file transfer begins: when a build slave has
     successfully completed a build it informs the master via the
-    :class:`SlaveDriver` task. That task replies with a "SEND" instruction to
-    the slave (including a filename). The slave then initiates the transfer
-    with a "HELLO" message to this task. Once transfers are complete the slave
-    sends a "SENT" message to the :class:`SlaveDriver` task which verifies the
-    transfer and either retries it (when verification fails) or sends back
-    "DONE" indicating the slave can wipe the source file.
+    :class:`~.slave_driver.SlaveDriver` task. That task replies with a "SEND"
+    instruction to the slave (including a filename). The slave then initiates
+    the transfer with a "HELLO" message to this task. Once transfers are
+    complete the slave sends a "SENT" message to the
+    :class:`~.slave_driver.SlaveDriver` task which verifies the transfer and
+    either retries it (when verification fails) or sends back "DONE" indicating
+    the slave can wipe the source file.
     """
     name = 'master.file_juggler'
 
@@ -115,7 +131,8 @@ class FileJuggler(Task):
         """
         Message sent by :class:`FsClient` to inform file juggler that a build
         slave is about to start a file transfer. The message includes the full
-        :class:`FileState`. The state is stored in the ``pending`` map.
+        :class:`~.states.FileState`. The state is stored in the ``pending``
+        map.
 
         :param int slave_id:
             The identity of the build slave about to begin the transfer.
@@ -163,8 +180,8 @@ class FileJuggler(Task):
         """
         Handle incoming file-transfer messages from build slaves.
 
-        The file transfer protocol is in some ways very simple (see the
-        ``docs/file_protocol`` chart for an overview of the message sequence)
+        The file transfer protocol is in some ways very simple (see the chart
+        in the :doc:`slaves` chapter for an overview of the message sequence)
         and in some ways rather complex (read the ZeroMQ guide chapter on file
         transfers for more detail on why multiple messages must be allowed in
         flight simultaneously).
@@ -236,7 +253,7 @@ class FileJuggler(Task):
         Called for messages associated with an existing file transfer.
 
         Usually this is "CHUNK" indicating another chunk of data. Rarely, it
-        can be HELLO if the master has fallen silent and dropped tons of
+        can be "HELLO" if the master has fallen silent and dropped tons of
         packets.
 
         :param TransferState transfer:
@@ -246,7 +263,7 @@ class FileJuggler(Task):
             The message sent during the transfer.
 
         :param *args:
-            All additional arguments; for CHUNK the first must be the file
+            All additional arguments; for "CHUNK" the first must be the file
             offset and the second the data to write to that offset.
         """
         # pylint: disable=no-self-use

@@ -1,6 +1,118 @@
 ==========
-The Master
+piw-master
 ==========
+
+The piw-master script is intended to be run on the database and file-server
+machine. It is recommended you do not run piw-slave on the same machine as the
+piw-master script. The database specified in the configuration must exist and
+have been configured with the piw-initdb script. It is recommended you run
+piw-master as an ordinary unprivileged user, although obviously it will need
+write access to the output directory.
+
+
+Synopsis
+========
+
+::
+
+    piw-master [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-d DSN]
+               [--pypi-xmlrpc URL] [--pypi-simple URL] [-o PATH]
+               [--index-queue ADDR] [--status-queue ADDR]
+               [--control-queue ADDR] [--builds-queue ADDR]
+               [--db-queue ADDR] [--fs-queue ADDR] [--slave-queue ADDR]
+               [--file-queue ADDR]
+
+
+Description
+===========
+
+.. program:: piw-master
+
+.. option:: -h, --help
+
+    show this help message and exit
+
+.. option:: --version
+
+    show program's version number and exit
+
+.. option:: -c FILE, --configuration FILE
+
+    Specify a configuration file to load
+
+.. option:: -q, --quiet
+
+    produce less console output
+
+.. option:: -v, --verbose
+
+    produce more console output
+
+.. option:: -l FILE, --log-file FILE
+
+    log messages to the specified file
+
+.. option:: -d DSN, --dsn DSN
+
+    The database to use; this database must be configured with piw-initdb and
+    the user should *not* be a PostgreSQL superuser (default:
+    postgres:///piwheels)
+
+.. option:: --pypi-xmlrpc URL
+
+    The URL of the PyPI XML-RPC service (default: https://pypi.python.org/pypi)
+
+.. option:: --pypi-simple URL
+
+    The URL of the PyPI simple API (default: https://pypi.python.org/simple)
+
+.. option:: -o PATH, --output-path PATH
+
+    The path under which the website should be written; must be writable by the
+    current user
+
+.. option:: --index-queue ADDR
+
+    The address of the IndexScribe queue (default: inproc://indexes)
+
+.. option:: --status-queue ADDR
+
+    The address of the queue used to report status to monitors (default:
+    ipc:///tmp/piw-status)
+
+.. option:: --control-queue ADDR
+
+    The address of the queue a monitor can use to control the master (default:
+    ipc:///tmp/piw-control)
+
+.. option:: --builds-queue ADDR
+
+    The address of the queue used to store pending builds (default:
+    inproc://builds)
+
+.. option:: --db-queue ADDR
+
+    The address of the queue used to talk to the database server (default:
+    inproc://db)
+
+.. option:: --fs-queue ADDR
+
+    The address of the queue used to talk to the file- system server (default:
+    inproc://fs)
+
+.. option:: --slave-queue ADDR
+
+    The address of the queue used to talk to the build slaves (default:
+    tcp://\*:5555)
+
+.. option:: --file-queue ADDR
+
+    The address of the queue used to transfer files from slaves (default:
+    tcp://\*:5556)
+
+
+Development
+===========
 
 Although the piwheels master appears to be a monolithic script, it's actually
 composed of numerous (often extremely simple) tasks. Each task runs its own
@@ -34,7 +146,7 @@ at PyPI to the "back" at Users):
 Cloud Gazer
 -----------
 
-Implemented in: :class:`CloudGazer`.
+Implemented in: :class:`piwheels.master.cloud_gazer.CloudGazer`.
 
 This task is the "front" of the system. It follows PyPI's event log for new
 package and version registrations, and writes those entries to the database.
@@ -46,7 +158,7 @@ It does this via :ref:`the-oracle`.
 The Oracle
 ----------
 
-Implemented in: :class:`TheOracle`.
+Implemented in: :class:`piwheels.master.the_oracle.TheOracle`.
 
 This task is the main interface to the database. It accepts requests from other
 tasks ("register this new package", "log this build", "what files were built
@@ -60,7 +172,7 @@ actually several instances of the oracle which sit behind :ref:`seraph`.
 Seraph
 ------
 
-Implemented in: :class:`Seraph`.
+Implemented in: :class:`piwheels.master.seraph.Seraph`.
 
 Seraph is a simple load-balancer for the various instances of
 :ref:`the-oracle`. This is the task that *actually* accepts database requests.
@@ -73,7 +185,7 @@ when it's finished.
 The Architect
 -------------
 
-Implemented in: :class:`TheArchitect`.
+Implemented in: :class:`piwheels.master.the_architect.TheArchitect`.
 
 This task is the final database related task in the master script. Unlike
 :ref:`the-oracle` it simply queries the database for the packages that need
@@ -86,7 +198,7 @@ it asks the Architect for one matching the build slave's ABI.
 Slave Driver
 ------------
 
-Implemented in: :class:`SlaveDriver`.
+Implemented in: :class:`piwheels.master.slave_driver.SlaveDriver`.
 
 This task is the main coordinator of the build slave's activities. When a build
 slave first comes online it introduces itself to this task (with information
@@ -109,7 +221,7 @@ informs the :ref:`index-scribe` that the package's index will need (re)writing.
 File Juggler
 ------------
 
-Implemented in: :class:`FileJuggler`.
+Implemented in: :class:`piwheels.master.file_juggler.FileJuggler`.
 
 This task handles file transfers from the build slaves to the master. Files are
 transferred in multiple (relatively small) chunks and are verified with the
@@ -122,7 +234,7 @@ hash reported by the build slave (retrieved from the database via
 Big Brother
 -----------
 
-Implemented in: :class:`BigBrother`.
+Implemented in: :class:`piwheels.master.big_brother.BigBrother`.
 
 This task is a bit of a miscellaneous one. It sits around periodically
 generating statistics about the system as a whole (number of files, number of
@@ -135,7 +247,7 @@ disk space, etc.) and sends these off to the :ref:`index-scribe`.
 Index Scribe
 ------------
 
-Implemented in: :class:`IndexScribe`.
+Implemented in: :class:`piwheels.master.index_scribe.IndexScribe`.
 
 This task generates the web output for piwheels. It generates the home-page
 with statistics from :ref:`big-brother`, the overall package index, and

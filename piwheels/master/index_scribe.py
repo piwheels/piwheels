@@ -26,7 +26,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`IndexScribe` task; see class for more details"
+"""
+Defines the :class:`IndexScribe` task; see class for more details.
+
+.. autoclass:: IndexScribe
+    :members:
+"""
 
 import re
 import os
@@ -181,6 +186,12 @@ class IndexScribe(PauseableTask):
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
         file-system.
+
+        :param str package:
+            The name of the package to write the index for
+
+        :param list files:
+            A list of (filename, filehash) tuples.
         """
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package

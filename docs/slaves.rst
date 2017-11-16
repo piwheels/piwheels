@@ -1,10 +1,58 @@
-============
-Build Slaves
-============
+=========
+piw-slave
+=========
 
-The piwheels build slaves are small, simple scripts which communicate with the
-master to receive tasks, and to send the results of those builds back (along
-with any files generated).
+The piw-slave script is intended to be run on a standalone machine to build
+packages on behalf of the piw-master script. It is intended to be run as an
+unprivileged user with a clean home-directory. Any build dependencies you wish
+to use must already be installed. The script will run until it is explicitly
+terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
+
+
+Synopsis
+========
+
+::
+
+    usage: piw-slave [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-m HOST]
+                     [-t DURATION]
+
+Description
+===========
+
+.. program:: piw-slave
+
+.. option:: -h, --help
+
+    show this help message and exit
+
+.. option:: --version
+
+    show program's version number and exit
+
+.. option:: -c FILE, --configuration FILE
+
+    Specify a configuration file to load
+
+.. option:: -q, --quiet
+
+    produce less console output
+
+.. option:: -v, --verbose
+
+    produce more console output
+
+.. option:: -l FILE, --log-file FILE
+
+    log messages to the specified file
+
+.. option:: -m HOST, --master HOST
+
+    The IP address or hostname of the master server (default: localhost)
+
+.. option:: -t DURATION, --timeout DURATION
+
+    The time to wait before assuming a build has failed; (default: 3h)
 
 
 Protocols
@@ -47,7 +95,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
 
    * ``platform_tag`` is the platform of the slave (e.g. "linux_armv7l")
 
-2. The master replies with ``["HELLO", slave_id]`` where ``slave_id`` is an
+2. The master replies with ``["HELLO", slave_id]`` where *slave_id* is an
    integer identifier for the slave. Strictly speaking, the build slave doesn't
    need this identifier but it can be helpful for admins or developers to see
    the same identifier in logs on the master and the slave which is the only
@@ -69,48 +117,42 @@ protocol follows a strict request-reply sequence which is illustrated below:
    the protocol it occurs; the master will take this as a sign of termination).
 
 6. The master can also reply with ``["BUILD", package, version]`` where
-   ``package`` is the name of a package to build and ``version`` is the version
+   *package* is the name of a package to build and *version* is the version
    to build. At this point, the build slave should attempt to locate the
    package on PyPI and build a wheel from it.
 
-7. Whatever the outcome of the build, the slave sends ``["BUILT", package,
-   version, status, duration, output, files]``:
+7. Whatever the outcome of the build, the slave sends ``["BUILT", status,
+   duration, output, files]``:
 
-   * ``package`` is the name of the package that was built (the master should
-     check this matches what the slave was asked to build).
+   * *status* is ``True`` if the build succeeded and ``False`` otherwise.
 
-   * ``version`` is the version of the package that was built (again, the
-     master should check this matches what the slave was asked to do).
-
-   * ``status`` is ``True`` if the build succeeded and ``False`` otherwise.
-
-   * ``duration`` is a :class:`~datetime.timedelta` value indicating the length
+   * *duration* is a :class:`~datetime.timedelta` value indicating the length
      of time it took to build.
 
-   * ``output`` is a string containing the complete build log.
+   * *output* is a string containing the complete build log.
 
-   * ``files`` is a list of file state tuples containing the following fields
+   * *files* is a list of file state tuples containing the following fields
      in the specified order:
 
-     - ``filename`` is the filename of the wheel.
+     - *filename* is the filename of the wheel.
 
-     - ``filesize`` is the size in bytes of the wheel.
+     - *filesize* is the size in bytes of the wheel.
 
-     - ``filehash`` is the SHA256 hash of the wheel contents.
+     - *filehash* is the SHA256 hash of the wheel contents.
 
-     - ``pacakge_tag`` is the package tag extracted from the filename.
+     - *pacakge_tag* is the package tag extracted from the filename.
 
-     - ``package_version_tag`` is the version tag extracted from the filename.
+     - *package_version_tag* is the version tag extracted from the filename.
 
-     - ``py_version_tag`` is the python version tag extracted from the
+     - *py_version_tag* is the python version tag extracted from the
        filename.
 
-     - ``abi_tag`` is the ABI tag extracted from the filename (sanitized).
+     - *abi_tag* is the ABI tag extracted from the filename (sanitized).
 
-     - ``platform_tag`` is the platform tag extracted from the filename.
+     - *platform_tag* is the platform tag extracted from the filename.
 
 8. If the build succeeded, the master will send ``["SEND", filename]`` where
-   ``filename`` is one of the names transmitted in the prior "BUILT" message.
+   *filename* is one of the names transmitted in the prior "BUILT" message.
 
 9. At this point the slave should use the :ref:`file-juggler` protocol
    documented below to transmit the contents of the specified file to the
@@ -136,6 +178,61 @@ below:
 .. image:: file_protocol.*
     :align: center
 
+1. The build slave initially sends ``["HELLO", slave_id]`` where *slave_id* is
+   the integer identifier of the slave. The master knows what file it requested
+   from this slave (with "SEND" to the Slave Driver), and knows the file hash
+   it is expecting from the "BUILT" message.
+
+2. The master replies with ``["FETCH", offset, length]`` where *offset* is a
+   byte offset into the file, and *length* is the number of bytes to send.
+
+3. The build slave replies with ``["CHUNK", data]`` where *data* is a
+   byte-string containing the requested bytes from the file.
+
+4. The master now either replies with another "FETCH" message or, when it has
+   all chunks successfully received, replies with ``["DONE"]`` indicating the
+   build slave can now close the file (though it can't delete it yet; see
+   the "DONE" message on the Slave Driver side for that).
+
+"FETCH" messages may be repeated if the master drops packets (due to an
+overloaded queue). Furthermore, because the protocol is semi-asynchronous
+multiple "FETCH" messages will be sent before the master waits for any
+returning "CHUNK" messages.
+
 
 Security
 ========
+
+Care must be taken when running the build slave. Building all packages in PyPI
+effectively invites the denizens of the Internet to run arbitrary code on your
+machine. For this reason, the following steps are recommended:
+
+1. Never run the build slave on the master; ensure they are entirely separate
+   machines.
+
+2. Run the build slave as an unprivileged user which has access to nothing it
+   doesn't absolutely require (it shouldn't have any access to the master's
+   file-system, the master's database, etc.)
+
+3. Install the build slave's code in a location the build slave's unprivileged
+   user does not have write access (i.e. *not* in a virtualenv under the user's
+   home dir).
+
+4. Consider whether to make the unprivileged user's home-directory read-only.
+
+We have experimented with read-only home directories, but a significant portion
+of (usually scientifically oriented) packages attempt to be "friendly" and
+either write data to the user's home directory or modify the user's profile
+(:file:`~/.bashrc` and so forth).
+
+The quandry is whether it is better to fail with such packages (a read-only
+home-directory will most likely crash such setup scripts, failing the build),
+or partially support them (leaving the home-directory writeable even though the
+modifications on the build-slave won't be recorded in the resulting wheel and
+thus won't be replicated on user's machines). There is probably no universally
+good answer.
+
+Currently, while the build slave cleans up the temporary directory used by pip
+during wheel building, it doesn't attempt to clean its own home directory
+(which setup scripts are free to write to). This is something that ought to be
+addressed in future as it's a potentially exploitable hole.

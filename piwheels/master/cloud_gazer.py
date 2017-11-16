@@ -26,7 +26,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines the :class:`CloudGazer` task; see class for more details"
+"""
+Defines the :class:`CloudGazer` task; see class for more details.
+
+.. autoclass:: CloudGazer
+    :members:
+"""
 
 from .tasks import PauseableTask
 from .pypi import PyPIEvents
@@ -37,7 +42,7 @@ class CloudGazer(PauseableTask):
     """
     This task scrapes PyPI for the list of available packages, and the versions
     of those packages. This information is written into the backend database
-    for :class:`TheArchitect` to use.
+    for :class:`~.the_architect.TheArchitect` to use.
     """
     name = 'master.cloud_gazer'
 

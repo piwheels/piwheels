@@ -26,7 +26,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines :class:`TheArchitect` task; see class for more details"
+"""
+Defines :class:`TheArchitect` task; see class for more details.
+
+.. autoclass:: TheArchitect
+    :members:
+"""
 
 from collections import deque, defaultdict
 from datetime import datetime, timedelta
@@ -42,7 +47,7 @@ class TheArchitect(Task):
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It places
     a tuple of (package, version) for each such build into the internal
-    "builds" queue for :class:`SlaveDriver` to read.
+    "builds" queue for :class:`~.slave_driver.SlaveDriver` to read.
     """
     name = 'master.the_architect'
 
@@ -85,9 +90,10 @@ class TheArchitect(Task):
     def handle_builds(self, queue):
         """
         Handler for the task's builds queue. Whenever a build slave asks
-        :class:`SlaveDriver` for a new task, :class:`SlaveDriver` passes the
-        slave's ABI to :class:`TheArchitect` via this queue. We simply pop the
-        first entry (if any) off the relevant queue and send it back.
+        :class:`~.slave_driver.SlaveDriver` for a new task,
+        :class:`~.slave_driver.SlaveDriver` passes the slave's ABI to
+        :class:`TheArchitect` via this queue. We simply pop the first entry (if
+        any) off the relevant queue and send it back.
         """
         abi = queue.recv_pyobj()
         try:

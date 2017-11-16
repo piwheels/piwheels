@@ -28,6 +28,8 @@ Table of Contents
     master
     slaves
     monitor
+    initdb
+    modules
     license
 
 

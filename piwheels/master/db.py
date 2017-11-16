@@ -27,9 +27,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-This module defines the low level database API. This is a simple core
-SQLAlchemy affair which runs trivial queries against the PostgreSQL database.
-All the serious logic is defined within views in the database itself.
+This module defines the low level database API, :class:`Database`. This is a
+simple core SQLAlchemy affair which runs trivial queries against the PostgreSQL
+database.  All the serious logic is defined within views in the database
+itself.
+
+.. autoclass:: Database
+    :members:
 """
 
 import warnings

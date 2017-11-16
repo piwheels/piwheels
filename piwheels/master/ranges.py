@@ -31,7 +31,16 @@ A set of utility routines for efficiently tracking byte ranges within a stream.
 These are used to track which chunks of a file have been received during file
 transfers from build slaves.
 
-See :class:`FileJuggler` for the usage of these functions.
+See :class:`~.file_juggler.FileJuggler` for the usage of these functions.
+
+
+.. autofunction:: consolidate
+
+.. autofunction:: exclude
+
+.. autofunction:: intersect
+
+.. autofunction:: split
 """
 
 

@@ -30,6 +30,14 @@
 Implements the base classes (:class:`Task` and its derivative
 :class:`PauseableTask`) which form the basis of all the tasks in the piwheels
 master.
+
+.. autoexception:: TaskQuit
+
+.. autoclass:: Task
+    :members:
+
+.. autoclass:: PauseableTask
+    :members:
 """
 
 import logging
