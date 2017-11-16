@@ -1,4 +1,5 @@
 recursive-include piwheels/master/static *
+include piwheels/initdb/*.sql
 include piwheels/master/*.html
 include README.rst
 include LICENSE.txt
