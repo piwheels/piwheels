@@ -164,7 +164,8 @@ def detect_users(conn, test_user):
     if super_user is None:
         raise RuntimeError("User %s doesn't exist as a cluster user" % test_user)
     if super_user:
-        raise RuntimeError("User %s is a cluster superuser; this is not recommended")
+        raise RuntimeError("User %s is a cluster superuser; this is not "
+                           "recommended" % test_user)
 
 
 def detect_version(conn):
