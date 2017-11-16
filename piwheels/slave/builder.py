@@ -144,7 +144,7 @@ class PiWheelsPackage:
         """
         Open the wheel in binary mode and return the open file object.
         """
-        return self.wheel_file.open(mode, 'rb')
+        return self.wheel_file.open(mode)
 
 
 class PiWheelsBuilder:
