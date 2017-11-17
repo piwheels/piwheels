@@ -29,6 +29,7 @@
 "Defines :class:`PyPI`, the low level interface to PyPI's event log."
 
 import re
+import socket
 import logging
 import http.client
 import xmlrpc.client
@@ -78,16 +79,14 @@ class PyPIEvents:
         self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc)
 
     def _get_events(self):
-        # On rare occasions we get some form of HTTP improper state, so allow
-        # retries
-        for retry in range(self.retries, -1, -1):
-            try:
-                return self.client.changelog_since_serial(self.serial)
-            except http.client.ImproperConnectionState:
-                if retry:
-                    sleep(5)
-                else:
-                    raise
+        # On rare occasions we get some form of HTTP improper state, or DNS
+        # lookups fail. In this case just return an empty list and try again
+        # later
+        try:
+            return self.client.changelog_since_serial(self.serial)
+        except (socket.gaierror, http.client.ImproperConnectionState) as e:
+            self.logger.warning('failure to read from PyPI: %s', e)
+            return []
 
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
@@ -106,6 +105,8 @@ class PyPIEvents:
                             yield (package, version)
                     self.serial = serial
             else:
-                # If the read is empty we've reached the end of the event log;
-                # make sure we don't bother PyPI for another 10 seconds
+                # If the read is empty we've reached the end of the event log
+                # or an error has occurred; make sure we don't bother PyPI for
+                # another 10 seconds
+                self.logger.info('retrying PyPI in 10 seconds')
                 self.next_read = datetime.utcnow() + timedelta(seconds=10)
