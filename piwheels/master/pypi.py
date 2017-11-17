@@ -85,7 +85,6 @@ class PyPIEvents:
         try:
             return self.client.changelog_since_serial(self.serial)
         except (socket.gaierror, http.client.ImproperConnectionState) as e:
-            self.logger.warning('failure to read from PyPI: %s', e)
             return []
 
     def __iter__(self):
@@ -108,5 +107,4 @@ class PyPIEvents:
                 # If the read is empty we've reached the end of the event log
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
-                self.logger.info('retrying PyPI in 10 seconds')
                 self.next_read = datetime.utcnow() + timedelta(seconds=10)
