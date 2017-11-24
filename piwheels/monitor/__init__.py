@@ -70,6 +70,7 @@ class PiWheelsMonitor:
         self.build_rate_label = None
         self.build_size_label = None
         self.build_time_label = None
+        self.list_header = None
 
     def __call__(self, args=None):
         parser = terminal.configure_parser(__doc__, log_params=False)
@@ -112,8 +113,6 @@ class PiWheelsMonitor:
         and the application's palette, for passing to the selected urwid event
         loop constructor.
         """
-        self.slave_list = SlaveListWalker()
-        list_box = widgets.ListBox(self.slave_list)
         actions_box = widgets.AttrMap(
             widgets.Pile([
                 widgets.AttrMap(
@@ -137,6 +136,19 @@ class PiWheelsMonitor:
         self.build_rate_label = widgets.Text('- pkgs/hour')
         self.build_time_label = widgets.Text('-:--:--')
         self.build_size_label = widgets.Text('- bytes')
+        self.list_header = widgets.AttrMap(
+            widgets.Columns([
+                (2, widgets.Text('S')),
+                (2, widgets.Text('#')),
+                (7, widgets.Text('UpTime')),
+                (9, widgets.Text('TaskTime')),
+                (4, widgets.Text('ABI')),
+                widgets.Text('Task'),
+            ]),
+            'colheader'
+        )
+        self.slave_list = SlaveListWalker(self.list_header.original_widget)
+        list_box = widgets.ListBox(self.slave_list)
         status_box = widgets.AttrMap(
             widgets.Pile([
                 widgets.Columns([
@@ -159,17 +171,7 @@ class PiWheelsMonitor:
                     widgets.Divider('\N{LOWER HALF BLOCK}'),
                     'coltrans'
                 ),
-                widgets.AttrMap(
-                    widgets.Columns([
-                        (2, widgets.Text('S')),
-                        (3, widgets.Text(' #')),
-                        (9, widgets.Text('  UpTime')),
-                        (9, widgets.Text('TaskTime')),
-                        (6, widgets.Text('ABI')),
-                        widgets.Text('Task'),
-                    ]),
-                    'colheader'
-                ),
+                self.list_header,
             ]),
             'header'
         )
@@ -366,8 +368,9 @@ class SlaveListWalker(widgets.ListWalker):
     known by the master. Provides methods to update the state of the list based
     on messages received on the external status queue.
     """
-    def __init__(self):
+    def __init__(self, header):
         super().__init__()
+        self.header = header
         self.focus = None
         self.slaves = {}   # maps slave ID to SlaveState
         self.widgets = []  # list of SlaveState.widget objects in list order
@@ -424,7 +427,7 @@ class SlaveListWalker(widgets.ListWalker):
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
         state.update(timestamp, msg, *args)
-        self._modified()
+        self.update()
 
     def tick(self):
         """
@@ -432,9 +435,6 @@ class SlaveListWalker(widgets.ListWalker):
         list. Also handles removing terminated slaves after a short delay (to
         let the user see the terminated state).
         """
-        # Increment "time in state" labels
-        for state in self.slaves.values():
-            state.tick()
         # Remove terminated slaves
         now = datetime.utcnow()
         for slave_id, state in list(self.slaves.items()):
@@ -445,6 +445,37 @@ class SlaveListWalker(widgets.ListWalker):
             self.focus = min(self.focus or 0, len(self.widgets) - 1)
         else:
             self.focus = None
+        self.update()
+
+    def update(self):
+        """
+        Called to update the list content with calculated column widths.
+        """
+        columns = [state.columns for state in self.slaves.values()]
+        head_lens = [
+            options[1] if options[0] == 'given' else 0
+            for widget, options in self.header.contents
+        ]
+        row_lens = [
+            [len(content) for style, content in state]
+            for state in columns
+        ]
+        col_lens = zip(*row_lens)  # transpose
+        col_lens = [
+            max(head_len, max(col) + 1)  # add 1 for col spacing
+            for head_len, col in zip(head_lens, col_lens)
+        ]
+        for state, state_cols in zip(self.slaves.values(), columns):
+            state.widget.original_widget.set_text([
+                (style, '%-*s' % (col_len, content))
+                for col_len, (style, content) in zip(col_lens, state_cols)
+            ])
+        for index, (col, col_len) in enumerate(zip(list(self.header.contents), col_lens)):
+            widget, options = col
+            if options[0] == 'given':
+                self.header.contents[index] = (
+                    widget, self.header.options('given', col_len)
+                )
         self._modified()
 
 
@@ -503,7 +534,6 @@ class SlaveState:
             self.status = 'Transferring file'
         elif msg == 'DONE':
             self.status = 'Cleaning up after build'
-        self.tick()
 
     @property
     def state(self):
@@ -518,22 +548,21 @@ class SlaveState:
                 return 'silent'
         return 'busy'
 
-    def tick(self):
+    @property
+    def columns(self):
         """
-        Called once a second to update the slave's label.
+        Calculates the state of all columns for the slave's entry. Returns a
+        list of (style, content) tuples. Note that the content is *not* padded
+        for width. The :class:`SlaveListWalker` class handles this.
         """
-        self.widget.original_widget.set_text([
-            (self.state, '* '),
-            ('status', '%2s' % self.slave_id),
-            ('status', ' '),
+        return [
+            (self.state, '*'),
+            ('status', str(self.slave_id)),
             ('status', since(self.first_seen)),
-            ('status', ' '),
             ('status', since(self.last_seen)),
-            ('status', ' '),
-            ('status', '%-5s' % self.abi),
-            ('status', ' '),
+            ('status', self.abi),
             ('status', self.status),
-        ])
+        ]
 
 
 def build_button(caption, callback):
@@ -558,21 +587,18 @@ def build_button(caption, callback):
     }), 'button', 'inv_button')
 
 
-def since(timestamp, template='%8s'):
+def since(timestamp):
     """
     Return a nicely formatted string indicating the number of hours minutes and
     seconds since *timestamp*.
 
     :param datetime.datetime timestamp:
         The timestamp from which to measure a duration.
-
-    :param str template:
-        The string template for the output.
     """
     if timestamp is None:
-        return template % '-'
+        return '-'
     else:
-        return template % (datetime.utcnow().replace(microsecond=0) -
+        return str(datetime.utcnow().replace(microsecond=0) -
                            timestamp.replace(microsecond=0))
 
 
