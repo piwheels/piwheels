@@ -1,5 +1,10 @@
 UPDATE configuration SET version = '0.9';
 
+DROP INDEX packages_skip;
+
+DROP INDEX versions_skip;
+CREATE INDEX versions_skip ON versions(skip, package);
+
 CREATE TABLE output (
     build_id        INTEGER NOT NULL,
     output          TEXT NOT NULL,
@@ -47,6 +52,11 @@ UPDATE builds AS b SET abi_tag = d.abi_tag
 FROM build_abi_tags AS d
 WHERE b.build_id = d.build_id;
 
+CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
+
+DROP INDEX files_abi;
+CREATE INDEX files_abi ON files(build_id, abi_tag);
+
 DROP VIEW builds_pending;
 CREATE VIEW builds_pending AS
 SELECT
@@ -66,24 +76,33 @@ FROM (
         NOT v.skip
         AND NOT p.skip
 
-    EXCEPT
+    EXCEPT ALL
 
-    SELECT
-        b.package,
-        b.version,
-        CASE
-            WHEN f.build_id IS NULL THEN b.abi_tag
-            ELSE
-                CASE f.abi_tag
-                    WHEN 'none' THEN v.abi_tag
-                    ELSE f.abi_tag
-                END
-        END AS abi_tag
-    FROM
-        builds b
-        LEFT JOIN files f ON b.build_id = f.build_id
-        CROSS JOIN build_abis v
-) t
+    (
+        SELECT
+            b.package,
+            b.version,
+            v.abi_tag
+        FROM
+            builds AS b
+            JOIN files AS f ON b.build_id = f.build_id
+            CROSS JOIN build_abis AS v
+        WHERE f.abi_tag = 'none'
+
+        UNION ALL
+
+        SELECT
+            b.package,
+            b.version,
+            COALESCE(f.abi_tag, b.abi_tag) AS abi_tag
+        FROM
+            builds AS b
+            LEFT JOIN files AS f ON b.build_id = f.build_id
+        WHERE
+            f.build_id IS NULL
+            OR f.abi_tag <> 'none'
+    )
+) AS t
 GROUP BY
     package,
     version;

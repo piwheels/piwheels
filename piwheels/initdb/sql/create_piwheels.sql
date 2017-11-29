@@ -1,8 +1,3 @@
-DROP TABLE IF EXISTS
-    packages, package_versions, versions, builds, files, metadata;
-DROP VIEW IF EXISTS
-    statistics, builds_pending;
-
 -- configuration
 -------------------------------------------------------------------------------
 -- This table contains a single row persisting configuration information. The
@@ -39,7 +34,6 @@ CREATE TABLE packages (
 );
 
 GRANT SELECT,INSERT ON packages TO {username};
-CREATE INDEX packages_skip ON packages(package) WHERE NOT skip;
 
 -- versions
 -------------------------------------------------------------------------------
@@ -59,9 +53,9 @@ CREATE TABLE versions (
         REFERENCES packages ON DELETE RESTRICT
 );
 
-GRANT SELECT,INSERT,DELETE ON versions TO {username};
 CREATE INDEX versions_package ON versions(package);
-CREATE INDEX versions_skip ON versions(package, version) WHERE NOT skip;
+CREATE INDEX versions_skip ON versions(skip, package);
+GRANT SELECT,INSERT,DELETE ON versions TO {username};
 
 -- build_abis
 -------------------------------------------------------------------------------
@@ -116,10 +110,11 @@ CREATE TABLE builds (
     CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
 );
 
-GRANT SELECT,INSERT ON builds TO {username};
 CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
+CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
+GRANT SELECT,INSERT ON builds TO {username};
 
 -- output
 -------------------------------------------------------------------------------
@@ -170,10 +165,10 @@ CREATE TABLE files (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT SELECT,INSERT,UPDATE ON files TO {username};
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
-CREATE INDEX files_abi ON files(build_id, abi_tag) WHERE abi_tag <> 'none';
+CREATE INDEX files_abi ON files(build_id, abi_tag);
+GRANT SELECT,INSERT,UPDATE ON files TO {username};
 
 -- builds_pending
 -------------------------------------------------------------------------------
@@ -213,24 +208,33 @@ FROM (
         NOT v.skip
         AND NOT p.skip
 
-    EXCEPT
+    EXCEPT ALL
 
-    SELECT
-        b.package,
-        b.version,
-        CASE
-            WHEN f.build_id IS NULL THEN b.abi_tag
-            ELSE
-                CASE f.abi_tag
-                    WHEN 'none' THEN v.abi_tag
-                    ELSE f.abi_tag
-                END
-        END AS abi_tag
-    FROM
-        builds b
-        LEFT JOIN files f ON b.build_id = f.build_id
-        CROSS JOIN build_abis v
-) t
+    (
+        SELECT
+            b.package,
+            b.version,
+            v.abi_tag
+        FROM
+            builds AS b
+            JOIN files AS f ON b.build_id = f.build_id
+            CROSS JOIN build_abis AS v
+        WHERE f.abi_tag = 'none'
+
+        UNION ALL
+
+        SELECT
+            b.package,
+            b.version,
+            COALESCE(f.abi_tag, b.abi_tag) AS abi_tag
+        FROM
+            builds AS b
+            LEFT JOIN files AS f ON b.build_id = f.build_id
+        WHERE
+            f.build_id IS NULL
+            OR f.abi_tag <> 'none'
+    )
+) AS t
 GROUP BY
     package,
     version;
