@@ -33,7 +33,7 @@ Defines :class:`TheArchitect` task; see class for more details.
     :members:
 """
 
-from collections import deque, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 import zmq
@@ -59,7 +59,7 @@ class TheArchitect(Task):
         builds_queue.bind(config.builds_queue)
         self.query = None
         self.timestamp = datetime.utcnow() - timedelta(seconds=30)
-        self.abi_queues = defaultdict(lambda: deque(maxlen=1000))
+        self.abi_queues = defaultdict(set)
         self.register(builds_queue, self.handle_builds)
 
     def loop(self):
@@ -82,7 +82,9 @@ class TheArchitect(Task):
         else:
             try:
                 row = next(self.query)
-                self.abi_queues[row.abi_tag].append((row.package, row.version))
+                q = self.abi_queues[row.abi_tag]
+                if len(q) < 1000:
+                    q.add((row.package, row.version))
             except StopIteration:
                 self.query = None
                 self.timestamp = datetime.utcnow()
@@ -97,6 +99,6 @@ class TheArchitect(Task):
         """
         abi = queue.recv_pyobj()
         try:
-            queue.send_pyobj(self.abi_queues[abi].popleft())
+            queue.send_pyobj(self.abi_queues[abi].pop())
         except IndexError:
             queue.send_pyobj(None)
