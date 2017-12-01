@@ -5,14 +5,17 @@ set -eu
 source /etc/os-release
 if [ $VERSION_ID -lt 9 ]; then
     LIBPNG_DEV=libpng12-dev
+    LIBMYSQL_DEV=libmysqlclient-dev
 else
     LIBPNG_DEV=libpng-dev
+    LIBMYSQL_DEV=libmariadbclient-dev
 fi
 
 apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
-    libffi-dev libxml2-dev libgmp-dev libhdf5-dev libldap2-dev libjpeg-dev \
+    $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev libxslt-dev libgmp-dev \
+    libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev \
     libusb-dev libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
     libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libgles1-mesa-dev \
     libgstreamer1.0-dev libsdl2-dev libssl-dev libsasl2-dev libldap2-dev \
