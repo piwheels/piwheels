@@ -100,5 +100,5 @@ class TheArchitect(Task):
         abi = queue.recv_pyobj()
         try:
             queue.send_pyobj(self.abi_queues[abi].pop())
-        except IndexError:
+        except KeyError:
             queue.send_pyobj(None)
