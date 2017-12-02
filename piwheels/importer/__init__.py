@@ -91,11 +91,12 @@ def main(args=None):
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-import (default: "
         "(%(default)s); this should always be an ipc address")
-    config = parser.parse_args(args)
-    terminal.configure_logging(config.log_level, config.log_file)
-
-    logging.info("PiWheels Importer version %s", __version__)
     try:
+        config = parser.parse_args(args)
+        terminal.configure_logging(config.log_level, config.log_file)
+
+        logging.info("PiWheels Importer version %s", __version__)
+
         # NOTE: If any of the files are unreadable, this'll fail (it attempts
         # to calculate the hash of the file which requires reading it)
         packages = [

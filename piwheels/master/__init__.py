@@ -132,41 +132,46 @@ write access to the output directory.
             '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
             help="The address of the queue used by piw-import (default: "
             "(%(default)s); this should always be an ipc address")
-        config = parser.parse_args(args)
-        config.output_path = os.path.expanduser(config.output_path)
-        terminal.configure_logging(config.log_level, config.log_file)
-        # We want the logger name included in our console output
-        terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
-            logging.Formatter('%(name)s: %(message)s'))
-
-        self.logger.info('PiWheels Master version %s', __version__)
-        ctx = zmq.Context.instance()
-        self.control_queue = ctx.socket(zmq.PULL)
-        self.control_queue.hwm = 10
-        self.control_queue.bind(config.control_queue)
-        self.int_status_queue = ctx.socket(zmq.PULL)
-        self.int_status_queue.hwm = 10
-        self.int_status_queue.bind(const.INT_STATUS_QUEUE)
-        self.ext_status_queue = ctx.socket(zmq.PUB)
-        self.ext_status_queue.hwm = 10
-        self.ext_status_queue.bind(config.status_queue)
-
-        self.start_tasks(config)
-        self.logger.info('started all tasks')
-        signal.signal(signal.SIGTERM, sig_term)
         try:
-            self.main_loop()
-        except TaskQuit:
-            pass
-        except SystemExit:
-            self.logger.warning('shutting down on SIGTERM')
-        except KeyboardInterrupt:
-            self.logger.warning('shutting down on Ctrl+C')
-        finally:
-            self.stop_tasks()
-            self.logger.info('stopped all tasks')
-            ctx.destroy(linger=1000)
-            ctx.term()
+            config = parser.parse_args(args)
+            config.output_path = os.path.expanduser(config.output_path)
+            terminal.configure_logging(config.log_level, config.log_file)
+            # We want the logger name included in our console output
+            terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
+                logging.Formatter('%(name)s: %(message)s'))
+
+            self.logger.info('PiWheels Master version %s', __version__)
+            ctx = zmq.Context.instance()
+            self.control_queue = ctx.socket(zmq.PULL)
+            self.control_queue.hwm = 10
+            self.control_queue.bind(config.control_queue)
+            self.int_status_queue = ctx.socket(zmq.PULL)
+            self.int_status_queue.hwm = 10
+            self.int_status_queue.bind(const.INT_STATUS_QUEUE)
+            self.ext_status_queue = ctx.socket(zmq.PUB)
+            self.ext_status_queue.hwm = 10
+            self.ext_status_queue.bind(config.status_queue)
+
+            self.start_tasks(config)
+            self.logger.info('started all tasks')
+            signal.signal(signal.SIGTERM, sig_term)
+            try:
+                self.main_loop()
+            except TaskQuit:
+                pass
+            except SystemExit:
+                self.logger.warning('shutting down on SIGTERM')
+            except KeyboardInterrupt:
+                self.logger.warning('shutting down on Ctrl+C')
+            finally:
+                self.stop_tasks()
+                self.logger.info('stopped all tasks')
+                ctx.destroy(linger=1000)
+                ctx.term()
+        except:  # pylint: disable=bare-except
+            return terminal.error_handler(*sys.exc_info())
+        else:
+            return 0
 
     def start_tasks(self, config):
         """

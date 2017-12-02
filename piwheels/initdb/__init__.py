@@ -70,11 +70,11 @@ def main(args=None):
     parser.add_argument(
         '-y', '--yes', action='store_true',
         help="Proceed without prompting before init/upgrades")
-    config = parser.parse_args(args)
-    terminal.configure_logging(config.log_level, config.log_file)
-
-    logging.info("PiWheels Initialize Database version %s", __version__)
     try:
+        config = parser.parse_args(args)
+        terminal.configure_logging(config.log_level, config.log_file)
+
+        logging.info("PiWheels Initialize Database version %s", __version__)
         conn = get_connection(config.dsn)
         logging.info("Checking username and superuser status")
         detect_users(conn, config.user)

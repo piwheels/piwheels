@@ -88,27 +88,35 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             default='3h', type=duration,
             help="The time to wait before assuming a build has failed; "
             "(default: %(default)s)")
-        self.config = parser.parse_args(args)
-        terminal.configure_logging(self.config.log_level, self.config.log_file)
-
-        self.logger.info('PiWheels Slave version %s', __version__)
-        ctx = zmq.Context.instance()
-        queue = ctx.socket(zmq.REQ)
-        queue.hwm = 1
-        queue.ipv6 = True
-        queue.connect('tcp://{master}:5555'.format(
-            master=self.config.master))
         try:
-            request = ['HELLO', self.config.timeout, pep425tags.get_impl_ver(),
-                       pep425tags.get_abi_tag(), pep425tags.get_platform()]
-            while request is not None:
-                queue.send_pyobj(request)
-                reply, *args = queue.recv_pyobj()
-                request = self.handle_reply(reply, *args)
-        finally:
-            queue.send_pyobj(['BYE'])
-            ctx.destroy(linger=1000)
-            ctx.term()
+            self.config = parser.parse_args(args)
+            terminal.configure_logging(self.config.log_level,
+                                       self.config.log_file)
+
+            self.logger.info('PiWheels Slave version %s', __version__)
+            ctx = zmq.Context.instance()
+            queue = ctx.socket(zmq.REQ)
+            queue.hwm = 1
+            queue.ipv6 = True
+            queue.connect('tcp://{master}:5555'.format(
+                master=self.config.master))
+            try:
+                request = ['HELLO', self.config.timeout,
+                           pep425tags.get_impl_ver(),
+                           pep425tags.get_abi_tag(),
+                           pep425tags.get_platform()]
+                while request is not None:
+                    queue.send_pyobj(request)
+                    reply, *args = queue.recv_pyobj()
+                    request = self.handle_reply(reply, *args)
+            finally:
+                queue.send_pyobj(['BYE'])
+                ctx.destroy(linger=1000)
+                ctx.term()
+        except:  # pylint: disable=bare-except
+            return terminal.error_handler(*sys.exc_info())
+        else:
+            return 0
 
     # A general note about the design of the slave: the build slave is
     # deliberately designed to be "brittle". In other words to fall over and
