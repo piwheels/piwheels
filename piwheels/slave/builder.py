@@ -36,8 +36,11 @@ Defines the classes which use ``pip`` to build wheels.
     :members:
 """
 
+import io
 import os
+import json
 import tempfile
+import zipfile
 import hashlib
 import resource
 from subprocess import Popen, DEVNULL, TimeoutExpired
@@ -56,15 +59,8 @@ class PiWheelsPackage:
     def __init__(self, path):
         self.wheel_file = path
         self._filesize = path.stat().st_size
-        s = hashlib.sha256()
-        with path.open('rb') as f:
-            while True:
-                buf = f.read(65536)
-                if buf:
-                    s.update(buf)
-                else:
-                    break
-        self._filehash = s.hexdigest().lower()
+        self._filehash = None
+        self._metadata = None
         self._parts = list(path.stem.split('-'))
         # Fix up retired tags (noabi->none)
         if self._parts[-2] == 'noabi':
@@ -90,6 +86,16 @@ class PiWheelsPackage:
         """
         Return an SHA256 digest of the wheel's contents.
         """
+        if self._filehash is None:
+            s = hashlib.sha256()
+            with self.wheel_file.open('rb') as f:
+                while True:
+                    buf = f.read(65536)
+                    if buf:
+                        s.update(buf)
+                    else:
+                        break
+            self._filehash = s.hexdigest().lower()
         return self._filehash
 
     @property
@@ -145,6 +151,23 @@ class PiWheelsPackage:
         Open the wheel in binary mode and return the open file object.
         """
         return self.wheel_file.open(mode)
+
+    @property
+    def metadata(self):
+        """
+        Return the contents of the :file:`metadata.json` file inside the wheel.
+        """
+        if self._metadata is None:
+            with zipfile.ZipFile(self.wheel_file.open('rb')) as wheel:
+                filename = (
+                    '{self.package_tag}-'
+                    '{self.package_version_tag}.dist-info/'
+                    'metadata.json'.format(self=self)
+                )
+                with wheel.open(filename) as metadata:
+                    wrapper = io.TextIOWrapper(metadata, encoding='utf-8')
+                    self._metadata = json.load(wrapper)
+        return self._metadata
 
     def transfer(self, queue, slave_id):
         """

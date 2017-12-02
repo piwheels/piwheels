@@ -139,6 +139,18 @@ class Database:
             else:
                 return True
 
+    def test_package_version(self, package, version):
+        """
+        Check whether *version* of *package* already exists in the database.
+        Returns a boolean.
+        """
+        with self._conn.begin():
+            return bool(self._conn.scalar(
+                self._versions.select().
+                where(self._versions.c.package == package).
+                where(self._versions.c.version == version)
+            ))
+
     def log_build(self, build):
         """
         Log a build attempt in the database, including build output and wheel
@@ -322,7 +334,6 @@ class Database:
         with self._conn.begin():
             result = self._conn.execute(
                 select([self._versions.c.version]).
-                where(self._versions.c.package == package).
-                order_by(self._versions.c.version)
+                where(self._versions.c.package == package)
             )
             return {rec.version for rec in result}

@@ -91,6 +91,7 @@ class TheOracle(Task):
                 'NEWVER': self.do_newver,
                 'LOGBUILD': self.do_logbuild,
                 'PKGFILES': self.do_pkgfiles,
+                'PKGEXISTS': self.do_pkgexists,
                 'GETABIS': self.do_getabis,
                 'GETPYPI': self.do_getpypi,
                 'SETPYPI': self.do_setpypi,
@@ -188,6 +189,19 @@ class TheOracle(Task):
         files = self.db.get_package_files(package)
         return list(files)
 
+    def do_pkgexists(self, package, version):
+        """
+        Handler for "PKGEXISTS" message, sent by :class:`DbClient` to request
+        whether or not the specified *version* of *package* exists.
+
+        :param str package:
+            The name of the package to check.
+
+        :param str version:
+            The version of the package to check.
+        """
+        return self.db.test_package_version(package, version)
+
     def do_getabis(self):
         """
         Handler for "GETABIS" message, sent by :class:`DbClient` to request the
@@ -265,6 +279,12 @@ class DbClient:
         See :meth:`TheOracle.do_newver`.
         """
         return self._execute(['NEWVER', package, version])
+
+    def test_package_version(self, package, version):
+        """
+        See :meth:`TheOracle.do_pkgexists`.
+        """
+        return self._execute(['PKGEXISTS', package, version])
 
     def log_build(self, build):
         """

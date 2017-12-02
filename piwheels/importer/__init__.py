@@ -104,9 +104,9 @@ def main(args=None):
         ]
         builder = PiWheelsBuilder(
             config.package if config.package is not None else
-            packages[0].package_tag,
+            packages[0].metadata['name'],
             config.version if config.version is not None else
-            packages[0].package_version_tag)
+            packages[0].metadata['version'])
         builder.duration = config.duration
         if config.output is not None:
             builder.output = config.output.read()

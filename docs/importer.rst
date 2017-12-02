@@ -113,7 +113,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
 .. image:: import_protocol.*
     :align: center
 
-1. The importer send ``["IMPORT", abi_tag, package, version, status, duration,
+1. The importer sends ``["IMPORT", abi_tag, package, version, status, duration,
    output, files]``:
 
    * *abi_tag* is either ``None``, indicating that the master should use the

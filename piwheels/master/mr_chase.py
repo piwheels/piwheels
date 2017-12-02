@@ -134,6 +134,7 @@ class MrChase(PauseableTask):
         that the requested package and version exist in the database (creating
         them if necessary).
         """
+        # pylint: disable=too-many-return-statements
         if not state.status:
             self.logger.error('attempting to add failed build')
             return ['ERROR', 'importing a failed build is not supported']
@@ -154,12 +155,13 @@ class MrChase(PauseableTask):
         if state.abi_tag not in build_abis:
             self.logger.error('invalid ABI: %s', state.abi_tag)
             return ['ERROR', 'invalid ABI: %s' % state.abi_tag]
-        if self.db.add_new_package(state.package):
-            self.logger.warning('added package %s', state.package)
-        if self.db.add_new_package_version(state.package, state.version):
-            self.logger.warning('added package %s version %s',
-                                state.package, state.version)
-        self.db.log_build(state)
+        if not self.db.test_package_version(state.package, state.version):
+            return ['ERROR', 'unknown package version %s-%s' % (
+                state.package, state.version)]
+        try:
+            self.db.log_build(state)
+        except IOError as err:
+            return ['ERROR', str(err)]
         if state.status and not state.transfers_done:
             self.fs.expect(0, state.files[state.next_file])
             self.logger.info('send %s', state.next_file)
