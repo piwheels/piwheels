@@ -163,8 +163,9 @@ def print_builder(config, builder):
         logging.warning('  Package tag:  %s', package.package_tag)
         logging.warning('  Version tag:  %s',
                         package.package_version_tag)
-        logging.warning('  Platform tag: %s', package.platform_tag)
+        logging.warning('  ABI tag:      %s', package.abi_tag)
         logging.warning('  Python tag:   %s', package.py_version_tag)
+        logging.warning('  Platform tag: %s', package.platform_tag)
         if package.build_tag is not None:
             logging.warning('  Build tag:    %s', package.build_tag)
 
