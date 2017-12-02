@@ -221,7 +221,7 @@ class FileJuggler(Task):
                 fetch_range = transfer.fetch()
 
     def new_transfer(self, msg, *args):
-        """
+        r"""
         Called for messages initiating a new file transfer.
 
         The first message must be HELLO along with the id of the slave starting
@@ -249,7 +249,7 @@ class FileJuggler(Task):
         return transfer
 
     def current_transfer(self, transfer, msg, *args):
-        """
+        r"""
         Called for messages associated with an existing file transfer.
 
         Usually this is "CHUNK" indicating another chunk of data. Rarely, it

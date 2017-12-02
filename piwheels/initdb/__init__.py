@@ -105,10 +105,10 @@ def main(args=None):
                     print('.', end='', flush=True)
                 print("")
             logging.info("Complete")
-    except (RuntimeError, exc.SQLAlchemyError) as e:
-        logging.error(str(e))
+    except (RuntimeError, exc.SQLAlchemyError) as err:
+        logging.error(str(err))
         return 1
-    except:
+    except:  # pylint: disable=bare-except
         logging.error("Terminating on error, rolled back work")
         return terminal.error_handler(*sys.exc_info())
 
@@ -223,9 +223,9 @@ def get_script(version):
     upgrades = {}
     ver_regex = re.compile(r'update_piwheels_(?P<from>.*)_to_(?P<to>.*)\.sql$')
     for filename in resource_listdir(__name__, 'sql'):
-        m = ver_regex.match(filename)
-        if m is not None:
-            upgrades[m.group('from')] = (m.group('to'), filename)
+        match = ver_regex.match(filename)
+        if match is not None:
+            upgrades[match.group('from')] = (match.group('to'), filename)
     # Attempt to find a list of scripts which'll get us from the existing
     # version to the desired one. NOTE: This is a stupid algorithm which won't
     # attempt different branches or back-tracking so if you wind up with custom
@@ -255,6 +255,7 @@ def parse_statements(script):
     It returns a generator which yields individiual statements from *script*,
     delimited by semi-colon terminators.
     """
+    # pylint: disable=too-many-branches
     stmt = ''
     quote = None
     for char in script:

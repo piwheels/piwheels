@@ -142,6 +142,28 @@ write access to the output directory.
         self.ext_status_queue = ctx.socket(zmq.PUB)
         self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
+
+        self.start_tasks(config)
+        self.logger.info('started all tasks')
+        signal.signal(signal.SIGTERM, sig_term)
+        try:
+            self.main_loop()
+        except TaskQuit:
+            pass
+        except SystemExit:
+            self.logger.warning('shutting down on SIGTERM')
+        except KeyboardInterrupt:
+            self.logger.warning('shutting down on Ctrl+C')
+        finally:
+            self.stop_tasks()
+            self.logger.info('stopped all tasks')
+            ctx.destroy(linger=1000)
+            ctx.term()
+
+    def start_tasks(self, config):
+        """
+        Start the master's various threads with the specified configuration.
+        """
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
         # for more information)
@@ -163,24 +185,15 @@ write access to the output directory.
         self.logger.info('starting tasks')
         for task in self.tasks:
             task.start()
-        self.logger.info('started all tasks')
-        signal.signal(signal.SIGTERM, sig_term)
-        try:
-            self.main_loop()
-        except TaskQuit:
-            pass
-        except SystemExit:
-            self.logger.warning('shutting down on SIGTERM')
-        except KeyboardInterrupt:
-            self.logger.warning('shutting down on Ctrl+C')
-        finally:
-            self.logger.info('closing tasks')
-            for task in reversed(self.tasks):
-                task.quit()
-                task.join()
-            self.logger.info('closed all tasks')
-            ctx.destroy(linger=1000)
-            ctx.term()
+
+    def stop_tasks(self):
+        """
+        Stops all tasks started by :meth:`start_tasks`.
+        """
+        self.logger.info('stopping tasks')
+        for task in reversed(self.tasks):
+            task.quit()
+            task.join()
 
     def main_loop(self):
         """

@@ -42,6 +42,7 @@ import sys
 import logging
 from datetime import datetime
 from time import sleep
+from random import randint
 
 import zmq
 import dateutil.parser
@@ -164,7 +165,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         """
         assert self.slave_id is not None, 'Sleep before hello'
         self.logger.info('No available jobs; sleeping')
-        sleep(10)
+        sleep(randint(5, 15))
         return ['IDLE']
 
     def do_build(self, package, version):

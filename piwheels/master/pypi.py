@@ -35,7 +35,6 @@ import http.client
 import xmlrpc.client
 from collections import deque
 from datetime import datetime, timedelta
-from time import sleep
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -84,7 +83,7 @@ class PyPIEvents:
         # later
         try:
             return self.client.changelog_since_serial(self.serial)
-        except (socket.gaierror, http.client.ImproperConnectionState) as e:
+        except (socket.gaierror, http.client.ImproperConnectionState):
             return []
 
     def __iter__(self):

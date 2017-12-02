@@ -59,6 +59,7 @@ class SlaveDriver(Task):
     queue is informed of any packages that need web page indexes re-building
     (as a result of a successful build).
     """
+    # pylint: disable=too-many-instance-attributes
     name = 'master.slave_driver'
 
     def __init__(self, config):
@@ -135,9 +136,9 @@ class SlaveDriver(Task):
         """
         Handle requests from build slaves.
 
-        See the :doc:`slaves` for an overview of the protocol for messages
-        between build slaves and :class:`SlaveDriver`.  This method retrieves
-        the message from the build slave, finds the associated
+        See the :doc:`slaves` chapter for an overview of the protocol for
+        messages between build slaves and :class:`SlaveDriver`.  This method
+        retrieves the message from the build slave, finds the associated
         :class:`~.states.SlaveState` and updates it with the message, then
         calls the appropriate message handler. The handler will be expected to
         return a reply (in the usual form of a list of strings) or ``None`` if
@@ -177,11 +178,7 @@ class SlaveDriver(Task):
                 reply = handler(slave)
                 if reply is not None:
                     slave.reply = reply
-                    queue.send_multipart([
-                        address,
-                        empty,
-                        pickle.dumps(reply)
-                    ])
+                    queue.send_multipart([address, empty, pickle.dumps(reply)])
                     self.logger.debug('TX: %r', reply)
 
     def do_hello(self, slave):

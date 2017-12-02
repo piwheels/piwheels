@@ -82,9 +82,9 @@ class TheArchitect(Task):
         else:
             try:
                 row = next(self.query)
-                q = self.abi_queues[row.abi_tag]
-                if len(q) < 1000:
-                    q.add((row.package, row.version))
+                queue = self.abi_queues[row.abi_tag]
+                if len(queue) < 1000:
+                    queue.add((row.package, row.version))
             except StopIteration:
                 self.query = None
                 self.timestamp = datetime.utcnow()

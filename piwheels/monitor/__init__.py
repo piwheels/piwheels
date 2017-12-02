@@ -599,7 +599,7 @@ def since(timestamp):
         return '-'
     else:
         return str(datetime.utcnow().replace(microsecond=0) -
-                           timestamp.replace(microsecond=0))
+                   timestamp.replace(microsecond=0))
 
 
 main = PiWheelsMonitor()  # pylint: disable=invalid-name
