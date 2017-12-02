@@ -46,6 +46,7 @@ DB_QUEUE = 'inproc://db'
 FS_QUEUE = 'inproc://fs'
 SLAVE_QUEUE = 'tcp://*:5555'
 FILE_QUEUE = 'tcp://*:5556'
+IMPORT_QUEUE = 'ipc:///tmp/piw-import'
 
 # NOTE: The following queues are *not* configurable and should always be an
 # inproc queue

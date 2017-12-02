@@ -70,6 +70,7 @@ sys.modules['zmq.error'] = Mock()
 sys.modules['configargparse'] = Mock()
 sys.modules['sqlalchemy'] = Mock()
 sys.modules['sqlalchemy.exc'] = Mock()
+sys.modules['sqlalchemy.engine.url'] = Mock()
 sys.modules['piwheels.terminal'] = Mock()
 
 # -- General configuration ------------------------------------------------

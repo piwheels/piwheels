@@ -29,6 +29,7 @@ Table of Contents
     slaves
     monitor
     initdb
+    importer
     modules
     license
 

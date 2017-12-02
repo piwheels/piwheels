@@ -55,6 +55,7 @@ from .slave_driver import SlaveDriver
 from .file_juggler import FileJuggler
 from .index_scribe import IndexScribe
 from .cloud_gazer import CloudGazer
+from .mr_chase import MrChase
 
 
 class PiWheelsMaster:
@@ -122,14 +123,21 @@ write access to the output directory.
         parser.add_argument(
             '--slave-queue', metavar='ADDR', default=const.SLAVE_QUEUE,
             help="The address of the queue used to talk to the build slaves "
-            "(default: %(default)s)")
+            "(default: %(default)s); this is usually a tcp address")
         parser.add_argument(
             '--file-queue', metavar='ADDR', default=const.FILE_QUEUE,
             help="The address of the queue used to transfer files from slaves "
-            "(default: %(default)s)")
+            "(default: %(default)s); this is usually a tcp address")
+        parser.add_argument(
+            '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
+            help="The address of the queue used by piw-import (default: "
+            "(%(default)s); this should always be an ipc address")
         config = parser.parse_args(args)
         config.output_path = os.path.expanduser(config.output_path)
         terminal.configure_logging(config.log_level, config.log_file)
+        # We want the logger name included in our console output
+        terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
+            logging.Formatter('%(name)s: %(message)s'))
 
         self.logger.info('PiWheels Master version %s', __version__)
         ctx = zmq.Context.instance()
@@ -180,6 +188,7 @@ write access to the output directory.
                 BigBrother,
                 CloudGazer,
                 SlaveDriver,
+                MrChase,
             )
         ]
         self.logger.info('starting tasks')

@@ -87,5 +87,6 @@ __entry_points__ = {
         'piw-slave = piwheels.slave:main',
         'piw-monitor = piwheels.monitor:main',
         'piw-initdb = piwheels.initdb:main',
+        'piw-import = piwheels.importer:main',
     ],
 }

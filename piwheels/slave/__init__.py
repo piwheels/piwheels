@@ -183,39 +183,31 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.info('Build succeeded')
         else:
             self.logger.warning('Build failed')
-        return [
-            'BUILT',
-            self.builder.status,
-            self.builder.duration,
-            self.builder.output,
-            {
-                pkg.filename: (
-                    pkg.filesize,
-                    pkg.filehash,
-                    pkg.package_tag,
-                    pkg.package_version_tag,
-                    pkg.py_version_tag,
-                    pkg.abi_tag,
-                    pkg.platform_tag,
-                )
-                for pkg in self.builder.files
-            },
-        ]
+        return ['BUILT'] + self.builder.as_message[2:]
 
     def do_send(self, filename):
         """
         If a build succeeds and generates files (detailed in a "BUILT"
         message), the master will reply with "SEND" *filename* indicating we
         should transfer the specified file (this is done on a separate socket
-        with a different protocol; see :meth:`transfer` for more details). Once
-        the transfers concludes, reply to the master with "SENT".
+        with a different protocol; see :meth:`builder.PiWheelsPackage.transfer`
+        for more details). Once the transfers concludes, reply to the master
+        with "SENT".
         """
         assert self.slave_id is not None, 'Send before hello'
         assert self.builder, 'Send before build / after failed build'
         assert self.builder.status, 'Send after failed build'
         pkg = [f for f in self.builder.files if f.filename == filename][0]
-        self.logger.info('Sending %s to master', pkg.filename)
-        self.transfer(pkg)
+        self.logger.info('Sending %s to master on localhost', pkg.filename)
+        ctx = zmq.Context.instance()
+        queue = ctx.socket(zmq.DEALER)
+        queue.ipv6 = True
+        queue.hwm = 10
+        queue.connect('tcp://{master}:5556'.format(master=self.config.master))
+        try:
+            pkg.transfer(queue, self.slave_id)
+        finally:
+            queue.close()
         return ['SENT']
 
     def do_done(self):
@@ -242,46 +234,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.info('Removing temporary build directories')
             self.builder.clean()
         return None
-
-    def transfer(self, package):
-        """
-        Transfer *package* to *master* over the separate file transfer queue.
-        See the :doc:`slaves` chapter for a rough overview of the file transfer
-        protocol.
-
-        :param pathlib.Path package:
-            The path of the package to transfer.
-        """
-        ctx = zmq.Context.instance()
-        with package.open() as f:
-            queue = ctx.socket(zmq.DEALER)
-            queue.ipv6 = True
-            queue.hwm = 10
-            queue.connect('tcp://{master}:5556'.format(
-                master=self.config.master))
-            try:
-                timeout = 0
-                while True:
-                    if not queue.poll(timeout):
-                        # Initially, send HELLO immediately; in subsequent
-                        # loops if we hear nothing from the server for 5
-                        # seconds then it's dropped a *lot* of packets; prod
-                        # the master with HELLO again
-                        queue.send_multipart(
-                            [b'HELLO', str(self.slave_id).encode('ascii')]
-                        )
-                        timeout = 5000
-                    req, *args = queue.recv_multipart()
-                    if req == b'DONE':
-                        return
-                    elif req == b'FETCH':
-                        offset, size = args
-                        f.seek(int(offset))
-                        queue.send_multipart(
-                            [b'CHUNK', offset, f.read(int(size))]
-                        )
-            finally:
-                queue.close()
 
 
 def duration(s):

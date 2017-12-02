@@ -216,6 +216,25 @@ Finally, when all files from the build have been transferred, the Slave Driver
 informs the :ref:`index-scribe` that the package's index will need (re)writing.
 
 
+.. _mr-chase:
+
+Mr. Chase
+---------
+
+Implemented in: :class:`piwheels.master.mr_chase.MrChase`.
+
+This task talks to :program:`piw-import` and handles importing builds manually
+into the system. It is essentially a cut-down version of the
+:ref:`slave-driver` with a correspondingly simpler protocol.
+
+This task writes information to the database via :ref:`the-oracle`. If the
+imported build was successful, it informs the :ref:`file-juggler` that it
+should expect a file transfer from the importer.
+
+Finally, when all files from the build have been transferred, it informs the
+:ref:`index-scribe` that the package's index will need (re)writing.
+
+
 .. _file-juggler:
 
 File Juggler

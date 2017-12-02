@@ -124,10 +124,10 @@
 <g id="edge7" class="edge"><title>BUILD&#45;&gt;BUILT</title>
 <path fill="none" stroke="black" d="M40.3997,-367.096C49.2966,-347.96 64.8433,-314.52 75.3913,-291.831"/>
 <polygon fill="black" stroke="black" points="78.6658,-293.09 79.7079,-282.547 72.3183,-290.139 78.6658,-293.09"/>
-<text text-anchor="middle" x="93.4709" y="-339" font-family="Sans" font-size="10.00">[package,</text>
-<text text-anchor="middle" x="93.4709" y="-328" font-family="Sans" font-size="10.00">version,</text>
-<text text-anchor="middle" x="93.4709" y="-317" font-family="Sans" font-size="10.00">status,</text>
-<text text-anchor="middle" x="93.4709" y="-306" font-family="Sans" font-size="10.00">...</text>
+<text text-anchor="middle" x="90.9709" y="-339" font-family="Sans" font-size="10.00">[status,</text>
+<text text-anchor="middle" x="90.9709" y="-328" font-family="Sans" font-size="10.00">duration,</text>
+<text text-anchor="middle" x="90.9709" y="-317" font-family="Sans" font-size="10.00">output,</text>
+<text text-anchor="middle" x="90.9709" y="-306" font-family="Sans" font-size="10.00">...</text>
 </g>
 <!-- SEND&#45;&gt;SENT -->
 <g id="edge10" class="edge"><title>SEND&#45;&gt;SENT</title>

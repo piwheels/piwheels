@@ -126,8 +126,8 @@ protocol follows a strict request-reply sequence which is illustrated below:
 
    * *status* is ``True`` if the build succeeded and ``False`` otherwise.
 
-   * *duration* is a :class:`~datetime.timedelta` value indicating the length
-     of time it took to build.
+   * *duration* is a :class:`float` value indicating the length of time it took
+     to build in seconds.
 
    * *output* is a string containing the complete build log.
 
@@ -154,7 +154,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
 8. If the build succeeded, the master will send ``["SEND", filename]`` where
    *filename* is one of the names transmitted in the prior "BUILT" message.
 
-9. At this point the slave should use the :ref:`file-juggler` protocol
+9. At this point the slave should use the :ref:`file-juggler-protocol` protocol
    documented below to transmit the contents of the specified file to the
    master. When the file transfer is complete, the build slave sends
    ``["SENT"]`` to the master.
@@ -166,6 +166,8 @@ protocol follows a strict request-reply sequence which is illustrated below:
 11. The build slave is now free to destroy all resources associated with the
     build, and returns to step 3 ("IDLE").
 
+
+.. _file-juggler-protocol:
 
 File Juggler
 ------------

@@ -91,7 +91,7 @@ def main(args=None):
             logging.warning("Detected database version %s", db_version)
             prompt = "Do you wish to proceed with the upgrade to %s?" % __version__
         script = get_script(db_version)
-        if config.yes or yes_no_prompt(prompt):
+        if config.yes or terminal.yes_no_prompt(prompt):
             if db_version is None:
                 logging.warning("Initializing database at version %s", __version__)
             else:
@@ -111,24 +111,6 @@ def main(args=None):
     except:  # pylint: disable=bare-except
         logging.error("Terminating on error, rolled back work")
         return terminal.error_handler(*sys.exc_info())
-
-
-def yes_no_prompt(question):
-    """
-    Print a yes/no *question* and return ``True`` (for yes) or ``False`` (for
-    no) according to the user's response.
-    """
-    while True:
-        try:
-            return {
-                '': True,
-                'y': True,
-                'yes': True,
-                'n': False,
-                'no': False,
-            }[input(question + ' [Y/n] ').strip().lower()]
-        except KeyError:
-            print('Invalid response')
 
 
 def get_connection(dsn):

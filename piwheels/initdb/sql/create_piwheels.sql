@@ -107,7 +107,7 @@ CREATE TABLE builds (
     CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
     CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
         REFERENCES versions ON DELETE CASCADE,
-    CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
+    CONSTRAINT builds_built_by_ck CHECK (built_by >= 0)
 );
 
 CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);

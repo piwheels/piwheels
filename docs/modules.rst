@@ -95,3 +95,15 @@ piwheels.slave.builder
 ======================
 
 .. automodule:: piwheels.slave.builder
+
+
+piwheels.initdb
+===============
+
+.. automodule:: piwheels.initdb
+
+
+piwheels.importer
+=================
+
+.. automodule:: piwheels.importer

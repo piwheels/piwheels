@@ -22,6 +22,10 @@ ALTER TABLE builds
     DROP COLUMN output,
     ADD COLUMN abi_tag VARCHAR(100) NOT NULL DEFAULT '';
 
+ALTER TABLE builds
+    DROP CONSTRAINT builds_built_by_ck,
+    ADD CONSTRAINT builds_built_by_ck CHECK (built_by >= 0);
+
 -- Set all extant builds as having been performed for the "first" build_abi
 WITH default_tag AS (
     SELECT abi_tag

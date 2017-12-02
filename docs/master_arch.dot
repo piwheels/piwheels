@@ -28,8 +28,8 @@ digraph piwheels {
     subgraph cluster_file_server {
         graph [label="file-server"];
 
-        FileJuggler [label="{{<fs>REP|<slaves>ROUTER}|<t>FileJuggler}"];
-        IndexScribe [label="{{<db>REQ|<indexes>PULL}|<t>IndexScribe}"];
+        FileJuggler [label="{{<slaves>ROUTER|<fs>REP}|<t>FileJuggler}"];
+        IndexScribe [label="{{<indexes>PULL|<db>REQ}|<t>IndexScribe}"];
         fs [label="www\nfilesystem", shape=folder];
         httpd;
 
@@ -43,11 +43,13 @@ digraph piwheels {
 
         CloudGazer [label="{<t>CloudGazer|<db>REQ}"];
         main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
-        BigBrother [label="{<t>BigBrother|{<int_status>PUSH|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
-        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<int_status>PUSH|<builds>REQ|<db>REQ|<fs>REQ|<indexes>PUSH}}"];
+        BigBrother [label="{<t>BigBrother|{<indexes>PUSH|<fs>REQ|<db>REQ|<int_status>PUSH}}"];
+        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<indexes>PUSH|<fs>REQ|<db>REQ|<builds>REQ|<int_status>PUSH}}"];
+        MrChase [label="{<imports>ROUTER|<t>MrChase|{<indexes>PUSH|<fs>REQ|<db>REQ|<int_status>PUSH}}"];
 
         BigBrother:int_status->main:int_status;
         SlaveDriver:int_status->main:int_status;
+        MrChase:int_status->main:int_status;
     }
 
     subgraph cluster_monitor {
@@ -55,15 +57,21 @@ digraph piwheels {
         monitor [label="{{<control>PUSH|<status>SUB}|<t>main}"];
     }
 
-    subgraph cluster_Slave1 {
+    subgraph cluster_slave1 {
         graph [label="slave1"];
-        Slave1 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
+        Slave1 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
     }
 
-    subgraph cluster_Slave2 {
+    subgraph cluster_slave2 {
         graph [label="slave2"];
-        Slave2 [label="{<t>main|{<builds>REQ|<files>DEALER}}"];
+        Slave2 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
     }
+
+    subgraph cluster_import {
+        graph [label="import"];
+        Import [label="{<t>main|{<files>DEALER|<imports>REQ}}"];
+    }
+
 
     PyPI->CloudGazer:t;
     PyPI->Slave1:t;
@@ -72,17 +80,22 @@ digraph piwheels {
     Slave2:builds->SlaveDriver:slaves [dir=both];
     Slave1:files->FileJuggler:slaves [dir=both];
     Slave2:files->FileJuggler:slaves [dir=both];
+    Import:imports->MrChase:imports [dir=both];
+    Import:files->FileJuggler:slaves [dir=both];
     main:ext_status->monitor:status;
     monitor:control->main:control;
 
     CloudGazer:db->Seraph:db [dir=both];
     BigBrother:indexes->IndexScribe:indexes;
     SlaveDriver:indexes->IndexScribe:indexes;
+    MrChase:indexes->IndexScribe:indexes;
     IndexScribe:db->Seraph:db [dir=both];
     BigBrother:db->Seraph:db [dir=both];
     BigBrother:fs->FileJuggler:fs [dir=both];
     SlaveDriver:fs->FileJuggler:fs [dir=both];
     SlaveDriver:db->Seraph:db [dir=both];
     SlaveDriver:builds->TheArchitect:builds [dir=both];
+    MrChase:fs->FileJuggler:fs [dir=both];
+    MrChase:db->Seraph:db [dir=both];
     httpd->Users;
 }

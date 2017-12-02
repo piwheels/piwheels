@@ -24,7 +24,7 @@ digraph slave {
     IDLE->SLEEP;
     IDLE->BYE1;
     SLEEP->IDLE;
-    BUILD->BUILT [label="[package,\nversion,\nstatus,\n..."];
+    BUILD->BUILT [label="[status,\nduration,\noutput,\n..."];
     BUILT->DONE [label="failure"];
     BUILT->SEND [label="success"];
     SEND->SENT;

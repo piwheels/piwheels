@@ -146,6 +146,30 @@ class PiWheelsPackage:
         """
         return self.wheel_file.open(mode)
 
+    def transfer(self, queue, slave_id):
+        """
+        Transfer the wheel via the specified *queue*. This is the client side
+        implementation of the :class:`.file_juggler.FileJuggler` protocol.
+        """
+        with self.open() as f:
+            timeout = 0
+            while True:
+                if not queue.poll(timeout):
+                    # Initially, send HELLO immediately; in subsequent loops if
+                    # we hear nothing from the server for 5 seconds then it's
+                    # dropped a *lot* of packets; prod the master with HELLO
+                    queue.send_multipart(
+                        [b'HELLO', str(slave_id).encode('ascii')]
+                    )
+                    timeout = 5000
+                req, *args = queue.recv_multipart()
+                if req == b'DONE':
+                    return
+                elif req == b'FETCH':
+                    offset, size = args
+                    f.seek(int(offset))
+                    queue.send_multipart([b'CHUNK', offset, f.read(int(size))])
+
 
 class PiWheelsBuilder:
     """
@@ -165,6 +189,29 @@ class PiWheelsBuilder:
         self.output = ''
         self.files = []
         self.status = False
+
+    @property
+    def as_message(self):
+        """
+        Return the state as a list suitable for use in several protocol
+        messages (specifically those used by :program:`piw-slave` and
+        :program:`piw-import`).
+        """
+        return [
+            self.package, self.version, self.status, self.duration,
+            self.output, {
+                pkg.filename: (
+                    pkg.filesize,
+                    pkg.filehash,
+                    pkg.package_tag,
+                    pkg.package_version_tag,
+                    pkg.py_version_tag,
+                    pkg.abi_tag,
+                    pkg.platform_tag,
+                )
+                for pkg in self.files
+            }
+        ]
 
     def build(self, timeout=None, pypi_index='https://pypi.python.org/simple'):
         """

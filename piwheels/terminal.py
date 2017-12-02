@@ -37,6 +37,7 @@ import logging
 import traceback
 
 import configargparse
+from configargparse import FileType  # pylint: disable=unused-import
 
 from . import __version__
 
@@ -53,7 +54,7 @@ locale.setlocale(locale.LC_ALL, '')
 # adornments. This will be used for logging messages sent before we "properly"
 # configure logging according to the user's preferences
 _CONSOLE = logging.StreamHandler(sys.stderr)
-_CONSOLE.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+_CONSOLE.setFormatter(logging.Formatter('%(message)s'))
 _CONSOLE.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(_CONSOLE)
 
@@ -151,3 +152,22 @@ def error_handler(exc_type, exc_value, exc_trace):
             for msg in line.rstrip().split('\n'):
                 logging.critical(msg.replace('%', '%%'))
         return 1
+
+
+def yes_no_prompt(question):
+    """
+    Print a yes/no *question* and return ``True`` (for yes) or ``False`` (for
+    no) according to the user's response.
+    """
+    print('')
+    while True:
+        try:
+            return {
+                '': True,
+                'y': True,
+                'yes': True,
+                'n': False,
+                'no': False,
+            }[input(question + ' [Y/n] ').strip().lower()]
+        except KeyError:
+            print('Invalid response')

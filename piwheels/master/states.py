@@ -321,6 +321,10 @@ class BuildState:
     def abi_tag(self):
         return self._abi_tag
 
+    @abi_tag.setter
+    def abi_tag(self, value):
+        self._abi_tag = value
+
     @property
     def status(self):
         return self._status
