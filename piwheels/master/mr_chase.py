@@ -141,7 +141,7 @@ class MrChase(PauseableTask):
         if not state.files:
             self.logger.error('attempting to add empty build')
             return ['ERROR', 'no files listed for import']
-        for file in state.files:
+        for file in state.files.values():
             if file.platform_tag == 'linux_armv6l':
                 self.logger.error('attempting to add armv6l wheel')
                 return ['ERROR', 'armv6l wheels will be automatically linked']
