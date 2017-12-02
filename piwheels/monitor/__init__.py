@@ -38,6 +38,7 @@ that are having issues (e.g. excessive resource consumption from a huge build)
 or terminate the master itself.
 """
 
+import sys
 from datetime import datetime, timedelta
 
 import zmq
@@ -84,7 +85,12 @@ class PiWheelsMonitor:
             default=const.CONTROL_QUEUE,
             help="The address of the queue a monitor can use to control the "
             "master (default: %(default)s)")
-        config = parser.parse_args(args)
+        try:
+            config = parser.parse_args(args)
+        except:  # pylint: disable=bare-except
+            return terminal.error_handler(*sys.exc_info())
+        else:
+            return 0
 
         ctx = zmq.Context()
         self.status_queue = ctx.socket(zmq.SUB)

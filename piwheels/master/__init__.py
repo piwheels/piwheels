@@ -72,8 +72,12 @@ class PiWheelsMaster:
         self.ext_status_queue = None
         self.tasks = []
 
-    def __call__(self, args=None):
-        sys.excepthook = terminal.error_handler
+    @staticmethod
+    def configure_parser():
+        """
+        Construct the command line parser for :program:`piw-master` with its
+        many options (this method only exists to simplify the main method).
+        """
         parser = terminal.configure_parser("""
 The piw-master script is intended to be run on the database and file-server
 machine. It is recommended you do not run piw-slave on the same machine as the
@@ -132,51 +136,30 @@ write access to the output directory.
             '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
             help="The address of the queue used by piw-import (default: "
             "(%(default)s); this should always be an ipc address")
-        try:
-            config = parser.parse_args(args)
-            config.output_path = os.path.expanduser(config.output_path)
-            terminal.configure_logging(config.log_level, config.log_file)
-            # We want the logger name included in our console output
-            terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
-                logging.Formatter('%(name)s: %(message)s'))
+        return parser
 
-            self.logger.info('PiWheels Master version %s', __version__)
-            ctx = zmq.Context.instance()
-            self.control_queue = ctx.socket(zmq.PULL)
-            self.control_queue.hwm = 10
-            self.control_queue.bind(config.control_queue)
-            self.int_status_queue = ctx.socket(zmq.PULL)
-            self.int_status_queue.hwm = 10
-            self.int_status_queue.bind(const.INT_STATUS_QUEUE)
-            self.ext_status_queue = ctx.socket(zmq.PUB)
-            self.ext_status_queue.hwm = 10
-            self.ext_status_queue.bind(config.status_queue)
+    def __call__(self, args=None):
+        sys.excepthook = terminal.error_handler
+        parser = self.configure_parser()
+        config = parser.parse_args(args)
+        config.output_path = os.path.expanduser(config.output_path)
+        terminal.configure_logging(config.log_level, config.log_file)
+        # We want the logger name included in our console output
+        terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
+            logging.Formatter('%(name)s: %(message)s'))
 
-            self.start_tasks(config)
-            self.logger.info('started all tasks')
-            signal.signal(signal.SIGTERM, sig_term)
-            try:
-                self.main_loop()
-            except TaskQuit:
-                pass
-            except SystemExit:
-                self.logger.warning('shutting down on SIGTERM')
-            except KeyboardInterrupt:
-                self.logger.warning('shutting down on Ctrl+C')
-            finally:
-                self.stop_tasks()
-                self.logger.info('stopped all tasks')
-                ctx.destroy(linger=1000)
-                ctx.term()
-        except:  # pylint: disable=bare-except
-            return terminal.error_handler(*sys.exc_info())
-        else:
-            return 0
+        self.logger.info('PiWheels Master version %s', __version__)
+        ctx = zmq.Context.instance()
+        self.control_queue = ctx.socket(zmq.PULL)
+        self.control_queue.hwm = 10
+        self.control_queue.bind(config.control_queue)
+        self.int_status_queue = ctx.socket(zmq.PULL)
+        self.int_status_queue.hwm = 10
+        self.int_status_queue.bind(const.INT_STATUS_QUEUE)
+        self.ext_status_queue = ctx.socket(zmq.PUB)
+        self.ext_status_queue.hwm = 10
+        self.ext_status_queue.bind(config.status_queue)
 
-    def start_tasks(self, config):
-        """
-        Start the master's various threads with the specified configuration.
-        """
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
         # for more information)
@@ -199,15 +182,24 @@ write access to the output directory.
         self.logger.info('starting tasks')
         for task in self.tasks:
             task.start()
-
-    def stop_tasks(self):
-        """
-        Stops all tasks started by :meth:`start_tasks`.
-        """
-        self.logger.info('stopping tasks')
-        for task in reversed(self.tasks):
-            task.quit()
-            task.join()
+        self.logger.info('started all tasks')
+        signal.signal(signal.SIGTERM, sig_term)
+        try:
+            self.main_loop()
+        except TaskQuit:
+            pass
+        except SystemExit:
+            self.logger.warning('shutting down on SIGTERM')
+        except KeyboardInterrupt:
+            self.logger.warning('shutting down on Ctrl+C')
+        finally:
+            self.logger.info('stopping tasks')
+            for task in reversed(self.tasks):
+                task.quit()
+                task.join()
+            self.logger.info('stopped all tasks')
+            ctx.destroy(linger=1000)
+            ctx.term()
 
     def main_loop(self):
         """

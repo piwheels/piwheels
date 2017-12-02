@@ -162,6 +162,8 @@ class MrChase(PauseableTask):
             self.db.log_build(state)
         except IOError as err:
             return ['ERROR', str(err)]
+        self.logger.info('registered build for %s %s',
+                         state.package, state.version)
         if state.status and not state.transfers_done:
             self.fs.expect(0, state.files[state.next_file])
             self.logger.info('send %s', state.next_file)

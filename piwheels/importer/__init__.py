@@ -147,8 +147,7 @@ def print_builder(config, builder):
     logging.warning('Preparing to import build')
     logging.warning('Package:  %s', builder.package)
     logging.warning('Version:  %s', builder.version)
-    logging.warning('ABI:      %s', config.abi if config.abi is not
-                    None else 'default')
+    logging.warning('ABI:      %s', abi(config, builder, 'default'))
     logging.warning('Status:   successful')
     logging.warning('Duration: %s',
                     timedelta(seconds=builder.duration))
@@ -187,7 +186,7 @@ def do_import(config, builder):
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
-        queue.send_pyobj(['IMPORT', config.abi] + builder.as_message)
+        queue.send_pyobj(['IMPORT', abi(config, builder)] + builder.as_message)
         msg, *args = queue.recv_pyobj()
         if msg == 'ERROR':
             raise RuntimeError(*args)
@@ -202,6 +201,20 @@ def do_import(config, builder):
         queue.close()
         ctx.destroy(linger=1000)
         ctx.term()
+
+
+def abi(config, builder, default=None):
+    """
+    Calculate the ABI from the given *config* and the first file contained by
+    the *builder* state. If the configuration contains no ABI override, and
+    the ABI of the first file is 'none', return *default*.
+    """
+    if config.abi is not None:
+        return config.abi
+    elif builder.files[0].abi_tag != 'none':
+        return builder.files[0].abi_tag
+    else:
+        return default
 
 
 def do_send(builder, filename):
