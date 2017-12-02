@@ -89,8 +89,6 @@ class PiWheelsMonitor:
             config = parser.parse_args(args)
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
-        else:
-            return 0
 
         ctx = zmq.Context()
         self.status_queue = ctx.socket(zmq.SUB)
