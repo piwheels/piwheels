@@ -26,6 +26,9 @@ following components:
 | :doc:`initdb`   | A simple maintenance script for initializing or   |
 |                 | upgrading the database to the current version.    |
 +-----------------+---------------------------------------------------+
+| :doc:`importer` | A tool for importing wheels manually into the     |
+|                 | piwheels database and file-system.                |
++-----------------+---------------------------------------------------+
 | database server | Currently only `PostgreSQL`_ is supported (and    |
 |                 | frankly that's all we're ever likely to support). |
 |                 | This provides the master's data store.            |

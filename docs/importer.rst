@@ -140,7 +140,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
 
      - *filehash* is the SHA256 hash of the wheel contents.
 
-     - *pacakge_tag* is the package tag extracted from the filename.
+     - *package_tag* is the package tag extracted from the filename.
 
      - *package_version_tag* is the version tag extracted from the filename.
 

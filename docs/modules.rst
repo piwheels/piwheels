@@ -67,6 +67,12 @@ piwheels.master.slave_driver
 .. automodule:: piwheels.master.slave_driver
 
 
+piwheels.master.mr_chase
+========================
+
+.. automodule:: piwheels.master.mr_chase
+
+
 piwheels.master.file_juggler
 ============================
 

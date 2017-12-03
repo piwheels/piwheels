@@ -29,14 +29,19 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-The piw-initdb script is used to initialize or upgrade the piwheels master
-database. The target PostgreSQL database must already exist, and the DSN should
-connect as a cluster superuser (e.g. the postgres user), in contrast to the
-piw-master script which should *not* use the cluster superuser. The script will
-prompt before making any permanent alterations, and all actions will be
-executed within a single transaction so that in the event of failure the
-database will be left unchanged. Nonetheless, it is strongly recommended you
-take a backup of your database before using this script for upgrades.
+Contains the functions that make up the :program:`piw-initdb` script.
+
+.. autofunction:: main
+
+.. autofunction:: detect_users
+
+.. autofunction:: detect_version
+
+.. autofunction:: get_connection
+
+.. autofunction:: get_script
+
+.. autofunction:: parse_statements
 """
 
 import re
@@ -58,7 +63,17 @@ def main(args=None):
     upgrades it to the current version of the application.
     """
     logging.getLogger().name = 'initdb'
-    parser = terminal.configure_parser(__doc__)
+    parser = terminal.configure_parser(
+"""
+The piw-initdb script is used to initialize or upgrade the piwheels master
+database. The target PostgreSQL database must already exist, and the DSN should
+connect as a cluster superuser (e.g. the postgres user), in contrast to the
+piw-master script which should *not* use the cluster superuser. The script will
+prompt before making any permanent alterations, and all actions will be
+executed within a single transaction so that in the event of failure the
+database will be left unchanged. Nonetheless, it is strongly recommended you
+take a backup of your database before using this script for upgrades.
+""")
     parser.add_argument(
         '-d', '--dsn', default=const.DSN,
         help="The database to create or upgrade; this DSN must connect as "

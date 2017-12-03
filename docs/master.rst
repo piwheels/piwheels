@@ -20,7 +20,7 @@ Synopsis
                [--index-queue ADDR] [--status-queue ADDR]
                [--control-queue ADDR] [--builds-queue ADDR]
                [--db-queue ADDR] [--fs-queue ADDR] [--slave-queue ADDR]
-               [--file-queue ADDR]
+               [--file-queue ADDR] [--import-queue ADDR]
 
 
 Description
@@ -109,6 +109,11 @@ Description
 
     The address of the queue used to transfer files from slaves (default:
     tcp://\*:5556)
+
+.. option:: --import-queue ADDR
+
+    The address of the queue used by piw-import (default:
+    (ipc:///tmp/piw-import); this should always be an ipc address
 
 
 Development

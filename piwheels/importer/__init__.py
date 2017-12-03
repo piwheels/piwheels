@@ -29,9 +29,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-The piw-import script is used to inject the specified file(s) manually into
-the piwheels database and file-system. This script must be run on the same
-node as the piw-master script.
+Contains the functions that implement the :program:`piw-import` script.
+
+.. autofunction:: main
+
+.. autofunction:: print_builder
+
+.. autofunction:: abi
+
+.. autofunction:: do_import
+
+.. autofunction:: do_send
 """
 
 import sys
@@ -54,7 +62,12 @@ def main(args=None):
     :class:`~.mr_chase.MrChase` needs.
     """
     logging.getLogger().name = 'import'
-    parser = terminal.configure_parser(__doc__)
+    parser = terminal.configure_parser(
+"""
+The piw-import script is used to inject the specified file(s) manually into
+the piwheels database and file-system. This script must be run on the same
+node as the piw-master script.
+""")
     parser.add_argument(
         '--package', default=None,
         help="The name of the package to import; if omitted this will be "
