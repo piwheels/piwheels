@@ -82,7 +82,7 @@ Description
 
 .. option:: --import-queue ADDR
 
-    The address of the queue used by piw-import (default:
+    The address of the queue used by :program:`piw-import` (default:
     (ipc:///tmp/piw-import); this should always be an ipc address
 
 

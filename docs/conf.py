@@ -67,6 +67,7 @@ class Mock(object):
 
 sys.modules['zmq'] = Mock()
 sys.modules['zmq.error'] = Mock()
+sys.modules['dateutil'] = Mock()
 sys.modules['configargparse'] = Mock()
 sys.modules['sqlalchemy'] = Mock()
 sys.modules['sqlalchemy.exc'] = Mock()
