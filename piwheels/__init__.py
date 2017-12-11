@@ -54,7 +54,7 @@ defined:
 # flake8: noqa
 
 __project__      = 'piwheels'
-__version__      = '0.9'
+__version__      = '0.10'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
@@ -67,6 +67,7 @@ __extra_requires__ = {
     'monitor': ['urwid'],
     'master':  ['sqlalchemy'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
+    'log':     ['lars'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
 }
@@ -88,5 +89,6 @@ __entry_points__ = {
         'piw-monitor = piwheels.monitor:main',
         'piw-initdb = piwheels.initdb:main',
         'piw-import = piwheels.importer:main',
+        'piw-logger = piwheels.logger:main',
     ],
 }

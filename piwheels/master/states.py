@@ -50,6 +50,7 @@ import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
+from collections import namedtuple
 
 from .ranges import exclude, intersect
 
@@ -618,6 +619,20 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+DownloadState = namedtuple('DownloadState', (
+    'filename',
+    'host',
+    'timestamp',
+    'arch',
+    'distro_name',
+    'distro_version',
+    'os_name',
+    'os_version',
+    'py_name',
+    'py_version',
+))
 
 
 def mkdir_override_symlink(pkg_dir):

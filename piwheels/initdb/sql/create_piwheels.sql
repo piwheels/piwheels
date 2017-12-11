@@ -15,7 +15,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.9');
+INSERT INTO configuration(id, version) VALUES (1, '0.10');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
@@ -170,6 +170,31 @@ CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
 GRANT SELECT,INSERT,UPDATE ON files TO {username};
+
+-- downloads
+-------------------------------------------------------------------------------
+-- The "downloads" table tracks the files that are downloaded by piwheels
+-- users.
+-------------------------------------------------------------------------------
+
+CREATE TABLE downloads (
+    filename            VARCHAR(255) NOT NULL,
+    accessed_by         INET NOT NULL,
+    accessed_at         TIMESTAMP NOT NULL,
+    arch                VARCHAR(100) DEFAULT NULL,
+    distro_name         VARCHAR(100) DEFAULT NULL,
+    distro_version      VARCHAR(100) DEFAULT NULL,
+    os_name             VARCHAR(100) DEFAULT NULL,
+    os_version          VARCHAR(100) DEFAULT NULL,
+    py_name             VARCHAR(100) DEFAULT NULL,
+    py_version          VARCHAR(100) DEFAULT NULL,
+
+    CONSTRAINT downloads_filename_fk FOREIGN KEY (filename)
+        REFERENCES files (filename) ON DELETE CASCADE
+);
+
+CREATE INDEX downloads_files ON downloads(filename);
+GRANT SELECT,INSERT ON downloads TO {username};
 
 -- builds_pending
 -------------------------------------------------------------------------------

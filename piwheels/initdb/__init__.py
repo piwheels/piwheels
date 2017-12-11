@@ -63,8 +63,7 @@ def main(args=None):
     upgrades it to the current version of the application.
     """
     logging.getLogger().name = 'initdb'
-    parser = terminal.configure_parser(
-"""
+    parser = terminal.configure_parser("""\
 The piw-initdb script is used to initialize or upgrade the piwheels master
 database. The target PostgreSQL database must already exist, and the DSN should
 connect as a cluster superuser (e.g. the postgres user), in contrast to the

@@ -62,8 +62,7 @@ def main(args=None):
     :class:`~.mr_chase.MrChase` needs.
     """
     logging.getLogger().name = 'import'
-    parser = terminal.configure_parser(
-"""
+    parser = terminal.configure_parser("""\
 The piw-import script is used to inject the specified file(s) manually into
 the piwheels database and file-system. This script must be run on the same
 node as the piw-master script.

@@ -27,29 +27,47 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-This module defines the default configuration for all applications in the
-piwheels suite. Configuration can be overridden via configuration files, the
-command line or, in certain cases, environment variables.
+Defines the :class:`Lumberjack` task; see class for more details.
+
+.. autoclass:: Lumberjack
+    :members:
 """
 
-DSN = 'postgres:///piwheels'
-USER = 'piwheels'
-PYPI_ROOT = 'https://pypi.python.org/'
-PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
-PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
-OUTPUT_PATH = '/var/www'
-STATUS_QUEUE = 'ipc:///tmp/piw-status'
-CONTROL_QUEUE = 'ipc:///tmp/piw-control'
-INDEX_QUEUE = 'inproc://indexes'
-BUILDS_QUEUE = 'inproc://builds'
-DB_QUEUE = 'inproc://db'
-FS_QUEUE = 'inproc://fs'
-SLAVE_QUEUE = 'tcp://*:5555'
-FILE_QUEUE = 'tcp://*:5556'
-IMPORT_QUEUE = 'ipc:///tmp/piw-import'
-LOGGER_QUEUE = 'ipc:///tmp/piw-logger'
+import zmq
 
-# NOTE: The following queues are *not* configurable and should always be an
-# inproc queue
-INT_STATUS_QUEUE = 'inproc://status'
-ORACLE_QUEUE = 'inproc://oracle'
+from .tasks import PauseableTask
+from .the_oracle import DbClient
+from .states import DownloadState
+
+
+class Lumberjack(PauseableTask):
+    """
+    This task handles incoming log entries from the httpd server, and updates
+    the database with them. The external :program:`piw-log` script handles
+    parsing the raw log entries into the format expected by this task, so this
+    is an extremely basic class.
+    """
+    name = 'master.lumberjack'
+
+    def __init__(self, config):
+        super().__init__(config)
+        log_queue = self.ctx.socket(zmq.PULL)
+        log_queue.bind(config.log_queue)
+        self.register(log_queue, self.handle_log)
+        self.db = DbClient(config)
+
+    def handle_log(self, queue):
+        """
+        Handle requests from :program:`piw-logger` instances.
+
+        See the :doc:`logger` chapter for an overview of the protocol for
+        messages between the logger and the :class:`Lumberjack`.
+        """
+        msg, *args = queue.recv_pyobj()
+        if msg != 'LOG':
+            self.logger.warning('invalid message: %s', msg)
+        else:
+            download = DownloadState(*args)
+            self.logger.info('logging download of %s from %s',
+                             download.filename, download.host)
+            self.db.log_download(download)

@@ -101,6 +101,7 @@ class Database:
             self._builds = Table('builds', self._meta, autoload=True)
             self._output = Table('output', self._meta, autoload=True)
             self._files = Table('files', self._meta, autoload=True)
+            self._downloads = Table('downloads', self._meta, autoload=True)
             self._build_abis = Table('build_abis', self._meta, autoload=True)
             # The following are views on the tables above
             self._builds_pending = Table('builds_pending', self._meta,
@@ -150,6 +151,31 @@ class Database:
                 where(self._versions.c.package == package).
                 where(self._versions.c.version == version)
             ))
+
+    def log_download(self, download):
+        """
+        Log a download in the database, including data derived from JSON in
+        pip's user-agent.
+        """
+        with self._conn.begin():
+            try:
+                self._conn.execute(
+                    self._downloads.insert(),
+                    filename=download.filename,
+                    accessed_by=download.host,
+                    accessed_at=download.timestamp,
+                    arch=download.arch,
+                    distro_name=download.distro_name,
+                    distro_version=download.distro_version,
+                    os_name=download.os_name,
+                    os_version=download.os_version,
+                    py_name=download.py_name,
+                    py_version=download.py_version,
+                )
+            except IntegrityError:
+                return False
+            else:
+                return True
 
     def log_build(self, build):
         """

@@ -56,6 +56,7 @@ from .file_juggler import FileJuggler
 from .index_scribe import IndexScribe
 from .cloud_gazer import CloudGazer
 from .mr_chase import MrChase
+from .lumberjack import Lumberjack
 
 
 class PiWheelsMaster:
@@ -136,6 +137,10 @@ write access to the output directory.
             '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
             help="The address of the queue used by piw-import (default: "
             "(%(default)s); this should always be an ipc address")
+        parser.add_argument(
+            '--log-queue', metavar='ADDR', default=const.LOGGER_QUEUE,
+            help="The address of the queue used by piw-log (default: "
+            "(%(default)s)")
         return parser
 
     def __call__(self, args=None):
@@ -171,6 +176,7 @@ write access to the output directory.
                 TheOracle,
                 TheOracle,
                 TheArchitect,
+                Lumberjack,
                 IndexScribe,
                 FileJuggler,
                 BigBrother,

@@ -30,12 +30,14 @@ digraph piwheels {
 
         FileJuggler [label="{{<slaves>ROUTER|<fs>REP}|<t>FileJuggler}"];
         IndexScribe [label="{{<indexes>PULL|<db>REQ}|<t>IndexScribe}"];
+        Lumberjack [label="{<logs>PULL|<t>Lumberjack|<db>REQ}"];
         fs [label="www\nfilesystem", shape=folder];
         httpd;
 
         IndexScribe:t->fs;
         FileJuggler:t->fs [dir=both];
         fs->httpd;
+        httpd->Lumberjack:logs;
     }
 
     subgraph cluster_master {
@@ -97,5 +99,6 @@ digraph piwheels {
     SlaveDriver:builds->TheArchitect:builds [dir=both];
     MrChase:fs->FileJuggler:fs [dir=both];
     MrChase:db->Seraph:db [dir=both];
+    Lumberjack:db->Seraph:db [dir=both];
     httpd->Users;
 }

@@ -49,19 +49,19 @@ DOC_SOURCES:=docs/conf.py \
 	$(wildcard docs/*.gpi) \
 	$(wildcard docs/*.rst) \
 	$(wildcard docs/*.pdf)
-SUBDIRS:=icons $(NAME)/windows/fallback-theme
+SUBDIRS:=
 
 # Calculate the name of all outputs
 DIST_EGG=dist/$(NAME)-$(VER)-$(PYVER).egg
 DIST_TAR=dist/$(NAME)-$(VER).tar.gz
 DIST_ZIP=dist/$(NAME)-$(VER).zip
-DIST_DEB=dist/$(NAME)-master_$(VER)-1$(DEB_SUFFIX)_all.deb \
-	dist/$(NAME)-slave_$(VER)-1$(DEB_SUFFIX)_all.deb \
-	dist/$(NAME)-docs_$(VER)-1$(DEB_SUFFIX)_all.deb \
-	dist/$(NAME)_$(VER)-1$(DEB_SUFFIX)_$(DEB_ARCH).changes
-DIST_DSC=dist/$(NAME)_$(VER)-1$(DEB_SUFFIX).tar.gz \
-	dist/$(NAME)_$(VER)-1$(DEB_SUFFIX).dsc \
-	dist/$(NAME)_$(VER)-1$(DEB_SUFFIX)_source.changes
+DIST_DEB=dist/$(NAME)-master_$(VER)$(DEB_SUFFIX)_all.deb \
+	dist/$(NAME)-slave_$(VER)$(DEB_SUFFIX)_all.deb \
+	dist/$(NAME)-docs_$(VER)$(DEB_SUFFIX)_all.deb \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).changes
+DIST_DSC=dist/$(NAME)_$(VER)$(DEB_SUFFIX).tar.xz \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX).dsc \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 MAN_PAGES=man/piw-master.1 man/piw-slave.1 man/piw-monitor.1 man/piw-initdb.1
 
 
@@ -87,6 +87,7 @@ install: $(SUBDIRS)
 doc: $(DOC_SOURCES)
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
+	$(MAKE) -C docs epub
 	$(MAKE) -C docs latexpdf
 
 source: $(DIST_TAR) $(DIST_ZIP)
@@ -159,36 +160,32 @@ $(DIST_DSC): $(PY_SOURCES) $(SUBDIRS) $(DEB_SOURCES) $(MAN_PAGES)
 	mkdir -p dist/
 	for f in $(DIST_DSC); do cp ../$${f##*/} dist/; done
 
-release-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
+changelog-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
 	$(MAKE) clean
 	# ensure there are no current uncommitted changes
 	test -z "$(shell git status --porcelain)"
 	# update the debian changelog with new release information
-	dch --newversion $(VER)-1$(DEB_SUFFIX) --controlmaint
+	dch --newversion $(VER)$(DEB_SUFFIX) --controlmaint
 	# commit the changes and add a new tag
 	git commit debian/changelog -m "Updated changelog for release $(VER)"
-	git tag -s release-$(VER) -m "Release $(VER)"
-	# update the package's registration on PyPI (in case any metadata's changed)
-	$(PYTHON) $(PYFLAGS) setup.py register
 
-release-ubuntu: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
-	# ensure there are no current uncommitted changes
-	test -z "$(shell git status --porcelain)"
+changelog-ubuntu: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
 	# update the debian changelog with new release information
-	dch --newversion $(VER)-1$(DEB_SUFFIX) --controlmaint
+	dch --newversion $(VER)$(DEB_SUFFIX) --controlmaint
 	# commit the changes and add a new tag
 	git commit debian/changelog -m "Updated changelog for Ubuntu release"
 
-upload-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DIST_DEB) $(DIST_DSC)
+release-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DIST_DEB) $(DIST_DSC)
+	git tag -s release-$(VER) -m "Release $(VER)"
+	git push --tags
+	git push
 	# build a source archive and upload to PyPI
 	$(PYTHON) $(PYFLAGS) setup.py sdist upload
 	# build the deb source archive and upload to Raspbian
-	dput raspberrypi dist/$(NAME)_$(VER)-1$(DEB_SUFFIX)_source.changes
-	dput raspberrypi dist/$(NAME)_$(VER)-1$(DEB_SUFFIX)_$(DEB_ARCH).changes
-	git push --tags
+	dput raspberrypi dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 
-upload-ubuntu: $(DIST_DEB) $(DIST_DSC)
+release-ubuntu: $(DIST_DEB) $(DIST_DSC)
 	# build the deb source archive and upload to the PPA
-	dput waveform-ppa dist/$(NAME)_$(VER)-1$(DEB_SUFFIX)_source.changes
+	dput waveform-ppa dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 
-.PHONY: all install develop test doc source egg zip tar deb dist clean tags release-pi release-ubuntu upload-pi upload-ubuntu $(SUBDIRS)
+.PHONY: all install develop test doc source egg zip tar deb dist clean tags changelog-pi changelog-ubuntu release-pi release-ubuntu $(SUBDIRS)
