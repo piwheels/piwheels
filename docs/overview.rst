@@ -75,7 +75,7 @@ like this (all chunks assume you start as root):
        # su - postgres
        $ createuser piwheels
        $ createdb -O postgres piwheels
-       $ piw-init-db
+       $ piw-initdb
 
 4. Set up the web server:
 
@@ -119,7 +119,7 @@ Upgrades
 The master will check that build slaves have the same version number and will
 reject them if they do not. Furthermore, it will check the version number in
 the database's *configuration* table matches its own and fail if it does not.
-Re-run the :program:`piw-init-db` script as the postgres super-user to upgrade
+Re-run the :program:`piw-initdb` script as the postgres super-user to upgrade
 the database between versions (downgrades are not supported, so take a backup
 first!).
 
