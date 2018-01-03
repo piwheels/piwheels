@@ -16,7 +16,7 @@ CREATE TABLE configuration (
 );
 
 INSERT INTO configuration(id, version) VALUES (1, '0.9');
-GRANT UPDATE ON configuration TO {username};
+GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
 -------------------------------------------------------------------------------
@@ -115,6 +115,7 @@ CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
 GRANT SELECT,INSERT ON builds TO {username};
+GRANT USAGE ON builds_build_id_seq TO {username};
 
 -- output
 -------------------------------------------------------------------------------
