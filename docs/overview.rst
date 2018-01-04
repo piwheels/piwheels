@@ -56,7 +56,7 @@ like this (all chunks assume you start as root):
 
    .. code-block:: console
 
-       # apt install postgresql-9.6 apache2
+       # apt install postgresql-9.6 apache2 python3-psycopg2
        # pip install piwheels
 
 2. Set up the (unprivileged) piwheels user and the output directory:
