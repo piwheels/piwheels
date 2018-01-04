@@ -100,7 +100,7 @@ like this (all chunks assume you start as root):
 
    .. code-block:: console
 
-       # wget https://github.com/bennuttall/piwheels/master/deploy_slave.sh
+       # wget https://raw.githubusercontent.com/bennuttall/piwheels/master/deploy_slave.sh
        # chmod +x deploy_slave.sh
        # ./deploy_slave.sh
 
