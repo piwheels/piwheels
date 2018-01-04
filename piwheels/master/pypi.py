@@ -85,6 +85,13 @@ class PyPIEvents:
             return self.client.changelog_since_serial(self.serial)
         except (socket.gaierror, http.client.ImproperConnectionState):
             return []
+        except xmlrpc.client.ProtocolError as exc:
+            if exc.errcode >= 500:
+                # Server error; something upstream has broken (gateway,
+                # PyPI itself, whatever) so back off for a bit
+                return []
+            else:
+                raise
 
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
