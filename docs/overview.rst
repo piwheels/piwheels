@@ -57,7 +57,8 @@ like this (all chunks assume you start as root):
    .. code-block:: console
 
        # apt install postgresql-9.6 apache2 python3-psycopg2 python3-geoip
-       # pip install piwheels
+       # apt install python3-sqlalchemy python3-urwid python3-zmq
+       # pip install piwheels[monitor,master,log]
 
 2. Set up the (unprivileged) piwheels user and the output directory:
 
