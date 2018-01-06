@@ -100,6 +100,11 @@ class IndexScribe(PauseableTask):
     def run(self):
         self.logger.info('building package cache')
         self.package_cache = set(self.db.get_all_packages())
+        # Perform a one-time write of the root index if it doesn't exist; this
+        # is primarily for limited setups which don't expect to see "new"
+        # packages show up (the usual trigger for re-writing the root index)
+        if not (self.output_path / 'simple' / 'index.html').exists():
+            self.write_root_index()
         super().run()
 
     def handle_index(self, queue):
