@@ -17,4 +17,5 @@ CREATE TABLE downloads (
 );
 
 CREATE INDEX downloads_files ON downloads(filename);
+CREATE INDEX downloads_accessed_at ON downloads(accessed_at DESC);
 GRANT SELECT,INSERT ON downloads TO {username};
