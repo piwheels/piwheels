@@ -66,8 +66,8 @@ class PiWheelsMonitor:
         self.slave_to_kill = None  # which slave the user requested to kill
         self.popup_stack = []
         # The various widgets in the status box at the top
-        self.builds_bar = None
         self.disk_bar = None
+        self.builds_label = None
         self.build_rate_label = None
         self.build_size_label = None
         self.build_time_label = None
@@ -133,10 +133,9 @@ class PiWheelsMonitor:
             ]),
             'footer'
         )
-        self.builds_bar = widgets.ProgressBar('todo', 'done',
-                                              satt='todo_smooth')
         self.disk_bar = widgets.ProgressBar('todo', 'done',
                                             satt='todo_smooth')
+        self.builds_label = widgets.Text('-/- pkgs')
         self.build_rate_label = widgets.Text('- pkgs/hour')
         self.build_time_label = widgets.Text('-:--:--')
         self.build_size_label = widgets.Text('- bytes')
@@ -156,16 +155,16 @@ class PiWheelsMonitor:
         status_box = widgets.AttrMap(
             widgets.Pile([
                 widgets.Columns([
-                    (12, widgets.Pile([
+                    (13, widgets.Pile([
                         widgets.Text('Disk Free'),
-                        widgets.Text('Builds'),
+                        widgets.Text('Build Queue'),
                         widgets.Text('Build Rate'),
                         widgets.Text('Build Time'),
                         widgets.Text('Build Size'),
                     ])),
                     widgets.Pile([
                         self.disk_bar,
-                        self.builds_bar,
+                        self.builds_label,
                         self.build_rate_label,
                         self.build_time_label,
                         self.build_size_label,
@@ -280,12 +279,12 @@ class PiWheelsMonitor:
             A dictionary of various statistics from the master (see
             :class:`BigBrother` for full details).
         """
-        self.builds_bar.set_completion(
-            (status_info['versions_tried'] * 100 /
-             status_info['versions_count'])
-            if status_info['versions_count'] else 0)
         self.disk_bar.set_completion(
             status_info['disk_free'] * 100 / status_info['disk_size'])
+        self.builds_label.set_text(
+            '{} pkg(s)'.format(status_info['versions_count'] -
+                               status_info['versions_tried']
+                               if status_info['versions_count'] else 0))
         self.build_rate_label.set_text(
             '{} pkgs/hour'.format(status_info['builds_last_hour']))
         self.build_size_label.set_text(

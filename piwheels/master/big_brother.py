@@ -78,18 +78,19 @@ class BigBrother(PauseableTask):
             stat = self.fs.statvfs()
             rec = self.db.get_statistics()
             self.status_info1 = self.status_info2 = {
-                'packages_count':   rec.packages_count,
-                'packages_built':   rec.packages_built,
-                'versions_count':   rec.versions_count,
-                'versions_tried':   rec.versions_tried,
-                'builds_count':     rec.builds_count,
-                'builds_last_hour': rec.builds_count_last_hour,
-                'builds_success':   rec.builds_count_success,
-                'builds_time':      rec.builds_time,
-                'builds_size':      rec.builds_size,
-                'files_count':      rec.files_count,
-                'disk_free':        stat.f_frsize * stat.f_bavail,
-                'disk_size':        stat.f_frsize * stat.f_blocks,
+                'packages_count':        rec.packages_count,
+                'packages_built':        rec.packages_built,
+                'versions_count':        rec.versions_count,
+                'versions_tried':        rec.versions_tried,
+                'builds_count':          rec.builds_count,
+                'builds_last_hour':      rec.builds_count_last_hour,
+                'builds_success':        rec.builds_count_success,
+                'builds_time':           rec.builds_time,
+                'builds_size':           rec.builds_size,
+                'files_count':           rec.files_count,
+                'disk_free':             stat.f_frsize * stat.f_bavail,
+                'disk_size':             stat.f_frsize * stat.f_blocks,
+                'downloads_last_month':  rec.downloads_last_month,
             }
 
     def handle_index(self, queue):

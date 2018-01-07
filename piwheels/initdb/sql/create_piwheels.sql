@@ -325,6 +325,11 @@ CREATE VIEW statistics AS
         SELECT COALESCE(SUM(filesize), 0) AS builds_size
         FROM files
         WHERE platform_tag <> 'linux_armv6l'
+    ),
+    download_stats AS (
+        SELECT COUNT(*) AS downloads_last_month
+        FROM downloads
+        WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
     )
     SELECT
         p.packages_count,
@@ -336,7 +341,8 @@ CREATE VIEW statistics AS
         bl.builds_count_last_hour,
         bs.builds_time,
         fc.files_count,
-        fs.builds_size
+        fs.builds_size,
+        dl.downloads_last_month
     FROM
         package_stats p,
         version_stats v,
@@ -345,7 +351,8 @@ CREATE VIEW statistics AS
         build_stats bs,
         build_latest bl,
         file_count fc,
-        file_stats fs;
+        file_stats fs,
+        download_stats dl;
 
 GRANT SELECT ON statistics TO {username};
 
