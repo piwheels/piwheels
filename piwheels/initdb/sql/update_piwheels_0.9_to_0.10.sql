@@ -1,5 +1,10 @@
 UPDATE configuration SET version = '0.10';
 
+GRANT UPDATE ON packages TO {username};
+GRANT UPDATE ON versions TO {username};
+GRANT DELETE ON builds TO {username};
+REVOKE DELETE ON versions FROM {username};
+
 CREATE TABLE downloads (
     filename            VARCHAR(255) NOT NULL,
     accessed_by         INET NOT NULL,

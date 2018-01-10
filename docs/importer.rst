@@ -33,7 +33,7 @@ Description
 
 .. option:: -c FILE, --configuration FILE
 
-    Specify a configuration file to load
+    specify a configuration file to load
 
 .. option:: -q, --quiet
 
@@ -49,40 +49,40 @@ Description
 
 .. option:: --package PACKAGE
 
-    The name of the package to import; if omitted this will be derived from the
+    the name of the package to import; if omitted this will be derived from the
     file(s) specified
 
 .. option:: --package-version VERSION
 
-    The version of the package to import; if omitted this will be derived from
+    the version of the package to import; if omitted this will be derived from
     the file(s) specified
 
 .. option:: --abi ABI
 
-    The ABI of the package to import; if omitted this will be derived from the
+    the ABI of the package to import; if omitted this will be derived from the
     file(s) specified
 
 .. option:: --duration DURATION
 
-    The time taken to build the package (default: 0s)
+    the time taken to build the package (default: 0s)
 
 .. option:: --output FILE
 
-    The filename containing the build output to insert into the database; if
+    the filename containing the build output to insert into the database; if
     this is omitted an appropriate message will be inserted instead
 
 .. option:: -y, --yes
 
-    Run non-interactively; never prompt during operation
+    run non-interactively; never prompt during operation
 
 .. option:: -d, --delete
 
-    Remove the specified file(s) after a successful import; if the import
+    remove the specified file(s) after a successful import; if the import
     fails, no files will be removed
 
 .. option:: --import-queue ADDR
 
-    The address of the queue used by :program:`piw-import` (default:
+    the address of the queue used by :program:`piw-import` (default:
     (ipc:///tmp/piw-import); this should always be an ipc address
 
 
@@ -108,10 +108,12 @@ Mr Chase
 --------
 
 The queue that talks to :ref:`mr-chase` is a ZeroMQ REQ socket, hence the
-protocol follows a strict request-reply sequence which is illustrated below:
+protocol follows a strict request-reply sequence which is illustrated below
+(see :doc:`remove` for documentation of the ``REMOVE`` path):
 
 .. image:: import_protocol.*
     :align: center
+
 
 1. The importer sends ``["IMPORT", abi_tag, package, version, status, duration,
    output, files]``:
@@ -174,7 +176,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
 Usage
 =====
 
-This script is used to import wheels manually into the system. This is useful
+This utility is used to import wheels manually into the system. This is useful
 with packages which have no source available on PyPI, or binary-only packages
 from third parties. If invoked with multiple files, all files will be
 associated with a single "build" and the build will be for the package and

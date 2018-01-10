@@ -2,6 +2,7 @@ digraph slave {
     /* Sent messages */
     node [shape=house, fontname=Sans, fontsize=10, style=filled, fillcolor="#ffaaaa", penwidth=0];
     IMPORT;
+    REMOVE;
     SENT;
 
     /* Received messages */
@@ -13,8 +14,10 @@ digraph slave {
     /* Edges */
     edge [fontname=Sans, fontsize=10];
     IMPORT->SEND [label="[package,\nversion,\nstatus,\n..."];
-    IMPORT->ERROR [label="[message]"];
+    IMPORT->ERROR;
     SEND->SENT;
     SENT->DONE [label="success"];
     SENT->SEND [label="failure/more"];
+    REMOVE->DONE [label="[package,\nversion,\nskip]"];
+    REMOVE->ERROR;
 }

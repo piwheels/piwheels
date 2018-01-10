@@ -78,8 +78,8 @@ class MrChase(PauseableTask):
         """
         Handle requests from :program:`piw-import` instances.
 
-        See the :doc:`import` chapter for an overview of the protocol for
-        messages between the importer and :class:`MrChase`.
+        See the :doc:`importer` and :doc:`remove` chapters for an overview of
+        the protocol for messages between the importer and :class:`MrChase`.
         """
         # pylint: disable=too-many-locals
         try:
@@ -107,20 +107,25 @@ class MrChase(PauseableTask):
                         }
                     )
                     self.states[address] = state
+                elif msg == 'REMOVE':
+                    # No need to store state for the remover
+                    package, version, skip = args
+                    state = (package, version, skip)
                 else:
                     self.logger.error(
-                        'invalid first message from importer: %s', msg)
+                        'invalid first message from client: %s', msg)
                     return
         except ValueError:
-            self.logger.error('invalid message structure from importer')
+            self.logger.error('invalid message structure from client')
 
         try:
             handler = {
                 'IMPORT': self.do_import,
+                'REMOVE': self.do_remove,
                 'SENT': self.do_sent,
             }[msg]
         except KeyError:
-            self.logger.error('invalid message from importer: %s', msg)
+            self.logger.error('invalid message from client: %s', msg)
         else:
             reply = handler(state)
             if reply is not None:
@@ -203,3 +208,21 @@ class MrChase(PauseableTask):
         else:
             self.logger.info('send %s', state.next_file)
             return ['SEND', state.next_file]
+
+    def do_remove(self, state):
+        """
+        Handler for the importer's "REMOVE" message, indicating a request to
+        remove a specific version of a package from the system.
+        """
+        package, version, skip = state
+        if not self.db.test_package_version(package, version):
+            return ['ERROR', 'unknown package version %s-%s' % (
+                package, version)]
+        self.logger.info('removing %s %s', package, version)
+        if skip:
+            self.db.skip_package_version(package, version)
+        for filename in self.db.get_version_files(package, version):
+            self.fs.remove(package, filename)
+        self.db.delete_build(package, version)
+        self.index_queue.send_pyobj(['PKG', package])
+        return ['DONE']

@@ -30,6 +30,7 @@ Table of Contents
     monitor
     initdb
     importer
+    remove
     modules
     license
 

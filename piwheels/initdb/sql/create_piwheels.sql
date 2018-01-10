@@ -33,7 +33,7 @@ CREATE TABLE packages (
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
 
-GRANT SELECT,INSERT ON packages TO {username};
+GRANT SELECT,INSERT,UPDATE ON packages TO {username};
 
 -- versions
 -------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ CREATE TABLE versions (
 
 CREATE INDEX versions_package ON versions(package);
 CREATE INDEX versions_skip ON versions(skip, package);
-GRANT SELECT,INSERT,DELETE ON versions TO {username};
+GRANT SELECT,INSERT,UPDATE ON versions TO {username};
 
 -- build_abis
 -------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
-GRANT SELECT,INSERT ON builds TO {username};
+GRANT SELECT,INSERT,DELETE ON builds TO {username};
 GRANT USAGE ON builds_build_id_seq TO {username};
 
 -- output

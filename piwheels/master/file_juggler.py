@@ -119,6 +119,7 @@ class FileJuggler(Task):
                 'EXPECT': self.do_expect,
                 'VERIFY': self.do_verify,
                 'STATVFS': self.do_statvfs,
+                'REMOVE': self.do_remove,
             }[msg]
             result = handler(*args)
         except Exception as exc:
@@ -175,6 +176,19 @@ class FileJuggler(Task):
         stats on the output file-system.
         """
         return list(os.statvfs(str(self.output_path)))
+
+    def do_remove(self, package, filename):
+        """
+        Message sent by :class:`FsClient` to request that *filename* in
+        *package* should be removed.
+        """
+        path = self.output_path / 'simple' / package / filename
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            self.logger.warning('remove failed (not found): %s', path)
+        else:
+            self.logger.info('removed: %s', path)
 
     def handle_file(self, queue):
         """
@@ -327,3 +341,9 @@ class FsClient:
         See :meth:`FileJuggler.do_statvfs`.
         """
         return os.statvfs_result(self._execute(['STATVFS']))
+
+    def remove(self, package, filename):
+        """
+        See :meth:`FileJuggler.do_remove`.
+        """
+        self._execute(['REMOVE', package, filename])

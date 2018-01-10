@@ -140,6 +140,30 @@ class Database:
             else:
                 return True
 
+    def skip_package(self, package):
+        """
+        Mark a package to prevent future builds of all versions (and all
+        future versions).
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                self._packages.update().
+                where(self._packages.c.package == package),
+                skip=True
+            )
+
+    def skip_package_version(self, package, version):
+        """
+        Mark a version of a package to prevent future build attempts.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                self._versions.update().
+                where(self._versions.c.package == package).
+                where(self._versions.c.version == version),
+                skip=True
+            )
+
     def test_package_version(self, package, version):
         """
         Check whether *version* of *package* already exists in the database.
@@ -353,13 +377,30 @@ class Database:
                 where(self._builds.c.package == package)
             )
 
-    def get_package_versions(self, package):
+    def get_version_files(self, package, version):
         """
-        Returns the set of all known versions of a given package
+        Returns the names of all files for *version* of *package*
         """
         with self._conn.begin():
-            result = self._conn.execute(
-                select([self._versions.c.version]).
-                where(self._versions.c.package == package)
+            return {
+                rec.filename
+                for rec in self._conn.execute(
+                    select([self._files.c.filename]).
+                    select_from(self._builds.join(self._files)).
+                    where(self._builds.c.status).
+                    where(self._builds.c.package == package).
+                    where(self._builds.c.version == version)
+                )
+            }
+
+    def delete_build(self, package, version):
+        """
+        Remove all builds for the specified package and version, along with
+        all files and download records
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                self._builds.delete().
+                where(self._builds.c.package == package).
+                where(self._builds.c.version == version)
             )
-            return {rec.version for rec in result}
