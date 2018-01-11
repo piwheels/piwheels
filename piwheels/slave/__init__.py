@@ -94,20 +94,36 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
 
         self.logger.info('PiWheels Slave version %s', __version__)
         ctx = zmq.Context.instance()
-        queue = ctx.socket(zmq.REQ)
-        queue.hwm = 1
-        queue.ipv6 = True
-        queue.connect('tcp://{master}:5555'.format(
-            master=self.config.master))
+        queue = None
         try:
-            request = ['HELLO', self.config.timeout,
-                       pep425tags.get_impl_ver(),
-                       pep425tags.get_abi_tag(),
-                       pep425tags.get_platform()]
-            while request is not None:
-                queue.send_pyobj(request)
-                reply, *args = queue.recv_pyobj()
-                request = self.handle_reply(reply, *args)
+            while True:
+                queue = ctx.socket(zmq.REQ)
+                queue.hwm = 1
+                queue.ipv6 = True
+                queue.connect('tcp://{master}:5555'.format(
+                    master=self.config.master))
+                request = ['HELLO', self.config.timeout,
+                           pep425tags.get_impl_ver(),
+                           pep425tags.get_abi_tag(),
+                           pep425tags.get_platform()]
+                while request is not None:
+                    queue.send_pyobj(request)
+                    if queue.poll(30000):
+                        reply, *args = queue.recv_pyobj()
+                        request = self.handle_reply(reply, *args)
+                    else:
+                        self.logger.warning('Timed out waiting for master')
+                        if self.builder:
+                            self.logger.warning('Discarding current build')
+                            self.builder.clean()
+                            self.builder = None
+                        self.slave_id = None
+                        queue.close(linger=0)
+                        queue = None
+                        request = None
+                        self.logger.warning('Resetting connection')
+                if queue is not None:
+                    break
         finally:
             queue.send_pyobj(['BYE'])
             ctx.destroy(linger=1000)
