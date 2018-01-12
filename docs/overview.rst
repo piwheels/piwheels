@@ -29,6 +29,9 @@ following components:
 | :doc:`importer` | A tool for importing wheels manually into the     |
 |                 | piwheels database and file-system.                |
 +-----------------+---------------------------------------------------+
+| :doc:`remove`   | A tool for manually removing builds from the      |
+|                 | database and file-system.                         |
++-----------------+---------------------------------------------------+
 | database server | Currently only `PostgreSQL`_ is supported (and    |
 |                 | frankly that's all we're ever likely to support). |
 |                 | This provides the master's data store.            |

@@ -166,6 +166,20 @@ protocol follows a strict request-reply sequence which is illustrated below:
 11. The build slave is now free to destroy all resources associated with the
     build, and returns to step 3 ("IDLE").
 
+If at any point, the master takes more than 60 seconds to respond to a slave's
+request, the slave will assume the master has disappeared. If a build is still
+active, it will be cleaned up and terminated, the connection to the master will
+be closed, the slave's ID will be reset and the slave must restart the protocol
+from the top ("HELLO").
+
+This permits the master to be upgraded or replaced without having to shutdown
+and restart the slaves manually. It is possible that the master is restarted
+too fast for the slave to notice. In this case the slave's next message will be
+mis-interpreted by the master as an invalid initial message, and it will be
+ignored. However, this is acceptable behaviour as the re-connection protocol
+described above will then effectively restart the slave after the 60 second
+timeout has elapsed.
+
 
 .. _file-juggler-protocol:
 
