@@ -38,6 +38,7 @@ entry-point for the :program:`piw-slave` script.
 .. autofunction:: duration
 """
 
+import os
 import sys
 import logging
 from datetime import datetime
@@ -93,6 +94,9 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                                    self.config.log_file)
 
         self.logger.info('PiWheels Slave version %s', __version__)
+        if os.geteuid() == 0:
+            self.logger.error('Slave must not be run as root')
+            return 1
         ctx = zmq.Context.instance()
         queue = None
         try:

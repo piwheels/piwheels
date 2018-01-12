@@ -154,6 +154,9 @@ write access to the output directory.
             logging.Formatter('%(name)s: %(message)s'))
 
         self.logger.info('PiWheels Master version %s', __version__)
+        if os.geteuid() == 0:
+            self.logger.error('Master must not be run as root')
+            return 1
         ctx = zmq.Context.instance()
         self.control_queue = ctx.socket(zmq.PULL)
         self.control_queue.hwm = 10
