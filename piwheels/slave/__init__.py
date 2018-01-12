@@ -108,7 +108,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                            pep425tags.get_platform()]
                 while request is not None:
                     queue.send_pyobj(request)
-                    if queue.poll(30000):
+                    if queue.poll(60000):
                         reply, *args = queue.recv_pyobj()
                         request = self.handle_reply(reply, *args)
                     else:
