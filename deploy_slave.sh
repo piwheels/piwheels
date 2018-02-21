@@ -34,7 +34,10 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     python-boto python3-boto python-gi python3-gi python-gi-cairo \
     python3-gi-cairo python-cairocffi python3-cairocffi \
     ipython ipython3 git tree byobu htop pkg-config gfortran cmake \
-    qt4-qmake qt5-qmake
+    qt4-qmake qt5-qmake libsdl-image1.2-dev libsdl-mixer1.2-dev \
+    libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev libtiff5-dev \
+    libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
+    xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm
 if [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
 fi
