@@ -23,7 +23,7 @@ Usage
 
 `Raspbian Stretch`_ includes configuration for pip to use piwheels by default.
 If you're using an alternate distribution, make sure you have pip v9, and you
-can use piwheels by placing the following lines in ``etc/pip.conf``::
+can use piwheels by placing the following lines in ``/etc/pip.conf``::
 
     [global]
     extra-index-url=https://www.piwheels.hostedpi.com/simple

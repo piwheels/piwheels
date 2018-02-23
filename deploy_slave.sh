@@ -17,9 +17,9 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev libxslt-dev libgmp-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
     libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
-    libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev \
+    libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libcurl4-openssl-dev \
     libgles1-mesa-dev libgstreamer1.0-dev libsdl2-dev libssl-dev libsasl2-dev \
-    libldap2-dev libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+    libldap2-dev libavcodec-dev libavformat-dev libswscale-dev libv4l-dev \
     libxvidcore-dev libx264-dev libgtk2.0-dev libgtk-3-dev libatlas-base-dev \
     python-numpy python3-numpy python-scipy python3-scipy python-matplotlib \
     python3-matplotlib python-pandas python3-pandas cython cython3 \
@@ -34,7 +34,10 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     python-boto python3-boto python-gi python3-gi python-gi-cairo \
     python3-gi-cairo python-cairocffi python3-cairocffi \
     ipython ipython3 git tree byobu htop pkg-config gfortran cmake \
-    qt4-qmake qt5-qmake
+    qt4-qmake qt5-qmake libsdl-image1.2-dev libsdl-mixer1.2-dev \
+    libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev libtiff5-dev \
+    libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
+    xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm
 if [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
 fi
