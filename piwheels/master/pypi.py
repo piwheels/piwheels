@@ -83,7 +83,7 @@ class PyPIEvents:
         # later
         try:
             return self.client.changelog_since_serial(self.serial)
-        except (socket.gaierror, http.client.ImproperConnectionState):
+        except (OSError, http.client.ImproperConnectionState):
             return []
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
