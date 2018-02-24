@@ -83,7 +83,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
     :align: center
 
 1. The new build slave sends ``["HELLO", timeout, py_version_tag, abi_tag,
-   platform_tag]`` where:
+   platform_tag, label]`` where:
 
    * ``timeout`` is the slave's configured timeout (the length of time after
      which it will assume a build has failed and attempt to terminate it)
@@ -94,6 +94,11 @@ protocol follows a strict request-reply sequence which is illustrated below:
    * ``abi_tag`` is the ABI the slave will build for (e.g. "cp35m")
 
    * ``platform_tag`` is the platform of the slave (e.g. "linux_armv7l")
+
+   * ``label`` is an identifying label for the slave (e.g. "slave2"); note
+     that this label doesn't have to be anything specific, it's purely a
+     convenience for administrators displayed in the monitor. In the current
+     implementation this is the unqualified hostname of the slave
 
 2. The master replies with ``["HELLO", slave_id]`` where *slave_id* is an
    integer identifier for the slave. Strictly speaking, the build slave doesn't

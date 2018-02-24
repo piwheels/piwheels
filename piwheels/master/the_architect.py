@@ -55,7 +55,7 @@ class TheArchitect(Task):
         super().__init__(config)
         self.db = Database(config.dsn)
         builds_queue = self.ctx.socket(zmq.REP)
-        builds_queue.hwm = 1
+        builds_queue.hwm = 10
         builds_queue.bind(config.builds_queue)
         self.query = None
         self.timestamp = datetime.utcnow() - timedelta(seconds=30)

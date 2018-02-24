@@ -383,10 +383,11 @@ class SlaveState:
     status_queue = None
 
     def __init__(self, address, timeout, native_py_version, native_abi,
-                 native_platform):
+                 native_platform, label):
         SlaveState.counter += 1
         self._address = address
         self._slave_id = SlaveState.counter
+        self._label = label
         self._timeout = timedelta(seconds=timeout)
         self._native_py_version = native_py_version
         self._native_abi = native_abi
@@ -400,20 +401,26 @@ class SlaveState:
 
     def __repr__(self):
         return (
-            "<SlaveState: id={slave_id}, last_seen={last_seen}, "
-            "last_reply={reply}, {alive}>".format(
+            "<SlaveState: id={slave_id}, label={label}, "
+            "last_seen={last_seen}, last_reply={reply}, {alive}>".format(
                 slave_id=self.slave_id,
+                label=self.label,
                 last_seen=datetime.utcnow() - self.last_seen,
                 reply='none' if self.reply is None else self.reply[0],
-                alive='killed' if self.terminated else 'alive'
+                alive='killed'
+                if self.terminated else 'expired'
+                if self.expired else 'alive'
             )
         )
 
     def hello(self):
         SlaveState.status_queue.send_pyobj(
             [self._slave_id, self._first_seen, 'HELLO',
-             self._native_py_version, self._native_abi, self._native_platform])
+             self._timeout, self._native_py_version, self._native_abi,
+             self._native_platform, self._label])
         if self._reply is not None and self._reply[0] != 'HELLO':
+            # Replay the last reply for the sake of monitors that have just
+            # connected to the master
             SlaveState.status_queue.send_pyobj(
                 [self._slave_id, self._last_seen] + self._reply)
 
@@ -431,6 +438,10 @@ class SlaveState:
     @property
     def slave_id(self):
         return self._slave_id
+
+    @property
+    def label(self):
+        return self._label
 
     @property
     def timeout(self):
@@ -455,6 +466,12 @@ class SlaveState:
     @property
     def last_seen(self):
         return self._last_seen
+
+    @property
+    def expired(self):
+        # There's a fudge factor of 10% here to allow slaves a little extra
+        # time before we expire and forget them
+        return (datetime.utcnow() - self._last_seen) > (self._timeout * 1.1)
 
     @property
     def build(self):

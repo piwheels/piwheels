@@ -41,6 +41,7 @@ entry-point for the :program:`piw-slave` script.
 import os
 import sys
 import logging
+import socket
 from datetime import datetime
 from time import sleep
 from random import randint
@@ -97,12 +98,13 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.error('Slave must not be run as root')
             return 1
+        hostname = socket.gethostname()
         ctx = zmq.Context.instance()
         queue = None
         try:
             while True:
                 queue = ctx.socket(zmq.REQ)
-                queue.hwm = 1
+                queue.hwm = 10
                 queue.ipv6 = True
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
@@ -110,8 +112,10 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                 request = ['HELLO', self.config.timeout,
                            pep425tags.get_impl_ver(),
                            pep425tags.get_abi_tag(),
-                           pep425tags.get_platform()]
+                           pep425tags.get_platform(),
+                           hostname]
                 while request is not None:
+                    systemd.watchdog_ping()
                     queue.send_pyobj(request)
                     if queue.poll(60000):
                         reply, *args = queue.recv_pyobj()
@@ -123,7 +127,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                             self.builder.clean()
                             self.builder = None
                         self.slave_id = None
-                        queue.close(linger=0)
+                        queue.close(linger=1000)
                         queue = None
                         request = None
                         self.logger.warning('Resetting connection')

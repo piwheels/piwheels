@@ -143,6 +143,7 @@ class PiWheelsMonitor:
             widgets.Columns([
                 (2, widgets.Text('S')),
                 (2, widgets.Text('#')),
+                (6, widgets.Text('Label')),
                 (7, widgets.Text('UpTime')),
                 (9, widgets.Text('TaskTime')),
                 (4, widgets.Text('ABI')),
@@ -341,7 +342,6 @@ class PiWheelsMonitor:
         # pylint: disable=unused-argument
         self.close_popup()
         slave = self.slave_list.slaves[self.slave_to_kill]
-        slave.terminated = True
         self.ctrl_queue.send_pyobj(['KILL', self.slave_to_kill])
         self.slave_to_kill = None
 
@@ -441,7 +441,7 @@ class SlaveListWalker(widgets.ListWalker):
         # Remove terminated slaves
         now = datetime.utcnow()
         for slave_id, state in list(self.slaves.items()):
-            if state.terminated and (now - state.last_seen > timedelta(seconds=5)):  # noqa: E501
+            if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
                 self.widgets.remove(state.widget)
                 del self.slaves[slave_id]
         if self.widgets:
@@ -499,11 +499,13 @@ class SlaveState:
         self.slave_id = slave_id
         self.last_msg = ''
         self.py_version = '-'
+        self.timeout = None
         self.abi = '-'
         self.platform = '-'
         self.first_seen = None
         self.last_seen = None
         self.status = ''
+        self.label = ''
 
     def update(self, timestamp, msg, *args):
         """
@@ -523,9 +525,13 @@ class SlaveState:
         if msg == 'HELLO':
             self.status = 'Initializing'
             self.first_seen = timestamp
-            self.py_version = args[0]
-            self.abi = args[1]
-            self.platform = args[2]
+            (
+                self.timeout,
+                self.py_version,
+                self.abi,
+                self.platform,
+                self.label
+            ) = args
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
         elif msg == 'BYE':
@@ -544,12 +550,14 @@ class SlaveState:
         Calculate a simple state indicator for the slave, used to color the
         initial "*" on the entry.
         """
-        if self.last_msg == 'SLEEP':
-            return 'idle'
         if self.last_seen is not None:
-            if datetime.utcnow() - self.last_seen > timedelta(minutes=10):
+            if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
                 return 'silent'
-        return 'busy'
+            elif datetime.utcnow() - self.last_seen > self.timeout:
+                return 'dead'
+        if self.terminated:
+            return 'dead'
+        return 'okay'
 
     @property
     def columns(self):
@@ -561,6 +569,7 @@ class SlaveState:
         return [
             (self.state, '*'),
             ('status', str(self.slave_id)),
+            ('status', self.label),
             ('status', since(self.first_seen)),
             ('status', since(self.last_seen)),
             ('status', self.abi),

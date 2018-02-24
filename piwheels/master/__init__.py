@@ -225,7 +225,8 @@ write access to the output directory.
         poller.register(self.control_queue, zmq.POLLIN)
         poller.register(self.int_status_queue, zmq.POLLIN)
         while True:
-            socks = dict(poller.poll())
+            systemd.watchdog_ping()
+            socks = dict(poller.poll(60000))
             if self.int_status_queue in socks:
                 self.ext_status_queue.send(self.int_status_queue.recv())
             if self.control_queue in socks:

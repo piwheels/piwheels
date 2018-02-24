@@ -47,6 +47,8 @@ from subprocess import Popen, DEVNULL, TimeoutExpired
 from time import time
 from pathlib import Path
 
+from .. import systemd
+
 
 class PiWheelsPackage:
     """
@@ -185,6 +187,10 @@ class PiWheelsPackage:
                         [b'HELLO', str(slave_id).encode('ascii')]
                     )
                     timeout = 5000
+                    # Transfers are generally very fast but if we wind up
+                    # having to restart there's a possibility we'll miss the
+                    # watchdog timer, so ping it each time the poll fails
+                    systemd.watchdog_ping()
                 req, *args = queue.recv_multipart()
                 if req == b'DONE':
                     return
@@ -286,16 +292,23 @@ class PiWheelsBuilder:
                     env=env
                 )
                 # If the build times out attempt to kill it with SIGTERM; if
-                # that hasn't worked after 10 seconds, resort to SIGKILL
-                try:
-                    proc.wait(timeout)
-                except TimeoutExpired:
-                    proc.terminate()
+                # that hasn't worked after 10 seconds, resort to SIGKILL.
+                # Builds frequently exceed the watchdog timeout (2 minutes) so
+                # ping every 60 seconds
+                while True:
+                    systemd.watchdog_ping()
                     try:
-                        proc.wait(10)
+                        proc.wait(60)
                     except TimeoutExpired:
-                        proc.kill()
-                    raise
+                        if time() - start > timeout:
+                            proc.terminate()
+                            try:
+                                proc.wait(10)
+                            except TimeoutExpired:
+                                proc.kill()
+                            raise
+                    else:
+                        break
             except Exception as exc:
                 error = exc
             else:

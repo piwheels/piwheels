@@ -41,7 +41,7 @@ import zmq
 # the unused imports
 # pylint: disable=unused-import
 
-from urwid import (  # noqa: F401
+from urwid import (
     connect_signal,
     AttrMap,
     Button,
@@ -67,27 +67,27 @@ from urwid import (  # noqa: F401
 # pylint: disable=bad-whitespace
 
 PALETTE = [
-    ('idle',        'light red',       'default'),        # noqa: E241
-    ('silent',      'yellow',          'default'),        # noqa: E241
-    ('busy',        'light green',     'default'),        # noqa: E241
-    ('time',        'light gray',      'default'),        # noqa: E241
-    ('status',      'light gray',      'default'),        # noqa: E241
-    ('hotkey',      'light cyan',      'dark blue'),      # noqa: E241
-    ('normal',      'light gray',      'default'),        # noqa: E241
-    ('todo',        'white',           'dark blue'),      # noqa: E241
-    ('done',        'black',           'light gray'),     # noqa: E241
-    ('todo_smooth', 'dark blue',       'light gray'),     # noqa: E241
-    ('header',      'light gray',      'dark blue'),      # noqa: E241
-    ('footer',      'light gray',      'dark blue'),      # noqa: E241
-    ('dialog',      'light gray',      'dark blue'),      # noqa: E241
-    ('button',      'light gray',      'dark blue'),      # noqa: E241
-    ('coltrans',    'dark cyan',       'dark blue'),      # noqa: E241
-    ('colheader',   'black',           'dark cyan'),      # noqa: E241
-    ('inv_dialog',  'dark blue',       'light gray'),     # noqa: E241
-    ('inv_normal',  'black',           'light gray'),     # noqa: E241
-    ('inv_hotkey',  'dark cyan',       'light gray'),     # noqa: E241
-    ('inv_button',  'black',           'light gray'),     # noqa: E241
-    ('inv_status',  'black',           'light gray'),     # noqa: E241
+    ('okay',        'light green',     'default'),
+    ('silent',      'yellow',          'default'),
+    ('dead',        'light red',       'default'),
+    ('time',        'light gray',      'default'),
+    ('status',      'light gray',      'default'),
+    ('hotkey',      'light cyan',      'dark blue'),
+    ('normal',      'light gray',      'default'),
+    ('todo',        'white',           'dark blue'),
+    ('done',        'black',           'light gray'),
+    ('todo_smooth', 'dark blue',       'light gray'),
+    ('header',      'light gray',      'dark blue'),
+    ('footer',      'light gray',      'dark blue'),
+    ('dialog',      'light gray',      'dark blue'),
+    ('button',      'light gray',      'dark blue'),
+    ('coltrans',    'dark cyan',       'dark blue'),
+    ('colheader',   'black',           'dark cyan'),
+    ('inv_dialog',  'dark blue',       'light gray'),
+    ('inv_normal',  'black',           'light gray'),
+    ('inv_hotkey',  'dark cyan',       'light gray'),
+    ('inv_button',  'black',           'light gray'),
+    ('inv_status',  'black',           'light gray'),
 ]
 
 
@@ -315,8 +315,8 @@ class YesNoDialog(WidgetWrap):
                     ('pack', Text(message)),
                     Filler(
                         Columns([
-                            ('pack', AttrMap(yes_button, 'button', 'inv_button')),  # noqa: E501
-                            ('pack', AttrMap(no_button, 'button', 'inv_button')),   # noqa: E501
+                            ('pack', AttrMap(yes_button, 'button', 'inv_button')),
+                            ('pack', AttrMap(no_button, 'button', 'inv_button')),
                         ], dividechars=2),
                         valign='bottom'
                     )

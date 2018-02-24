@@ -246,7 +246,7 @@ class IndexScribe(PauseableTask):
                             tag.h1('Links for {}'.format(package)),
                             ((tag.a(
                                 f.filename,
-                                href='{f.filename}#sha256={f.filehash}'.format(f=f),  # noqa: E501
+                                href='{f.filename}#sha256={f.filehash}'.format(f=f),
                                 rel='internal'), tag.br())
                              for f in files)
                         )
@@ -279,7 +279,7 @@ class IndexScribe(PauseableTask):
                     # canonicalized symlink? We (and TransferState.commit)
                     # handle that by removing the symlink and making a
                     # directory in its place.
-                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))  # noqa: E501
+                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
                     canon_dir.symlink_to(pkg_dir.name)
                 except FileExistsError:
                     pass

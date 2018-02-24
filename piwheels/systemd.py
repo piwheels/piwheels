@@ -46,7 +46,9 @@ Provides a simple interface to systemd's notification and watchdog services.
 
 .. autofunction:: watchdog_reset
 
-.. autofunction:: watchdog_enabled
+.. autofunction:: watchdog_period
+
+.. autofunction:: watchdog_clean
 
 .. autofunction:: main_pid
 """
@@ -59,9 +61,12 @@ def _init_socket():
     # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
     addr = os.environ.pop('NOTIFY_SOCKET', None)
     if addr is not None:
+        if len(addr) <= 1 or addr[0] not in ('@', '/'):
+            return None
         if addr[0] == '@':
             addr = '\0' + addr[1:] # abstract namespace socket
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        s = socket.socket(socket.AF_UNIX,
+                          socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
         try:
             s.connect(addr)
         except IOError:
@@ -152,7 +157,7 @@ def extend_timeout(timeout):
 def watchdog_ping():
     """
     Ping the systemd watchdog. This must be done periodically if
-    :func:`watchdog_enabled` returns True.
+    :func:`watchdog_period` returns a value other than ``None``.
     """
     notify(b'WATCHDOG=1')
 
@@ -164,27 +169,35 @@ def watchdog_reset(timeout):
     notify('WATCHDOG_USEC=%d' % int(timeout * 1000000))
 
 
-def watchdog_enabled(*, unset_environment=False):
+def watchdog_period():
     """
     Returns the time (in seconds) before which systemd expects the process
     to call :func:`watchdog_ping`. If a watchdog timeout is not set, the
     function returns ``None``.
-
-    If *unset_environment* is ``True``, the watchdog environment variables
-    will be unset (so no future child processes will inherit them). Subsequent
-    calls to this function will return ``None`` in this case.
     """
-    try:
-        timeout = os.environ.get('WATCHDOG_USEC')
-        if timeout is not None:
-            pid = os.environ.get('WATCHDOG_PID')
-            if pid is None or pid == os.getpid():
-                return timeout / 1000000
-        return None
-    finally:
-        if unset_environment:
-            os.environ.pop('WATCHDOG_USEC', None)
-            os.environ.pop('WATCHDOG_PID', None)
+    timeout = os.environ.get('WATCHDOG_USEC')
+    if timeout is not None:
+        pid = os.environ.get('WATCHDOG_PID')
+        if pid is None or pid == os.getpid():
+            return timeout / 1000000
+    return None
+
+
+def watchdog_clean():
+    """
+    Unsets the watchdog environment variables so that no future child processes
+    will inherit them.
+
+    .. warning::
+
+        After calling this function, :func:`watchdog_period` will return
+        ``None`` but systemd will continue expecting :func:`watchdog_ping` to
+        be called periodically. In other words, you should call
+        :func:`watchdog_period` first and store its result somewhere before
+        calling this function.
+    """
+    os.environ.pop('WATCHDOG_USEC', None)
+    os.environ.pop('WATCHDOG_PID', None)
 
 
 def main_pid(pid=None):
