@@ -66,14 +66,15 @@ class BigBrother(PauseableTask):
         self.register(index_queue, self.handle_index, zmq.POLLOUT)
         self.fs = FsClient(config)
         self.db = DbClient(config)
-        self.timestamp = datetime.utcnow() - timedelta(seconds=30)
+        self.timestamp = datetime.utcnow() - timedelta(seconds=60)
         self.status_info1 = None
         self.status_info2 = None
+        self.search_index = None
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
-        # every 30 seconds (at most)
-        if datetime.utcnow() - self.timestamp > timedelta(seconds=30):
+        # every minute (at most)
+        if datetime.utcnow() - self.timestamp > timedelta(seconds=60):
             self.timestamp = datetime.utcnow()
             stat = self.fs.statvfs()
             rec = self.db.get_statistics()
@@ -92,6 +93,11 @@ class BigBrother(PauseableTask):
                 'disk_size':             stat.f_frsize * stat.f_blocks,
                 'downloads_last_month':  rec.downloads_last_month,
             }
+            rec = self.db.get_downloads_recent()
+            self.search_index = [
+                (name, count)
+                for name, count in rec.items()
+            ]
 
     def handle_index(self, queue):
         """
@@ -102,6 +108,9 @@ class BigBrother(PauseableTask):
         if self.status_info1 is not None:
             queue.send_pyobj(['HOME', self.status_info1])
             self.status_info1 = None
+        elif self.search_index is not None:
+            queue.send_pyobj(['SEARCH', self.search_index])
+            self.search_index = None
 
     def handle_status(self, queue):
         """

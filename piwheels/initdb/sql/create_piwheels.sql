@@ -356,4 +356,29 @@ CREATE VIEW statistics AS
 
 GRANT SELECT ON statistics TO {username};
 
+-- downloads_recent
+-------------------------------------------------------------------------------
+-- The "downloads_recent" view lists all non-skipped packages, along with their
+-- download count for the last month. This is used as the basis of the package
+-- search index.
+-------------------------------------------------------------------------------
+
+CREATE VIEW downloads_recent AS
+SELECT
+    p.package,
+    COUNT(*) AS downloads
+FROM
+    packages AS p
+    LEFT JOIN (
+        builds AS b
+        JOIN files AS f ON b.build_id = f.build_id
+        JOIN downloads AS d ON d.filename = f.filename
+    ) ON p.package = b.package
+WHERE
+    d.accessed_at IS NULL
+    OR d.accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
+GROUP BY p.package;
+
+GRANT SELECT ON downloads_recent TO {username};
+
 COMMIT;

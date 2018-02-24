@@ -100,6 +100,7 @@ class TheOracle(Task):
                 'GETPYPI': self.do_getpypi,
                 'SETPYPI': self.do_setpypi,
                 'GETSTATS': self.do_getstats,
+                'GETDL': self.do_getdl,
             }[msg]
             result = handler(*args)
         except Exception as exc:
@@ -228,6 +229,14 @@ class TheOracle(Task):
         """
         return self.db.get_statistics().items()
 
+    def do_getdl(self):
+        """
+        Handler for "GETDL" message, sent by :class:`DdbClient` to request
+        the recent download statistics, returned as a list of (name, count)
+        tuples.
+        """
+        return self.db.get_downloads_recent()
+
 
 class DbClient:
     """
@@ -352,3 +361,9 @@ class DbClient:
             DbClient.stats_type = namedtuple('Statistics',
                                              tuple(k for k, v in rec))
         return DbClient.stats_type(**{k: v for k, v in rec})
+
+    def get_downloads_recent(self):
+        """
+        See :meth:`.db.Database.get_downloads_recent`.
+        """
+        return self._execute(['GETDL'])
