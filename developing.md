@@ -61,7 +61,7 @@ Set up a vhost by editing `/etc/apache2/sites-available/000-default.conf`, for e
 
 ```
 <VirtualHost *:80>
-	ServerName www.piwheels.hostedpi.com
+	ServerName www.piwheels.org
 	ServerAdmin webmaster@localhost
 	DocumentRoot /home/piwheels/www
 

@@ -107,6 +107,8 @@ class Database:
             self._builds_pending = Table('builds_pending', self._meta,
                                          autoload=True)
             self._statistics = Table('statistics', self._meta, autoload=True)
+            self._downloads_recent = Table('downloads_recent', self._meta,
+                                           autoload=True)
 
     def add_new_package(self, package):
         """
@@ -333,6 +335,17 @@ class Database:
         with self._conn.begin():
             for rec in self._conn.execute(self._statistics.select()):
                 return rec
+
+    def get_downloads_recent(self):
+        """
+        Return a mapping of all packages to their download count for the last
+        month. This is used to construct the searchable package index.
+        """
+        with self._conn.begin():
+            return {
+                rec.package: rec.downloads
+                for rec in self._conn.execute(self._downloads_recent.select())
+            }
 
     def get_build(self, build_id):
         """

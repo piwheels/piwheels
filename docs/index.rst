@@ -42,6 +42,6 @@ Indexes and Tables
 * :ref:`search`
 
 
-.. _piwheels homepage: https://www.piwheels.hostedpi.com/
+.. _piwheels homepage: https://www.piwheels.org/
 .. _piwheels code: https://github.com/bennuttall/piwheels
 .. _issue tracker: https://github.com/bennuttall/piwheels/issues

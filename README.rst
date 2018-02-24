@@ -9,13 +9,13 @@ This repository contains the source code for building armv6 and armv7 wheels
 for packages found on `PyPI`_, and the project's future will be discussed in
 `GitHub issues`_.
 
-The piwheels service is hosted at `www.piwheels.hostedpi.com`_.
+The piwheels service is hosted at `www.piwheels.org`_.
 
 .. _wheels: https://packaging.python.org/wheel_egg/
 .. _Raspberry Pi: https://www.raspberrypi.org/
 .. _PyPI: https://pypi.python.org/pypi
 .. _GitHub issues: https://github.com/bennuttall/piwheels/issues
-.. _www.piwheels.hostedpi.com: https://www.piwheels.hostedpi.com/
+.. _www.piwheels.org: https://www.piwheels.org/
 
 
 Usage
@@ -26,20 +26,20 @@ If you're using an alternate distribution, make sure you have pip v9, and you
 can use piwheels by placing the following lines in ``/etc/pip.conf``::
 
     [global]
-    extra-index-url=https://www.piwheels.hostedpi.com/simple
+    extra-index-url=https://www.piwheels.org/simple
 
 Alternatively, install from piwheels explicitly with ``-i`` or
 ``--index-url``::
 
-    sudo pip3 install numpy -i https://www.piwheels.hostedpi.com/simple
+    sudo pip3 install numpy -i https://www.piwheels.org/simple
 
 or ::
 
-    sudo pip3 install numpy --index-url https://www.piwheels.hostedpi.com/simple
+    sudo pip3 install numpy --index-url https://www.piwheels.org/simple
 
 Or as an additional index::
 
-    sudo pip3 install numpy --extra-index-url https://www.piwheels.hostedpi.com/simple
+    sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple
 
 .. _Raspbian Stretch: https://www.raspberrypi.org/downloads/raspbian/
 

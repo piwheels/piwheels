@@ -1,56 +1,56 @@
 body {
   font-family: "Roboto", sans;
-  color: #222;
-  max-width: 50em;
-  margin: 0 auto;
 }
-h1 {
-  background:
-    url('raspberry-pi-logo.svg') no-repeat top 8px right / 20%,
-    url('python-logo.svg') no-repeat bottom left 8px / 20%,
-    linear-gradient(60deg, #15bcac, #c51a4a);
+
+header { margin-bottom: 2em; }
+header .logo {
+  background: url('piwheels-logo.opt.svg') no-repeat;
+  width: 75px;
+  height: 75px;
+  display: inline-block;
+  vertical-align: middle;
+}
+/* Oh the silly things you can do with CSS these days... */
+header .logo:hover {
+  animation: 1s ease 0s 1 normal spin;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-720deg); }
+}
+header h1 {
   color: white;
-  text-align: center;
-  padding: 1em;
-  margin: 0;
-  border-bottom: 4px solid black;
+  display: inline;
 }
-h2 {
-  margin: 0;
-  padding: 1em 0 0 0;
-  color: #77777a;
+header div.top-bar, header div.top-bar ul { background: #444; }
+header .menu-text a { padding: 0; }
+
+footer .row {
+  background: #99999b url('mythic_beasts_logo.png') no-repeat 98% 50%;
+  margin-top: 2em;
+  padding-top: 1em;
+  padding-right: 250px;
+  border-top: 2px solid #77777a;
+  min-height: 140px;
 }
-#faq h3 {
-  margin-bottom: 0;
-}
-#faq h4 {
-  color: #77777a;
-  margin-bottom: 0;
-}
-p {
-  margin: 0;
-  padding: 0 0 0.25em 0;
-  text-align: justify;
+footer p {
   font-size: 11pt;
 }
-ul li, ol li {
-  font-size: 11pt;
-}
-a {
-  color: #222;
-  text-decoration: underline;
-}
-table {
+
+h2 { color: #77777a; }
+p { text-align: justify; }
+a { color: #222; text-decoration: underline; }
+
+table.stats {
+  border-collapse: separate;
+  border-radius: 5px;
   background: #8addd5;
   border: 2px solid #15bcac;
-  border-radius: 5px;
-  margin: 1em 2em;
-  padding: 1em;
+  padding: 0.5em;
 }
-th, td {
-  text-align: left;
-  font-size: 11pt;
-}
+table.stats tbody, table.stats tbody tr { background: transparent; }
+table.stats th, table.stats td { text-align: left; padding: 0.25em; }
+
 pre {
   background: #ffdead;
   border: 2px solid #ffbd5c;
@@ -59,3 +59,18 @@ pre {
   padding: 1em;
 }
 
+#faq h3 {
+  font-size: 125%;
+  color: #77777a;
+}
+#faq a.accordion-title {
+  background-color: #e6e6e6;
+  color: #14679e;
+  font-size: 100%;
+  text-decoration: none;
+}
+#faq a.accordion-title:hover { background-color: #d6d6d6; }
+
+#status {
+  font-weight: bold;
+}

@@ -1,0 +1,118 @@
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>piwheels - Home</title>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/css/foundation-float.min.css">
+    <link rel="stylesheet" href="styles.css" type="text/css"/>
+  </head>
+  <body>
+    <header>
+      <div class="row">
+        <div class="title-bar" data-responsive-toggle="nav-menu" data-hide-for="medium">
+          <button class="menu-icon" type="button" data-toggle="nav-menu"></button>
+          <div class="title-bar-title">Menu</div>
+        </div>
+
+        <div class="top-bar" id="nav-menu">
+          <div class="top-bar-left">
+            <ul class="menu">
+              <li class="menu-text">
+                <a href="index.html">
+                  <div class="logo"></div>
+                  <h1>piwheels</h1>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="top-bar-right">
+            <ul class="menu">
+              <li><a class="button" href="packages.html">Package List</a></li>
+              <li><a class="button" href="faq.html">FAQ</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="row">
+      <div class="small-12 medium-8 columns">
+        <h2>Python Wheels for the Raspberry Pi</h2>
+
+        <p>piwheels is a <a href="https://python.org">Python</a> package
+        repository providing ARM platform <a href="http://pythonwheels.com/">wheels</a>
+        (pre-compiled binary Python packages) specifically for the
+        <a href="https://raspberrypi.org">Raspberry Pi</a>.  Packages are
+        natively compiled on Raspberry Pi 3 hardware using the
+        <a href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts Pi cloud</a>.</p>
+      </div>
+
+      <div class="small-12 medium-4 columns">
+        <table class="stats">
+          <tr><th>Packages</th><td>{packages_built:n}</td></tr>
+          <tr><th>Wheels</th><td>{files_count:n}</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td>{downloads_last_month:n}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="small-12 columns">
+        <h2>Configuration</h2>
+
+        <p><a href="https://www.raspberrypi.org/downloads/raspbian/">Raspbian
+          Stretch</a> includes configuration for <code>pip</code> to use piwheels
+        by default. If you're using an alternate distribution (or an older
+        version of Raspbian), you can use piwheels by placing the following
+        lines in <code>/etc/pip.conf</code>:</p>
+
+        <pre>[global]
+extra-index-url=https://www.piwheels.org/simple</pre>
+
+        <p>That's it! With this simple configuration change, <code>pip</code>
+        should now search piwheels for built distributions of packages and use
+        them in preference to building from source. You can test this out by
+        creating a virtual environment and attempting to install <a
+        href="https://numpy.org/">numpy</a> which usually involves a fairly
+        lengthy compilation:</p>
+
+        <pre>$ sudo apt install virtualenv python3-virtualenv -y
+$ virtualenv -p /usr/bin/python3 testpip
+$ source testpip/bin/activate
+(testpip) $ pip install numpy
+...
+(testpip) $ deactivate
+$ rm -fr testpip/</pre>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="small-12 columns">
+        <h2>Support</h2>
+
+        <p>Wheels provided support all Raspberry Pi models (Pi 3, Pi 2, Pi 1 and Pi
+        Zero). Wheels are provided for Python 3.4 and 3.5. We plan to add support for
+        Python 3.6 and 2.7.</p>
+      </div>
+    </div>
+
+    <footer>
+      <div class="row">
+        <div class="small-12 columns">
+          <p>piwheels is a community project by <a
+          href="https://github.com/bennuttall">Ben Nuttall</a> and <a
+          href="https://github.com/waveform80">Dave Jones</a>. Hosting is kindly donated by
+          <a href="https://www.mythic-beasts.com/">Mythic Beasts</a>. Project <a
+           href="https://github.com/bennuttall/piwheels">source code</a> is available from GitHub.</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="//code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/what-input/4.2.0/what-input.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/js/foundation.min.js"></script>
+    <script>$(document).foundation();</script>
+  </body>
+</html>

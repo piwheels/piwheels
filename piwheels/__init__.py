@@ -54,11 +54,11 @@ defined:
 # flake8: noqa
 
 __project__      = 'piwheels'
-__version__      = '0.10'
+__version__      = '0.11'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'
-__url__          = 'https://www.piwheels.hostedpi.com/'
+__url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
 __requires__ = ['configargparse', 'pyzmq']

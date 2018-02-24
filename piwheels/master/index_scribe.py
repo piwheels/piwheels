@@ -35,6 +35,7 @@ Defines the :class:`IndexScribe` task; see class for more details.
 
 import re
 import os
+import json
 import tempfile
 from pathlib import Path
 
@@ -67,7 +68,7 @@ class IndexScribe(PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.homepage_template = resource_string(
-            __name__, 'index.template.html').decode('utf-8')
+            __name__, 'static/index.html').decode('utf-8')
         self.output_path = Path(config.output_path)
         index_queue = self.ctx.socket(zmq.PULL)
         index_queue.hwm = 100
@@ -92,6 +93,9 @@ class IndexScribe(PauseableTask):
         except FileExistsError:
             pass
         for filename in resource_listdir(__name__, 'static'):
+            if filename == 'index.html':
+                # Skip template
+                continue
             with (self.output_path / filename).open('wb') as f:
                 source = resource_stream(__name__, 'static/' + filename)
                 f.write(source.read())
@@ -131,6 +135,9 @@ class IndexScribe(PauseableTask):
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
+        elif msg == 'SEARCH':
+            search_index = args[0]
+            self.write_search_index(search_index)
         else:
             self.logger.error('invalid index_queue message: %s', msg)
 
@@ -144,6 +151,7 @@ class IndexScribe(PauseableTask):
         """
         self.logger.info('writing homepage')
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
+                                         encoding='utf-8',
                                          delete=False) as index:
             try:
                 index.file.write(self.homepage_template.format(**status_info))
@@ -154,6 +162,28 @@ class IndexScribe(PauseableTask):
                 os.fchmod(index.file.fileno(), 0o664)
                 os.replace(index.name, str(self.output_path / 'index.html'))
 
+    def write_search_index(self, search_index):
+        """
+        Re-writes the JSON search index using the provided statistics.
+
+        :param dict search_index:
+            A dict mapping package names to their download count obtained by
+            :class:`BigBrother`.
+        """
+        self.logger.info('writing search index')
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
+                                         encoding='utf-8',
+                                         delete=False) as index:
+            try:
+                json.dump(search_index, index,
+                          check_circular=False, separators=(',', ':'))
+            except BaseException:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o664)
+                os.replace(index.name, str(self.output_path / 'packages.json'))
+
     def write_root_index(self):
         """
         (Re)writes the index of all packages. This is implicitly called when a
@@ -163,6 +193,7 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing package index')
         temp_dir = self.output_path / 'simple'
         with tempfile.NamedTemporaryFile(mode='w', dir=str(temp_dir),
+                                         encoding='utf-8',
                                          delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
@@ -202,6 +233,7 @@ class IndexScribe(PauseableTask):
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
         with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
+                                         encoding='utf-8',
                                          delete=False) as index:
             try:
                 index.file.write('<!DOCTYPE html>\n')
