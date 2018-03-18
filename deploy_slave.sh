@@ -56,6 +56,8 @@ else
   git clone https://github.com/bennuttall/piwheels
   cd piwheels
 fi
+cp piwheels-slave.service /etc/systemd/system/
+systemctl enable piwheels-slave.service
 pip3 install .
 if ! grep swapfile /etc/rc.local >/dev/null; then
     dd if=/dev/zero of=/swapfile bs=1M count=1024

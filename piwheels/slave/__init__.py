@@ -49,7 +49,7 @@ import zmq
 import dateutil.parser
 from wheel import pep425tags
 
-from .. import __version__, terminal
+from .. import __version__, terminal, systemd
 from .builder import PiWheelsBuilder
 
 
@@ -106,6 +106,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                 queue.ipv6 = True
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
+                systemd.ready()
                 request = ['HELLO', self.config.timeout,
                            pep425tags.get_impl_ver(),
                            pep425tags.get_abi_tag(),
@@ -128,7 +129,9 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                         self.logger.warning('Resetting connection')
                 if queue is not None:
                     break
+                systemd.reloading()
         finally:
+            systemd.stopping()
             queue.send_pyobj(['BYE'])
             ctx.destroy(linger=1000)
             ctx.term()

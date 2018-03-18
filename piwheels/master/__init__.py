@@ -45,7 +45,7 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const
+from .. import __version__, terminal, const, systemd
 from .tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
@@ -194,6 +194,7 @@ write access to the output directory.
         self.logger.info('started all tasks')
         signal.signal(signal.SIGTERM, sig_term)
         try:
+            systemd.ready()
             self.main_loop()
         except TaskQuit:
             pass
@@ -202,10 +203,12 @@ write access to the output directory.
         except KeyboardInterrupt:
             self.logger.warning('shutting down on Ctrl+C')
         finally:
+            systemd.stopping()
             self.logger.info('stopping tasks')
             for task in reversed(self.tasks):
                 task.quit()
                 task.join()
+                systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
             ctx.destroy(linger=1000)
             ctx.term()
