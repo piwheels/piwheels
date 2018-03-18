@@ -6,10 +6,8 @@ After=local-fs.target network.target
 Type=notify
 Restart=on-failure
 User=piwheels
-WorkingDirectory=~
 NoNewPrivileges=true
 ExecStart=/usr/local/bin/piw-master -v
 
 [Install]
 WantedBy=multi-user.target
-

@@ -6,7 +6,6 @@ After=local-fs.target network.target
 Type=notify
 Restart=on-failure
 User=piwheels
-WorkingDirectory=~
 PrivateTmp=true
 NoNewPrivileges=true
 ExecStart=/usr/local/bin/piw-slave -v
