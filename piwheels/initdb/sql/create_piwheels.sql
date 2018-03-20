@@ -15,7 +15,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.10');
+INSERT INTO configuration(id, version) VALUES (1, '0.12');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
@@ -196,6 +196,31 @@ CREATE TABLE downloads (
 CREATE INDEX downloads_files ON downloads(filename);
 CREATE INDEX downloads_accessed_at ON downloads(accessed_at DESC);
 GRANT SELECT,INSERT ON downloads TO {username};
+
+-- searches
+-------------------------------------------------------------------------------
+-- The "searches" table tracks the searches made against piwheels by users.
+-------------------------------------------------------------------------------
+
+CREATE TABLE searches (
+    package             VARCHAR(200) NOT NULL,
+    accessed_by         INET NOT NULL,
+    accessed_at         TIMESTAMP NOT NULL,
+    arch                VARCHAR(100) DEFAULT NULL,
+    distro_name         VARCHAR(100) DEFAULT NULL,
+    distro_version      VARCHAR(100) DEFAULT NULL,
+    os_name             VARCHAR(100) DEFAULT NULL,
+    os_version          VARCHAR(100) DEFAULT NULL,
+    py_name             VARCHAR(100) DEFAULT NULL,
+    py_version          VARCHAR(100) DEFAULT NULL,
+
+    CONSTRAINT packages_package_fk FOREIGN KEY (package)
+        REFERENCES packages (package) ON DELETE CASCADE
+);
+
+CREATE INDEX searches_package ON searches(package);
+CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
+GRANT SELECT,INSERT ON searches TO {username};
 
 -- builds_pending
 -------------------------------------------------------------------------------
