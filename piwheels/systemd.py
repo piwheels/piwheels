@@ -56,7 +56,8 @@ import socket
 
 
 def _init_socket():
-    addr = os.environ.get('NOTIFY_SOCKET')
+    # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
+    addr = os.environ.pop('NOTIFY_SOCKET', None)
     if addr is not None:
         if addr[0] == '@':
             addr = '\0' + addr[1:] # abstract namespace socket
