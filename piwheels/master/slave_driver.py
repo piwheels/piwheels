@@ -346,7 +346,8 @@ def build_armv6l_hack(build):
         if file.platform_tag == 'linux_armv7l':
             arm7_name = file.filename
             arm6_name = arm7_name[:-16] + 'linux_armv6l.whl'
-            build.files[arm6_name] = FileState(
-                arm6_name, file.filesize, file.filehash, file.package_tag,
-                file.package_version_tag, file.py_version_tag, file.abi_tag,
-                'linux_armv6l', True)
+            if arm6_name not in build.files:
+                build.files[arm6_name] = FileState(
+                    arm6_name, file.filesize, file.filehash, file.package_tag,
+                    file.package_version_tag, file.py_version_tag,
+                    file.abi_tag, 'linux_armv6l', True)
