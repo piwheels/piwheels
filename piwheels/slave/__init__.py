@@ -43,7 +43,7 @@ import sys
 import logging
 import socket
 from datetime import datetime
-from time import sleep
+from time import time, sleep
 from random import randint
 
 import zmq
@@ -52,6 +52,12 @@ from wheel import pep425tags
 
 from .. import __version__, terminal, systemd
 from .builder import PiWheelsBuilder
+
+
+class MasterTimeout(IOError):
+    """
+    Exception raised when the master fails to respond before a timeout.
+    """
 
 
 class PiWheelsSlave:
@@ -66,6 +72,7 @@ class PiWheelsSlave:
     """
     def __init__(self):
         self.logger = logging.getLogger('slave')
+        self.label = socket.gethostname()
         self.config = None
         self.slave_id = None
         self.builder = None
@@ -98,7 +105,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.error('Slave must not be run as root')
             return 1
-        hostname = socket.gethostname()
         ctx = zmq.Context.instance()
         queue = None
         try:
@@ -109,31 +115,12 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
                 systemd.ready()
-                request = ['HELLO', self.config.timeout,
-                           pep425tags.get_impl_ver(),
-                           pep425tags.get_abi_tag(),
-                           pep425tags.get_platform(),
-                           hostname]
-                while request is not None:
-                    systemd.watchdog_ping()
-                    queue.send_pyobj(request)
-                    if queue.poll(60000):
-                        reply, *args = queue.recv_pyobj()
-                        request = self.handle_reply(reply, *args)
-                    else:
-                        self.logger.warning('Timed out waiting for master')
-                        if self.builder:
-                            self.logger.warning('Discarding current build')
-                            self.builder.clean()
-                            self.builder = None
-                        self.slave_id = None
-                        queue.close(linger=1000)
-                        queue = None
-                        request = None
-                        self.logger.warning('Resetting connection')
-                if queue is not None:
-                    break
-                systemd.reloading()
+                try:
+                    self.main_loop(queue)
+                except MasterTimeout:
+                    systemd.reloading()
+                    self.logger.warning('Resetting connection')
+                    queue.close(linger=1000)
         finally:
             systemd.stopping()
             queue.send_pyobj(['BYE'])
@@ -151,6 +138,36 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
     # carry on running even if a build slave goes bat-shit crazy and starts
     # sending nonsense (in which case it should calmly ignore it and/or attempt
     # to kill said slave with a "BYE" message).
+
+    def main_loop(self, queue, timeout=300):
+        """
+        The main messaging loop. Sends the initial request, and dispatches
+        replies via :meth:`handle_reply`. Implements a *timeout* for responses
+        from the master and raises :exc:`MasterTimeout` if *timeout* seconds
+        are exceeded.
+        """
+        request = ['HELLO', self.config.timeout,
+                   pep425tags.get_impl_ver(),
+                   pep425tags.get_abi_tag(),
+                   pep425tags.get_platform(),
+                   self.label]
+        while True:
+            queue.send_pyobj(request)
+            start = time()
+            while True:
+                systemd.watchdog_ping()
+                if queue.poll(60000):
+                    reply, *args = queue.recv_pyobj()
+                    request = self.handle_reply(reply, *args)
+                    break
+                elif time() - start > timeout:
+                    self.logger.warning('Timed out waiting for master')
+                    if self.builder:
+                        self.logger.warning('Discarding current build')
+                        self.builder.clean()
+                        self.builder = None
+                    self.slave_id = None
+                    raise MasterTimeout()
 
     def handle_reply(self, reply, *args):
         """
@@ -256,14 +273,14 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
     def do_bye(self):
         """
         The master may respond with "BYE" at any time indicating we should
-        immediately terminate (first cleaning up any extant build). We return
-        ``None`` to tell the main loop to quit.
+        immediately terminate (first cleaning up any extant build). We raise
+        :exc:`SystemExit` to cause :meth:`main_loop` to exit.
         """
         self.logger.warning('Master requested termination')
         if self.builder is not None:
             self.logger.info('Removing temporary build directories')
             self.builder.clean()
-        return None
+        raise SystemExit(0)
 
 
 def duration(s):
