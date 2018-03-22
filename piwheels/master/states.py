@@ -622,6 +622,9 @@ class TransferState:
         pkg_dir = tmp_file.with_name(package)
         mkdir_override_symlink(pkg_dir)
         final_name = pkg_dir / self._file_state.filename
+        # rename() will replace any existing file *or* symlink. This means in
+        # the case of an actual armv6 build being uploaded, it will (rightly)
+        # clobber any symlink currently in place
         tmp_file.rename(final_name)
         if self._file_state.platform_tag == 'linux_armv7l':
             # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name;
@@ -631,6 +634,10 @@ class TransferState:
             try:
                 arm6_name.symlink_to(final_name.name)
             except FileExistsError:
+                # If the symlink already exists, or if a file with the same
+                # name already exists, ignore the error. In particular, if an
+                # actual file exists (a specific armv6 build) we must NOT
+                # overwrite it
                 pass
         self._file_state.verified()
 
