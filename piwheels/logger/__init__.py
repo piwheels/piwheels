@@ -82,6 +82,11 @@ as the piw-master script.
         '--logger-queue', metavar='ADDR', default=const.LOGGER_QUEUE,
         help="The address of the queue used by piw-logger (default: "
         "(%(default)s); this should always be an ipc address")
+    parser.add_argument(
+        '--drop', action='store_true',
+        help="Drop log records if unable to send them to the master after a "
+        "short timeout; this should generally be specified when piw-logger "
+        "is used as a piped log script")
     try:
         config = parser.parse_args(args)
         terminal.configure_logging(config.log_level, config.log_file)
@@ -102,7 +107,10 @@ as the piw-master script.
                     with ApacheSource(log_file, config.format) as src:
                         for row in src:
                             if log_filter(row):
-                                queue.send_pyobj(['LOG'] + log_transform(row))
+                                if not config.drop or queue.poll(1000, zmq.POLLOUT):
+                                    queue.send_pyobj(['LOG'] + log_transform(row))
+                                else:
+                                    logging.warning('dropping log entry')
                 finally:
                     log_file.close()
         finally:
