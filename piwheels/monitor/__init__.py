@@ -550,7 +550,7 @@ class SlaveState:
         Calculate a simple state indicator for the slave, used to color the
         initial "*" on the entry.
         """
-        if self.last_seen is not None:
+        if self.first_seen is not None:
             if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
                 return 'silent'
             elif datetime.utcnow() - self.last_seen > self.timeout:
