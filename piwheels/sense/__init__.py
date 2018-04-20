@@ -322,3 +322,8 @@ class SlaveState:
             ('status', self.status),
         ]
 
+
+main = PiWheelsSense()  # pylint: disable=invalid-name
+
+if __name__ == '__main__':
+    main()
