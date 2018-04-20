@@ -42,7 +42,6 @@ master.
 
 import logging
 from threading import Thread
-from collections import OrderedDict
 
 import zmq
 
@@ -67,9 +66,7 @@ class Task(Thread):
     def __init__(self, config):
         super().__init__()
         self.ctx = zmq.Context.instance()
-        # Use an ordered dictionary to ensure the control queue is always
-        # checked first
-        self.handlers = OrderedDict()
+        self.handlers = {}
         self.poller = zmq.Poller()
         self.logger = logging.getLogger(self.name)
         control_queue = self.ctx.socket(zmq.PULL)
@@ -169,14 +166,14 @@ class Task(Thread):
         """
         pass
 
-    def poll(self, timeout=1000):
+    def poll(self, timeout=1):
         """
         This method is called once per loop of the task's :meth:`run` method.
         It polls all registered queues and calls their associated handlers if
         the poll is successful.
         """
         while True:
-            socks = dict(self.poller.poll(timeout))
+            socks = dict(self.poller.poll(timeout * 1000))
             try:
                 for queue in socks:
                     self.handlers[queue](queue)
