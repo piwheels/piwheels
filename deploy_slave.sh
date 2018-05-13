@@ -6,9 +6,11 @@ source /etc/os-release
 if [ $VERSION_ID -lt 9 ]; then
     LIBPNG_DEV=libpng12-dev
     LIBMYSQL_DEV=libmysqlclient-dev
+    POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
 else
     LIBPNG_DEV=libpng-dev
     LIBMYSQL_DEV=libmariadbclient-dev
+    POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
 fi
 
 apt update
@@ -37,7 +39,8 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     qt4-qmake qt5-qmake libsdl-image1.2-dev libsdl-mixer1.2-dev \
     libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev libtiff5-dev \
     libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
-    xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev
+    xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev \
+    $POSTGRES_SERVER_DEV
 if [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
 fi
