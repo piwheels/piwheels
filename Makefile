@@ -106,7 +106,7 @@ develop: tags
 	@# These have to be done separately to avoid a cockup...
 	$(PIP) install -U setuptools
 	$(PIP) install -U pip
-	$(PIP) install -e .[doc,test]
+	$(PIP) install -e .[doc,test,master,slave,monitor,log]
 
 test:
 	$(COVERAGE) run -m $(PYTEST) tests -v

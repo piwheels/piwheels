@@ -36,16 +36,15 @@ Defines the classes which use ``pip`` to build wheels.
     :members:
 """
 
-import io
 import os
-import json
-import tempfile
 import zipfile
 import hashlib
 import resource
-from subprocess import Popen, DEVNULL, TimeoutExpired
+import tempfile
+import email.parser
 from time import time
 from pathlib import Path
+from subprocess import Popen, DEVNULL, TimeoutExpired
 
 from .. import systemd
 
@@ -157,18 +156,18 @@ class PiWheelsPackage:
     @property
     def metadata(self):
         """
-        Return the contents of the :file:`metadata.json` file inside the wheel.
+        Return the contents of the :file:`METADATA` file inside the wheel.
         """
         if self._metadata is None:
             with zipfile.ZipFile(self.wheel_file.open('rb')) as wheel:
                 filename = (
                     '{self.package_tag}-'
                     '{self.package_version_tag}.dist-info/'
-                    'metadata.json'.format(self=self)
+                    'METADATA'.format(self=self)
                 )
                 with wheel.open(filename) as metadata:
-                    wrapper = io.TextIOWrapper(metadata, encoding='utf-8')
-                    self._metadata = json.load(wrapper)
+                    parser = email.parser.BytesParser()
+                    self._metadata = parser.parse(metadata)
         return self._metadata
 
     def transfer(self, queue, slave_id):

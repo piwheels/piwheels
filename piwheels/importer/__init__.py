@@ -117,9 +117,9 @@ node as the piw-master script.
         ]
         builder = PiWheelsBuilder(
             config.package if config.package is not None else
-            packages[0].metadata['name'],
+            packages[0].metadata['Name'],
             config.version if config.version is not None else
-            packages[0].metadata['version'])
+            packages[0].metadata['Version'])
         builder.duration = config.duration
         if config.output is not None:
             builder.output = config.output.read()
