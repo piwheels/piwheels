@@ -3,24 +3,37 @@
 set -eu
 
 source /etc/os-release
-if [ $VERSION_ID -lt 9 ]; then
-    LIBPNG_DEV=libpng12-dev
-    LIBMYSQL_DEV=libmysqlclient-dev
-    POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
+if [ $ID -eq raspbian ]; then
+    LIBXLST=libxslt-dev
+    TURBOGEARS=python-turbogears
+    SOUNDFONT=musescore-soundfont-gm
+    LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
+    if [ $VERSION_ID -lt 9 ]; then
+        LIBPNG_DEV=libpng12-dev
+        LIBMYSQL_DEV=libmysqlclient-dev
+        POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
+    else
+        LIBPNG_DEV=libpng-dev
+        LIBMYSQL_DEV=libmariadbclient-dev
+        POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
 else
+    LIBXLST=libxslt1-dev
+    TURBOGEARS=python-turbogears2
+    SOUNDFONT=timgm6mb-soundfont
+    LIBGLES=libgles2-mesa-dev
     LIBPNG_DEV=libpng-dev
     LIBMYSQL_DEV=libmariadbclient-dev
-    POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
+    POSTGRES_SERVER_DEV=postgresql-server-dev-10
 fi
 
 apt update
 apt -y upgrade
 apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
-    $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev libxslt-dev libgmp-dev \
+    $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev $LIBXLST libgmp-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
     libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
-    libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libcurl4-openssl-dev \
-    libgles1-mesa-dev libgstreamer1.0-dev libsdl2-dev libssl-dev libsasl2-dev \
+    libblas-dev liblapack-dev liblapacke-dev $LIBGLES libcurl4-openssl-dev \
+    libgstreamer1.0-dev libsdl2-dev libssl-dev libsasl2-dev \
     libldap2-dev libavcodec-dev libavformat-dev libswscale-dev libv4l-dev \
     libxvidcore-dev libx264-dev libgtk2.0-dev libgtk-3-dev libatlas-base-dev \
     python-numpy python3-numpy python-scipy python3-scipy python-matplotlib \
@@ -29,7 +42,7 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     python3-cffi python-bs4 python3-bs4 python-click \
     python3-click python-sqlalchemy python3-sqlalchemy python-pil python3-pil \
     python-pymongo python3-pymongo python-django python3-django python-flask \
-    python3-flask python-turbogears python-cherrypy python3-cherrypy3 \
+    python3-flask $TURBOGEARS python-cherrypy python3-cherrypy3 \
     python-tornado python3-tornado python-pip python3-pip \
     python-redis python3-redis python-dateutil python3-dateutil \
     python-dnspython python3-dnspython python-sphinx python3-sphinx \
@@ -39,7 +52,7 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     qt4-qmake qt5-qmake libsdl-image1.2-dev libsdl-mixer1.2-dev \
     libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev libtiff5-dev \
     libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
-    xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev \
+    xfonts-cyrillic fluid-soundfont-gm $SOUNDFONT libsystemd-dev \
     $POSTGRES_SERVER_DEV
 if [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
