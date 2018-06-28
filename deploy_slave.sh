@@ -3,7 +3,7 @@
 set -eu
 
 source /etc/os-release
-if [ $ID -eq raspbian ]; then
+if [ $ID = raspbian ]; then
     LIBXLST=libxslt-dev
     TURBOGEARS=python-turbogears
     SOUNDFONT=musescore-soundfont-gm
@@ -16,6 +16,7 @@ if [ $ID -eq raspbian ]; then
         LIBPNG_DEV=libpng-dev
         LIBMYSQL_DEV=libmariadbclient-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
+    fi
 else
     LIBXLST=libxslt1-dev
     TURBOGEARS=python-turbogears2
@@ -54,7 +55,7 @@ apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm $SOUNDFONT libsystemd-dev \
     $POSTGRES_SERVER_DEV
-if [ $VERSION_ID -lt 9 ]; then
+if [ $ID -eq raspbian ] && [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
 fi
 pip3 install pypandoc
@@ -86,4 +87,6 @@ swapon /dev/loop0\
 ' /etc/rc.local
 fi
 
-rm -f /etc/pip.conf
+if [ -e /etc/pip.conf ]; then
+    rm -f /etc/pip.conf
+fi
