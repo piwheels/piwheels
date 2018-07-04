@@ -39,16 +39,15 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from threading import Thread
 from itertools import cycle
-from signal import pause
+from time import sleep
 
 import zmq
 import numpy as np
-from colorzero import Color, Saturation
+from colorzero import Color, Lightness, Saturation
+from pisense import SenseHAT
 
 from .. import terminal, const
 from .tasks import Task
-from .pisense.stick import SenseStick
-from .pisense.screen import SenseScreen
 
 
 class PiWheelsSense:
@@ -81,48 +80,52 @@ class PiWheelsSense:
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
 
-        ctx = zmq.Context()
-        try:
-            screen = ScreenTask(config.status_queue)
-            ui = UITask(config.ctrl_queue)
-            pause()
-        finally:
-            ui.quit()
-            ui.join()
-            screen.quit()
-            screen.join()
-            ctx.destroy(linger=1000)
-            ctx.term()
+        with SenseHAT() as hat:
+            ctx = zmq.Context()
+            try:
+                stick = StickTask(config, hat)
+                stick.start()
+                screen = ScreenTask(config, hat)
+                screen.start()
+                while True:
+                    sleep(0.1)
+            finally:
+                screen.quit()
+                screen.join()
+                stick.quit()
+                stick.join()
+                ctx.destroy(linger=1000)
+                ctx.term()
 
 
 class ScreenTask(Task):
     name = "screen"
 
-    def __init__(self, status_queue):
+    def __init__(self, config, hat):
+        super().__init__()
         self.slaves = SlaveList()
-        self.screen = SenseScreen()
-        self.buffer = self.screen.pixels.copy()
-        pulse = [i / 10 for i in range(10)]
+        self.screen = hat.screen
+        self.buffer = self.screen.array.copy()
+        pulse = [i / 20 for i in range(20)]
         pulse += list(reversed(pulse))
         self.pulse = iter(cycle(pulse))
         self.position = (0, 0)
-        ctx = zmq.Context()
-        stick_queue = ctx.socket(zmq.PULL)
+        stick_queue = self.ctx.socket(zmq.PULL)
         stick_queue.hwm = 10
-        stick_queue.bind('inproc://stick')
-        status_queue = ctx.socket(zmq.SUB)
+        stick_queue.connect('inproc://stick')
+        status_queue = self.ctx.socket(zmq.SUB)
         status_queue.hwm = 10
-        status_queue.connect(status_queue)
+        status_queue.connect(config.status_queue)
         status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
-        self.register(stick_queue, handle_stick)
-        self.register(status_queue, handle_status)
+        self.register(stick_queue, self.handle_stick)
+        self.register(status_queue, self.handle_status)
 
     def run(self):
-        self.screen.marquee('piwheels')
+        self.screen.clear()
         super().run()
 
     def poll(self):
-        super().poll(0.1)
+        super().poll(0.05)
 
     def loop(self):
         self.buffer[:] = Color('black').rgb_bytes
@@ -133,21 +136,20 @@ class ScreenTask(Task):
                 'silent': Color('yellow'),
                 'dead':   Color('red'),
             }[slave.state].rgb_bytes
-        self.buffer[self.position] = Color('white').rgb_bytes
-        self.screen.pixels = self.buffer
+        self.buffer[self.position] = (Color('white') * Lightness(next(self.pulse))).rgb_bytes
+        self.screen.array = self.buffer
 
     def handle_stick(self, queue):
         event = queue.recv_pyobj()
-        if event.state in ('pressed', 'held'):
-            y, x = self.position
-            if event.direction == 'up':
-                self.position = (max(0, y - 1), x)
-            elif event.direction == 'down':
-                self.position = (min(7, y + 1), x)
-            elif event.direction == 'left':
-                self.position = (y, max(0, x - 1))
-            elif event.direction == 'right':
-                self.position = (y, min(7, x + 1))
+        y, x = self.position
+        if event.direction == 'up':
+            self.position = (max(0, y - 1), x)
+        elif event.direction == 'down':
+            self.position = (min(7, y + 1), x)
+        elif event.direction == 'left':
+            self.position = (y, max(0, x - 1))
+        elif event.direction == 'right':
+            self.position = (y, min(7, x + 1))
 
     def handle_status(self, queue):
         """
@@ -161,33 +163,35 @@ class ScreenTask(Task):
         * The message itself
         """
         slave_id, timestamp, msg, *args = queue.recv_pyobj()
+        print(msg)
         if msg == 'STATUS':
-            self.update_status(args[0])
+            pass
         else:
             self.slaves.message(slave_id, timestamp, msg, *args)
 
 
 class StickTask(Thread):
-    def __init__(self, ctrl_queue):
+    def __init__(self, config, hat):
         super().__init__()
         self._quit = False
-        self.ctrl_queue = ctx.socket(zmq.PUSH)
-        self.ctrl_queue.connect(ctrl_queue)
+        self._stick = hat.stick
+        self.ctx = zmq.Context.instance()
+        self.ctrl_queue = self.ctx.socket(zmq.PUSH)
+        self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_pyobj(['HELLO'])
-        self.stick_queue = ctx.socket(zmq.PUSH)
+        self.stick_queue = self.ctx.socket(zmq.PUSH)
         self.stick_queue.hwm = 10
-        self.stick_queue.connect('inproc://stick')
+        self.stick_queue.bind('inproc://stick')
 
     def quit(self):
         self._quit = True
 
     def run(self):
         try:
-            with SenseStick() as stick:
-                while not self._quit:
-                    event = stick.read(0.1)
-                    if event is not None:
-                        self.stick_queue.send_pyobj(event)
+            while not self._quit:
+                event = self._stick.read(0.1)
+                if event is not None and event.pressed:
+                    self.stick_queue.send_pyobj(event)
         finally:
             self.ctrl_queue.close()
             self.stick_queue.close()
