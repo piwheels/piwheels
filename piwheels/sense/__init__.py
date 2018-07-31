@@ -44,7 +44,7 @@ from time import sleep
 import zmq
 import numpy as np
 from colorzero import Color, Lightness, Saturation
-from pisense import SenseHAT
+from pisense import SenseHAT, array
 
 from .. import terminal, const
 from .tasks import Task
@@ -105,7 +105,7 @@ class ScreenTask(Task):
         super().__init__()
         self.slaves = SlaveList()
         self.screen = hat.screen
-        self.buffer = self.screen.array.copy()
+        self.buffer = array(Color('black'))
         pulse = [i / 20 for i in range(20)]
         pulse += list(reversed(pulse))
         self.pulse = iter(cycle(pulse))
@@ -128,16 +128,16 @@ class ScreenTask(Task):
         super().poll(0.05)
 
     def loop(self):
-        self.buffer[:] = Color('black').rgb_bytes
+        self.buffer[:] = Color('black')
         for index, slave in enumerate(self.slaves):
             y, x = divmod(index, 8)
             self.buffer[y, x] = {
                 'okay':   Color('green'),
                 'silent': Color('yellow'),
                 'dead':   Color('red'),
-            }[slave.state].rgb_bytes
-        self.buffer[self.position] = (Color('white') * Lightness(next(self.pulse))).rgb_bytes
-        self.screen.array = self.buffer
+            }[slave.state]
+        self.buffer[self.position] += Color('white') * Lightness(next(self.pulse))
+        self.screen.array = self.buffer.clip(0, 1)
 
     def handle_stick(self, queue):
         event = queue.recv_pyobj()
@@ -163,7 +163,6 @@ class ScreenTask(Task):
         * The message itself
         """
         slave_id, timestamp, msg, *args = queue.recv_pyobj()
-        print(msg)
         if msg == 'STATUS':
             pass
         else:

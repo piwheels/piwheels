@@ -83,7 +83,7 @@ __extra_requires__ = {
     'log':     ['lars'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
-    'sense':   ['numpy', 'colorzero'],
+    'sense':   ['pisense'],
 }
 
 __classifiers__ = [
