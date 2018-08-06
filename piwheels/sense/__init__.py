@@ -35,19 +35,18 @@ the master node.
 """
 
 import sys
+import signal
 from collections import OrderedDict
-from datetime import datetime, timedelta
-from threading import Thread
-from itertools import cycle
+from threading import Thread, main_thread
 from time import sleep
 
 import zmq
-import numpy as np
-from colorzero import Color, Lightness, Saturation
 from pisense import SenseHAT, array
+from colorzero import Color
 
 from .. import terminal, const
-from .tasks import Task
+from .tasks import Task, TaskQuit
+from .renderers import MainRenderer, StatusRenderer
 
 
 class PiWheelsSense:
@@ -66,29 +65,33 @@ class PiWheelsSense:
     def __call__(self, args=None):
         parser = terminal.configure_parser(__doc__, log_params=False)
         parser.add_argument(
-            '--status-queue', metavar='ADDR',
-            default=const.STATUS_QUEUE,
+            '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
             help="The address of the queue used to report status to monitors "
             "(default: %(default)s)")
         parser.add_argument(
-            '--control-queue', metavar='ADDR',
-            default=const.CONTROL_QUEUE,
+            '--control-queue', metavar='ADDR', default=const.CONTROL_QUEUE,
             help="The address of the queue a monitor can use to control the "
             "master (default: %(default)s)")
+        parser.add_argument(
+            '-r', '--rotate', metavar='DEGREES', default=0, type=int,
+            help="The rotation of the HAT in degrees; must be 0 (the default) "
+            "90, 180, or 270")
         try:
             config = parser.parse_args(args)
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
 
         with SenseHAT() as hat:
+            hat.rotation = config.rotate
             ctx = zmq.Context()
             try:
                 stick = StickTask(config, hat)
                 stick.start()
                 screen = ScreenTask(config, hat)
                 screen.start()
-                while True:
-                    sleep(0.1)
+                signal.sigwait({signal.SIGINT, signal.SIGTERM})
+            except KeyboardInterrupt:
+                pass
             finally:
                 screen.quit()
                 screen.join()
@@ -96,6 +99,30 @@ class PiWheelsSense:
                 stick.join()
                 ctx.destroy(linger=1000)
                 ctx.term()
+                hat.screen.fade_to(array(Color('black')))
+
+
+class StickTask(Thread):
+    def __init__(self, config, hat):
+        super().__init__()
+        self._quit = False
+        self.stick = hat.stick
+        self.ctx = zmq.Context.instance()
+        self.stick_queue = self.ctx.socket(zmq.PUSH)
+        self.stick_queue.hwm = 10
+        self.stick_queue.bind('inproc://stick')
+
+    def quit(self):
+        self._quit = True
+
+    def run(self):
+        try:
+            while not self._quit:
+                event = self.stick.read(0.1)
+                if event is not None and event.pressed:
+                    self.stick_queue.send_pyobj(event)
+        finally:
+            self.stick_queue.close()
 
 
 class ScreenTask(Task):
@@ -103,13 +130,13 @@ class ScreenTask(Task):
 
     def __init__(self, config, hat):
         super().__init__()
-        self.slaves = SlaveList()
         self.screen = hat.screen
-        self.buffer = array(Color('black'))
-        pulse = [i / 20 for i in range(20)]
-        pulse += list(reversed(pulse))
-        self.pulse = iter(cycle(pulse))
-        self.position = (0, 0)
+        self.main = MainRenderer()
+        self.status = StatusRenderer(self.main)
+        self._renderer = None
+        self._screen_iter = None
+        self.renderer = self.main
+        self.transition = self.screen.fade_to
         stick_queue = self.ctx.socket(zmq.PULL)
         stick_queue.hwm = 10
         stick_queue.connect('inproc://stick')
@@ -119,37 +146,29 @@ class ScreenTask(Task):
         status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         self.register(stick_queue, self.handle_stick)
         self.register(status_queue, self.handle_status)
-
-    def run(self):
-        self.screen.clear()
-        super().run()
+        self.ctrl_queue = self.ctx.socket(zmq.PUSH)
+        self.ctrl_queue.connect(config.control_queue)
+        self.ctrl_queue.send_pyobj(['HELLO'])
 
     def poll(self):
-        super().poll(0.05)
+        super().poll(1 / 30)
 
     def loop(self):
-        self.buffer[:] = Color('black')
-        for index, slave in enumerate(self.slaves):
-            y, x = divmod(index, 8)
-            self.buffer[y, x] = {
-                'okay':   Color('green'),
-                'silent': Color('yellow'),
-                'dead':   Color('red'),
-            }[slave.state]
-        self.buffer[self.position] += Color('white') * Lightness(next(self.pulse))
-        self.screen.array = self.buffer.clip(0, 1)
+        self.transition(next(self._screen_iter))
+        self.transition = self.screen.draw
+
+    @property
+    def renderer(self):
+        return self._renderer
+
+    @renderer.setter
+    def renderer(self, value):
+        self._renderer = value
+        self._screen_iter = iter(value)
 
     def handle_stick(self, queue):
         event = queue.recv_pyobj()
-        y, x = self.position
-        if event.direction == 'up':
-            self.position = (max(0, y - 1), x)
-        elif event.direction == 'down':
-            self.position = (min(7, y + 1), x)
-        elif event.direction == 'left':
-            self.position = (y, max(0, x - 1))
-        elif event.direction == 'right':
-            self.position = (y, min(7, x + 1))
+        self.renderer.move(event, self)
 
     def handle_status(self, queue):
         """
@@ -164,166 +183,9 @@ class ScreenTask(Task):
         """
         slave_id, timestamp, msg, *args = queue.recv_pyobj()
         if msg == 'STATUS':
-            pass
+            self.main.status = args[0]
         else:
-            self.slaves.message(slave_id, timestamp, msg, *args)
-
-
-class StickTask(Thread):
-    def __init__(self, config, hat):
-        super().__init__()
-        self._quit = False
-        self._stick = hat.stick
-        self.ctx = zmq.Context.instance()
-        self.ctrl_queue = self.ctx.socket(zmq.PUSH)
-        self.ctrl_queue.connect(config.control_queue)
-        self.ctrl_queue.send_pyobj(['HELLO'])
-        self.stick_queue = self.ctx.socket(zmq.PUSH)
-        self.stick_queue.hwm = 10
-        self.stick_queue.bind('inproc://stick')
-
-    def quit(self):
-        self._quit = True
-
-    def run(self):
-        try:
-            while not self._quit:
-                event = self._stick.read(0.1)
-                if event is not None and event.pressed:
-                    self.stick_queue.send_pyobj(event)
-        finally:
-            self.ctrl_queue.close()
-            self.stick_queue.close()
-
-
-class SlaveList:
-    """
-    Tracks the active set of build slaves currently known by the master.
-    Provides methods to update the state of the list based on messages received
-    on the external status queue.
-    """
-    def __init__(self):
-        self.slaves = OrderedDict()
-
-    def __len__(self):
-        return len(self.slaves)
-
-    def __iter__(self):
-        for slave in self.slaves.values():
-            yield slave
-
-    def message(self, slave_id, timestamp, msg, *args):
-        """
-        Update the list with a message from the external status queue.
-
-        :param int slave_id:
-            The id of the slave the message was originally sent to.
-
-        :param datetime.datetime timestamp:
-            The timestamp when the message was originally sent.
-
-        :param str msg:
-            The reply that was sent to the build slave.
-
-        :param *args:
-            Any arguments that went with the message.
-        """
-        try:
-            state = self.slaves[slave_id]
-        except KeyError:
-            state = SlaveState(slave_id)
-            self.slaves[slave_id] = state
-        state.update(timestamp, msg, *args)
-        # TODO refresh display
-
-
-class SlaveState:
-    """
-    Class for tracking the state of a single build slave.
-    """
-    # pylint: disable=too-many-instance-attributes
-
-    def __init__(self, slave_id):
-        self.terminated = False
-        self.slave_id = slave_id
-        self.last_msg = ''
-        self.py_version = '-'
-        self.timeout = None
-        self.abi = '-'
-        self.platform = '-'
-        self.first_seen = None
-        self.last_seen = None
-        self.status = ''
-        self.label = ''
-
-    def update(self, timestamp, msg, *args):
-        """
-        Update the slave's state from an incoming reply message.
-
-        :param datetime.datetime timestamp:
-            The time at which the message was originally sent.
-
-        :param str msg:
-            The message itself.
-
-        :param *args:
-            Any arguments sent with the message.
-        """
-        self.last_msg = msg
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            self.status = 'Initializing'
-            self.first_seen = timestamp
-            (
-                self.timeout,
-                self.py_version,
-                self.abi,
-                self.platform,
-                self.label
-            ) = args
-        elif msg == 'SLEEP':
-            self.status = 'Waiting for jobs'
-        elif msg == 'BYE':
-            self.terminated = True
-            self.status = 'Terminating'
-        elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(args[0], args[1])
-        elif msg == 'SEND':
-            self.status = 'Transferring file'
-        elif msg == 'DONE':
-            self.status = 'Cleaning up after build'
-
-    @property
-    def state(self):
-        """
-        Calculate a simple state indicator for the slave, used to color the
-        initial "*" on the entry.
-        """
-        if self.first_seen is not None:
-            if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
-                return 'silent'
-            elif datetime.utcnow() - self.last_seen > self.timeout:
-                return 'dead'
-        if self.terminated:
-            return 'dead'
-        return 'okay'
-
-    @property
-    def columns(self):
-        """
-        Calculates the state of all columns for the slave's entry. Returns a
-        list of (style, content) tuples. Note that the content is *not* padded
-        for width. The :class:`SlaveListWalker` class handles this.
-        """
-        return [
-            (self.state, '*'),
-            ('status', str(self.slave_id)),
-            ('status', self.label),
-            ('status', since(self.first_seen)),
-            ('status', since(self.last_seen)),
-            ('status', self.abi),
-            ('status', self.status),
-        ]
+            self.main.slaves.message(slave_id, timestamp, msg, *args)
 
 
 main = PiWheelsSense()  # pylint: disable=invalid-name
