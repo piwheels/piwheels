@@ -40,13 +40,6 @@ Implements the screen rendering classes for the Sense HAT monitor.
 .. autoclass:: SlaveRenderer
 """
 
-from __future__ import (
-    unicode_literals,
-    absolute_import,
-    print_function,
-    division,
-)
-
 import signal
 from datetime import datetime, timedelta
 from functools import partial
@@ -66,6 +59,15 @@ def bounce(it):
 
 
 class Renderer:
+    """
+    Base class for all renderers. A renderer acts as an iterator, yielding
+    images (or arrays, or anything that can be passed to one of the screen
+    methods). Renderers also have a :meth:`move` method which is used by the
+    owning task to pass along joystick events to the renderer.
+
+    The base implementation provides a simple joystick-based navigation
+    implementation, and limits its coordinates to a specified boundary.
+    """
     def __init__(self):
         self.position = (0, 0)
         self.limits = (0, 0, 7, 7)
@@ -87,6 +89,13 @@ class Renderer:
 
 
 class MainRenderer(Renderer):
+    """
+    The :class:`MainRenderer` is responsible for rendering the main screen
+    in the application (the first screen shown on start). It consists of two
+    simple bar charts at the top of the screen indicating remaining disk space
+    and number of packages left in the queue. The status of each slave is
+    depicted as a single pixel below these two rows.
+    """
     def __init__(self):
         super().__init__()
         self.slaves = SlaveList()
@@ -161,6 +170,12 @@ class MainRenderer(Renderer):
 
 
 class StatusRenderer(Renderer):
+    """
+    The :class:`StatusRenderer` class is responsible for rendering the overall
+    master status when the user moves "up" to it from the main screen. It
+    includes several horizontally scrolled menus displaying several statistics,
+    and "Terminate?" and "Quit?" screens.
+    """
     def __init__(self, main):
         super().__init__()
         self.main = main
@@ -254,6 +269,11 @@ class StatusRenderer(Renderer):
 
 
 class SlaveRenderer(Renderer):
+    """
+    The :class:`SlaveRenderer` is used to render the full-screen status of
+    a build slave (when selected from the main menu). Various screens are
+    included, detailing the slave's label, ABI build tag, and current status.
+    """
     def __init__(self, slave):
         super().__init__()
         self.slave = slave

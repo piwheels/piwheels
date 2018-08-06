@@ -31,17 +31,10 @@
 """
 Implements the classes for tracking slave states.
 
-.. autoclass: SlaveList
+.. autoclass:: SlaveList
 
 .. autoclass:: SlaveState
 """
-
-from __future__ import (
-    unicode_literals,
-    absolute_import,
-    print_function,
-    division,
-)
 
 from collections import OrderedDict
 from datetime import datetime, timedelta
