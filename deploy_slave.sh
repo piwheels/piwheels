@@ -15,7 +15,7 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
+apt -y install vim python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev libxslt-dev libgmp-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
     libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
