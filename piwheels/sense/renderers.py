@@ -100,16 +100,24 @@ class MainRenderer(Renderer):
         super().__init__()
         self.slaves = SlaveList()
         self.status = {}
-        self.position = (0, 2)
-        self.limits = (0, 2, 7, 7)
+        self.position = (0, 3)
+        self.limits = (0, 3, 7, 7)
+        self.last_message = datetime(1970, 1, 1)
+
+    def message(self, slave_id, timestamp, msg, *args):
+        self.last_message = datetime.utcnow()
+        if msg == 'STATUS':
+            self.status = args[0]
+        else:
+            self.slaves.message(slave_id, timestamp, msg, *args)
 
     @staticmethod
     def _slave_coords(index):
-        return (index // 6, 2 + index % 6)
+        return (index // 5, 3 + index % 5)
 
     @staticmethod
     def _slave_index(x, y):
-        return (x * 6) + (y - 2)
+        return (x * 5) + (y - 3)
 
     @property
     def selected(self):
@@ -123,10 +131,14 @@ class MainRenderer(Renderer):
             return None
 
     def move(self, event, task):
-        if event.direction == 'up' and self.position[1] == 2:
-            task.renderer = task.status
+        if event.direction == 'up' and self.position[1] == 3:
+            task.renderer = task.renderers['status']
             task.transition = partial(
                 task.screen.slide_to, direction='down', duration=0.5)
+        elif event.direction == 'down' and self.position[1] == 7:
+            task.renderer = task.renderers['quit']
+            task.transition = partial(
+                task.screen.slide_to, direction='up', duration=0.5)
         delta = super().move(event, task)
         if event.direction == 'enter' and self.selected is not None:
             task.renderer = SlaveRenderer(self.selected)
@@ -135,37 +147,73 @@ class MainRenderer(Renderer):
                 duration=0.5)
         return delta
 
-    def __iter__(self):
-        buf = array(Color('black'))
-        pulse = iter(bounce(range(15)))
-        while True:
-            buf[:] = Color('black')
-            # Render disk-free bar at the top
-            disk = (
-                8 * self.status.get('disk_free', 0) /
-                self.status.get('disk_size', 1))
+    def _render_ping(self, buf, pulse):
+        # Render the ping bar at the top
+        grad = list(Color('blue').gradient(Color('white'), 32))
+        ping = 8 * max(
+            timedelta(0),
+            datetime.utcnow() - self.last_message).total_seconds() / 30
+        if ping > 8:
+            buf[0, :] = Color(pulse / 15, 0, 0)
+        else:
             buf[0, :] = [
-                Color('gray') if x < int(disk) else
-                Color('gray') * Lightness(disk - int(disk)) if x < disk else
+                Color('white') if x < int(ping) else
+                grad[int(32 * (ping - int(ping)))] if x < ping else
                 Color('blue')
                 for x in range(8)
             ]
-            # Then the queue length bar
-            pkgs = max(
-                0, self.status.get('versions_count', 0) -
-                self.status.get('versions_tried', 0))
-            buf[1, :] = [
-                Color('gray') if x < pkgs else Color('blue')
-                for x in range(8)
-            ]
-            # Then the slave status pixels
-            for index, slave in enumerate(self.slaves):
-                x, y = self._slave_coords(index)
-                buf[y, x] = slave.color
-            x, y = self.position
-            base = Color(*buf[y, x])
-            grad = list(base.gradient(Color('white'), steps=15))
-            buf[y, x] = grad[next(pulse)]
+
+    def _render_disk(self, buf, pulse):
+        # Then the disk-free bar
+        grad = list(Color('blue').gradient(Color('white'), 32))
+        disk = (
+            8 * self.status.get('disk_free', 0) /
+            self.status.get('disk_size', 1))
+        buf[1, :] = [
+            Color('white') if x < int(disk) else
+            grad[int(32 * (disk - int(disk)))] if x < disk else
+            Color('blue')
+            for x in range(8)
+        ]
+
+    def _render_queue(self, buf, pulse):
+        # Then the queue length bar
+        grad = list(Color('blue').gradient(Color('white'), 32))
+        pkgs = 8 * max(
+            0, self.status.get('versions_count', 0) -
+            self.status.get('versions_tried', 0)) / 64
+        buf[2, :] = [
+            Color('white') if x < int(pkgs) else
+            grad[int(32 * (pkgs - int(pkgs)))] if x < pkgs else
+            Color('blue')
+            for x in range(8)
+        ]
+
+    def _render_slaves(self, buf, pulse):
+        # Then the slave status pixels
+        for index, slave in enumerate(self.slaves):
+            x, y = self._slave_coords(index)
+            buf[y, x] = slave.color
+        x, y = self.position
+        base = Color(*buf[y, x])
+        grad = list(base.gradient(Color('white'), steps=15))
+        buf[y, x] = grad[pulse]
+
+    def __iter__(self):
+        buf = array(Color('black'))
+        pulse = iter(bounce(range(15)))
+        methods = (
+            self._render_ping,
+            self._render_disk,
+            self._render_queue,
+            self._render_slaves,
+        )
+        while True:
+            buf[:] = Color('black')
+            p = next(pulse)
+            self.slaves.prune()
+            for method in methods:
+                method(buf, p)
             yield buf
 
 
@@ -173,13 +221,12 @@ class StatusRenderer(Renderer):
     """
     The :class:`StatusRenderer` class is responsible for rendering the overall
     master status when the user moves "up" to it from the main screen. It
-    includes several horizontally scrolled menus displaying several statistics,
-    and "Terminate?" and "Quit?" screens.
+    includes several horizontally scrolled menus displaying several statistics.
     """
     def __init__(self, main):
         super().__init__()
         self.main = main
-        self.limits = (0, 0, 4, 0)
+        self.limits = (0, 0, 3, 0)
         self.back = None
         self.text = None
         self.update_back()
@@ -188,12 +235,11 @@ class StatusRenderer(Renderer):
     def move(self, event, task):
         if event.direction == 'enter' and self.position[0] == 4:
             task.ctrl_queue.send_pyobj(['QUIT'])
-            signal.pthread_kill(main_thread().ident, signal.SIGINT)
-        elif event.direction == 'enter' and self.position[0] == 4:
+        if event.direction == 'enter' and self.position[0] >= 4:
             signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
         if event.direction == 'down':
-            task.renderer = task.main
+            task.renderer = self.main
             task.transition = partial(
                 task.screen.slide_to, direction='up', duration=0.5)
         elif delta != (0, 0):
@@ -201,13 +247,22 @@ class StatusRenderer(Renderer):
             self.update_text()
             task.transition = partial(
                 task.screen.slide_to,
-                direction='left' if delta == (1, 0) else 'right',
-                duration=0.5)
+                direction='left' if delta == (1, 0) else 'right', duration=0.5)
         return delta
 
     def update_back(self):
         x, y = self.position
         if x == 0:
+            ping = 63 * max(timedelta(0), min(timedelta(seconds=30),
+                datetime.utcnow() - self.main.last_message)).total_seconds() / 30
+            grad = list(Color('green').gradient(Color('red'), steps=64))
+            self.back = array([
+                grad[int(ping)] if i < ping else
+                Color('black')
+                for i in range(64)
+            ])
+            self.back = np.flipud(self.back)
+        elif x == 1:
             disk = (
                 64 * self.main.status.get('disk_free', 0) /
                 self.main.status.get('disk_size', 1))
@@ -218,21 +273,21 @@ class StatusRenderer(Renderer):
                 for i in range(64)
             ])
             self.back = np.flipud(self.back)
-        elif x == 1:
+        elif x == 2:
             pkgs = min(
                 64, self.main.status.get('versions_count', 0) -
                 self.main.status.get('versions_tried', 0))
             self.back = array([
-                Color('blue') if i < int(pkgs) else
+                Color('blue') if i < pkgs else
                 Color('black')
                 for i in range(64)
             ])
             self.back = np.flipud(self.back)
-        elif x == 2:
+        elif x == 3:
             bph = min(
                 64, self.main.status.get('builds_last_hour', 0))
             self.back = array([
-                Color('blue') if i < int(bph) else
+                Color('blue') if i < bph else
                 Color('black')
                 for i in range(64)
             ])
@@ -242,16 +297,14 @@ class StatusRenderer(Renderer):
 
     def update_text(self):
         x, y = self.position
-        text, color = {
-            0: ('Disk Free', 'gray'),
-            1: ('Queue Size', 'gray'),
-            2: ('Builds/hour', 'gray'),
-            3: ('Terminate?', 'red'),
-            4: ('Quit?', 'red'),
+        text = {
+            0: 'Last Ping',
+            1: 'Disk Free',
+            2: 'Queue Size',
+            3: 'Builds/Hour',
         }[x]
         self.text = array(
-            draw_text(text, foreground=Color(color), padding=(8, 0, 8, 1)))
-        self.offset = iter(cycle(range(self.text.shape[1] - 8)))
+            draw_text(text, foreground=Color('gray'), padding=(8, 0, 8, 1)))
         self.offset = iter(cycle(chain(
             range(8, self.text.shape[1] - 8), range(8)
         )))
@@ -268,6 +321,55 @@ class StatusRenderer(Renderer):
             yield buf.clip(0, 1)
 
 
+class QuitRenderer(Renderer):
+    """
+    The :class:`QuitRenderer` is responsible for rendering the Quit? and
+    Terminate? options which are "below" the main screen.
+    """
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+        self.limits = (0, 0, 1, 0)
+        self.text = None
+        self.update_text()
+
+    def move(self, event, task):
+        if event.direction == 'enter' and self.position[0] == 1:
+            task.ctrl_queue.send_pyobj(['QUIT'])
+        if event.direction == 'enter':
+            signal.pthread_kill(main_thread().ident, signal.SIGINT)
+        delta = super().move(event, task)
+        if event.direction == 'up':
+            task.renderer = self.main
+            task.transition = partial(
+                task.screen.slide_to, direction='down', duration=0.5)
+        elif delta != (0, 0):
+            self.update_text()
+            task.transition = partial(
+                task.screen.slide_to,
+                direction='left' if delta == (1, 0) else 'right', duration=0.5)
+        return delta
+
+    def update_text(self):
+        x, y = self.position
+        text = {
+            0: 'Quit?',
+            1: 'Terminate?',
+        }[x]
+        self.text = array(
+            draw_text(text, foreground=Color('red'), padding=(8, 0, 8, 1)))
+        self.offset = iter(cycle(chain(
+            range(8, self.text.shape[1] - 8), range(8)
+        )))
+
+    def __iter__(self):
+        buf = array(Color('black'))
+        while True:
+            offset = next(self.offset)
+            buf[:self.text.shape[0], :] = self.text[:, offset:offset + 8]
+            yield buf.clip(0, 1)
+
+
 class SlaveRenderer(Renderer):
     """
     The :class:`SlaveRenderer` is used to render the full-screen status of
@@ -277,17 +379,19 @@ class SlaveRenderer(Renderer):
     def __init__(self, slave):
         super().__init__()
         self.slave = slave
-        self.limits = (0, 0, 2, 0)
+        self.limits = (0, 0, 3, 0)
         self.text = None
         self.update_text()
 
     def move(self, event, task):
+        if event.direction == 'enter' and self.position[0] == 3:
+            task.ctrl_queue.send_pyobj(['KILL', self.slave.slave_id])
         delta = super().move(event, task)
         if event.direction == 'enter':
-            task.renderer = task.main
+            task.renderer = task.renderers['main']
             task.transition = partial(
                 task.screen.zoom_to, direction='out',
-                center=task.main.position, duration=0.5)
+                center=task.renderers['main'].position, duration=0.5)
         elif delta != (0, 0):
             self.update_text()
             task.transition = partial(
@@ -298,15 +402,16 @@ class SlaveRenderer(Renderer):
 
     def update_text(self):
         x, y = self.position
-        text = {
-            0: self.slave.label,
-            1: 'ABI:' + self.slave.abi,
-            2: self.slave.status,
+        text, fg, bg = {
+            0: (self.slave.label,        'white',  None),
+            1: ('ABI:' + self.slave.abi, 'white',  None),
+            2: (self.slave.status,       'white',  None),
+            3: ('Kill?',                 'red',    'black'),
         }[x]
         self.text = array(
-            draw_text(text, foreground=Color('white'),
-                      background=self.slave.color, padding=(8, 0, 8, 1)))
-        self.offset = iter(cycle(range(self.text.shape[1] - 8)))
+            draw_text(text, foreground=Color(fg),
+                      background=self.slave.color if bg is None else Color(bg),
+                      padding=(8, 0, 8, 1)))
         self.offset = iter(cycle(chain(
             range(8, self.text.shape[1] - 8), range(8)
         )))

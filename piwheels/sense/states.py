@@ -61,6 +61,13 @@ class SlaveList:
         for slave in self.slaves.values():
             yield slave
 
+    def prune(self):
+        now = datetime.utcnow()
+        for slave in self:
+            if slave.terminated and (now - state.last_seen >
+                                     timedelta(seconds=5)):
+                del self.slaves[slave.slave_id]
+
     def message(self, slave_id, timestamp, msg, *args):
         """
         Update the list with a message from the external status queue.
@@ -83,7 +90,6 @@ class SlaveList:
             state = SlaveState(slave_id)
             self.slaves[slave_id] = state
         state.update(timestamp, msg, *args)
-        # TODO refresh display
 
 
 class SlaveState:
@@ -149,9 +155,9 @@ class SlaveState:
         """
         if self.first_seen is not None:
             if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
-                return Color('#440')  # silent
+                return Color('#760')  # silent
             elif datetime.utcnow() - self.last_seen > self.timeout:
-                return Color('#400')  # dead
+                return Color('red')  # dead
         if self.terminated:
-            return Color('#400')  # dead
-        return Color('#040')
+            return Color('red')  # dead
+        return Color('green')

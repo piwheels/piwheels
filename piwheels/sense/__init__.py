@@ -46,7 +46,7 @@ from colorzero import Color
 
 from .. import terminal, const
 from .tasks import Task, TaskQuit
-from .renderers import MainRenderer, StatusRenderer
+from .renderers import MainRenderer, StatusRenderer, QuitRenderer
 
 
 class PiWheelsSense:
@@ -131,11 +131,13 @@ class ScreenTask(Task):
     def __init__(self, config, hat):
         super().__init__()
         self.screen = hat.screen
-        self.main = MainRenderer()
-        self.status = StatusRenderer(self.main)
+        self.renderers = {}
+        self.renderers['main'] = MainRenderer()
+        self.renderers['quit'] = QuitRenderer(self.renderers['main'])
+        self.renderers['status'] = StatusRenderer(self.renderers['main'])
         self._renderer = None
         self._screen_iter = None
-        self.renderer = self.main
+        self.renderer = self.renderers['main']
         self.transition = self.screen.fade_to
         stick_queue = self.ctx.socket(zmq.PULL)
         stick_queue.hwm = 10
@@ -146,12 +148,13 @@ class ScreenTask(Task):
         status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         self.register(stick_queue, self.handle_stick)
         self.register(status_queue, self.handle_status)
+        sleep(1)
         self.ctrl_queue = self.ctx.socket(zmq.PUSH)
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_pyobj(['HELLO'])
 
     def poll(self):
-        super().poll(1 / 30)
+        super().poll(1 / 15)
 
     def loop(self):
         self.transition(next(self._screen_iter))
@@ -181,11 +184,7 @@ class ScreenTask(Task):
         * The timestamp when the message was sent
         * The message itself
         """
-        slave_id, timestamp, msg, *args = queue.recv_pyobj()
-        if msg == 'STATUS':
-            self.main.status = args[0]
-        else:
-            self.main.slaves.message(slave_id, timestamp, msg, *args)
+        self.renderers['main'].message(*queue.recv_pyobj())
 
 
 main = PiWheelsSense()  # pylint: disable=invalid-name

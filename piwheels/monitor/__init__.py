@@ -40,6 +40,7 @@ or terminate the master itself.
 
 import sys
 from datetime import datetime, timedelta
+from time import sleep
 
 import zmq
 
@@ -95,6 +96,7 @@ class PiWheelsMonitor:
         self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        sleep(1)
         self.ctrl_queue = ctx.socket(zmq.PUSH)
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_pyobj(['HELLO'])
