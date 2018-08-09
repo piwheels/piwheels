@@ -5,6 +5,7 @@ PYTHON=python
 PIP=pip
 PYTEST=py.test
 COVERAGE=coverage
+TWINE=twine
 PYFLAGS=
 DEST_DIR=/
 
@@ -19,17 +20,17 @@ endif
 # Calculate the base names of the distribution, the location of all source,
 # documentation, packaging, icon, and executable script files
 NAME:=$(shell $(PYTHON) $(PYFLAGS) setup.py --name)
+PKG_DIR:=$(subst -,_,$(NAME))
 VER:=$(shell $(PYTHON) $(PYFLAGS) setup.py --version)
+DEB_ARCH:=$(shell dpkg --print-architecture)
 ifeq ($(shell lsb_release -si),Ubuntu)
 DEB_SUFFIX:=ubuntu1
 else
 DEB_SUFFIX:=
 endif
-DEB_ARCH:=$(shell dpkg --print-architecture)
-PYVER:=$(shell $(PYTHON) $(PYFLAGS) -c "import sys; print('py%d.%d' % sys.version_info[:2])")
 PY_SOURCES:=$(shell \
 	$(PYTHON) $(PYFLAGS) setup.py egg_info >/dev/null 2>&1 && \
-	grep -v "\.egg-info" $(NAME).egg-info/SOURCES.txt)
+	grep -v "\.egg-info" $(PKG_DIR).egg-info/SOURCES.txt)
 DEB_SOURCES:=debian/changelog \
 	debian/control \
 	debian/copyright \
@@ -52,15 +53,19 @@ DOC_SOURCES:=docs/conf.py \
 SUBDIRS:=
 
 # Calculate the name of all outputs
-DIST_EGG=dist/$(NAME)-$(VER)-$(PYVER).egg
+DIST_WHEEL=dist/$(NAME)-$(VER)-py2.py3-none-any.whl
 DIST_TAR=dist/$(NAME)-$(VER).tar.gz
 DIST_ZIP=dist/$(NAME)-$(VER).zip
 DIST_DEB=dist/$(NAME)-master_$(VER)$(DEB_SUFFIX)_all.deb \
 	dist/$(NAME)-slave_$(VER)$(DEB_SUFFIX)_all.deb \
 	dist/$(NAME)-docs_$(VER)$(DEB_SUFFIX)_all.deb \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).build \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).buildinfo \
 	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).changes
 DIST_DSC=dist/$(NAME)_$(VER)$(DEB_SUFFIX).tar.xz \
 	dist/$(NAME)_$(VER)$(DEB_SUFFIX).dsc \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.build \
+	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.buildinfo \
 	dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 MAN_PAGES=man/piw-master.1 man/piw-slave.1 man/piw-monitor.1 man/piw-initdb.1
 
@@ -92,7 +97,7 @@ doc: $(DOC_SOURCES)
 
 source: $(DIST_TAR) $(DIST_ZIP)
 
-egg: $(DIST_EGG)
+wheel: $(DIST_WHEEL)
 
 zip: $(DIST_ZIP)
 
@@ -100,7 +105,7 @@ tar: $(DIST_TAR)
 
 deb: $(DIST_DEB) $(DIST_DSC)
 
-dist: $(DIST_EGG) $(DIST_DEB) $(DIST_DSC) $(DIST_TAR) $(DIST_ZIP)
+dist: $(DIST_WHEEL) $(DIST_DEB) $(DIST_DSC) $(DIST_TAR) $(DIST_ZIP)
 
 develop: tags
 	@# These have to be done separately to avoid a cockup...
@@ -109,14 +114,12 @@ develop: tags
 	$(PIP) install -e .[doc,test,master,slave,monitor,log]
 
 test:
-	$(COVERAGE) run -m $(PYTEST) tests -v
+	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) tests
 	$(COVERAGE) report --rcfile coverage.cfg
 
 clean:
-	$(PYTHON) $(PYFLAGS) setup.py clean
-	$(MAKE) -f $(CURDIR)/debian/rules clean
-	$(MAKE) -C docs clean
-	rm -fr build/ dist/ $(NAME).egg-info/ tags
+	dh_clean
+	rm -fr dist/ $(NAME).egg-info/ tags
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean; \
 	done
@@ -139,15 +142,15 @@ $(DIST_TAR): $(PY_SOURCES) $(SUBDIRS)
 $(DIST_ZIP): $(PY_SOURCES) $(SUBDIRS)
 	$(PYTHON) $(PYFLAGS) setup.py sdist --formats zip
 
-$(DIST_EGG): $(PY_SOURCES) $(SUBDIRS)
-	$(PYTHON) $(PYFLAGS) setup.py bdist_egg
+$(DIST_WHEEL): $(PY_SOURCES) $(SUBDIRS)
+	$(PYTHON) $(PYFLAGS) setup.py bdist_wheel --universal
 
 $(DIST_DEB): $(PY_SOURCES) $(SUBDIRS) $(DEB_SOURCES) $(MAN_PAGES)
 	# build the binary package in the parent directory then rename it to
 	# project_version.orig.tar.gz
 	$(PYTHON) $(PYFLAGS) setup.py sdist --dist-dir=../
 	rename -f 's/$(NAME)-(.*)\.tar\.gz/$(NAME)_$$1\.orig\.tar\.gz/' ../*
-	debuild -b -i -I -Idist -Ibuild -Idocs/_build -Icoverage -I__pycache__ -I.coverage -Itags -I*.pyc -I*.vim -I*.xcf -rfakeroot
+	debuild -b
 	mkdir -p dist/
 	for f in $(DIST_DEB); do cp ../$${f##*/} dist/; done
 
@@ -156,36 +159,31 @@ $(DIST_DSC): $(PY_SOURCES) $(SUBDIRS) $(DEB_SOURCES) $(MAN_PAGES)
 	# project_version.orig.tar.gz
 	$(PYTHON) $(PYFLAGS) setup.py sdist --dist-dir=../
 	rename -f 's/$(NAME)-(.*)\.tar\.gz/$(NAME)_$$1\.orig\.tar\.gz/' ../*
-	debuild -S -i -I -Idist -Ibuild -Idocs/_build -Icoverage -I__pycache__ -I.coverage -Itags -I*.pyc -I*.vim -I*.xcf -rfakeroot
+	debuild -S
 	mkdir -p dist/
 	for f in $(DIST_DSC); do cp ../$${f##*/} dist/; done
 
-changelog-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
+changelog: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
 	$(MAKE) clean
 	# ensure there are no current uncommitted changes
 	test -z "$(shell git status --porcelain)"
 	# update the debian changelog with new release information
-	dch --newversion $(VER)$(DEB_SUFFIX) --controlmaint
+	dch --newversion $(VER)$(DEB_SUFFIX)
 	# commit the changes and add a new tag
 	git commit debian/changelog -m "Updated changelog for release $(VER)"
-
-changelog-ubuntu: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
-	# update the debian changelog with new release information
-	dch --newversion $(VER)$(DEB_SUFFIX) --controlmaint
-	# commit the changes and add a new tag
-	git commit debian/changelog -m "Updated changelog for Ubuntu release"
 
 release-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DIST_DEB) $(DIST_DSC)
 	git tag -s release-$(VER) -m "Release $(VER)"
 	git push --tags
 	git push
 	# build a source archive and upload to PyPI
-	$(PYTHON) $(PYFLAGS) setup.py sdist upload
+	$(TWINE) upload $(DIST_TAR) $(DIST_WHEEL)
 	# build the deb source archive and upload to Raspbian
 	dput raspberrypi dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
+	dput raspberrypi dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).changes
 
 release-ubuntu: $(DIST_DEB) $(DIST_DSC)
 	# build the deb source archive and upload to the PPA
 	dput waveform-ppa dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 
-.PHONY: all install develop test doc source egg zip tar deb dist clean tags changelog-pi changelog-ubuntu release-pi release-ubuntu $(SUBDIRS)
+.PHONY: all install develop test doc source wheel zip tar deb dist clean tags changelog release-pi release-ubuntu $(SUBDIRS)
