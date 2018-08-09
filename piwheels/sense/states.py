@@ -103,13 +103,14 @@ class SlaveState:
         self.slave_id = slave_id
         self.last_msg = '?'
         self.py_version = '?'
-        self.timeout = None
+        self.timeout = timedelta(hours=3)
         self.abi = '?'
         self.platform = '?'
         self.first_seen = None
         self.last_seen = None
         self.status = '?'
         self.label = '???'
+        self._color = Color('red')
 
     def update(self, timestamp, msg, *args):
         """
@@ -138,15 +139,20 @@ class SlaveState:
             ) = args
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
+            self._color = Color('#333')
         elif msg == 'BYE':
             self.terminated = True
             self.status = 'Terminating'
+            self._color = Color('red')
         elif msg == 'BUILD':
             self.status = 'Building {} {}'.format(args[0], args[1])
+            self._color = Color('#060')
         elif msg == 'SEND':
             self.status = 'Transferring file'
+            self._color = Color('#007')
         elif msg == 'DONE':
             self.status = 'Cleaning up after build'
+            self._color = Color('#707')
 
     @property
     def color(self):
@@ -158,6 +164,4 @@ class SlaveState:
                 return Color('#760')  # silent
             elif datetime.utcnow() - self.last_seen > self.timeout:
                 return Color('red')  # dead
-        if self.terminated:
-            return Color('red')  # dead
-        return Color('#050')
+        return self._color
