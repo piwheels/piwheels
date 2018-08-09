@@ -45,7 +45,16 @@ def zmq_context(request):
 @pytest.fixture()
 def master_config(request):
     config = mock.Mock()
-    config.control_queue = 'inproc://control'
+    config.index_queue = 'inproc://tests-indexes'
+    config.status_queue = 'inproc://tests-status'
+    config.control_queue = 'inproc://tests-control'
+    config.builds_queue = 'inproc://tests-builds'
+    config.db_queue = 'inproc://tests-db'
+    config.fs_queue = 'inproc://tests-fs'
+    config.slave_queue = 'inproc://tests-slave-driver'
+    config.file_queue = 'inproc://tests-file-juggler'
+    config.import_queue = 'inproc://tests-imports'
+    config.log_queue = 'inproc://tests-logger'
     return config
 
 
