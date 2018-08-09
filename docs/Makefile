@@ -5,12 +5,12 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         =
-BUILDDIR      = _build
-DOT_DIAGRAMS  := $(wildcard *.dot)
-MSC_DIAGRAMS  := $(wildcard *.mscgen)
-GPI_DIAGRAMS  := $(wildcard *.gpi)
-SVG_IMAGES    := $(wildcard *.svg) $(DOT_DIAGRAMS:%.dot=%.svg) $(MSC_DIAGRAMS:%.mscgen=%.svg)
-PNG_IMAGES    := $(wildcard *.png) $(GPI_DIAGRAMS:%.gpi=%.png)
+BUILDDIR      = ../build
+DOT_DIAGRAMS  := $(wildcard images/*.dot)
+MSC_DIAGRAMS  := $(wildcard images/*.mscgen)
+GPI_DIAGRAMS  := $(wildcard images/*.gpi)
+SVG_IMAGES    := $(wildcard images/*.svg) $(DOT_DIAGRAMS:%.dot=%.svg) $(MSC_DIAGRAMS:%.mscgen=%.svg)
+PNG_IMAGES    := $(wildcard images/*.png) $(GPI_DIAGRAMS:%.gpi=%.png) $(SVG_IMAGES:%.svg=%.png)
 PDF_IMAGES    := $(SVG_IMAGES:%.svg=%.pdf) $(GPI_DIAGRAMS:%.gpi=%.pdf) $(DOT_DIAGRAMS:%.dot=%.pdf) $(MSC_DIAGRAMS:%.mscgen=%.pdf)
 
 # User-friendly check for sphinx-build
@@ -89,17 +89,17 @@ qthelp:
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
 	      ".qhcp project file in $(BUILDDIR)/qthelp, like this:"
-	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/picamera.qhcp"
+	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/piwheels.qhcp"
 	@echo "To view the help file:"
-	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/picamera.qhc"
+	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/piwheels.qhc"
 
 devhelp:
 	$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(BUILDDIR)/devhelp
 	@echo
 	@echo "Build finished."
 	@echo "To view the help file:"
-	@echo "# mkdir -p $$HOME/.local/share/devhelp/picamera"
-	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/picamera"
+	@echo "# mkdir -p $$HOME/.local/share/devhelp/piwheels"
+	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/piwheels"
 	@echo "# devhelp"
 
 epub:
@@ -186,17 +186,19 @@ pseudoxml:
 %.svg: %.dot
 	dot -T svg -o $@ $<
 
-%.png: %.gpi common.gp
-	gnuplot -e "set term pngcairo size 640,480" $< > $@
+%.png: %.gpi
+	gnuplot -e "set term pngcairo transparent size 400,400" $< > $@
+
+%.png: %.svg
+	inkscape -e $@ $<
 
 %.pdf: %.svg
 	inkscape -A $@ $<
 
-%.pdf: %.gpi common.gp
-	gnuplot -e "set term pdfcairo size 10cm,7.5cm" $< > $@
+%.pdf: %.gpi
+	gnuplot -e "set term pdfcairo size 5cm,5cm" $< > $@
 
 %.pdf: %.mscgen
 	mscgen -T eps -o - $< | ps2pdf -dEPSCrop - $@
 
 .PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext
-
