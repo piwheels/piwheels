@@ -159,7 +159,7 @@ class SlaveState:
         """
         Calculate a simple color indicator for the slave.
         """
-        if self.first_seen is not None:
+        if self.last_seen is not None:
             if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
                 return Color('#760')  # silent
             elif datetime.utcnow() - self.last_seen > self.timeout:
