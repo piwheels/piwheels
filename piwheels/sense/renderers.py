@@ -48,7 +48,7 @@ from threading import main_thread
 
 import numpy as np
 from pisense import array, draw_text
-from colorzero import Color, Lightness, Saturation, Blue
+from colorzero import Color, Lightness, Saturation, Blue, ease_out
 
 from .states import SlaveList
 
@@ -226,9 +226,16 @@ class StatusRenderer(Renderer):
     def __init__(self, main):
         super().__init__()
         self.main = main
-        self.limits = (0, 0, 3, 0)
+        self.limits = (0, 0, 5, 0)
         self.back = None
         self.text = None
+        self.ping_grad = list(
+            Color('green').gradient(Color('red'), steps=64)
+        )
+        self.disk_grad = list(
+            Color('red').gradient(Color('green'), steps=64, easing=ease_out)
+        )
+        self.offset = cycle([8])
         self.update_back()
         self.update_text()
 
@@ -243,6 +250,7 @@ class StatusRenderer(Renderer):
             task.transition = partial(
                 task.screen.slide_to, direction='up', duration=0.5)
         elif delta != (0, 0):
+            self.offset = cycle([8])
             self.update_back()
             self.update_text()
             task.transition = partial(
@@ -253,13 +261,12 @@ class StatusRenderer(Renderer):
     def update_back(self):
         x, y = self.position
         if x == 0:
-            ping = 63 * max(timedelta(0), min(timedelta(seconds=30),
+            ping = 64 * max(timedelta(0), min(timedelta(seconds=30),
                 datetime.utcnow() - self.main.last_message)).total_seconds() / 30
-            grad = list(Color('green').gradient(Color('red'), steps=64))
             self.back = array([
-                grad[int(ping)] if i < ping else
-                Color('black')
+                c if i <= ping else Color('black')
                 for i in range(64)
+                for c in (self.ping_grad[min(63, int(ping))],)
             ])
             self.back = np.flipud(self.back)
         elif x == 1:
@@ -267,10 +274,11 @@ class StatusRenderer(Renderer):
                 64 * self.main.status.get('disk_free', 0) /
                 self.main.status.get('disk_size', 1))
             self.back = array([
-                Color('blue') if i < int(disk) else
-                Color('blue') * Blue(disk - int(disk)) if i < disk else
+                c if i < int(disk) else
+                c * Lightness(disk - int(disk)) if i < disk else
                 Color('black')
                 for i in range(64)
+                for c in (self.disk_grad[min(63, int(disk))],)
             ])
             self.back = np.flipud(self.back)
         elif x == 2:
@@ -297,16 +305,34 @@ class StatusRenderer(Renderer):
 
     def update_text(self):
         x, y = self.position
+        time = self.main.status.get('builds_time', timedelta(0))
+        time -= timedelta(microseconds=time.microseconds)
+        ping = datetime.utcnow() - self.main.last_message
+        ping -= timedelta(microseconds=ping.microseconds)
         text = {
-            0: 'Last Ping',
-            1: 'Disk Free',
-            2: 'Queue Size',
-            3: 'Builds/Hour',
+            0: 'Last Ping: {}s'.format(int(ping.total_seconds())),
+            1: 'Disk Free: {}%'.format(
+                100 * self.main.status.get('disk_free', 0) //
+                self.main.status.get('disk_size', 1)),
+            2: 'Queue Size: {}'.format(max(0,
+                self.main.status.get('versions_count', 0) -
+                self.main.status.get('versions_tried', 0))),
+            3: 'Builds/Hour: {}'.format(
+                self.main.status.get('builds_last_hour', 0)),
+            4: 'Build Time: {}'.format(time),
+            5: 'Build Size: {}Mb'.format(
+                self.main.status.get('builds_size', 0) // 1048576),
         }[x]
         self.text = array(
             draw_text(text, foreground=Color('gray'), padding=(8, 0, 8, 1)))
+        # Ensure the text doesn't "skip" while we're rendering it by starting
+        # the offset cycle at the current position of the offset cycle (unless
+        # it's out of range)
+        last = next(self.offset)
+        if last >= self.text.shape[1] - 8:
+            last = 0
         self.offset = iter(cycle(chain(
-            range(8, self.text.shape[1] - 8), range(8)
+            range(last, self.text.shape[1] - 8), range(last)
         )))
 
     def __iter__(self):
@@ -315,6 +341,7 @@ class StatusRenderer(Renderer):
             if datetime.utcnow() - now > timedelta(seconds=1):
                 now = datetime.utcnow()
                 self.update_back()
+                self.update_text()
             offset = next(self.offset)
             buf = self.back.copy()
             buf[:self.text.shape[0], :] += self.text[:, offset:offset + 8]

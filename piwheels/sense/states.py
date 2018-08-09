@@ -101,15 +101,15 @@ class SlaveState:
     def __init__(self, slave_id):
         self.terminated = False
         self.slave_id = slave_id
-        self.last_msg = ''
-        self.py_version = '-'
+        self.last_msg = '?'
+        self.py_version = '?'
         self.timeout = None
-        self.abi = '-'
-        self.platform = '-'
+        self.abi = '?'
+        self.platform = '?'
         self.first_seen = None
         self.last_seen = None
-        self.status = ''
-        self.label = ''
+        self.status = '?'
+        self.label = '???'
 
     def update(self, timestamp, msg, *args):
         """
