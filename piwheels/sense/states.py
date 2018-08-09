@@ -160,4 +160,4 @@ class SlaveState:
                 return Color('red')  # dead
         if self.terminated:
             return Color('red')  # dead
-        return Color('green')
+        return Color('#050')
