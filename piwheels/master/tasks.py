@@ -159,7 +159,7 @@ class Task(Thread):
                 for queue in socks:
                     self.handlers[queue](queue)
             except zmq.error.Again:
-                continue
+                continue  # pragma: no cover
             break
 
     def run(self):
