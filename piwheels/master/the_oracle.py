@@ -231,7 +231,7 @@ class TheOracle(Task):
 
     def do_getdl(self):
         """
-        Handler for "GETDL" message, sent by :class:`DdbClient` to request
+        Handler for "GETDL" message, sent by :class:`DbClient` to request
         the recent download statistics, returned as a list of (name, count)
         tuples.
         """
