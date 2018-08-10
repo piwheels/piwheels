@@ -34,7 +34,7 @@ command line or, in certain cases, environment variables.
 
 DSN = 'postgres:///piwheels'
 USER = 'piwheels'
-PYPI_ROOT = 'https://pypi.python.org/'
+PYPI_ROOT = 'https://pypi.org/'
 PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
 OUTPUT_PATH = '/var/www'

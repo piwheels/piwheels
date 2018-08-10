@@ -135,6 +135,12 @@ class FileState:
             self._transferred,
         )[index]
 
+    def __eq__(self, other):
+        return (
+            len(self) == len(other) and
+            all(s == o for s, o in zip(self, other))
+        )
+
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
             filename=self.filename,
@@ -224,6 +230,7 @@ class BuildState:
     """
     def __init__(self, slave_id, package, version, abi_tag, status, duration,
                  output, files, build_id=None):
+        assert abi_tag != 'none'
         self._slave_id = slave_id
         self._package = package
         self._version = version
@@ -249,6 +256,18 @@ class BuildState:
             self._files,
             self._build_id,
         ][index]
+
+    def __setitem__(self, index, value):
+        if index == 3:
+            self._abi_tag = value
+        else:
+            raise AttributeError('index %d is immutable' % index)
+
+    def __eq__(self, other):
+        return (
+            len(self) == len(other) and
+            all(s == o for s, o in zip(self, other))
+        )
 
     def __repr__(self):
         return (
@@ -471,6 +490,8 @@ class SlaveState:
     def expired(self):
         # There's a fudge factor of 10% here to allow slaves a little extra
         # time before we expire and forget them
+        if self._last_seen is None:
+            return False
         return (datetime.utcnow() - self._last_seen) > (self._timeout * 1.1)
 
     @property

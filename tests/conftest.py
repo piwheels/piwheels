@@ -31,6 +31,8 @@ from unittest import mock
 import zmq
 import pytest
 
+from piwheels import const
+
 
 @pytest.fixture(scope='function')
 def zmq_context(request):
@@ -63,6 +65,17 @@ def master_control_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.hwm = 10
     queue.bind(master_config.control_queue)
+    def fin():
+        queue.close()
+    request.addfinalizer(fin)
+    return queue
+
+
+@pytest.fixture(scope='function')
+def master_status_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.PULL)
+    queue.hwm = 10
+    queue.bind(const.INT_STATUS_QUEUE)
     def fin():
         queue.close()
     request.addfinalizer(fin)
