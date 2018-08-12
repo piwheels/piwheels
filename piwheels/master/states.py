@@ -301,7 +301,7 @@ class BuildState:
                 brec.version,
                 brec.abi_tag,
                 brec.status,
-                brec.duration,
+                brec.duration.total_seconds(),
                 brec.output,
                 {
                     frec.filename: FileState(

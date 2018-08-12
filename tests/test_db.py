@@ -28,95 +28,101 @@
 
 
 from unittest import mock
+from datetime import datetime
 
 import pytest
 
-from piwheels.master.db import *
+from piwheels.master.db import Database
 
 
-def test_init(master_config, db_schema):
-    db = Database(master_config.dsn)
+@pytest.fixture()
+def db_intf(request, master_config, with_schema):
+    return Database(master_config.dsn)
 
 
-def test_init_wrong_version(master_config, db_schema):
-    conn = db_schema
-    with conn.begin():
-        conn.execute("UPDATE configuration SET version = '0.0'")
+def test_init(master_config, db, with_schema):
+    Database(master_config.dsn)
+
+
+def test_init_wrong_version(master_config, db, with_schema):
+    with db.begin():
+        db.execute("UPDATE configuration SET version = '0.0'")
     with pytest.raises(RuntimeError):
         Database(master_config.dsn)
 
 
-def test_add_new_package(master_config, db_schema):
-    conn = db_schema
-    with conn.begin():
-        assert conn.execute("SELECT * FROM packages").first() is None
-    db = Database(master_config.dsn)
-    assert db.add_new_package('foo')
-    with conn.begin():
-        assert conn.execute("SELECT COUNT(*) FROM packages").first()[0] == 1
-        assert conn.execute("SELECT package FROM packages").first() == ('foo',)
-    assert not db.add_new_package('foo')
-    with conn.begin():
-        assert conn.execute("SELECT COUNT(*) FROM packages").first()[0] == 1
-        assert conn.execute("SELECT package FROM packages").first() == ('foo',)
+def test_add_new_package(db_intf, db, with_schema):
+    with db.begin():
+        assert db.execute("SELECT * FROM packages").first() is None
+    assert db_intf.add_new_package('foo')
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
+        assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert not db_intf.add_new_package('foo')
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
+        assert db.execute("SELECT package FROM packages").first() == ('foo',)
 
 
-def test_add_new_package_version(master_config, db_schema):
-    conn = db_schema
-    with conn.begin():
-        assert conn.execute("SELECT * FROM versions").first() is None
-    db = Database(master_config.dsn)
-    db.add_new_package('foo')
-    assert db.add_new_package_version('foo', '0.1')
-    with conn.begin():
-        assert conn.execute(
-            "SELECT COUNT(*) FROM versions").first()[0] == 1
-        assert conn.execute(
-            "SELECT package, version FROM versions").first() == ('foo', '0.1')
-    assert not db.add_new_package_version('foo', '0.1')
-    with conn.begin():
-        assert conn.execute(
-            "SELECT COUNT(*) FROM versions").first()[0] == 1
-        assert conn.execute(
-            "SELECT package, version FROM versions").first() == ('foo', '0.1')
+def test_add_new_package_version(db_intf, db, with_package):
+    with db.begin():
+        assert db.execute("SELECT * FROM versions").first() is None
+    assert db_intf.add_new_package_version(with_package, '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT COUNT(*) FROM versions").first() == (1,)
+        assert db.execute(
+            "SELECT package, version "
+            "FROM versions").first() == (with_package, '0.1')
+    assert not db_intf.add_new_package_version(with_package, '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT COUNT(*) FROM versions").first() == (1,)
+        assert db.execute(
+            "SELECT package, version "
+            "FROM versions").first() == (with_package, '0.1')
 
 
-def test_skip_package(master_config, db_schema):
-    conn = db_schema
-    with conn.begin():
-        assert conn.execute("SELECT * FROM packages").first() is None
-    db = Database(master_config.dsn)
-    db.add_new_package('foo')
-    with conn.begin():
-        assert conn.execute(
+def test_skip_package(db_intf, db, with_package):
+    with db.begin():
+        assert db.execute(
             "SELECT skip FROM packages "
             "WHERE package = 'foo'").first() == (False,)
-    db.skip_package('foo')
-    with conn.begin():
-        assert conn.execute(
+    db_intf.skip_package('foo')
+    with db.begin():
+        assert db.execute(
             "SELECT skip FROM packages "
             "WHERE package = 'foo'").first() == (True,)
 
 
-def test_skip_package_version(master_config, db_schema):
-    conn = db_schema
-    with conn.begin():
-        assert conn.execute("SELECT * FROM packages").first() is None
-    db = Database(master_config.dsn)
-    db.add_new_package('foo')
-    db.add_new_package_version('foo', 0.1)
-    with conn.begin():
-        assert conn.execute(
+def test_skip_package_version(db_intf, db, with_package_version):
+    with db.begin():
+        assert db.execute(
             "SELECT skip FROM versions "
             "WHERE package = 'foo' "
             "AND version = '0.1'").first() == (False,)
-    db.skip_package_version('foo', '0.1')
-    with conn.begin():
-        assert conn.execute(
+    db_intf.skip_package_version('foo', '0.1')
+    with db.begin():
+        assert db.execute(
             "SELECT skip FROM packages "
             "WHERE package = 'foo'").first() == (False,)
-        assert conn.execute(
+        assert db.execute(
             "SELECT skip FROM versions "
             "WHERE package = 'foo' "
             "AND version = '0.1'").first() == (True,)
 
+
+def test_test_package_version(db_intf, db, with_package):
+    assert not db_intf.test_package_version(with_package, '0.1')
+    db_intf.add_new_package_version(with_package, '0.1')
+    assert db_intf.test_package_version(with_package, '0.1')
+
+
+def test_log_download(db_intf, db, with_files, download_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM downloads").first() == (0,)
+    db_intf.log_download(download_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM downloads").first() == (1,)
+    assert db.execute(
+        "SELECT filename FROM downloads").first() == (download_state.filename,)

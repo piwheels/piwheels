@@ -29,24 +29,27 @@
 
 import os
 from unittest import mock
+from datetime import datetime, timedelta
+from hashlib import sha256
 
 import zmq
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 from piwheels import const
+from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.initdb import get_script, parse_statements
 
 
-# The database tests all assume that a database (default: piwtest) exists,
-# along with two users. An ordinary unprivileged user (default: piwheels) which
-# will be used as if it were the piwheels user on the production database,
-# and a postgres superuser (default: postgres) which will be used to set up
-# structures in the test database and remove them between each test. The
-# environment variables listed below can be used to configure the names of
-# these entities for use by the test suite.
+# The database tests all assume that a database (default: piwheels_test)
+# exists, along with two users. An ordinary unprivileged user (default:
+# piwheels) which will be used as if it were the piwheels user on the
+# production database, and a postgres superuser (default: postgres) which will
+# be used to set up structures in the test database and remove them between
+# each test. The environment variables listed below can be used to configure
+# the names of these entities for use by the test suite.
 
-PIWHEELS_TESTDB = os.environ.get('PIWHEELS_TESTDB', 'piwtest')
+PIWHEELS_TESTDB = os.environ.get('PIWHEELS_TESTDB', 'piwheels_test')
 PIWHEELS_USER = os.environ.get('PIWHEELS_USER', 'piwheels')
 PIWHEELS_PASS = os.environ.get('PIWHEELS_PASS', 'piwheels')
 PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
@@ -64,6 +67,63 @@ def zmq_context(request):
 
 
 @pytest.fixture()
+def file_content(request):
+    return b'\x01\x02\x03\x04\x05\x06\x07\x08' * 15432  # 123456 bytes
+
+
+@pytest.fixture()
+def file_state(request, file_content):
+    h = sha256()
+    h.update(file_content)
+    return FileState(
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
+        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l')
+
+
+@pytest.fixture()
+def file_state_hacked(request, file_content):
+    h = sha256()
+    h.update(file_content)
+    return FileState(
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl', len(file_content),
+        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l')
+
+
+@pytest.fixture()
+def file_state_universal(request, file_content):
+    h = sha256()
+    h.update(file_content)
+    return FileState(
+        'foo-0.1-py2.py3-none-any.whl', len(file_content),
+        h.hexdigest().lower(), 'foo', '0.1', 'py2.py3', 'none', 'any')
+
+
+@pytest.fixture()
+def build_state(request, file_state):
+    return BuildState(
+        1, file_state.package_tag, file_state.package_version_tag,
+        file_state.abi_tag, True, 300, 'Built successfully',
+        {file_state.filename: file_state})
+
+
+@pytest.fixture()
+def build_state_hacked(request, file_state, file_state_hacked):
+    return BuildState(
+        1, file_state.package_tag, file_state.package_version_tag,
+        file_state.abi_tag, True, 300, 'Built successfully', {
+            file_state.filename: file_state,
+            file_state_hacked.filename: file_state_hacked,
+        })
+
+
+@pytest.fixture()
+def download_state(request, file_state):
+    return DownloadState(
+        file_state.filename, '123.4.5.6', datetime(2018, 1, 1, 0, 0, 0),
+        'armv7l', 'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
+
+
+@pytest.fixture()
 def db_engine(request):
     url = 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_SUPERUSER,
@@ -78,8 +138,9 @@ def db_engine(request):
 
 
 @pytest.fixture()
-def db_conn(request, db_engine):
+def db(request, db_engine):
     conn = db_engine.connect()
+    conn.execute("SET SESSION synchronous_commit TO OFF")  # it's only a test
     def fin():
         conn.close()
     request.addfinalizer(fin)
@@ -87,20 +148,81 @@ def db_conn(request, db_engine):
 
 
 @pytest.fixture(scope='function')
-def db_schema(request, db_conn):
-    with db_conn.begin():
+def with_schema(request, db):
+    with db.begin():
+        # Wipe the public schema and re-create it with standard defaults
+        db.execute("DROP SCHEMA public CASCADE")
+        db.execute("CREATE SCHEMA public AUTHORIZATION postgres")
+        db.execute("GRANT CREATE ON SCHEMA public TO PUBLIC")
+        db.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
         for stmt in parse_statements(get_script()):
             stmt = stmt.format(username=PIWHEELS_USER)
-            db_conn.execute(text(stmt))
-    def fin():
-        with db_conn.begin():
-            db_conn.execute(text("DROP SCHEMA public CASCADE"))
-            db_conn.execute(text("CREATE SCHEMA public AUTHORIZATION postgres"))
-            db_conn.execute(text("GRANT CREATE ON SCHEMA public TO PUBLIC"))
-            db_conn.execute(text("GRANT USAGE ON SCHEMA public TO PUBLIC"))
-        db_conn.close()
-    request.addfinalizer(fin)
-    return db_conn
+            db.execute(stmt)
+    return 'schema'
+
+
+@pytest.fixture()
+def with_build_abis(request, db, with_schema):
+    with db.begin():
+        db.execute(
+            "INSERT INTO build_abis VALUES ('cp34m'), ('cp35m')")
+
+
+@pytest.fixture()
+def with_package(request, db, with_schema, build_state):
+    with db.begin():
+        db.execute(
+            "INSERT INTO packages(package) VALUES (%s)", build_state.package)
+    return build_state.package
+
+
+@pytest.fixture()
+def with_package_version(request, db, with_package, build_state):
+    with db.begin():
+        db.execute(
+            "INSERT INTO versions(package, version) "
+            "VALUES (%s, %s)", build_state.package, build_state.version)
+    return (build_state.package, build_state.version)
+
+
+@pytest.fixture()
+def with_build(request, db, with_package_version, build_state):
+    with db.begin():
+        build_id = db.execute(
+            "INSERT INTO builds"
+            "(package, version, built_by, built_at, duration, status, abi_tag) "
+            "VALUES "
+            "(%s, %s, %s, TIMESTAMP '2018-01-01 00:00:00', %s, true, %s) "
+            "RETURNING (build_id)",
+            build_state.package,
+            build_state.version,
+            build_state.slave_id,
+            timedelta(seconds=build_state.duration),
+            build_state.abi_tag).first()[0]
+        db.execute(
+            "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)
+    return build_id
+
+
+@pytest.fixture()
+def with_files(request, db, with_build, file_state):
+    with db.begin():
+        db.execute(
+            "INSERT INTO files "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            file_state.filename, with_build,
+            file_state.filesize, file_state.filehash, file_state.package_tag,
+            file_state.package_version_tag, file_state.py_version_tag,
+            file_state.abi_tag, file_state.platform_tag)
+        db.execute(
+            "INSERT INTO files "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            file_state.filename.replace('armv7l', 'armv6l'), with_build,
+            file_state.filesize, file_state.filehash, file_state.package_tag,
+            file_state.package_version_tag, file_state.py_version_tag,
+            file_state.abi_tag,
+            file_state.platform_tag.replace('armv7l', 'armv6l'))
+    return file_state.filename
 
 
 @pytest.fixture()
