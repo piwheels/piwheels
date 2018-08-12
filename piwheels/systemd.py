@@ -102,7 +102,6 @@ else:
         :exc:`RuntimeError`. Services expecting systemd notifications to be
         available can call this to assert that notifications will be noticed.
         """
-        pass
 
 
     def notify(state):
@@ -178,8 +177,8 @@ def watchdog_period():
     timeout = os.environ.get('WATCHDOG_USEC')
     if timeout is not None:
         pid = os.environ.get('WATCHDOG_PID')
-        if pid is None or pid == os.getpid():
-            return timeout / 1000000
+        if pid is None or int(pid) == os.getpid():
+            return int(timeout) / 1000000
     return None
 
 
