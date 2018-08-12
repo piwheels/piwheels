@@ -328,8 +328,7 @@ class Database:
         for more information.
         """
         with self._conn.begin():
-            for rec in self._conn.execute(self._statistics.select()):
-                return rec
+            return self._conn.execute(self._statistics.select()).first()
 
     def get_downloads_recent(self):
         """

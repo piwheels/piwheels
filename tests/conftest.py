@@ -166,10 +166,11 @@ def with_build_abis(request, db, with_schema):
     with db.begin():
         db.execute(
             "INSERT INTO build_abis VALUES ('cp34m'), ('cp35m')")
+    return {'cp34m', 'cp35m'}
 
 
 @pytest.fixture()
-def with_package(request, db, with_schema, build_state):
+def with_package(request, db, with_build_abis, build_state):
     with db.begin():
         db.execute(
             "INSERT INTO packages(package) VALUES (%s)", build_state.package)
@@ -201,28 +202,50 @@ def with_build(request, db, with_package_version, build_state):
             build_state.abi_tag).first()[0]
         db.execute(
             "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)
-    return build_id
+    build_state.logged(build_id)
+    return build_state
 
 
 @pytest.fixture()
-def with_files(request, db, with_build, file_state):
+def with_files(request, db, with_build, file_state, file_state_hacked):
     with db.begin():
         db.execute(
             "INSERT INTO files "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            file_state.filename, with_build,
+            file_state.filename, with_build.build_id,
             file_state.filesize, file_state.filehash, file_state.package_tag,
             file_state.package_version_tag, file_state.py_version_tag,
             file_state.abi_tag, file_state.platform_tag)
         db.execute(
             "INSERT INTO files "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            file_state.filename.replace('armv7l', 'armv6l'), with_build,
-            file_state.filesize, file_state.filehash, file_state.package_tag,
-            file_state.package_version_tag, file_state.py_version_tag,
-            file_state.abi_tag,
-            file_state.platform_tag.replace('armv7l', 'armv6l'))
-    return file_state.filename
+            file_state_hacked.filename, with_build.build_id,
+            file_state_hacked.filesize, file_state_hacked.filehash,
+            file_state_hacked.package_tag,
+            file_state_hacked.package_version_tag,
+            file_state_hacked.py_version_tag, file_state_hacked.abi_tag,
+            file_state_hacked.platform_tag)
+    return [file_state, file_state_hacked]
+
+
+@pytest.fixture()
+def with_downloads(request, db, with_files, download_state):
+    dl = download_state
+    with db.begin():
+        db.execute(
+            "INSERT INTO downloads "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            dl.filename, dl.host, dl.timestamp,
+            dl.arch, dl.distro_name, dl.distro_version,
+            dl.os_name, dl.os_version,
+            dl.py_name, dl.py_version)
+        db.execute(
+            "INSERT INTO downloads "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            dl.filename, dl.host, dl.timestamp + timedelta(minutes=5),
+            dl.arch, dl.distro_name, dl.distro_version,
+            dl.os_name, dl.os_version,
+            dl.py_name, dl.py_version)
 
 
 @pytest.fixture()

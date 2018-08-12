@@ -89,15 +89,15 @@ def test_build_state_init(build_state, file_state):
 def test_build_state_from_db(master_config, with_build, with_files,
                              build_state_hacked):
     db = Database(master_config.dsn)
-    build_state_hacked.logged(with_build)
+    build_state_hacked.logged(with_build.build_id)
     for file_state in build_state_hacked.files.values():
         file_state.verified()
-    assert BuildState.from_db(db, with_build) == build_state_hacked
+    assert BuildState.from_db(db, with_build.build_id) == build_state_hacked
 
 
 def test_build_state_from_db_unknown_build(master_config, with_build):
     db = Database(master_config.dsn)
-    assert with_build != 1000
+    assert with_build.build_id != 1000
     with pytest.raises(ValueError):
         BuildState.from_db(db, 1000)
 
