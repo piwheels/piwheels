@@ -204,7 +204,7 @@ def detect_version(conn):
         return db_version
 
 
-def get_script(version):
+def get_script(version=None):
     """
     Generate the script to get the database from *version* (the result of
     :func:`detect_version`) to the current version of the software. If
