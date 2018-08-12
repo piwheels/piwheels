@@ -595,9 +595,6 @@ class TransferState:
                     if result:
                         self._offset = result.stop
                         return result
-                    elif map_range.start > fetch_range.start:
-                        fetch_range = range(map_range.start,
-                                            map_range.start + self.chunk_size)
                 try:
                     fetch_range = range(self._map[0].start,
                                         self._map[0].start + self.chunk_size)
@@ -633,7 +630,10 @@ class TransferState:
                 body.update(buf)
             else:
                 break
+        size = self._file.tell()
         self._file.close()
+        if size != self._file_state.filesize:
+            raise IOError('wrong size for transfer at %s' % self._file.name)
         if body.hexdigest().lower() != self._file_state.filehash:
             raise IOError('failed to verify transfer at %s' % self._file.name)
 

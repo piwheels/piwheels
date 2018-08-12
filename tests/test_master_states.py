@@ -286,13 +286,12 @@ def test_transfer_state_init(tmpdir, file_state):
     assert not trans_state.done
 
 
-def test_transfer_state_fetch(tmpdir, file_state, file_content):
+def test_transfer_state_fetch1(tmpdir, file_state, file_content):
     tmpdir.mkdir('simple')
     TransferState.output_path = Path(str(tmpdir))
     trans_state = TransferState(1, file_state)
     assert trans_state.fetch() == range(TransferState.chunk_size)
     trans_state.chunk(0, file_content[:TransferState.chunk_size])
-    trans_state._offset = 0
     assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
     trans_state.chunk(TransferState.chunk_size,
                       file_content[TransferState.chunk_size:])
@@ -300,6 +299,23 @@ def test_transfer_state_fetch(tmpdir, file_state, file_content):
     assert trans_state.done
     trans_state.reset_credit()
     assert trans_state.fetch() is None
+
+
+def test_transfer_state_fetch2(tmpdir, file_state, file_content):
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    trans_state = TransferState(1, file_state)
+    trans_state._credit = 10  # hack the credit
+    assert trans_state.fetch() == range(TransferState.chunk_size)
+    assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
+    assert trans_state.fetch() == range(TransferState.chunk_size)
+    trans_state.chunk(0, file_content[:TransferState.chunk_size])
+    assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
+    assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
+    trans_state.chunk(TransferState.chunk_size,
+                      file_content[TransferState.chunk_size:])
+    assert trans_state.fetch() is None
+    assert trans_state.done
 
 
 def test_transfer_state_invalid_reset_credit(tmpdir, file_state, caplog):
@@ -323,7 +339,21 @@ def test_transfer_verify(tmpdir, file_state, file_content):
     trans_state.verify()
 
 
-def test_transfer_verify_fail(tmpdir, file_state, file_content):
+def test_transfer_verify_fail_size(tmpdir, file_state, file_content):
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    trans_state = TransferState(1, file_state)
+    r = trans_state.fetch()
+    trans_state.chunk(r.start, file_content[r.start:r.stop])
+    r = trans_state.fetch()
+    trans_state.chunk(r.start, file_content[r.start:r.stop])
+    assert trans_state.done
+    trans_state._file.write(b'\x00' * 4)
+    with pytest.raises(IOError):
+        trans_state.verify()
+
+
+def test_transfer_verify_fail_hash(tmpdir, file_state, file_content):
     tmpdir.mkdir('simple')
     TransferState.output_path = Path(str(tmpdir))
     trans_state = TransferState(1, file_state)
@@ -336,3 +366,83 @@ def test_transfer_verify_fail(tmpdir, file_state, file_content):
     trans_state._file.write(b'\xff\xff')
     with pytest.raises(IOError):
         trans_state.verify()
+
+
+def test_transfer_rollback(tmpdir, file_state, file_content):
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
+    trans_state = TransferState(1, file_state)
+    temp_path = TransferState.output_path / trans_state._file.name
+    trans_state._file.seek(0)
+    trans_state._file.write(file_content)
+    trans_state.rollback()
+    assert not final_path.exists()
+    assert not temp_path.exists()
+
+
+def test_transfer_commit(tmpdir, file_state, file_content):
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    trans_state = TransferState(1, file_state)
+    trans_state._file.seek(0)
+    trans_state._file.write(file_content)
+    trans_state.commit('foo')
+    assert not (TransferState.output_path / 'simple' / trans_state._file.name).exists()
+    final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
+    assert final_path.exists()
+
+
+def test_transfer_commit_override_symlink(tmpdir, file_state, file_content):
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
+    final_path.parent.with_name('bar').mkdir()
+    final_path.parent.symlink_to('bar', True)
+    trans_state = TransferState(1, file_state)
+    trans_state._file.seek(0)
+    trans_state._file.write(file_content)
+    trans_state.commit('foo')
+    assert not (TransferState.output_path / 'simple' / trans_state._file.name).exists()
+    assert not final_path.parent.is_symlink()
+    assert final_path.parent.is_dir()
+    assert final_path.exists()
+
+
+def test_transfer_commit_armv6_hack(tmpdir, file_state, file_content):
+    file_state._filename = 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    file_state._py_version_tag = 'cp34'
+    file_state._abi_tag = 'cp34m'
+    file_state._platform_tag = 'linux_armv7l'
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
+    link_path = final_path.with_name('foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    trans_state = TransferState(1, file_state)
+    trans_state._file.seek(0)
+    trans_state._file.write(file_content)
+    trans_state.commit('foo')
+    assert not (TransferState.output_path / 'simple' / trans_state._file.name).exists()
+    assert final_path.exists()
+    assert link_path.is_symlink()
+    assert link_path.resolve() == final_path
+
+
+def test_transfer_commit_armv6_exists(tmpdir, file_state, file_content):
+    file_state._filename = 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    file_state._py_version_tag = 'cp34'
+    file_state._abi_tag = 'cp34m'
+    file_state._platform_tag = 'linux_armv7l'
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
+    link_path = final_path.with_name('foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    link_path.parent.mkdir()
+    link_path.open('wb').close()  # create as a file
+    trans_state = TransferState(1, file_state)
+    trans_state._file.seek(0)
+    trans_state._file.write(file_content)
+    trans_state.commit('foo')
+    assert not (TransferState.output_path / 'simple' / trans_state._file.name).exists()
+    assert final_path.exists()
+    assert not link_path.is_symlink()
