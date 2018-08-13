@@ -80,35 +80,42 @@ class Database:
             engine = create_engine(dsn)
             Database.engines[dsn] = engine
         self._conn = engine.connect()
-        self._meta = MetaData(bind=self._conn)
-        with warnings.catch_warnings():
-            # Ignore warnings about partial indexes (SQLAlchemy doesn't know
-            # how to reflect them but that doesn't matter for our purposes as
-            # we're not doing DDL translation)
-            warnings.simplefilter('ignore', category=SAWarning)
-            self._configuration = Table('configuration', self._meta,
-                                        autoload=True)
-            with self._conn.begin():
-                db_version = self._conn.scalar(
-                    select([self._configuration.c.version])
-                )
-                if db_version != __version__:
-                    raise RuntimeError('Database version (%s) does not match '
-                                       'software version (%s)' %
-                                       (db_version, __version__))
-            self._packages = Table('packages', self._meta, autoload=True)
-            self._versions = Table('versions', self._meta, autoload=True)
-            self._builds = Table('builds', self._meta, autoload=True)
-            self._output = Table('output', self._meta, autoload=True)
-            self._files = Table('files', self._meta, autoload=True)
-            self._downloads = Table('downloads', self._meta, autoload=True)
-            self._build_abis = Table('build_abis', self._meta, autoload=True)
-            # The following are views on the tables above
-            self._builds_pending = Table('builds_pending', self._meta,
-                                         autoload=True)
-            self._statistics = Table('statistics', self._meta, autoload=True)
-            self._downloads_recent = Table('downloads_recent', self._meta,
-                                           autoload=True)
+        try:
+            self._meta = MetaData(bind=self._conn)
+            with warnings.catch_warnings():
+                # Ignore warnings about partial indexes (SQLAlchemy doesn't
+                # know how to reflect them but that doesn't matter for our
+                # purposes as we're not doing DDL translation)
+                warnings.simplefilter('ignore', category=SAWarning)
+                self._configuration = Table('configuration', self._meta,
+                                            autoload=True)
+                with self._conn.begin():
+                    db_version = self._conn.scalar(
+                        select([self._configuration.c.version])
+                    )
+                    if db_version != __version__:
+                        raise RuntimeError(
+                            'Database version (%s) does not match '
+                            'software version (%s)' % (db_version, __version__)
+                        )
+                self._packages = Table('packages', self._meta, autoload=True)
+                self._versions = Table('versions', self._meta, autoload=True)
+                self._builds = Table('builds', self._meta, autoload=True)
+                self._output = Table('output', self._meta, autoload=True)
+                self._files = Table('files', self._meta, autoload=True)
+                self._downloads = Table('downloads', self._meta, autoload=True)
+                self._build_abis = Table(
+                    'build_abis', self._meta, autoload=True)
+                # The following are views on the tables above
+                self._builds_pending = Table(
+                    'builds_pending', self._meta, autoload=True)
+                self._statistics = Table(
+                    'statistics', self._meta, autoload=True)
+                self._downloads_recent = Table(
+                    'downloads_recent', self._meta, autoload=True)
+        except:
+            self._conn.close()
+            raise
 
     def add_new_package(self, package):
         """

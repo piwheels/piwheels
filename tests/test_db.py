@@ -37,11 +37,18 @@ from piwheels.master.db import Database
 
 @pytest.fixture()
 def db_intf(request, master_config, with_schema):
-    return Database(master_config.dsn)
+    intf = Database(master_config.dsn)
+    def fin():
+        intf._conn.close()
+    request.addfinalizer(fin)
+    return intf
 
 
 def test_init(master_config, db, with_schema):
-    Database(master_config.dsn)
+    try:
+        intf = Database(master_config.dsn)
+    finally:
+        intf._conn.close()
 
 
 def test_init_wrong_version(master_config, db, with_schema):
@@ -52,64 +59,54 @@ def test_init_wrong_version(master_config, db, with_schema):
 
 
 def test_add_new_package(db_intf, db, with_schema):
-    with db.begin():
-        assert db.execute("SELECT * FROM packages").first() is None
+    assert db.execute("SELECT * FROM packages").first() is None
     assert db_intf.add_new_package('foo')
-    with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
-        assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
+    assert db.execute("SELECT package FROM packages").first() == ('foo',)
     assert not db_intf.add_new_package('foo')
-    with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
-        assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
+    assert db.execute("SELECT package FROM packages").first() == ('foo',)
 
 
 def test_add_new_package_version(db_intf, db, with_package):
-    with db.begin():
-        assert db.execute("SELECT * FROM versions").first() is None
+    assert db.execute("SELECT * FROM versions").first() is None
     assert db_intf.add_new_package_version(with_package, '0.1')
-    with db.begin():
-        assert db.execute(
-            "SELECT COUNT(*) FROM versions").first() == (1,)
-        assert db.execute(
-            "SELECT package, version "
-            "FROM versions").first() == (with_package, '0.1')
+    assert db.execute(
+        "SELECT COUNT(*) FROM versions").first() == (1,)
+    assert db.execute(
+        "SELECT package, version "
+        "FROM versions").first() == (with_package, '0.1')
     assert not db_intf.add_new_package_version(with_package, '0.1')
-    with db.begin():
-        assert db.execute(
-            "SELECT COUNT(*) FROM versions").first() == (1,)
-        assert db.execute(
-            "SELECT package, version "
-            "FROM versions").first() == (with_package, '0.1')
+    assert db.execute(
+        "SELECT COUNT(*) FROM versions").first() == (1,)
+    assert db.execute(
+        "SELECT package, version "
+        "FROM versions").first() == (with_package, '0.1')
 
 
 def test_skip_package(db_intf, db, with_package):
-    with db.begin():
-        assert db.execute(
-            "SELECT skip FROM packages "
-            "WHERE package = 'foo'").first() == (False,)
+    assert db.execute(
+        "SELECT skip FROM packages "
+        "WHERE package = 'foo'").first() == (False,)
     db_intf.skip_package('foo')
-    with db.begin():
-        assert db.execute(
-            "SELECT skip FROM packages "
-            "WHERE package = 'foo'").first() == (True,)
+    assert db.execute(
+        "SELECT skip FROM packages "
+        "WHERE package = 'foo'").first() == (True,)
 
 
 def test_skip_package_version(db_intf, db, with_package_version):
-    with db.begin():
-        assert db.execute(
-            "SELECT skip FROM versions "
-            "WHERE package = 'foo' "
-            "AND version = '0.1'").first() == (False,)
+    assert db.execute(
+        "SELECT skip FROM versions "
+        "WHERE package = 'foo' "
+        "AND version = '0.1'").first() == (False,)
     db_intf.skip_package_version('foo', '0.1')
-    with db.begin():
-        assert db.execute(
-            "SELECT skip FROM packages "
-            "WHERE package = 'foo'").first() == (False,)
-        assert db.execute(
-            "SELECT skip FROM versions "
-            "WHERE package = 'foo' "
-            "AND version = '0.1'").first() == (True,)
+    assert db.execute(
+        "SELECT skip FROM packages "
+        "WHERE package = 'foo'").first() == (False,)
+    assert db.execute(
+        "SELECT skip FROM versions "
+        "WHERE package = 'foo' "
+        "AND version = '0.1'").first() == (True,)
 
 
 def test_test_package_version(db_intf, db, with_package):

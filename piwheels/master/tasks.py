@@ -79,6 +79,15 @@ class Task(Thread):
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
 
+    def close(self):
+        """
+        Close all registered queues. This should be overridden to close any
+        additional queues the task holds which aren't registered.
+        """
+        for queue in self.handlers:
+            queue.close()
+        self.quit_queue.close()
+
     def register(self, queue, handler, flags=zmq.POLLIN):
         """
         Register *queue* to be polled on each cycle of the task. Any messages
@@ -101,9 +110,11 @@ class Task(Thread):
 
     def _ctrl(self, msg):
         queue = self.ctx.socket(zmq.PUSH)
-        queue.connect('inproc://ctrl-%s' % self.name)
-        queue.send_pyobj(msg)
-        queue.close()
+        try:
+            queue.connect('inproc://ctrl-%s' % self.name)
+            queue.send_pyobj(msg)
+        finally:
+            queue.close()
 
     def pause(self):
         """
@@ -169,16 +180,19 @@ class Task(Thread):
         any finalization required.
         """
         self.logger.info('starting')
-        while True:
-            try:
-                self.loop()
-                self.poll()
-            except TaskQuit:
-                self.logger.info('closing')
-                break
-            except:
-                self.quit_queue.send_pyobj(['QUIT'])
-                raise
+        try:
+            while True:
+                try:
+                    self.loop()
+                    self.poll()
+                except TaskQuit:
+                    self.logger.info('closing')
+                    break
+                except:
+                    self.quit_queue.send_pyobj(['QUIT'])
+                    raise
+        finally:
+            self.close()
 
 
 class PauseableTask(Task):

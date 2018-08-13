@@ -56,16 +56,6 @@ PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
 PIWHEELS_SUPERPASS = os.environ.get('PIWHEELS_SUPERPASS', '')
 
 
-@pytest.fixture(scope='function')
-def zmq_context(request):
-    context = zmq.Context.instance()
-    def fin():
-        context.destroy()
-        context.term()
-    request.addfinalizer(fin)
-    return context
-
-
 @pytest.fixture()
 def file_content(request):
     return b'\x01\x02\x03\x04\x05\x06\x07\x08' * 15432  # 123456 bytes
@@ -123,7 +113,7 @@ def download_state(request, file_state):
         'armv7l', 'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def db_engine(request):
     url = 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_SUPERUSER,
@@ -140,10 +130,10 @@ def db_engine(request):
 @pytest.fixture()
 def db(request, db_engine):
     conn = db_engine.connect()
-    conn.execute("SET SESSION synchronous_commit TO OFF")  # it's only a test
     def fin():
         conn.close()
     request.addfinalizer(fin)
+    conn.execute("SET SESSION synchronous_commit TO OFF")  # it's only a test
     return conn
 
 
@@ -248,7 +238,7 @@ def with_downloads(request, db, with_files, download_state):
             dl.py_name, dl.py_version)
 
 
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def master_config(request):
     config = mock.Mock()
     config.dsn = 'postgres://{username}:{password}@/{db}'.format(
@@ -270,22 +260,32 @@ def master_config(request):
 
 
 @pytest.fixture(scope='function')
+def zmq_context(request):
+    context = zmq.Context.instance()
+    def fin():
+        context.destroy(linger=1000)
+        context.term()
+    request.addfinalizer(fin)
+    return context
+
+
+@pytest.fixture(scope='function')
 def master_control_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
-    queue.hwm = 10
-    queue.bind(master_config.control_queue)
     def fin():
         queue.close()
     request.addfinalizer(fin)
+    queue.hwm = 10
+    queue.bind(master_config.control_queue)
     return queue
 
 
 @pytest.fixture(scope='function')
-def master_status_queue(request, zmq_context, master_config):
+def master_status_queue(request, zmq_context):
     queue = zmq_context.socket(zmq.PULL)
-    queue.hwm = 10
-    queue.bind(const.INT_STATUS_QUEUE)
     def fin():
         queue.close()
     request.addfinalizer(fin)
+    queue.hwm = 10
+    queue.bind(const.INT_STATUS_QUEUE)
     return queue

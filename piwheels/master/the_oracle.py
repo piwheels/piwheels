@@ -81,8 +81,8 @@ class TheOracle(Task):
         Handle incoming requests from :class:`DbClient` instances.
         """
         address, empty, msg = queue.recv_multipart()
-        msg, *args = pickle.loads(msg)
         try:
+            msg, *args = pickle.loads(msg)
             handler = {
                 'ALLPKGS': self.do_allpkgs,
                 'ALLVERS': self.do_allvers,
@@ -160,7 +160,7 @@ class TheOracle(Task):
         Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
         register a new download.
         """
-        return self.db.log_download(download)
+        self.db.log_download(download)
 
     def do_logbuild(self, build):
         """
@@ -191,7 +191,7 @@ class TheOracle(Task):
         the filenames of all wheels associated with *version* of *package*.
         """
         files = self.db.get_version_files(package, version)
-        return list(files)
+        return set(files)
 
     def do_pkgexists(self, package, version):
         """
@@ -307,7 +307,7 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        return self._execute(['LOGDOWNLOAD', download])
+        self._execute(['LOGDOWNLOAD', download])
 
     def log_build(self, build):
         """
