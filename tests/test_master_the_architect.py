@@ -26,51 +26,38 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""
-Defines :class:`TheArchitect` task; see class for more details.
-
-.. autoclass:: TheArchitect
-    :members:
-"""
-
 import zmq
+import pytest
 
-from .tasks import Task
-from .db import Database
+from piwheels.master.the_architect import TheArchitect
 
 
-class TheArchitect(Task):
-    """
-    This task queries the backend database to determine which versions of
-    packages have yet to be built (and aren't marked to be skipped). It places
-    a tuple of (package, version) for each such build into the internal
-    "builds" queue for :class:`~.slave_driver.SlaveDriver` to read.
-    """
-    name = 'master.the_architect'
+@pytest.fixture(scope='function')
+def task_architect(request, master_config):
+    task = TheArchitect(master_config)
+    task.start()
+    def fin():
+        task.quit()
+        task.join(2)
+        if task.is_alive():
+            raise RuntimeError('failed to kill the_architect task')
+        task.db._conn.close()
+    request.addfinalizer(fin)
+    return task
 
-    def __init__(self, config):
-        super().__init__(config)
-        self.db = Database(config.dsn)
-        self.query = None
-        self.builds_queue = self.ctx.socket(zmq.PUSH)
-        self.builds_queue.hwm = 10
-        self.builds_queue.bind(config.builds_queue)
 
-    def loop(self):
-        """
-        The architect simply runs the build queue query repeatedly. On each
-        loop iteration, an entry from the result set is added to the relevant
-        ABI queue. The queues are limited in length to prevent silly memory
-        usage on the initial run (which will involve millions of entries). This
-        does mean that a single loop over the query will potentially miss
-        entries, but that's fine as it'll just be repeated again.
-        """
-        if self.query is None:
-            self.query = self.db.get_build_queue()
-        try:
-            row = next(self.query)
-            self.builds_queue.send_pyobj(
-                (row.abi_tag, row.package, row.version)
-            )
-        except StopIteration:
-            self.query = None
+@pytest.fixture(scope='function')
+def builds_queue(request, zmq_context, master_config, task_architect):
+    queue = zmq_context.socket(zmq.PULL)
+    queue.connect(master_config.builds_queue)
+    def fin():
+        queue.close()
+    request.addfinalizer(fin)
+    return queue
+
+
+def test_architect_queue(db, with_build, builds_queue):
+    assert builds_queue.recv_pyobj() == ('cp35m', 'foo', '0.1')
+    with db.begin():
+        db.execute("DELETE FROM builds")
+    assert builds_queue.recv_pyobj() == ('cp34m', 'foo', '0.1')

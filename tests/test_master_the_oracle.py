@@ -69,15 +69,15 @@ def test_oracle_bad_request(seraph_oracle_queue, task_the_oracle):
     assert pickle.loads(resp) == ['ERR', repr('FOO')]
 
 
-def test_db_get_all_packages(db_client, db, with_package):
+def test_db_get_all_packages(db, with_package, db_client):
     assert db_client.get_all_packages() == {'foo'}
 
 
-def test_db_get_all_package_versions(db_client, db, with_package_version):
+def test_db_get_all_package_versions(db, with_package_version, db_client):
     assert db_client.get_all_package_versions() == {('foo', '0.1')}
 
 
-def test_db_add_new_package(db_client, db, with_schema):
+def test_db_add_new_package(db, with_schema, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").first() == (0,)
     db_client.add_new_package('foo')
@@ -87,7 +87,7 @@ def test_db_add_new_package(db_client, db, with_schema):
             "SELECT package, skip FROM packages").first() == ('foo', False)
 
 
-def test_db_add_new_package_version(db_client, db, with_package):
+def test_db_add_new_package_version(db, with_package, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM versions").first() == (0,)
     db_client.add_new_package_version('foo', '0.1')
@@ -98,7 +98,7 @@ def test_db_add_new_package_version(db_client, db, with_package):
             "FROM versions").first() == ('foo', '0.1', False)
 
 
-def test_db_skip_package(db_client, db, with_package):
+def test_db_skip_package(db, with_package, db_client):
     with db.begin():
         assert db.execute(
             "SELECT package, skip FROM packages").first() == ('foo', False)
@@ -108,7 +108,7 @@ def test_db_skip_package(db_client, db, with_package):
             "SELECT package, skip FROM packages").first() == ('foo', True)
 
 
-def test_db_skip_package_version(db_client, db, with_package_version):
+def test_db_skip_package_version(db, with_package_version, db_client):
     with db.begin():
         assert db.execute(
             "SELECT package, version, skip "
@@ -120,12 +120,12 @@ def test_db_skip_package_version(db_client, db, with_package_version):
             "FROM versions").first() == ('foo', '0.1', True)
 
 
-def test_test_package_version(db_client, db, with_package_version):
+def test_test_package_version(db, with_package_version, db_client):
     assert db_client.test_package_version('foo', '0.1')
     assert not db_client.test_package_version('foo', '0.2')
 
 
-def test_db_log_download(db_client, db, with_files, download_state):
+def test_db_log_download(db, with_files, download_state, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM downloads").first() == (0,)
     db_client.log_download(download_state)
@@ -135,7 +135,7 @@ def test_db_log_download(db_client, db, with_files, download_state):
             "SELECT filename FROM downloads").first() == (download_state.filename,)
 
 
-def test_db_log_build(db_client, db, with_package_version, build_state_hacked):
+def test_db_log_build(db, with_package_version, build_state_hacked, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM builds").first() == (0,)
     db_client.log_build(build_state_hacked)
@@ -145,7 +145,7 @@ def test_db_log_build(db_client, db, with_package_version, build_state_hacked):
         assert db.execute("SELECT COUNT(*) FROM files").first() == (2,)
 
 
-def test_db_delete_build(db_client, db, with_build):
+def test_db_delete_build(db, with_build, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM builds").first() == (1,)
     db_client.delete_build('foo', '0.1')
@@ -153,7 +153,7 @@ def test_db_delete_build(db_client, db, with_build):
         assert db.execute("SELECT COUNT(*) FROM builds").first() == (0,)
 
 
-def test_get_package_files(db_client, db, with_files, build_state_hacked):
+def test_get_package_files(db, with_files, build_state_hacked, db_client):
     assert {
         (r.filename, r.filehash)
         for r in db_client.get_package_files('foo')
@@ -163,19 +163,19 @@ def test_get_package_files(db_client, db, with_files, build_state_hacked):
     }
 
 
-def test_get_version_files(db_client, db, with_files, build_state_hacked):
+def test_get_version_files(db, with_files, build_state_hacked, db_client):
     assert db_client.get_version_files('foo', '0.1') == build_state_hacked.files.keys()
 
 
-def test_get_build_abis(db_client, db, with_build_abis):
+def test_get_build_abis(db, with_build_abis, db_client):
     assert db_client.get_build_abis() == {'cp34m', 'cp35m'}
 
 
-def test_get_pypi_serial(db_client, db, with_schema):
+def test_get_pypi_serial(db, with_schema, db_client):
     assert db_client.get_pypi_serial() == 0
 
 
-def test_set_pypi_serial(db_client, db, with_schema):
+def test_set_pypi_serial(db, with_schema, db_client):
     assert db_client.get_pypi_serial() == 0
     db_client.set_pypi_serial(50000)
     assert db_client.get_pypi_serial() == 50000
