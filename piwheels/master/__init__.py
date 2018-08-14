@@ -138,7 +138,7 @@ write access to the output directory.
             help="The address of the queue used by piw-import (default: "
             "(%(default)s); this should always be an ipc address")
         parser.add_argument(
-            '--log-queue', metavar='ADDR', default=const.LOGGER_QUEUE,
+            '--log-queue', metavar='ADDR', default=const.LOG_QUEUE,
             help="The address of the queue used by piw-log (default: "
             "(%(default)s)")
         return parser

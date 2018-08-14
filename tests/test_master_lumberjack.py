@@ -26,30 +26,50 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""
-This module defines the default configuration for all applications in the
-piwheels suite. Configuration can be overridden via configuration files, the
-command line or, in certain cases, environment variables.
-"""
 
-DSN = 'postgres:///piwheels'
-USER = 'piwheels'
-PYPI_ROOT = 'https://pypi.org/'
-PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
-PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
-OUTPUT_PATH = '/var/www'
-STATUS_QUEUE = 'ipc:///tmp/piw-status'
-CONTROL_QUEUE = 'ipc:///tmp/piw-control'
-INDEX_QUEUE = 'inproc://indexes'
-BUILDS_QUEUE = 'inproc://builds'
-DB_QUEUE = 'inproc://db'
-FS_QUEUE = 'inproc://fs'
-SLAVE_QUEUE = 'tcp://*:5555'
-FILE_QUEUE = 'tcp://*:5556'
-IMPORT_QUEUE = 'ipc:///tmp/piw-import'
-LOG_QUEUE = 'ipc:///tmp/piw-logger'
+from unittest import mock
+from threading import Event
 
-# NOTE: The following queues are *not* configurable and should always be an
-# inproc queue
-INT_STATUS_QUEUE = 'inproc://status'
-ORACLE_QUEUE = 'inproc://oracle'
+import zmq
+import pytest
+
+from piwheels.master.lumberjack import Lumberjack
+
+
+@pytest.fixture(scope='function')
+def task_lumberjack(request, zmq_context, master_config):
+    task = Lumberjack(master_config)
+    task.logger = mock.Mock()
+    task.start()
+    def fin():
+        task.quit()
+        task.join(2)
+        if task.is_alive():
+            raise RuntimeError('failed to kill lumberjack task')
+    request.addfinalizer(fin)
+    return task
+
+
+@pytest.fixture(scope='function')
+def log_queue(request, zmq_context, master_config, task_lumberjack):
+    queue = zmq_context.socket(zmq.PUSH)
+    queue.connect(master_config.log_queue)
+    def fin():
+        queue.close()
+    request.addfinalizer(fin)
+    return queue
+
+
+def test_lumberjack_log_valid(db_queue, log_queue, download_state, task_lumberjack):
+    log_queue.send_pyobj(['LOG'] + list(download_state))
+    assert db_queue.recv_pyobj() == ['LOGDOWNLOAD', download_state]
+    db_queue.send_pyobj(['OK', None])
+    assert task_lumberjack.logger.info.call_args == mock.call(
+        'logging download of %s from %s',
+        download_state.filename, download_state.host)
+
+def test_lumberjack_log_invalid(db_queue, log_queue, task_lumberjack):
+    log_queue.send_pyobj(['FOO'])
+    evt = Event()
+    task_lumberjack.logger.warning.side_effect = lambda *args: evt.set()
+    assert evt.wait(1)

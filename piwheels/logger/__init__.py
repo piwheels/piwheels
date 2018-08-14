@@ -79,7 +79,7 @@ as the piw-master script.
         help="The log file(s) to load into the master; if omitted or - then "
         "stdin will be read which is the default for piped log usage")
     parser.add_argument(
-        '--logger-queue', metavar='ADDR', default=const.LOGGER_QUEUE,
+        '--log-queue', metavar='ADDR', default=const.LOG_QUEUE,
         help="The address of the queue used by piw-logger (default: "
         "(%(default)s); this should always be an ipc address")
     parser.add_argument(
@@ -99,7 +99,7 @@ as the piw-master script.
         }.get(config.format, config.format)
         ctx = zmq.Context.instance()
         queue = ctx.socket(zmq.PUSH)
-        queue.connect(config.logger_queue)
+        queue.connect(config.log_queue)
         try:
             for filename in config.files:
                 log_file = log_open(filename)
