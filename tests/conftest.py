@@ -37,8 +37,10 @@ import pytest
 from sqlalchemy import create_engine
 
 from piwheels import const
-from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.initdb import get_script, parse_statements
+from piwheels.master.states import BuildState, FileState, DownloadState
+from piwheels.master.the_oracle import TheOracle
+from piwheels.master.seraph import Seraph
 
 
 # The database tests all assume that a database (default: piwheels_test)
@@ -269,6 +271,38 @@ def zmq_context(request):
     return context
 
 
+@pytest.fixture()
+def sock_push_pull(request, zmq_context):
+    # XXX Could extend this to be a factory fixture (permitting multiple pairs)
+    pull = zmq_context.socket(zmq.PULL)
+    push = zmq_context.socket(zmq.PUSH)
+    pull.hwm = 1
+    push.hwm = 1
+    pull.bind('inproc://push-pull')
+    push.connect('inproc://push-pull')
+    def fin():
+        push.close()
+        pull.close()
+    request.addfinalizer(fin)
+    return push, pull
+
+
+@pytest.fixture()
+def sock_pair(request, zmq_context):
+    # XXX Could extend this to be a factory fixture (permitting multiple pairs)
+    sock1 = zmq_context.socket(zmq.PAIR)
+    sock2 = zmq_context.socket(zmq.PAIR)
+    sock1.hwm = 1
+    sock2.hwm = 1
+    sock1.bind('inproc://pair-pair')
+    sock2.connect('inproc://pair-pair')
+    def fin():
+        sock2.close()
+        sock1.close()
+    request.addfinalizer(fin)
+    return sock1, sock2
+
+
 @pytest.fixture(scope='function')
 def master_control_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
@@ -289,3 +323,43 @@ def master_status_queue(request, zmq_context):
     queue.hwm = 10
     queue.bind(const.INT_STATUS_QUEUE)
     return queue
+
+
+@pytest.fixture(scope='function')
+def db_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.REP)
+    def fin():
+        queue.close()
+    request.addfinalizer(fin)
+    queue.hwm = 10
+    queue.bind(master_config.db_queue)
+    return queue
+
+
+@pytest.fixture(scope='function')
+def task_seraph(request, zmq_context, master_config):
+    task = Seraph(master_config)
+    task.front_queue.router_mandatory = True  # don't drop msgs during test
+    task.back_queue.router_mandatory = True
+    task.start()
+    def fin():
+        task.quit()
+        task.join(2)
+        if task.is_alive():
+            raise RuntimeError('failed to kill seraph task')
+    request.addfinalizer(fin)
+    return task
+
+
+@pytest.fixture(scope='function')
+def task_the_oracle(request, zmq_context, master_config):
+    task = TheOracle(master_config)
+    task.start()
+    def fin():
+        task.quit()
+        task.join(2)
+        if task.is_alive():
+            raise RuntimeError('failed to kill the_oracle task')
+        task.db._conn.close()
+    request.addfinalizer(fin)
+    return task

@@ -40,36 +40,7 @@ from piwheels.master.the_oracle import TheOracle, DbClient
 
 
 @pytest.fixture(scope='function')
-def seraph(request, zmq_context, master_config):
-    task = Seraph(master_config)
-    task.front_queue.router_mandatory = True  # don't drop msgs during test
-    task.back_queue.router_mandatory = True
-    task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill the_oracle task')
-    request.addfinalizer(fin)
-    return task
-
-
-@pytest.fixture(scope='function')
-def the_oracle(request, zmq_context, master_config):
-    task = TheOracle(master_config)
-    task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill the_oracle task')
-        task.db._conn.close()
-    request.addfinalizer(fin)
-    return task
-
-
-@pytest.fixture(scope='function')
-def db_client(request, seraph, the_oracle, master_config):
+def db_client(request, task_seraph, task_the_oracle, master_config):
     client = DbClient(master_config)
     return client
 
@@ -85,11 +56,11 @@ def seraph_oracle_queue(request, zmq_context):
     return queue
 
 
-def test_oracle_init(seraph_oracle_queue, the_oracle):
+def test_oracle_init(seraph_oracle_queue, task_the_oracle):
     assert seraph_oracle_queue.recv() == b'READY'
 
 
-def test_oracle_bad_request(seraph_oracle_queue, the_oracle):
+def test_oracle_bad_request(seraph_oracle_queue, task_the_oracle):
     assert seraph_oracle_queue.recv() == b'READY'
     seraph_oracle_queue.send_multipart([b'foo', b'', pickle.dumps(['FOO'])])
     address, empty, resp = seraph_oracle_queue.recv_multipart()
