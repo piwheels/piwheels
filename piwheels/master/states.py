@@ -552,6 +552,10 @@ class TransferState:
     def __init__(self, slave_id, file_state):
         self._slave_id = slave_id
         self._file_state = file_state
+        try:
+            (self.output_path / 'simple').mkdir()
+        except FileExistsError:
+            pass
         self._file = tempfile.NamedTemporaryFile(
             dir=str(self.output_path / 'simple'), delete=False)
         self._file.seek(self._file_state.filesize)
@@ -685,9 +689,19 @@ def mkdir_override_symlink(pkg_dir):
     Make *pkg_dir*, replacing any existing symlink in its place. See the
     notes in :meth:`IndexScribe.write_package_index` for more information.
     """
-    try:
-        pkg_dir.mkdir()
-    except FileExistsError:
-        if pkg_dir.is_symlink():
-            pkg_dir.unlink()
+    # There is a tiny possibility of a race here between two threads wanting
+    # to replace a symlinked dir with a "real" dir, hence the loop below
+    while True:
+        try:
             pkg_dir.mkdir()
+        except FileExistsError:
+            if pkg_dir.is_symlink():
+                # There is another tiny possibility that, in racing another
+                # thread replacing the symlinked dir, the other thread wins
+                # and this unlink fails because it's now a "real" dir
+                try:
+                    pkg_dir.unlink()
+                    continue
+                except IsADirectoryError:
+                    pass
+        break
