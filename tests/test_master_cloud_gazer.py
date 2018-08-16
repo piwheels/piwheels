@@ -42,7 +42,9 @@ def pypi_proxy(request, sock_push_pull):
     def recv(serial):
         try:
             return pull.recv_pyobj(zmq.NOBLOCK)
-        except zmq.EAGAIN:
+        except zmq.ZMQError as e:
+            if e.errno != zmq.EAGAIN:
+                raise
             return []
     proxy_patcher = mock.patch('xmlrpc.client.ServerProxy')
     proxy_mock = proxy_patcher.start()

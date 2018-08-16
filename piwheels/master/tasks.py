@@ -76,6 +76,7 @@ class Task(Thread):
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(zmq.PUSH)
+        self.quit_queue.hwm = 1
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
 
@@ -150,6 +151,14 @@ class Task(Thread):
         if msg == 'QUIT':
             raise TaskQuit
 
+    def once(self):
+        """
+        This method is called once before the task loop starts. It the task
+        needs to do some initialization or setup within the task thread, this
+        is the place to do it.
+        """
+        pass
+
     def loop(self):
         """
         This method is called once per loop of the task's :meth:`run` method.
@@ -181,16 +190,15 @@ class Task(Thread):
         """
         self.logger.info('starting')
         try:
+            self.once()
             while True:
-                try:
-                    self.loop()
-                    self.poll()
-                except TaskQuit:
-                    self.logger.info('closing')
-                    break
-                except:
-                    self.quit_queue.send_pyobj(['QUIT'])
-                    raise
+                self.loop()
+                self.poll()
+        except TaskQuit:
+            self.logger.info('closing')
+        except:
+            self.quit_queue.send_pyobj(['QUIT'])
+            raise
         finally:
             self.close()
 

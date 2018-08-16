@@ -240,14 +240,15 @@ def with_downloads(request, db, with_files, download_state):
             dl.py_name, dl.py_version)
 
 
-@pytest.fixture(scope='session')
-def master_config(request):
+@pytest.fixture(scope='function')
+def master_config(request, tmpdir):
     config = mock.Mock()
     config.dsn = 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
         db=PIWHEELS_TESTDB
     )
+    config.output_path = str(tmpdir)
     config.index_queue = 'inproc://tests-indexes'
     config.status_queue = 'inproc://tests-status'
     config.control_queue = 'inproc://tests-control'
@@ -334,32 +335,3 @@ def db_queue(request, zmq_context, master_config):
     queue.hwm = 10
     queue.bind(master_config.db_queue)
     return queue
-
-
-@pytest.fixture(scope='function')
-def task_seraph(request, zmq_context, master_config):
-    task = Seraph(master_config)
-    task.front_queue.router_mandatory = True  # don't drop msgs during test
-    task.back_queue.router_mandatory = True
-    task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill seraph task')
-    request.addfinalizer(fin)
-    return task
-
-
-@pytest.fixture(scope='function')
-def task_the_oracle(request, zmq_context, master_config):
-    task = TheOracle(master_config)
-    task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill the_oracle task')
-        task.db._conn.close()
-    request.addfinalizer(fin)
-    return task

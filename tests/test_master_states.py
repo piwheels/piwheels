@@ -408,7 +408,7 @@ def test_transfer_commit_armv6_exists(tmpdir, file_state, file_content):
     final_path = TransferState.output_path / 'simple' / 'foo' / file_state.filename
     link_path = final_path.with_name('foo-0.1-cp34-cp34m-linux_armv6l.whl')
     link_path.parent.mkdir()
-    link_path.open('wb').close()  # create as a file
+    link_path.touch()
     trans_state = TransferState(1, file_state)
     trans_state._file.seek(0)
     trans_state._file.write(file_content)

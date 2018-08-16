@@ -75,8 +75,22 @@ class IndexScribe(PauseableTask):
         index_queue.bind(config.index_queue)
         self.register(index_queue, self.handle_index)
         self.db = DbClient(config)
-        self.package_cache = set()
+        self.package_cache = None
+        self.statistics = {}
+
+    def close(self):
+        self.db.close()
+        super().close()
+
+    def once(self):
         self.setup_output_path()
+        self.logger.info('building package cache')
+        self.package_cache = self.db.get_all_packages()
+        # Perform a one-time write of the root index if it doesn't exist; this
+        # is primarily for limited setups which don't expect to see "new"
+        # packages show up (the usual trigger for re-writing the root index)
+        if not (self.output_path / 'simple' / 'index.html').exists():
+            self.write_root_index()
 
     def setup_output_path(self):
         """
@@ -100,16 +114,6 @@ class IndexScribe(PauseableTask):
                 source = resource_stream(__name__, 'static/' + filename)
                 f.write(source.read())
                 source.close()
-
-    def run(self):
-        self.logger.info('building package cache')
-        self.package_cache = set(self.db.get_all_packages())
-        # Perform a one-time write of the root index if it doesn't exist; this
-        # is primarily for limited setups which don't expect to see "new"
-        # packages show up (the usual trigger for re-writing the root index)
-        if not (self.output_path / 'simple' / 'index.html').exists():
-            self.write_root_index()
-        super().run()
 
     def handle_index(self, queue):
         """
@@ -141,20 +145,20 @@ class IndexScribe(PauseableTask):
         else:
             self.logger.error('invalid index_queue message: %s', msg)
 
-    def write_homepage(self, status_info):
+    def write_homepage(self, statistics):
         """
         Re-writes the site homepage using the provided statistics in the
         homepage template (which is effectively a simple Python format string).
 
-        :param tuple status_info:
-            A namedtuple containing statistics obtained by :class:`BigBrother`.
+        :param dict statistics:
+            A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
         with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
                                          encoding='utf-8',
                                          delete=False) as index:
             try:
-                index.file.write(self.homepage_template.format(**status_info))
+                index.file.write(self.homepage_template.format(**statistics))
             except BaseException:
                 index.delete = True
                 raise
