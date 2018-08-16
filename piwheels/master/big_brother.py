@@ -56,40 +56,66 @@ class BigBrother(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
+        self.stats = {
+            'packages_count':        0,
+            'packages_built':        0,
+            'versions_count':        0,
+            'builds_count':          0,
+            'builds_last_hour':      0,
+            'builds_success':        0,
+            'builds_time':           timedelta(0),
+            'builds_size':           0,
+            'builds_pending':        0,
+            'files_count':           0,
+            'disk_free':             0,
+            'disk_size':             1,
+            'downloads_last_month':  0,
+        }
+        self.timestamp = datetime.utcnow() - timedelta(seconds=40)
+        stats_queue = self.ctx.socket(zmq.PULL)
+        stats_queue.hwm = 10
+        stats_queue.bind(const.STATS_QUEUE)
+        self.register(stats_queue, self.handle_stats)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config.index_queue)
-        self.fs = FsClient(config)
         self.db = DbClient(config)
-        self.timestamp = datetime.utcnow() - timedelta(seconds=60)
+
+    def close(self):
+        self.status_queue.close()
+        self.index_queue.close()
+        self.db.close()
+        super().close()
+
+    def handle_stats(self, queue):
+        msg, *args = queue.recv_pyobj()
+        if msg == 'STATFS':
+            self.stats['disk_free'] = args[0].f_frsize * args[0].f_bavail
+            self.stats['disk_size'] = args[0].f_frsize * args[0].f_blocks
+        elif msg == 'STATBQ':
+            self.stats['builds_pending'] = sum(args[0].values())
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
-        # every minute (at most)
-        if datetime.utcnow() - self.timestamp > timedelta(seconds=60):
+        # every 30 seconds (at most)
+        if datetime.utcnow() - self.timestamp > timedelta(seconds=30):
             self.timestamp = datetime.utcnow()
-            stat = self.fs.statvfs()
             rec = self.db.get_statistics()
-            status_info = {
-                'packages_count':        rec.packages_count,
-                'packages_built':        rec.packages_built,
-                'versions_count':        rec.versions_count,
-                'versions_tried':        rec.versions_tried,
-                'builds_count':          rec.builds_count,
-                'builds_last_hour':      rec.builds_count_last_hour,
-                'builds_success':        rec.builds_count_success,
-                'builds_time':           rec.builds_time,
-                'builds_size':           rec.builds_size,
-                'files_count':           rec.files_count,
-                'disk_free':             stat.f_frsize * stat.f_bavail,
-                'disk_size':             stat.f_frsize * stat.f_blocks,
-                'downloads_last_month':  rec.downloads_last_month,
-            }
-            self.index_queue.send_pyobj(['HOME', status_info])
-            self.status_queue.send_pyobj([-1, self.timestamp, 'STATUS', status_info])
+            self.stats['packages_count'] = rec.packages_count
+            self.stats['packages_built'] = rec.packages_built
+            self.stats['versions_count'] = rec.versions_count
+            self.stats['builds_count'] = rec.builds_count
+            self.stats['builds_last_hour'] = rec.builds_count_last_hour
+            self.stats['builds_success'] = rec.builds_success
+            self.stats['builds_time'] = rec.builds_time
+            self.stats['builds_size'] = rec.builds_size
+            self.stats['files_count'] = rec.files_count
+            self.stats['downloads_last_month'] = rec.downloads_last_month
+            self.index_queue.send_pyobj(['HOME', self.stats])
+            self.status_queue.send_pyobj([-1, self.timestamp, 'STATUS', self.stats])
             rec = self.db.get_downloads_recent()
             search_index = [
                 (name, count)

@@ -82,10 +82,19 @@ class SlaveDriver(Task):
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config.index_queue)
+        self.stats_queue = self.ctx.socket(zmq.PUSH)
+        self.stats_queue.hwm = 10
+        self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.slaves = {}
         self.pypi_simple = config.pypi_simple
+
+    def close(self):
+        self.status_queue.close()
+        self.index_queue.close()
+        self.stats_queue.close()
+        super().close()
 
     def list_slaves(self):
         """
@@ -164,6 +173,9 @@ class SlaveDriver(Task):
         queue = self.abi_queues[abi]
         if len(queue) < 1000:
             queue.add((package, version))
+        self.stats_queue.send_pyobj(['STATBQ', {
+            abi: len(queue) for (abi, queue) in self.abi_queues.items()
+        }])
 
     def handle_slave(self, queue):
         """

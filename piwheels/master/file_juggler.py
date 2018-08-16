@@ -103,11 +103,23 @@ class FileJuggler(Task):
         fs_queue = self.ctx.socket(zmq.REP)
         fs_queue.hwm = 1
         fs_queue.bind(config.fs_queue)
+        self.stats_queue = self.ctx.socket(zmq.PUSH)
+        self.stats_queue.hwm = 10
+        self.stats_queue.connect(config.stats_queue)
         self.register(file_queue, self.handle_file)
         self.register(fs_queue, self.handle_fs_request)
         self.pending = {}   # keyed by slave_id
         self.active = {}    # keyed by slave address
         self.complete = {}  # keyed by slave_id
+
+    def close(self):
+        self.stats_queue.close()
+        super().close()
+
+    def run(self):
+        self.stats_queue.send_pyobj(
+            ['STATFS', os.statvfs(str(self.output_path))])
+        super().run()
 
     def handle_fs_request(self, queue):
         """
@@ -118,7 +130,6 @@ class FileJuggler(Task):
             handler = {
                 'EXPECT': self.do_expect,
                 'VERIFY': self.do_verify,
-                'STATVFS': self.do_statvfs,
                 'REMOVE': self.do_remove,
             }[msg]
             result = handler(*args)
@@ -169,13 +180,8 @@ class FileJuggler(Task):
         else:
             transfer.commit(package)
             self.logger.info('verified: %s', transfer.file_state.filename)
-
-    def do_statvfs(self):
-        """
-        Message sent by :class:`FsClient` to request that file juggler return
-        stats on the output file-system.
-        """
-        return list(os.statvfs(str(self.output_path)))
+            self.stats_queue.send_pyobj(
+                ['STATFS', os.statvfs(str(self.output_path))])
 
     def do_remove(self, package, filename):
         """
@@ -189,6 +195,8 @@ class FileJuggler(Task):
             self.logger.warning('remove failed (not found): %s', path)
         else:
             self.logger.info('removed: %s', path)
+            self.stats_queue.send_pyobj(
+                ['STATFS', os.statvfs(str(self.output_path))])
 
     def handle_file(self, queue):
         """
@@ -335,12 +343,6 @@ class FsClient:
             return False
         else:
             return True
-
-    def statvfs(self):
-        """
-        See :meth:`FileJuggler.do_statvfs`.
-        """
-        return os.statvfs_result(self._execute(['STATVFS']))
 
     def remove(self, package, filename):
         """

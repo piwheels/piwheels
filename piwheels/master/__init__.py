@@ -118,6 +118,10 @@ write access to the output directory.
             help="The address of the queue used to store pending builds "
             "(default: %(default)s)")
         parser.add_argument(
+            '--stats-queue', metavar='ADDR', default=const.STATS_QUEUE,
+            help="The address of the queue used to send statistics to the "
+            "collator task (default: %(default)s)")
+        parser.add_argument(
             '--db-queue', metavar='ADDR', default=const.DB_QUEUE,
             help="The address of the queue used to talk to the database "
             "server (default: %(default)s)")

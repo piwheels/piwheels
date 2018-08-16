@@ -250,6 +250,9 @@ class DbClient:
         self.db_queue.hwm = 1
         self.db_queue.connect(config.db_queue)
 
+    def close(self):
+        self.db_queue.close()
+
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
