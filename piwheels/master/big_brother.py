@@ -97,6 +97,8 @@ class BigBrother(PauseableTask):
             self.stats['disk_size'] = args[0].f_frsize * args[0].f_blocks
         elif msg == 'STATBQ':
             self.stats['builds_pending'] = sum(args[0].values())
+        else:
+            self.logger.error('invalid big_brother message: %s', msg)
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
@@ -109,7 +111,7 @@ class BigBrother(PauseableTask):
             self.stats['versions_count'] = rec.versions_count
             self.stats['builds_count'] = rec.builds_count
             self.stats['builds_last_hour'] = rec.builds_count_last_hour
-            self.stats['builds_success'] = rec.builds_success
+            self.stats['builds_success'] = rec.builds_count_success
             self.stats['builds_time'] = rec.builds_time
             self.stats['builds_size'] = rec.builds_size
             self.stats['files_count'] = rec.files_count

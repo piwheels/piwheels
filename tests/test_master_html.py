@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from piwheels.master.html import html, literal, tag, TagFactory
+from piwheels.master.html import html, literal, content, tag, TagFactory
 
 
 def test_literals():
