@@ -26,7 +26,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from piwheels.master.html import *
+
+from piwheels.master.html import html, literal, tag, TagFactory
 
 
 def test_literals():

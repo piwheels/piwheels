@@ -63,7 +63,7 @@ def task(request, zmq_context, master_config, db_queue):
         task.quit()
         task.join(2)
         if task.is_alive():
-            raise RuntimeError('failed to kill seraph task')
+            raise RuntimeError('failed to kill index_scribe task')
     request.addfinalizer(fin)
     return task
 

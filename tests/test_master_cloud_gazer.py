@@ -56,7 +56,7 @@ def pypi_proxy(request, sock_push_pull):
 
 
 @pytest.fixture(scope='function')
-def task_cloud_gazer(request, db_queue, master_config):
+def task(request, db_queue, master_config):
     task = CloudGazer(master_config)
     task.start()
     def fin():
@@ -70,7 +70,7 @@ def task_cloud_gazer(request, db_queue, master_config):
     return task
 
 
-def test_cloud_gazer_idle(pypi_proxy, db_queue, task_cloud_gazer):
+def test_cloud_gazer_idle(pypi_proxy, db_queue, task):
     assert db_queue.recv_pyobj() == ['ALLPKGS']
     db_queue.send_pyobj(['OK', {"foo"}])
     assert db_queue.recv_pyobj() == ['GETPYPI']
@@ -81,10 +81,10 @@ def test_cloud_gazer_idle(pypi_proxy, db_queue, task_cloud_gazer):
     pypi_proxy.send_pyobj([])
     pypi_proxy.send_pyobj([])
     pypi_proxy.send_pyobj([])
-    assert task_cloud_gazer.serial == 0
+    assert task.serial == 0
 
 
-def test_cloud_gazer_new_pkg(pypi_proxy, db_queue, task_cloud_gazer):
+def test_cloud_gazer_new_pkg(pypi_proxy, db_queue, task):
     assert db_queue.recv_pyobj() == ['ALLPKGS']
     db_queue.send_pyobj(['OK', {"foo"}])
     assert db_queue.recv_pyobj() == ['GETPYPI']
@@ -99,7 +99,7 @@ def test_cloud_gazer_new_pkg(pypi_proxy, db_queue, task_cloud_gazer):
     db_queue.send_pyobj(['OK', None])
 
 
-def test_cloud_gazer_existing_ver(pypi_proxy, db_queue, task_cloud_gazer):
+def test_cloud_gazer_existing_ver(pypi_proxy, db_queue, task):
     assert db_queue.recv_pyobj() == ['ALLPKGS']
     db_queue.send_pyobj(['OK', {}])
     assert db_queue.recv_pyobj() == ['GETPYPI']
@@ -117,7 +117,7 @@ def test_cloud_gazer_existing_ver(pypi_proxy, db_queue, task_cloud_gazer):
 
 
 
-def test_cloud_gazer_new_ver(pypi_proxy, db_queue, task_cloud_gazer):
+def test_cloud_gazer_new_ver(pypi_proxy, db_queue, task):
     assert db_queue.recv_pyobj() == ['ALLPKGS']
     db_queue.send_pyobj(['OK', {"foo"}])
     assert db_queue.recv_pyobj() == ['GETPYPI']

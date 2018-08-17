@@ -38,7 +38,13 @@ import pytest
 
 from piwheels import const
 from piwheels.master.db import Database
-from piwheels.master.states import *
+from piwheels.master.states import (
+    SlaveState,
+    BuildState,
+    FileState,
+    TransferState,
+    DownloadState,
+)
 
 
 @pytest.fixture()
