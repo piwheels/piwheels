@@ -34,7 +34,7 @@ from datetime import datetime, timedelta
 import zmq
 import pytest
 
-from conftest import MockTask, ANY_VALUE
+from conftest import MockTask
 from piwheels import const
 from piwheels.master.big_brother import BigBrother
 
@@ -97,36 +97,49 @@ def stats_disk(request):
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.PULL, master_config.index_queue)
-    def fin():
-        task.close()
-    request.addfinalizer(fin)
-    return task
+def stats_queue(request, zmq_context):
+    queue = zmq_context.socket(zmq.PUSH)
+    queue.hwm = 1
+    queue.connect(const.STATS_QUEUE)
+    yield queue
+    queue.close()
 
 
 @pytest.fixture()
 def task(request, master_config):
     task = BigBrother(master_config)
-    return task
-
-
-@pytest.fixture()
-def stats_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PUSH)
-    queue.hwm = 1
-    queue.connect(const.STATS_QUEUE)
-    def fin():
-        queue.close()
-    request.addfinalizer(fin)
-    return queue
+    yield task
+    task.close()
 
 
 def test_gen_stats(db_queue, master_status_queue, index_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        db_queue.expect(['GETSTATS'])
+        db_queue.send(['OK', stats_result])
+        index_queue.expect(['HOME', stats_dict])
+        master_status_queue.expect([-1, dt.utcnow.return_value, 'STATUS', stats_dict])
+        db_queue.expect(['GETDL'])
+        db_queue.send(['OK', {'foo': 10}])
+        index_queue.expect(['SEARCH', [('foo', 10)]])
+        task.loop()  # crank the handle once
+        db_queue.check()
+        index_queue.check()
+        master_status_queue.check()
+
+
+def test_gen_disk_stats(db_queue, master_status_queue, index_queue, task,
+                        stats_queue, stats_result, stats_dict, stats_disk):
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        stats_queue.send_pyobj(['STATFS', stats_disk])
+        while task.stats['disk_free'] == 0:
+            task.poll()
+        stats_dict['disk_free'] = stats_disk.f_frsize * stats_disk.f_bavail
+        stats_dict['disk_size'] = stats_disk.f_frsize * stats_disk.f_blocks
         db_queue.expect(['GETSTATS'])
         db_queue.send(['OK', stats_result])
         index_queue.expect(['HOME', stats_dict])
@@ -135,6 +148,41 @@ def test_gen_stats(db_queue, master_status_queue, index_queue, task,
         db_queue.send(['OK', {'foo': 10}])
         index_queue.expect(['SEARCH', [('foo', 10)]])
         task.loop()
-        assert db_queue.success
-        assert index_queue.success
-        assert master_status_queue.success
+        db_queue.check()
+        index_queue.check()
+        master_status_queue.check()
+
+
+def test_gen_queue_stats(db_queue, master_status_queue, index_queue, task,
+                         stats_queue, stats_result, stats_dict):
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        stats_queue.send_pyobj(['STATBQ', {'cp34m': 1, 'cp35m': 0}])
+        while task.stats['builds_pending'] == 0:
+            task.poll()
+        stats_dict['builds_pending'] = 1
+        db_queue.expect(['GETSTATS'])
+        db_queue.send(['OK', stats_result])
+        index_queue.expect(['HOME', stats_dict])
+        master_status_queue.expect([-1, dt.utcnow.return_value, 'STATUS', stats_dict])
+        db_queue.expect(['GETDL'])
+        db_queue.send(['OK', {'foo': 10}])
+        index_queue.expect(['SEARCH', [('foo', 10)]])
+        task.loop()
+        db_queue.check()
+        index_queue.check()
+        master_status_queue.check()
+
+
+def test_bad_stats(db_queue, master_status_queue, index_queue, task,
+                         stats_queue, stats_result, stats_dict):
+    task.logger = mock.Mock()
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        stats_queue.send_pyobj(['FOO'])
+        while task.logger.error.call_count == 0:
+            task.poll()
+        assert task.logger.error.call_args == mock.call(
+            'invalid big_brother message: %s', 'FOO')

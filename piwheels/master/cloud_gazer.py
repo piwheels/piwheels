@@ -57,11 +57,17 @@ class CloudGazer(PauseableTask):
         self.db.set_pypi_serial(self.serial)
         super().close()
 
+    def once(self):
+        self.logger.info('retrieving current state')
+        self.packages = self.db.get_all_packages()
+        self.pypi.serial = self.serial = self.db.get_pypi_serial()
+        self.logger.info('querying upstream')
+
     def loop(self):
         for package, version in self.pypi:
             if package not in self.packages:
+                self.packages.add(package)
                 if self.db.add_new_package(package):
-                    self.packages.add(package)
                     self.logger.info('added package %s', package)
             if self.db.add_new_package_version(package, version):
                 self.logger.info('added package %s version %s',
@@ -70,10 +76,3 @@ class CloudGazer(PauseableTask):
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial
             self.db.set_pypi_serial(self.serial)
-
-    def run(self):
-        self.logger.info('retrieving current state')
-        self.packages = self.db.get_all_packages()
-        self.pypi.serial = self.serial = self.db.get_pypi_serial()
-        self.logger.info('querying upstream')
-        super().run()

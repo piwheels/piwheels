@@ -48,24 +48,17 @@ Row = namedtuple('Row', ('filename', 'filehash'))
 @pytest.fixture()
 def index_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PUSH)
-    def fin():
-        queue.close()
-    request.addfinalizer(fin)
     queue.hwm = 10
     queue.connect(master_config.index_queue)
-    return queue
+    yield queue
+    queue.close()
 
 
 @pytest.fixture()
 def task(request, zmq_context, master_config, db_queue):
     task = IndexScribe(master_config)
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill index_scribe task')
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.close()
 
 
 def wait_for_file(path, timeout=1):

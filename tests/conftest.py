@@ -124,20 +124,16 @@ def db_engine(request):
         db=PIWHEELS_TESTDB
     )
     engine = create_engine(url)
-    def fin():
-        engine.dispose()
-    request.addfinalizer(fin)
-    return engine
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture()
 def db(request, db_engine):
     conn = db_engine.connect()
-    def fin():
-        conn.close()
-    request.addfinalizer(fin)
     conn.execute("SET SESSION synchronous_commit TO OFF")  # it's only a test
-    return conn
+    yield conn
+    conn.close()
 
 
 @pytest.fixture(scope='function')
@@ -244,6 +240,7 @@ def with_downloads(request, db, with_files, download_state):
 @pytest.fixture(scope='function')
 def master_config(request, tmpdir):
     config = mock.Mock()
+    config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.dsn = 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
@@ -266,11 +263,9 @@ def master_config(request, tmpdir):
 @pytest.fixture(scope='function')
 def zmq_context(request):
     context = zmq.Context.instance()
-    def fin():
-        context.destroy(linger=1000)
-        context.term()
-    request.addfinalizer(fin)
-    return context
+    yield context
+    context.destroy(linger=1000)
+    context.term()
 
 
 @pytest.fixture()
@@ -282,11 +277,9 @@ def sock_push_pull(request, zmq_context):
     push.hwm = 1
     pull.bind('inproc://push-pull')
     push.connect('inproc://push-pull')
-    def fin():
-        push.close()
-        pull.close()
-    request.addfinalizer(fin)
-    return push, pull
+    yield push, pull
+    push.close()
+    pull.close()
 
 
 @pytest.fixture()
@@ -298,14 +291,9 @@ def sock_pair(request, zmq_context):
     sock2.hwm = 1
     sock1.bind('inproc://pair-pair')
     sock2.connect('inproc://pair-pair')
-    def fin():
-        sock2.close()
-        sock1.close()
-    request.addfinalizer(fin)
-    return sock1, sock2
-
-
-ANY_VALUE = object()
+    yield sock1, sock2
+    sock2.close()
+    sock1.close()
 
 
 class MockMessage:
@@ -330,7 +318,7 @@ class MockTask(Thread):
 
     def __init__(self, ctx, sock_type, sock_addr):
         address = 'inproc://mock-%d' % MockTask.ident
-        super().__init__(args=(ctx, address))
+        super().__init__(target=self.loop, args=(ctx, address))
         MockTask.ident += 1
         self.sock_type = sock_type
         self.sock_addr = sock_addr
@@ -351,9 +339,11 @@ class MockTask(Thread):
         assert self.control.recv_pyobj() == ['OK']
         self.join(10)
         self.control.close()
-        self.sock.close()
+        self.control = None
         if self.is_alive():
             raise RuntimeError('failed to terminate mock task %r' % self)
+        self.sock.close()
+        self.sock = None
 
     def expect(self, message):
         self.control.send_pyobj(['RECV', message])
@@ -363,71 +353,99 @@ class MockTask(Thread):
         self.control.send_pyobj(['SEND', message])
         assert self.control.recv_pyobj() == ['OK']
 
-    @property
-    def success(self):
-        self.control.send_pyobj(['TEST'])
+    def check(self, timeout=1):
+        self.control.send_pyobj(['TEST', timeout])
         exc = self.control.recv_pyobj()
         if exc is not None:
             raise exc
 
-    def run(self, ctx, address):
-        control = ctx.socket(zmq.REP)
-        control.hwm = 1
-        control.bind(address)
-        poller = zmq.Poller()
-        poller.register(control, zmq.POLLIN)
-        poller.register(self.sock, zmq.POLLIN)
+    def reset(self):
+        self.control.send_pyobj(['RESET'])
+        assert self.control.recv_pyobj() == ['OK']
+
+    def loop(self, ctx, address):
         queue = []
         done = []
-        while True:
-            socks = dict(poller.poll(10))
-            if control in socks:
-                msg, *args = control.recv_pyobj()
-                if msg == 'QUIT':
-                    control.send_pyobj(['OK'])
-                    break
-                elif msg == 'SEND':
-                    queue.append(MockMessage('send', args[0]))
-                    control.send_pyobj(['OK'])
-                elif msg == 'RECV':
-                    queue.append(MockMessage('recv', args[0]))
-                    control.send_pyobj(['OK'])
-                elif msg == 'TEST':
-            if self._stop_pull in socks:
-                self._stop_pull.recv()
-                break
-            elif self.queue:
-                if self.sock in socks and self.queue[0].action == 'recv':
-                    self.queue[0].result = self.sock.recv_pyobj()
-                    self.done.append(self.queue.pop(0))
-                elif self.queue[0].action == 'send':
-                    self.sock.send_pyobj(self.queue[0].message)
-                    self.queue[0].result = self.queue[0].message
-                    self.done.append(self.queue.pop(0))
+        socks = {}
+
+        def handle_queue():
+            if self.sock in socks and queue[0].action == 'recv':
+                queue[0].result = self.sock.recv_pyobj()
+                done.append(queue.pop(0))
+            elif queue[0].action == 'send':
+                self.sock.send_pyobj(queue[0].message)
+                queue[0].result = queue[0].message
+                done.append(queue.pop(0))
+
+        control = ctx.socket(zmq.REP)
+        control.hwm = 1
+        control.connect(address)
+        try:
+            poller = zmq.Poller()
+            poller.register(control, zmq.POLLIN)
+            poller.register(self.sock, zmq.POLLIN)
+            while True:
+                socks = dict(poller.poll(10))
+                if control in socks:
+                    msg, *args = control.recv_pyobj()
+                    if msg == 'QUIT':
+                        control.send_pyobj(['OK'])
+                        break
+                    elif msg == 'SEND':
+                        queue.append(MockMessage('send', args[0]))
+                        control.send_pyobj(['OK'])
+                    elif msg == 'RECV':
+                        queue.append(MockMessage('recv', args[0]))
+                        control.send_pyobj(['OK'])
+                    elif msg == 'TEST':
+                        try:
+                            timeout = timedelta(seconds=args[0])
+                            start = datetime.utcnow()
+                            while queue and datetime.utcnow() - start < timeout:
+                                socks = dict(poller.poll(10))
+                                handle_queue()
+                            if queue:
+                                assert False, 'Still waiting for %r' % queue[0]
+                            for item in done:
+                                assert item.message == item.result
+                        except Exception as exc:
+                            control.send_pyobj(exc)
+                        else:
+                            control.send_pyobj(None)
+                    elif msg == 'RESET':
+                        queue = []
+                        done = []
+                        control.send_pyobj(['OK'])
+                if queue:
+                    handle_queue()
+        finally:
+            control.close()
+
 
 
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, zmq.REP, master_config.db_queue)
-    def fin():
-        task.close()
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.close()
+
+
+@pytest.fixture()
+def index_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, zmq.PULL, master_config.index_queue)
+    yield task
+    task.close()
 
 
 @pytest.fixture(scope='function')
 def master_control_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, zmq.PULL, master_config.control_queue)
-    def fin():
-        task.close()
-    request.addfinalizer(fin)
-    return queue
+    yield task
+    task.close()
 
 
 @pytest.fixture(scope='function')
 def master_status_queue(request, zmq_context):
     task = MockTask(zmq_context, zmq.PULL, const.INT_STATUS_QUEUE)
-    def fin():
-        task.close()
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.close()
