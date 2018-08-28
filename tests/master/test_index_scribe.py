@@ -96,11 +96,12 @@ def contains_elem(path, tag, attrs):
 
 
 def test_scribe_first_start(db_queue, task, master_config):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
+    task.once()
+    db_queue.check()
     root = Path(master_config.output_path)
-    wait_for_file(root / 'simple' / 'index.html')
+    assert (root / 'simple' / 'index.html').exists()
     assert contains_elem(root / 'simple' / 'index.html', 'a', [('href', 'foo')])
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
     for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
@@ -115,77 +116,82 @@ def test_scribe_second_start(db_queue, task, master_config):
     (root / 'index.html').touch()
     (root / 'simple').mkdir()
     (root / 'simple' / 'index.html').touch()
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
-    wait_for_file(root / 'simple' / 'index.html')
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
+    task.once()
+    db_queue.check()
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
     for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
         if filename != 'index.html':
             assert (root / filename).exists() and (root / filename).is_file()
 
 
-def test_write_root_index_fails(master_control_queue, db_queue, task,
-                                index_queue):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', None])
-    # Check the task died and killed the master on the way out
-    task.join(1)
-    assert not task.is_alive()
-    assert master_control_queue.recv_pyobj() == ['QUIT']
+def test_write_root_index_fails(db_queue, task, master_config):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', None])
+    with pytest.raises(TypeError):
+        task.once()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    assert not (root / 'simple' / 'index.html').exists()
 
 
 def test_bad_request(db_queue, task, index_queue, master_config):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
+    index_queue.send_pyobj(['FOO'])
     e = Event()
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
-    index_queue.send_pyobj(['FOO'])
+    task.once()
+    task.poll()
+    db_queue.check()
     assert e.wait(1)
     assert task.logger.error.call_args('invalid index_queue message: %s', 'FOO')
 
 
 def test_write_homepage(db_queue, task, index_queue, master_config):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['HOME', {
         'packages_built': 123,
         'files_count': 234,
         'downloads_last_month': 345
     }])
+    task.once()
+    task.poll()
+    db_queue.check()
     root = Path(master_config.output_path)
-    wait_for_file(root / 'index.html')
+    assert (root / 'index.html').exists() and (root / 'index.html').is_file()
 
 
-def test_write_homepage_fails(master_control_queue, db_queue, task,
-                              index_queue):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
+def test_write_homepage_fails(db_queue, task, index_queue, master_config):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['HOME', {}])
-    # Check the task died and killed the master on the way out
-    task.join(1)
-    assert not task.is_alive()
-    assert master_control_queue.recv_pyobj() == ['QUIT']
+    task.once()
+    with pytest.raises(KeyError):
+        task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    assert not (root / 'index.html').exists()
 
 
 def test_write_pkg_index(db_queue, task, index_queue, master_config):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['PKG', 'foo'])
-    assert db_queue.recv_pyobj() == ['PKGFILES', 'foo']
-    db_queue.send_pyobj(['OK', [
+    db_queue.expect(['PKGFILES', 'foo'])
+    db_queue.send(['OK', [
         Row('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
         Row('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
     ]])
+    task.once()
+    task.poll()
+    db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
-    wait_for_file(index)
+    assert index.exists() and index.is_file()
     assert contains_elem(
         index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
     )
@@ -194,42 +200,44 @@ def test_write_pkg_index(db_queue, task, index_queue, master_config):
     )
 
 
-def test_write_pkg_index_fails(master_control_queue, db_queue, task,
-                               index_queue):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
+def test_write_pkg_index_fails(db_queue, task, index_queue, master_config):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['PKG', 'foo'])
-    assert db_queue.recv_pyobj() == ['PKGFILES', 'foo']
-    db_queue.send_pyobj(['OK', [
-        # Send an ordinary tuple (method expects rows with attributes named
+    db_queue.expect(['PKGFILES', 'foo'])
+    db_queue.send(['OK', [
+        # Send ordinary tuples (method expects rows with attributes named
         # after columns)
         ('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
+        ('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
     ]])
-    # Check the task died and killed the master on the way out
-    task.join(1)
-    assert not task.is_alive()
-    assert master_control_queue.recv_pyobj() == ['QUIT']
+    task.once()
+    with pytest.raises(AttributeError):
+        task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
 
 
 def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
-    root = Path(master_config.output_path)
-    root_index = root / 'simple' / 'index.html'
-    pkg_index = root / 'simple' / 'bar' / 'index.html'
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo'}])
-    wait_for_file(root_index)
-    root_index.unlink()
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['PKG', 'bar'])
-    assert db_queue.recv_pyobj() == ['PKGFILES', 'bar']
-    db_queue.send_pyobj(['OK', [
+    db_queue.expect(['PKGFILES', 'bar'])
+    db_queue.send(['OK', [
         Row('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
         Row('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
     ]])
-    wait_for_file(root_index)
+    task.once()
+    task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    root_index = root / 'simple' / 'index.html'
+    pkg_index = root / 'simple' / 'bar' / 'index.html'
+    assert root_index.exists() and root_index.is_file()
     assert contains_elem(root_index, 'a', [('href', 'bar')])
-    wait_for_file(pkg_index)
+    assert pkg_index.exists() and pkg_index.is_file()
     assert contains_elem(
         pkg_index, 'a', [('href', 'bar-1.0-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
     )
@@ -239,31 +247,34 @@ def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
 
 
 def test_write_search_index(db_queue, task, index_queue, master_config):
-    root = Path(master_config.output_path)
-    packages_json = root / 'packages.json'
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo', 'bar'}])
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo', 'bar'}])
     search_index = [
         ('foo', 10),
         ('bar', 1),
     ]
     index_queue.send_pyobj(['SEARCH', search_index])
-    wait_for_file(packages_json)
+    task.once()
+    task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    packages_json = root / 'packages.json'
+    assert packages_json.exists() and packages_json.is_file()
     assert json.load(packages_json.open('r')) == [list(i) for i in search_index]
 
 
-def test_write_search_index_fails(master_control_queue, db_queue, task,
-                                  index_queue):
-    task.start()
-    assert db_queue.recv_pyobj() == ['ALLPKGS']
-    db_queue.send_pyobj(['OK', {'foo', '\0\0'}])
+def test_write_search_index_fails(db_queue, task, index_queue, master_config):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {'foo', 'bar'}])
     search_index = [
         ('foo', 10),
         ('bar', 1 + 2j),  # complex download counts :)
     ]
     index_queue.send_pyobj(['SEARCH', search_index])
-    # Check the task died and killed the master on the way out
-    task.join(1)
-    assert not task.is_alive()
-    assert master_control_queue.recv_pyobj() == ['QUIT']
+    task.once()
+    with pytest.raises(TypeError):
+        task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    packages_json = root / 'packages.json'
+    assert not packages_json.exists()

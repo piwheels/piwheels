@@ -175,11 +175,12 @@ def test_slave_state_hello(master_status_queue, slave_queue):
         dt.utcnow.return_value = now
         slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                                  'linux_armv7l', 'piwheels2')
-        slave_state.reply = ['HELLO', slave_state.slave_id, const.PYPI_XMLRPC]
-        assert master_status_queue.recv_pyobj() == [
+        master_status_queue.expect([
             slave_state.slave_id, now, 'HELLO',
             timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
-        ]
+        ])
+        slave_state.reply = ['HELLO', slave_state.slave_id, const.PYPI_XMLRPC]
+        master_status_queue.check()
 
 
 def test_slave_recv_request(build_state, file_state):
@@ -243,14 +244,15 @@ def test_slave_state_recv_hello(master_status_queue, slave_queue):
         slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                                  'linux_armv7l', 'piwheels2')
         slave_state._reply = ['IDLE']
-        slave_state.hello()
-        assert master_status_queue.recv_pyobj() == [
+        master_status_queue.expect([
             slave_state.slave_id, now, 'HELLO',
             timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
-        ]
-        assert master_status_queue.recv_pyobj() == [
+        ])
+        master_status_queue.expect([
             slave_state.slave_id, None, 'IDLE'
-        ]
+        ])
+        slave_state.hello()
+        master_status_queue.check()
 
 
 def test_transfer_state_init(tmpdir, file_state):
