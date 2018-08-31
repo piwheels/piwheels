@@ -45,7 +45,7 @@ apt -y install vim python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
 if [ $VERSION_ID -lt 9 ]; then
     pip3 install pip --upgrade
 fi
-pip3 install pypandoc versioneer kervi
+pip3 install pypandoc versioneer kervi scikit-build
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
