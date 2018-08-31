@@ -20,7 +20,8 @@ apt -y install vim python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
     libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
     libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libcurl4-openssl-dev \
-    libgles1-mesa-dev libgstreamer1.0-dev libsdl2-dev libssl-dev libsasl2-dev \
+    libgles1-mesa-dev libgstreamer1.0-dev libsdl2-dev libsdl2-image-dev \
+    libsdl2-mixer-dev libsdl2-ttf-dev libssl-dev libsasl2-dev \
     libldap2-dev libavcodec-dev libavformat-dev libswscale-dev libv4l-dev \
     libxvidcore-dev libx264-dev libgtk2.0-dev libgtk-3-dev libatlas-base-dev \
     python-numpy python3-numpy python-scipy python3-scipy python-matplotlib \
