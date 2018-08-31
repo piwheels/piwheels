@@ -214,8 +214,8 @@ class BuildState:
     :param bool status:
         ``True`` if the build succeeded, ``False`` if it failed.
 
-    :param datetime.timedelta duration:
-        The amount of time it took to complete the build.
+    :param float duration:
+        The amount of time (in seconds) it took to complete the build.
 
     :param str output:
         The log output of the build.

@@ -322,8 +322,7 @@ class FsClient:
         self.fs_queue.send_pyobj(msg, flags=zmq.NOBLOCK)
         status, result = self.fs_queue.recv_pyobj()
         if status == 'OK':
-            if result is not None:
-                return result
+            return result
         else:
             raise result
 

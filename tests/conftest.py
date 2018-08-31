@@ -32,6 +32,7 @@ from unittest import mock
 from datetime import datetime, timedelta
 from hashlib import sha256
 from threading import Thread
+from time import sleep
 
 import zmq
 import pytest
@@ -79,7 +80,8 @@ def file_state_hacked(request, file_content):
     h.update(file_content)
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv6l.whl', len(file_content),
-        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l')
+        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l',
+        transferred=True)
 
 
 @pytest.fixture()
@@ -260,7 +262,7 @@ def master_config(request, tmpdir):
     return config
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope='session')
 def zmq_context(request):
     context = zmq.Context.instance()
     yield context
@@ -426,6 +428,13 @@ class MockTask(Thread):
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, zmq.REP, master_config.db_queue)
+    yield task
+    task.close()
+
+
+@pytest.fixture(scope='function')
+def fs_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue)
     yield task
     task.close()
 

@@ -398,7 +398,8 @@ class SlaveDriver(Task):
 def build_armv6l_hack(build):
     """
     A dirty hack for armv6l wheels; if the build contains any arch-specific
-    wheels for armv7l, generate equivalent armv6l entries from them.
+    wheels for armv7l, generate equivalent armv6l entries from them (with
+    the transferred flag set to True as nothing actually needs transferring).
     """
     for file in list(build.files.values()):
         if file.platform_tag == 'linux_armv7l':
