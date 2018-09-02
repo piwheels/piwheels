@@ -562,15 +562,14 @@ class TransferState:
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = min(self.pipeline_size,
-                           self._file_state.filesize // self.chunk_size)
-        self._credit = max(1, self._credit)
+        self._credit = 0
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
         # file we have yet to received; this is manipulated by chunk()
         self._offset = 0
         self._map = [range(self._file_state.filesize)]
+        self.reset_credit()
 
     def __repr__(self):
         return "<TransferState: offset={offset} map={_map}>".format(
@@ -606,6 +605,7 @@ class TransferState:
                     return None
 
     def chunk(self, offset, data):
+        # XXX Check we actually still need this chunk? I/O is expensive after all
         self._file.seek(offset)
         self._file.write(data)
         self._map = list(exclude(self._map, range(offset, offset + len(data))))
@@ -615,13 +615,8 @@ class TransferState:
             self._credit += 1
 
     def reset_credit(self):
-        if self._credit == 0:
-            # NOTE: We don't bother with the filesize here; if we're dropping
-            # that many packets we should max out "in-flight" packets for this
-            # transfer anyway
-            self._credit = self.pipeline_size
-        else:
-            logging.warning('Transfer still has credit; no need for reset')
+        self._credit = max(1, min(self.pipeline_size,
+                           self._file_state.filesize // self.chunk_size))
 
     def verify(self):
         # XXX Would be nicer to construct the hash from the transferred chunks

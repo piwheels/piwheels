@@ -33,31 +33,25 @@ from piwheels.master.the_architect import TheArchitect
 
 
 @pytest.fixture(scope='function')
-def task_architect(request, master_config):
+def task(request, master_config):
     task = TheArchitect(master_config)
-    task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill the_architect task')
-        task.db._conn.close()
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.close()
 
 
 @pytest.fixture(scope='function')
-def builds_queue(request, zmq_context, master_config, task_architect):
+def builds_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.connect(master_config.builds_queue)
-    def fin():
-        queue.close()
-    request.addfinalizer(fin)
-    return queue
+    yield queue
+    queue.close()
 
 
-def test_architect_queue(db, with_build, builds_queue):
+def test_architect_queue(db, with_build, task, builds_queue):
+    task.loop()
     assert builds_queue.recv_pyobj() == ('cp35m', 'foo', '0.1')
     with db.begin():
         db.execute("DELETE FROM builds")
+    task.loop()  # Empty loop on StopIteration
+    task.loop()
     assert builds_queue.recv_pyobj() == ('cp34m', 'foo', '0.1')

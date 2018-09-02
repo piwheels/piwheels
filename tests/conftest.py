@@ -259,6 +259,7 @@ def master_config(request, tmpdir):
     config.file_queue = 'inproc://tests-file-juggler'
     config.import_queue = 'inproc://tests-imports'
     config.log_queue = 'inproc://tests-logger'
+    config.stats_queue = 'inproc://tests-stats'
     return config
 
 

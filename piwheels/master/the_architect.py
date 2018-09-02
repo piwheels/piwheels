@@ -51,10 +51,14 @@ class TheArchitect(Task):
     def __init__(self, config):
         super().__init__(config)
         self.db = Database(config.dsn)
-        self.query = None
+        self.query = self.db.get_build_queue()
         self.builds_queue = self.ctx.socket(zmq.PUSH)
         self.builds_queue.hwm = 10
         self.builds_queue.bind(config.builds_queue)
+
+    def close(self):
+        self.db.close()
+        super().close()
 
     def loop(self):
         """
@@ -65,12 +69,10 @@ class TheArchitect(Task):
         does mean that a single loop over the query will potentially miss
         entries, but that's fine as it'll just be repeated again.
         """
-        if self.query is None:
-            self.query = self.db.get_build_queue()
         try:
             row = next(self.query)
             self.builds_queue.send_pyobj(
                 (row.abi_tag, row.package, row.version)
             )
         except StopIteration:
-            self.query = None
+            self.query = self.db.get_build_queue()

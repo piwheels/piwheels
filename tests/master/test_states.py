@@ -296,15 +296,6 @@ def test_transfer_state_fetch2(tmpdir, file_state, file_content):
     assert trans_state.done
 
 
-def test_transfer_state_invalid_reset_credit(tmpdir, file_state, caplog):
-    tmpdir.mkdir('simple')
-    TransferState.output_path = Path(str(tmpdir))
-    trans_state = TransferState(1, file_state)
-    trans_state.reset_credit()
-    assert len(caplog.records) == 1
-    assert caplog.records[0].levelname == 'WARNING'
-
-
 def test_transfer_verify(tmpdir, file_state, file_content):
     tmpdir.mkdir('simple')
     TransferState.output_path = Path(str(tmpdir))

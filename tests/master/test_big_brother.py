@@ -97,10 +97,10 @@ def stats_disk(request):
 
 
 @pytest.fixture()
-def stats_queue(request, zmq_context):
+def stats_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PUSH)
     queue.hwm = 1
-    queue.connect(const.STATS_QUEUE)
+    queue.connect(master_config.stats_queue)
     yield queue
     queue.close()
 

@@ -48,7 +48,7 @@ def task(request, zmq_context, master_config):
         task.join(2)
         if task.is_alive():
             raise RuntimeError('failed to kill the_oracle task')
-        task.db._conn.close()
+        task.close()
     request.addfinalizer(fin)
     return task
 

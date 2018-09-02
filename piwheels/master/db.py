@@ -117,6 +117,11 @@ class Database:
             self._conn.close()
             raise
 
+    def close(self):
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
     def add_new_package(self, package):
         """
         Insert a new package record into the database. Key violations are

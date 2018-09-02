@@ -116,10 +116,9 @@ class FileJuggler(Task):
         self.stats_queue.close()
         super().close()
 
-    def run(self):
+    def once(self):
         self.stats_queue.send_pyobj(
             ['STATFS', os.statvfs(str(self.output_path))])
-        super().run()
 
     def handle_fs_request(self, queue):
         """
@@ -214,6 +213,7 @@ class FileJuggler(Task):
         """
         address, msg, *args = queue.recv_multipart()
         try:
+            transfer = None
             try:
                 transfer = self.active[address]
             except KeyError:
@@ -226,21 +226,25 @@ class FileJuggler(Task):
             del self.active[address]
             self.complete[transfer.slave_id] = transfer
             queue.send_multipart([address, b'DONE'])
+            return
         except TransferIgnoreChunk as exc:
             self.logger.debug(str(exc))
+            return
         except TransferError as exc:
             self.logger.error(str(exc))
             # XXX Delete the transfer object?
+            if transfer is None:
+                return
             # XXX Remove transfer from slave?
-        else:
+
+        fetch_range = transfer.fetch()
+        while fetch_range:
+            queue.send_multipart([
+                address, b'FETCH',
+                str(fetch_range.start).encode('ascii'),
+                str(len(fetch_range)).encode('ascii')
+            ])
             fetch_range = transfer.fetch()
-            while fetch_range:
-                queue.send_multipart([
-                    address, b'FETCH',
-                    str(fetch_range.start).encode('ascii'),
-                    str(len(fetch_range)).encode('ascii')
-                ])
-                fetch_range = transfer.fetch()
 
     def new_transfer(self, msg, *args):
         r"""
@@ -267,7 +271,7 @@ class FileJuggler(Task):
         except ValueError:
             raise TransferError('invalid slave id: %s' % args[0])
         except KeyError:
-            raise TransferError('no pending transfer for slave: %d' % slave_id)
+            raise TransferError('unexpected transfer from slave: %d' % slave_id)
         return transfer
 
     def current_transfer(self, transfer, msg, *args):
@@ -294,16 +298,17 @@ class FileJuggler(Task):
             if transfer.done:
                 raise TransferDone('transfer complete: %s' %
                                    transfer.file_state.filename)
-        elif msg == b'HELLO':
-            # This only happens if we've dropped a *lot* of packets,
-            # and the slave's timed out waiting for another FETCH.
-            # In this case reset the amount of "credit" on the
-            # transfer so it can start fetching again
-            # XXX Should check slave ID reported in HELLO matches
-            # the slave retrieved from the cache
-            transfer.reset_credit()
         else:
-            raise TransferError('invalid chunk header from slave: %s' % msg)
+            # This only happens if there's either a corrupted package, or we've
+            # dropped a *lot* of packets, and the slave's timed out waiting for
+            # another FETCH. In either case reset the amount of "credit" on the
+            # transfer so it can start fetching again
+            transfer.reset_credit()
+            # XXX Should check slave ID reported in HELLO matches the slave
+            # retrieved from the cache
+            if msg != b'HELLO':
+                raise TransferError(
+                    'invalid chunk header from slave: %s' % msg)
 
 
 class FsClient:

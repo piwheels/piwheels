@@ -74,7 +74,7 @@ class BigBrother(PauseableTask):
         self.timestamp = datetime.utcnow() - timedelta(seconds=40)
         stats_queue = self.ctx.socket(zmq.PULL)
         stats_queue.hwm = 10
-        stats_queue.bind(const.STATS_QUEUE)
+        stats_queue.bind(config.stats_queue)
         self.register(stats_queue, self.handle_stats)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10

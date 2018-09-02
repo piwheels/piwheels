@@ -109,7 +109,7 @@ def exclude(ranges, ex):
 
 def intersect(range1, range2):
     """
-    Returns two ranges *range1* and *range2* (which must both have a step of
+    Given two ranges *range1* and *range2* (which must both have a step of
     1), returns the range formed by the intersection of the two ranges, or
     ``None`` if the ranges do not overlap. For example::
 

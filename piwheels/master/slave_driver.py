@@ -379,7 +379,7 @@ class SlaveDriver(Task):
                                  slave.build.next_file)
                 return ['SEND', slave.build.next_file]
         else:
-            self.logger.info('slave %d (%s): send %s',
+            self.logger.info('slave %d (%s): re-send %s',
                              slave.slave_id, slave.label,
                              slave.build.next_file)
             return ['SEND', slave.build.next_file]
