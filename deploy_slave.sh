@@ -43,10 +43,8 @@ apt -y install vim python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
     xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev \
     libusb-1.0-0-dev libudev-dev $POSTGRES_SERVER_DEV
     
-if [ $VERSION_ID -lt 9 ]; then
-    pip3 install pip --upgrade
-fi
-pip3 install pypandoc versioneer kervi scikit-build
+pip3 install pip setuptools pypandoc versioneer kervi scikit-build --upgrade
+hash -r
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
