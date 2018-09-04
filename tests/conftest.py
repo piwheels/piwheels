@@ -243,6 +243,7 @@ def with_downloads(request, db, with_files, download_state):
 def master_config(request, tmpdir):
     config = mock.Mock()
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
+    config.pypi_simple = 'https://pypi.org/simple'
     config.dsn = 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,

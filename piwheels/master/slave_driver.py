@@ -160,6 +160,8 @@ class SlaveDriver(Task):
         elif msg == 'HELLO':
             for slave in self.slaves.values():
                 slave.hello()
+        else:
+            self.logger.error('invalid control message: %s', msg)
 
     def handle_build(self, queue):
         """
@@ -189,43 +191,44 @@ class SlaveDriver(Task):
         return a reply (in the usual form of a list of strings) or ``None`` if
         no reply should be sent (e.g. for a final "BYE" message).
         """
+        address, empty, msg = queue.recv_multipart()
         try:
-            address, empty, msg = queue.recv_multipart()
-        except ValueError:
-            self.logger.error('invalid message structure from slave')
-        else:
             msg, *args = pickle.loads(msg)
-            self.logger.debug('RX: %s %r', msg, args)
+        except (ValueError, pickle.UnpicklingError):
+            self.logger.error('invalid message structure from slave')
+            return
 
-            try:
-                slave = self.slaves[address]
-            except KeyError:
-                if msg == 'HELLO':
-                    slave = SlaveState(address, *args)
-                else:
-                    self.logger.error('invalid first message from slave: %s',
-                                      msg)
-                    return
-
-            slave.request = [msg] + args
-            try:
-                handler = {
-                    'HELLO': self.do_hello,
-                    'BYE': self.do_bye,
-                    'IDLE': self.do_idle,
-                    'BUILT': self.do_built,
-                    'SENT': self.do_sent,
-                }[msg]
-            except KeyError:
-                self.logger.error(
-                    'slave %d (%s): protocol error (%s)',
-                    slave.slave_id, slave.label, msg)
+        self.logger.debug('RX: %s %r', msg, args)
+        try:
+            slave = self.slaves[address]
+        except KeyError:
+            if msg == 'HELLO':
+                slave = SlaveState(address, *args)
             else:
-                reply = handler(slave)
-                if reply is not None:
-                    slave.reply = reply
-                    queue.send_multipart([address, empty, pickle.dumps(reply)])
-                    self.logger.debug('TX: %r', reply)
+                self.logger.error('invalid first message from slave: %s',
+                                  msg)
+                return
+
+        slave.request = [msg] + args
+        try:
+            handler = {
+                'HELLO': self.do_hello,
+                'BYE': self.do_bye,
+                'IDLE': self.do_idle,
+                'BUILT': self.do_built,
+                'SENT': self.do_sent,
+            }[msg]
+        except KeyError:
+            self.logger.error(
+                'slave %d (%s): protocol error (%s)',
+                slave.slave_id, slave.label, msg)
+            # XXX Reply? Remove the slave?
+        else:
+            reply = handler(slave)
+            if reply is not None:
+                slave.reply = reply
+                queue.send_multipart([address, empty, pickle.dumps(reply)])
+                self.logger.debug('TX: %r', reply)
 
     def do_hello(self, slave):
         """

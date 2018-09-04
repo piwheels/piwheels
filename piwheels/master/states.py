@@ -377,7 +377,9 @@ class BuildState:
         Returns the filename of the next file that needs transferring or
         ``None`` if all files have been transferred.
         """
-        for filename, f in self._files.items():
+        # XXX This is a horrid hack; the ONLY reason we sort here is to make
+        # certain tests predictable
+        for filename, f in sorted(self._files.items()):
             if not f.transferred:
                 return filename
         return None
@@ -507,14 +509,18 @@ class SlaveState:
         self._last_seen = datetime.utcnow()
         self._request = value
         if value[0] == 'BUILT':
-            status, duration, output, files = value[1:]
-            self._build = BuildState(
-                self._slave_id, self._reply[1], self._reply[2],
-                self.native_abi, status, duration, output, files={
-                    filename: FileState(filename, *filestate)
-                    for filename, filestate in files.items()
-                }
-            )
+            try:
+                status, duration, output, files = value[1:]
+                self._build = BuildState(
+                    self._slave_id, self._reply[1], self._reply[2],
+                    self.native_abi, status, duration, output, files={
+                        filename: FileState(filename, *filestate)
+                        for filename, filestate in files.items()
+                    }
+                )
+            except (ValueError, TypeError):
+                logging.error('Invalid BUILT message: %r', value)
+                self._build = None
 
     @property
     def reply(self):

@@ -150,6 +150,8 @@ class Task(Thread):
         msg, *args = queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
+        else:
+            self.logger.error('invalid control message: %s', msg)
 
     def once(self):
         """
@@ -224,3 +226,7 @@ class PauseableTask(Task):
                     raise TaskQuit
                 elif msg == 'RESUME':
                     break
+                else:
+                    self.logger.error('invalid control message: %s', msg)
+        else:
+            self.logger.error('invalid control message: %s', msg)
