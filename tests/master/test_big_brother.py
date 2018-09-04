@@ -106,6 +106,15 @@ def stats_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
+def index_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.PULL)
+    queue.hwm = 1
+    queue.bind(master_config.index_queue)
+    yield queue
+    queue.close()
+
+
+@pytest.fixture()
 def task(request, master_config):
     task = BigBrother(master_config)
     yield task
@@ -119,15 +128,13 @@ def test_gen_stats(db_queue, master_status_queue, index_queue, task,
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         db_queue.expect(['GETSTATS'])
         db_queue.send(['OK', stats_result])
-        index_queue.expect(['HOME', stats_dict])
-        master_status_queue.expect([-1, dt.utcnow.return_value, 'STATUS', stats_dict])
         db_queue.expect(['GETDL'])
         db_queue.send(['OK', {'foo': 10}])
-        index_queue.expect(['SEARCH', [('foo', 10)]])
         task.loop()  # crank the handle once
         db_queue.check()
-        index_queue.check()
-        master_status_queue.check()
+        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
+        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
 def test_gen_disk_stats(db_queue, master_status_queue, index_queue, task,
@@ -142,15 +149,13 @@ def test_gen_disk_stats(db_queue, master_status_queue, index_queue, task,
         stats_dict['disk_size'] = stats_disk.f_frsize * stats_disk.f_blocks
         db_queue.expect(['GETSTATS'])
         db_queue.send(['OK', stats_result])
-        index_queue.expect(['HOME', stats_dict])
-        master_status_queue.expect([-1, dt.utcnow.return_value, 'STATUS', stats_dict])
         db_queue.expect(['GETDL'])
         db_queue.send(['OK', {'foo': 10}])
-        index_queue.expect(['SEARCH', [('foo', 10)]])
         task.loop()
         db_queue.check()
-        index_queue.check()
-        master_status_queue.check()
+        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
+        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
 def test_gen_queue_stats(db_queue, master_status_queue, index_queue, task,
@@ -164,15 +169,13 @@ def test_gen_queue_stats(db_queue, master_status_queue, index_queue, task,
         stats_dict['builds_pending'] = 1
         db_queue.expect(['GETSTATS'])
         db_queue.send(['OK', stats_result])
-        index_queue.expect(['HOME', stats_dict])
-        master_status_queue.expect([-1, dt.utcnow.return_value, 'STATUS', stats_dict])
         db_queue.expect(['GETDL'])
         db_queue.send(['OK', {'foo': 10}])
-        index_queue.expect(['SEARCH', [('foo', 10)]])
         task.loop()
         db_queue.check()
-        index_queue.check()
-        master_status_queue.check()
+        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
+        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
 def test_bad_stats(db_queue, master_status_queue, index_queue, task,

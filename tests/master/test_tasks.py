@@ -106,13 +106,12 @@ def test_broken_task_quits(master_config, master_control_queue):
     class BrokenTask(Task):
         def loop(self):
             raise Exception("Don't panic!")
-    master_control_queue.expect(['QUIT'])
     task = BrokenTask(master_config)
     task.start()
     task.join(10)
     assert not task.is_alive()
     # Ensure the broken task tells the master to quit
-    master_control_queue.check()
+    assert master_control_queue.recv_pyobj() == ['QUIT']
 
 
 def test_task_ignores_unknown_controls(master_config, master_control_queue):

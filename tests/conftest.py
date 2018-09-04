@@ -271,6 +271,24 @@ def zmq_context(request):
     context.term()
 
 
+@pytest.fixture(scope='function')
+def master_control_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.PULL)
+    queue.hwm = 1
+    queue.bind(master_config.control_queue)
+    yield queue
+    queue.close()
+
+
+@pytest.fixture(scope='function')
+def master_status_queue(request, zmq_context):
+    queue = zmq_context.socket(zmq.PULL)
+    queue.hwm = 1
+    queue.bind(const.INT_STATUS_QUEUE)
+    yield queue
+    queue.close()
+
+
 @pytest.fixture()
 def sock_push_pull(request, zmq_context):
     # XXX Could extend this to be a factory fixture (permitting multiple pairs)
@@ -317,6 +335,12 @@ class MockMessage:
 
 
 class MockTask(Thread):
+    """
+    Helper class for testing tasks which interface with REQ/REP sockets. This
+    spawns a thread which can be tasked with expecting certain inputs and to
+    respond with certain outputs. Typically used to emulate DbClient and
+    FsClient to downstream tasks.
+    """
     ident = 0
 
     def __init__(self, ctx, sock_type, sock_addr):
@@ -425,7 +449,6 @@ class MockTask(Thread):
             control.close()
 
 
-
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, zmq.REP, master_config.db_queue)
@@ -436,26 +459,5 @@ def db_queue(request, zmq_context, master_config):
 @pytest.fixture(scope='function')
 def fs_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, zmq.REP, master_config.fs_queue)
-    yield task
-    task.close()
-
-
-@pytest.fixture()
-def index_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.PULL, master_config.index_queue)
-    yield task
-    task.close()
-
-
-@pytest.fixture(scope='function')
-def master_control_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.PULL, master_config.control_queue)
-    yield task
-    task.close()
-
-
-@pytest.fixture(scope='function')
-def master_status_queue(request, zmq_context):
-    task = MockTask(zmq_context, zmq.PULL, const.INT_STATUS_QUEUE)
     yield task
     task.close()
