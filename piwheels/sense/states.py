@@ -63,8 +63,8 @@ class SlaveList:
 
     def prune(self):
         now = datetime.utcnow()
-        for slave in self:
-            if slave.terminated and (now - state.last_seen >
+        for slave in list(self):
+            if slave.terminated and (now - slave.last_seen >
                                      timedelta(seconds=5)):
                 del self.slaves[slave.slave_id]
 
