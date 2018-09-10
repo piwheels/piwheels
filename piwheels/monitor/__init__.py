@@ -283,9 +283,7 @@ class PiWheelsMonitor:
         self.disk_bar.set_completion(
             status_info['disk_free'] * 100 / status_info['disk_size'])
         self.builds_label.set_text(
-            '{} pkg(s)'.format(status_info['versions_count'] -
-                               status_info['versions_tried']
-                               if status_info['versions_count'] else 0))
+            '{} pkg(s)'.format(status_info['builds_pending']))
         self.build_rate_label.set_text(
             '{} pkgs/hour'.format(status_info['builds_last_hour']))
         self.build_size_label.set_text(
