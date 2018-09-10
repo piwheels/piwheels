@@ -179,9 +179,7 @@ class MainRenderer(Renderer):
     def _render_queue(self, buf, pulse):
         # Then the queue length bar
         grad = list(Color('blue').gradient(Color('white'), 32))
-        pkgs = 8 * max(
-            0, self.status.get('versions_count', 0) -
-            self.status.get('versions_tried', 0)) / 64
+        pkgs = 8 * max(0, self.status.get('builds_pending', 0)) / 64
         buf[2, :] = [
             Color('white') if x < int(pkgs) else
             grad[int(32 * (pkgs - int(pkgs)))] if x < pkgs else
