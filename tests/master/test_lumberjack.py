@@ -26,53 +26,42 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""
-Defines :class:`TheArchitect` task; see class for more details.
 
-.. autoclass:: TheArchitect
-    :members:
-"""
+from unittest import mock
 
 import zmq
+import pytest
 
-from .tasks import Task
-from .db import Database
+from piwheels.master.lumberjack import Lumberjack
 
 
-class TheArchitect(Task):
-    """
-    This task queries the backend database to determine which versions of
-    packages have yet to be built (and aren't marked to be skipped). It places
-    a tuple of (package, version) for each such build into the internal
-    "builds" queue for :class:`~.slave_driver.SlaveDriver` to read.
-    """
-    name = 'master.the_architect'
+@pytest.fixture(scope='function')
+def task(request, zmq_context, master_config):
+    task = Lumberjack(master_config)
+    task.logger = mock.Mock()
+    yield task
+    task.close()
 
-    def __init__(self, config):
-        super().__init__(config)
-        self.db = Database(config.dsn)
-        self.query = self.db.get_build_queue()
-        self.builds_queue = self.ctx.socket(zmq.PUSH)
-        self.builds_queue.hwm = 10
-        self.builds_queue.bind(config.builds_queue)
 
-    def close(self):
-        self.db.close()
-        super().close()
+@pytest.fixture(scope='function')
+def log_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.PUSH)
+    queue.connect(master_config.log_queue)
+    yield queue
+    queue.close()
 
-    def loop(self):
-        """
-        The architect simply runs the build queue query repeatedly. On each
-        loop iteration, an entry from the result set is added to the relevant
-        ABI queue. The queues are limited in length to prevent silly memory
-        usage on the initial run (which will involve millions of entries). This
-        does mean that a single loop over the query will potentially miss
-        entries, but that's fine as it'll just be repeated again.
-        """
-        try:
-            row = next(self.query)
-            self.builds_queue.send_pyobj(
-                (row.abi_tag, row.package, row.version)
-            )
-        except StopIteration:
-            self.query = self.db.get_build_queue()
+
+def test_lumberjack_log_valid(db_queue, log_queue, download_state, task):
+    log_queue.send_pyobj(['LOG'] + list(download_state))
+    db_queue.expect(['LOGDOWNLOAD', download_state])
+    db_queue.send(['OK', None])
+    task.poll()
+    assert task.logger.info.call_args == mock.call(
+        'logging download of %s from %s',
+        download_state.filename, download_state.host)
+
+
+def test_lumberjack_log_invalid(db_queue, log_queue, task):
+    log_queue.send_pyobj(['FOO'])
+    task.poll()
+    assert task.logger.warning.call_count == 1

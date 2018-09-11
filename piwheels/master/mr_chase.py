@@ -60,7 +60,6 @@ class MrChase(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        self.paused = False
         import_queue = self.ctx.socket(zmq.ROUTER)
         import_queue.bind(config.import_queue)
         self.register(import_queue, self.handle_import)
@@ -112,25 +111,30 @@ class MrChase(PauseableTask):
                     package, version, skip = args
                     state = (package, version, skip)
                 else:
-                    self.logger.error(
-                        'invalid first message from client: %s', msg)
-                    return
-        except ValueError:
+                    raise ValueError('invalid first message')
+        except TypeError:
             self.logger.error('invalid message structure from client')
-
-        try:
-            handler = {
-                'IMPORT': self.do_import,
-                'REMOVE': self.do_remove,
-                'SENT': self.do_sent,
-            }[msg]
-        except KeyError:
+            reply = ['ERROR', 'invalid message structure']
+        except ValueError:
             self.logger.error('invalid message from client: %s', msg)
+            reply = ['ERROR', 'invalid message']
         else:
-            reply = handler(state)
-            if reply is not None:
-                queue.send_multipart([address, empty, pickle.dumps(reply)])
-                self.logger.debug('TX: %r', reply)
+            try:
+                handler = {
+                    'IMPORT': self.do_import,
+                    'REMOVE': self.do_remove,
+                    'SENT': self.do_sent,
+                }[msg]
+            except KeyError:
+                self.logger.error('invalid message from client: %s', msg)
+                reply = ['ERROR', 'invalid message']
+            else:
+                reply = handler(state)
+
+        if reply[0] in ('DONE', 'ERROR'):
+            self.states.pop(address, None)
+        queue.send_multipart([address, empty, pickle.dumps(reply)])
+        self.logger.debug('TX: %r', reply)
 
     def do_import(self, state):
         """
@@ -157,11 +161,14 @@ class MrChase(PauseableTask):
             self.logger.error('invalid ABI: %s', state.abi_tag)
             return ['ERROR', 'invalid ABI: %s' % state.abi_tag]
         if not self.db.test_package_version(state.package, state.version):
+            self.logger.error('unknown package version %s-%s',
+                              state.package, state.version)
             return ['ERROR', 'unknown package version %s-%s' % (
                 state.package, state.version)]
         try:
             self.db.log_build(state)
         except IOError as err:
+            self.logger.error('failed to log build: %s', err)
             return ['ERROR', str(err)]
         self.logger.info('registered build for %s %s',
                          state.package, state.version)
@@ -202,7 +209,7 @@ class MrChase(PauseableTask):
                 self.logger.info('send %s', state.next_file)
                 return ['SEND', state.next_file]
         else:
-            self.logger.info('send %s', state.next_file)
+            self.logger.info('re-send %s', state.next_file)
             return ['SEND', state.next_file]
 
     def do_remove(self, state):
@@ -212,6 +219,8 @@ class MrChase(PauseableTask):
         """
         package, version, skip = state
         if not self.db.test_package_version(package, version):
+            self.logger.error('unknown package version %s-%s',
+                              package, version)
             return ['ERROR', 'unknown package version %s-%s' % (
                 package, version)]
         self.logger.info('removing %s %s', package, version)

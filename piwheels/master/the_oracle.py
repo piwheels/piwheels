@@ -76,13 +76,17 @@ class TheOracle(Task):
         self.register(db_queue, self.handle_db_request)
         db_queue.send(b'READY')
 
+    def close(self):
+        self.db.close()
+        super().close()
+
     def handle_db_request(self, queue):
         """
         Handle incoming requests from :class:`DbClient` instances.
         """
         address, empty, msg = queue.recv_multipart()
-        msg, *args = pickle.loads(msg)
         try:
+            msg, *args = pickle.loads(msg)
             handler = {
                 'ALLPKGS': self.do_allpkgs,
                 'ALLVERS': self.do_allvers,
@@ -160,7 +164,7 @@ class TheOracle(Task):
         Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
         register a new download.
         """
-        return self.db.log_download(download)
+        self.db.log_download(download)
 
     def do_logbuild(self, build):
         """
@@ -191,7 +195,7 @@ class TheOracle(Task):
         the filenames of all wheels associated with *version* of *package*.
         """
         files = self.db.get_version_files(package, version)
-        return list(files)
+        return set(files)
 
     def do_pkgexists(self, package, version):
         """
@@ -231,7 +235,7 @@ class TheOracle(Task):
 
     def do_getdl(self):
         """
-        Handler for "GETDL" message, sent by :class:`DdbClient` to request
+        Handler for "GETDL" message, sent by :class:`DbClient` to request
         the recent download statistics, returned as a list of (name, count)
         tuples.
         """
@@ -249,6 +253,9 @@ class DbClient:
         self.db_queue = self.ctx.socket(zmq.REQ)
         self.db_queue.hwm = 1
         self.db_queue.connect(config.db_queue)
+
+    def close(self):
+        self.db_queue.close()
 
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
@@ -307,7 +314,7 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        return self._execute(['LOGDOWNLOAD', download])
+        self._execute(['LOGDOWNLOAD', download])
 
     def log_build(self, build):
         """

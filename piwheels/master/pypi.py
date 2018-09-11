@@ -36,8 +36,17 @@ import xmlrpc.client
 from collections import deque
 from datetime import datetime, timedelta
 
+from .. import __version__
+
+
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+
+class PiWheelsTransport(xmlrpc.client.SafeTransport):
+    # A Transport for the xmlrpc ServerProxy with a custom UA string (so
+    # PyPI can identify our requests more easily in case we're being naughty!)
+    user_agent = 'piwheels/%s' % __version__
 
 
 class PyPIEvents:
@@ -67,7 +76,7 @@ class PyPIEvents:
     """
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, pypi_xmlrpc='https://pypi.python.org/pypi',
+    def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
                  serial=0, retries=3):
         self.retries = retries
         self.next_read = datetime.utcnow()
@@ -75,7 +84,8 @@ class PyPIEvents:
         # Keep a list of the last 100 (package, version) tuples so we can make
         # a vague attempt at reducing duplicate reports
         self.cache = deque(maxlen=100)
-        self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc)
+        self.transport = PiWheelsTransport()
+        self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc, self.transport)
 
     def _get_events(self):
         # On rare occasions we get some form of HTTP improper state, or DNS

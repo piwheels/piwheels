@@ -103,11 +103,22 @@ class FileJuggler(Task):
         fs_queue = self.ctx.socket(zmq.REP)
         fs_queue.hwm = 1
         fs_queue.bind(config.fs_queue)
+        self.stats_queue = self.ctx.socket(zmq.PUSH)
+        self.stats_queue.hwm = 10
+        self.stats_queue.connect(config.stats_queue)
         self.register(file_queue, self.handle_file)
         self.register(fs_queue, self.handle_fs_request)
         self.pending = {}   # keyed by slave_id
         self.active = {}    # keyed by slave address
         self.complete = {}  # keyed by slave_id
+
+    def close(self):
+        self.stats_queue.close()
+        super().close()
+
+    def once(self):
+        self.stats_queue.send_pyobj(
+            ['STATFS', os.statvfs(str(self.output_path))])
 
     def handle_fs_request(self, queue):
         """
@@ -118,7 +129,6 @@ class FileJuggler(Task):
             handler = {
                 'EXPECT': self.do_expect,
                 'VERIFY': self.do_verify,
-                'STATVFS': self.do_statvfs,
                 'REMOVE': self.do_remove,
             }[msg]
             result = handler(*args)
@@ -169,13 +179,8 @@ class FileJuggler(Task):
         else:
             transfer.commit(package)
             self.logger.info('verified: %s', transfer.file_state.filename)
-
-    def do_statvfs(self):
-        """
-        Message sent by :class:`FsClient` to request that file juggler return
-        stats on the output file-system.
-        """
-        return list(os.statvfs(str(self.output_path)))
+            self.stats_queue.send_pyobj(
+                ['STATFS', os.statvfs(str(self.output_path))])
 
     def do_remove(self, package, filename):
         """
@@ -189,6 +194,8 @@ class FileJuggler(Task):
             self.logger.warning('remove failed (not found): %s', path)
         else:
             self.logger.info('removed: %s', path)
+            self.stats_queue.send_pyobj(
+                ['STATFS', os.statvfs(str(self.output_path))])
 
     def handle_file(self, queue):
         """
@@ -206,6 +213,7 @@ class FileJuggler(Task):
         """
         address, msg, *args = queue.recv_multipart()
         try:
+            transfer = None
             try:
                 transfer = self.active[address]
             except KeyError:
@@ -218,21 +226,25 @@ class FileJuggler(Task):
             del self.active[address]
             self.complete[transfer.slave_id] = transfer
             queue.send_multipart([address, b'DONE'])
+            return
         except TransferIgnoreChunk as exc:
             self.logger.debug(str(exc))
+            return
         except TransferError as exc:
             self.logger.error(str(exc))
             # XXX Delete the transfer object?
+            if transfer is None:
+                return
             # XXX Remove transfer from slave?
-        else:
+
+        fetch_range = transfer.fetch()
+        while fetch_range:
+            queue.send_multipart([
+                address, b'FETCH',
+                str(fetch_range.start).encode('ascii'),
+                str(len(fetch_range)).encode('ascii')
+            ])
             fetch_range = transfer.fetch()
-            while fetch_range:
-                queue.send_multipart([
-                    address, b'FETCH',
-                    str(fetch_range.start).encode('ascii'),
-                    str(len(fetch_range)).encode('ascii')
-                ])
-                fetch_range = transfer.fetch()
 
     def new_transfer(self, msg, *args):
         r"""
@@ -259,7 +271,7 @@ class FileJuggler(Task):
         except ValueError:
             raise TransferError('invalid slave id: %s' % args[0])
         except KeyError:
-            raise TransferError('no pending transfer for slave: %d' % slave_id)
+            raise TransferError('unexpected transfer from slave: %d' % slave_id)
         return transfer
 
     def current_transfer(self, transfer, msg, *args):
@@ -286,16 +298,17 @@ class FileJuggler(Task):
             if transfer.done:
                 raise TransferDone('transfer complete: %s' %
                                    transfer.file_state.filename)
-        elif msg == b'HELLO':
-            # This only happens if we've dropped a *lot* of packets,
-            # and the slave's timed out waiting for another FETCH.
-            # In this case reset the amount of "credit" on the
-            # transfer so it can start fetching again
-            # XXX Should check slave ID reported in HELLO matches
-            # the slave retrieved from the cache
-            transfer.reset_credit()
         else:
-            raise TransferError('invalid chunk header from slave: %s' % msg)
+            # This only happens if there's either a corrupted package, or we've
+            # dropped a *lot* of packets, and the slave's timed out waiting for
+            # another FETCH. In either case reset the amount of "credit" on the
+            # transfer so it can start fetching again
+            transfer.reset_credit()
+            # XXX Should check slave ID reported in HELLO matches the slave
+            # retrieved from the cache
+            if msg != b'HELLO':
+                raise TransferError(
+                    'invalid chunk header from slave: %s' % msg)
 
 
 class FsClient:
@@ -314,8 +327,7 @@ class FsClient:
         self.fs_queue.send_pyobj(msg, flags=zmq.NOBLOCK)
         status, result = self.fs_queue.recv_pyobj()
         if status == 'OK':
-            if result is not None:
-                return result
+            return result
         else:
             raise result
 
@@ -335,12 +347,6 @@ class FsClient:
             return False
         else:
             return True
-
-    def statvfs(self):
-        """
-        See :meth:`FileJuggler.do_statvfs`.
-        """
-        return os.statvfs_result(self._execute(['STATVFS']))
 
     def remove(self, package, filename):
         """

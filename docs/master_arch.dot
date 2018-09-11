@@ -12,7 +12,7 @@ digraph piwheels {
         TheOracle1 [label="{<Seraph>REQ|<t>TheOracle}"];
         TheOracle2 [label="{<Seraph>REQ|<t>TheOracle}"];
         TheOracle3 [label="{<Seraph>REQ|<t>TheOracle}"];
-        TheArchitect [label="{<builds>REP|<t>TheArchitect}"];
+        TheArchitect [label="{<builds>PUSH|<t>TheArchitect}"];
         Seraph [label="{<db>ROUTER|<t>Seraph|<oracle>ROUTER}"];
         db [label="piwheels\ndatabase", shape=folder];
 
@@ -28,8 +28,8 @@ digraph piwheels {
     subgraph cluster_file_server {
         graph [label="file-server"];
 
-        FileJuggler [label="{{<slaves>ROUTER|<fs>REP}|<t>FileJuggler}"];
-        IndexScribe [label="{{<indexes>PULL|<db>REQ}|<t>IndexScribe}"];
+        IndexScribe [label="{<indexes>PULL|<t>IndexScribe|<db>REQ}"];
+        FileJuggler [label="{{<slaves>ROUTER|<fs>REP|<stats>PUSH}|<t>FileJuggler}"];
         Lumberjack [label="{<logs>PULL|<t>Lumberjack|<db>REQ}"];
         fs [label="www\nfilesystem", shape=folder];
         httpd;
@@ -45,9 +45,9 @@ digraph piwheels {
 
         CloudGazer [label="{<t>CloudGazer|<db>REQ}"];
         main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
-        BigBrother [label="{<t>BigBrother|{<indexes>PUSH|<fs>REQ|<db>REQ|<int_status>PUSH}}"];
-        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<indexes>PUSH|<fs>REQ|<db>REQ|<builds>REQ|<int_status>PUSH}}"];
-        MrChase [label="{<imports>ROUTER|<t>MrChase|{<indexes>PUSH|<fs>REQ|<db>REQ|<int_status>PUSH}}"];
+        MrChase [label="{<imports>ROUTER|<t>MrChase|{<fs>REQ|<indexes>PUSH|<int_status>PUSH|<db>REQ}}"];
+        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<fs>REQ|<indexes>PUSH|<int_status>PUSH|<stats>PUSH|<db>REQ|<builds>PULL}}"];
+        BigBrother [label="{<stats>PULL|<t>BigBrother|{<indexes>PUSH|<int_status>PUSH|<db>REQ}}"];
 
         BigBrother:int_status->main:int_status;
         SlaveDriver:int_status->main:int_status;
@@ -90,13 +90,14 @@ digraph piwheels {
     CloudGazer:db->Seraph:db [dir=both];
     BigBrother:indexes->IndexScribe:indexes;
     SlaveDriver:indexes->IndexScribe:indexes;
+    SlaveDriver:stats->BigBrother:stats;
+    FileJuggler:stats->BigBrother:stats;
     MrChase:indexes->IndexScribe:indexes;
     IndexScribe:db->Seraph:db [dir=both];
     BigBrother:db->Seraph:db [dir=both];
-    BigBrother:fs->FileJuggler:fs [dir=both];
     SlaveDriver:fs->FileJuggler:fs [dir=both];
     SlaveDriver:db->Seraph:db [dir=both];
-    SlaveDriver:builds->TheArchitect:builds [dir=both];
+    TheArchitect:builds->SlaveDriver:builds;
     MrChase:fs->FileJuggler:fs [dir=both];
     MrChase:db->Seraph:db [dir=both];
     Lumberjack:db->Seraph:db [dir=both];

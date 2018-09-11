@@ -135,6 +135,12 @@ class FileState:
             self._transferred,
         )[index]
 
+    def __eq__(self, other):
+        return (
+            len(self) == len(other) and
+            all(s == o for s, o in zip(self, other))
+        )
+
     def __repr__(self):
         return "<FileState: {filename!r}, {filesize}Kb {transferred}>".format(
             filename=self.filename,
@@ -208,8 +214,8 @@ class BuildState:
     :param bool status:
         ``True`` if the build succeeded, ``False`` if it failed.
 
-    :param datetime.timedelta duration:
-        The amount of time it took to complete the build.
+    :param float duration:
+        The amount of time (in seconds) it took to complete the build.
 
     :param str output:
         The log output of the build.
@@ -224,6 +230,7 @@ class BuildState:
     """
     def __init__(self, slave_id, package, version, abi_tag, status, duration,
                  output, files, build_id=None):
+        assert abi_tag != 'none'
         self._slave_id = slave_id
         self._package = package
         self._version = version
@@ -249,6 +256,18 @@ class BuildState:
             self._files,
             self._build_id,
         ][index]
+
+    def __setitem__(self, index, value):
+        if index == 3:
+            self._abi_tag = value
+        else:
+            raise AttributeError('index %d is immutable' % index)
+
+    def __eq__(self, other):
+        return (
+            len(self) == len(other) and
+            all(s == o for s, o in zip(self, other))
+        )
 
     def __repr__(self):
         return (
@@ -282,7 +301,7 @@ class BuildState:
                 brec.version,
                 brec.abi_tag,
                 brec.status,
-                brec.duration,
+                brec.duration.total_seconds(),
                 brec.output,
                 {
                     frec.filename: FileState(
@@ -358,7 +377,9 @@ class BuildState:
         Returns the filename of the next file that needs transferring or
         ``None`` if all files have been transferred.
         """
-        for filename, f in self._files.items():
+        # XXX This is a horrid hack; the ONLY reason we sort here is to make
+        # certain tests predictable
+        for filename, f in sorted(self._files.items()):
             if not f.transferred:
                 return filename
         return None
@@ -471,6 +492,8 @@ class SlaveState:
     def expired(self):
         # There's a fudge factor of 10% here to allow slaves a little extra
         # time before we expire and forget them
+        if self._last_seen is None:
+            return False
         return (datetime.utcnow() - self._last_seen) > (self._timeout * 1.1)
 
     @property
@@ -486,14 +509,18 @@ class SlaveState:
         self._last_seen = datetime.utcnow()
         self._request = value
         if value[0] == 'BUILT':
-            status, duration, output, files = value[1:]
-            self._build = BuildState(
-                self._slave_id, self._reply[1], self._reply[2],
-                self.native_abi, status, duration, output, files={
-                    filename: FileState(filename, *filestate)
-                    for filename, filestate in files.items()
-                }
-            )
+            try:
+                status, duration, output, files = value[1:]
+                self._build = BuildState(
+                    self._slave_id, self._reply[1], self._reply[2],
+                    self.native_abi, status, duration, output, files={
+                        filename: FileState(filename, *filestate)
+                        for filename, filestate in files.items()
+                    }
+                )
+            except (ValueError, TypeError):
+                logging.error('Invalid BUILT message: %r', value)
+                self._build = None
 
     @property
     def reply(self):
@@ -531,21 +558,24 @@ class TransferState:
     def __init__(self, slave_id, file_state):
         self._slave_id = slave_id
         self._file_state = file_state
+        try:
+            (self.output_path / 'simple').mkdir()
+        except FileExistsError:
+            pass
         self._file = tempfile.NamedTemporaryFile(
             dir=str(self.output_path / 'simple'), delete=False)
         self._file.seek(self._file_state.filesize)
         self._file.truncate()
         # See 0MQ guide's File Transfers section for more on the credit-driven
         # nature of this interaction
-        self._credit = min(self.pipeline_size,
-                           self._file_state.filesize // self.chunk_size)
-        self._credit = max(1, self._credit)
+        self._credit = 0
         # _offset is the position that we will next return when the fetch()
         # method is called (or rather, it's the minimum position we'll return)
         # whilst _map is a sorted list of ranges indicating which bytes of the
         # file we have yet to received; this is manipulated by chunk()
         self._offset = 0
         self._map = [range(self._file_state.filesize)]
+        self.reset_credit()
 
     def __repr__(self):
         return "<TransferState: offset={offset} map={_map}>".format(
@@ -574,9 +604,6 @@ class TransferState:
                     if result:
                         self._offset = result.stop
                         return result
-                    elif map_range.start > fetch_range.start:
-                        fetch_range = range(map_range.start,
-                                            map_range.start + self.chunk_size)
                 try:
                     fetch_range = range(self._map[0].start,
                                         self._map[0].start + self.chunk_size)
@@ -584,6 +611,7 @@ class TransferState:
                     return None
 
     def chunk(self, offset, data):
+        # XXX Check we actually still need this chunk? I/O is expensive after all
         self._file.seek(offset)
         self._file.write(data)
         self._map = list(exclude(self._map, range(offset, offset + len(data))))
@@ -593,13 +621,8 @@ class TransferState:
             self._credit += 1
 
     def reset_credit(self):
-        if self._credit == 0:
-            # NOTE: We don't bother with the filesize here; if we're dropping
-            # that many packets we should max out "in-flight" packets for this
-            # transfer anyway
-            self._credit = self.pipeline_size
-        else:
-            logging.warning('Transfer still has credit; no need for reset')
+        self._credit = max(1, min(self.pipeline_size,
+                           self._file_state.filesize // self.chunk_size))
 
     def verify(self):
         # XXX Would be nicer to construct the hash from the transferred chunks
@@ -612,7 +635,10 @@ class TransferState:
                 body.update(buf)
             else:
                 break
+        size = self._file.tell()
         self._file.close()
+        if size != self._file_state.filesize:
+            raise IOError('wrong size for transfer at %s' % self._file.name)
         if body.hexdigest().lower() != self._file_state.filehash:
             raise IOError('failed to verify transfer at %s' % self._file.name)
 
@@ -664,9 +690,19 @@ def mkdir_override_symlink(pkg_dir):
     Make *pkg_dir*, replacing any existing symlink in its place. See the
     notes in :meth:`IndexScribe.write_package_index` for more information.
     """
-    try:
-        pkg_dir.mkdir()
-    except FileExistsError:
-        if pkg_dir.is_symlink():
-            pkg_dir.unlink()
+    # There is a tiny possibility of a race here between two threads wanting
+    # to replace a symlinked dir with a "real" dir, hence the loop below
+    while True:
+        try:
             pkg_dir.mkdir()
+        except FileExistsError:
+            if pkg_dir.is_symlink():
+                # There is another tiny possibility that, in racing another
+                # thread replacing the symlinked dir, the other thread wins
+                # and this unlink fails because it's now a "real" dir
+                try:
+                    pkg_dir.unlink()
+                    continue
+                except IsADirectoryError:
+                    pass
+        break

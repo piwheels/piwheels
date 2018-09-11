@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # The piwheels project
@@ -31,10 +31,10 @@
 
 import sys
 import os
+from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 import piwheels as _setup
-from datetime import datetime
 
 # Mock out certain modules while building documentation
 class Mock(object):
@@ -78,12 +78,21 @@ sys.modules['piwheels.terminal'] = Mock()
 # -- General configuration ------------------------------------------------
 
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx']
+if on_rtd:
+    needs_sphinx = '1.4.0'
+    extensions.append('sphinx.ext.imgmath')
+    imgmath_image_format = 'svg'
+    tags.add('rtd')
+else:
+    extensions.append('sphinx.ext.mathjax')
+    mathjax_path = '/usr/share/javascript/mathjax/MathJax.js?config=TeX-AMS_HTML'
+
 templates_path = ['_templates']
 source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 master_doc = 'index'
 project = _setup.__project__.title()
-copyright = '%d %s' % (datetime.now().year, _setup.__author__)
+copyright = '2017-%s %s' % (datetime.now().year, _setup.__author__)
 version = _setup.__version__
 release = _setup.__version__
 #language = None
@@ -106,21 +115,22 @@ autodoc_member_order = 'groupwise'
 
 intersphinx_mapping = {
     'python': ('http://docs.python.org/3.4', None),
-    }
+}
+intersphinx_cache_limit = 7
 
 # -- Options for HTML output ----------------------------------------------
 
 if on_rtd:
     html_theme = 'sphinx_rtd_theme'
+    pygments_style = 'default'
     #html_theme_options = {}
-    #html_theme_path = []
     #html_sidebars = {}
 else:
     html_theme = 'default'
     #html_theme_options = {}
-    #html_theme_path = []
     #html_sidebars = {}
 html_title = '%s %s Documentation' % (project, version)
+#html_theme_path = []
 #html_short_title = None
 #html_logo = None
 #html_favicon = None
@@ -162,7 +172,7 @@ latex_documents = [
         _setup.__author__,             # author
         'manual',                      # documentclass
         True,                          # documents ref'd from toctree only
-        ),
+    ),
 ]
 
 #latex_logo = None
@@ -192,7 +202,7 @@ man_pages = [
     ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [_setup.__author__], 1),
 ]
 
-#man_show_urls = False
+man_show_urls = True
 
 # -- Options for Texinfo output -------------------------------------------
 

@@ -35,6 +35,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 
 import pickle
 from datetime import datetime
+from collections import defaultdict
 
 import zmq
 
@@ -65,24 +66,35 @@ class SlaveDriver(Task):
     def __init__(self, config):
         super().__init__(config)
         self.paused = False
+        self.abi_queues = defaultdict(set)
         slave_queue = self.ctx.socket(zmq.ROUTER)
         slave_queue.ipv6 = True
         slave_queue.bind(config.slave_queue)
         self.register(slave_queue, self.handle_slave)
+        builds_queue = self.ctx.socket(zmq.PULL)
+        builds_queue.hwm = 10
+        builds_queue.connect(config.builds_queue)
+        self.register(builds_queue, self.handle_build)
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
-        self.builds_queue = self.ctx.socket(zmq.REQ)
-        self.builds_queue.hwm = 10
-        self.builds_queue.connect(config.builds_queue)
         self.index_queue = self.ctx.socket(zmq.PUSH)
         self.index_queue.hwm = 10
         self.index_queue.connect(config.index_queue)
+        self.stats_queue = self.ctx.socket(zmq.PUSH)
+        self.stats_queue.hwm = 10
+        self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.slaves = {}
         self.pypi_simple = config.pypi_simple
+
+    def close(self):
+        self.status_queue.close()
+        self.index_queue.close()
+        self.stats_queue.close()
+        super().close()
 
     def list_slaves(self):
         """
@@ -148,6 +160,24 @@ class SlaveDriver(Task):
         elif msg == 'HELLO':
             for slave in self.slaves.values():
                 slave.hello()
+        else:
+            self.logger.error('invalid control message: %s', msg)
+
+    def handle_build(self, queue):
+        """
+        Build up ABI-specific queues of package versions waiting to be built.
+        The queues are limited to 1000 packages per ABI, and are kept as sets
+        to eliminate duplicate versions that will inevitably appear due to
+        re-runs of the build-queue query (in :class:`TheArchitect`) while
+        queried versions are actively being built.
+        """
+        abi, package, version = queue.recv_pyobj()
+        queue = self.abi_queues[abi]
+        if len(queue) < 1000:
+            queue.add((package, version))
+        self.stats_queue.send_pyobj(['STATBQ', {
+            abi: len(queue) for (abi, queue) in self.abi_queues.items()
+        }])
 
     def handle_slave(self, queue):
         """
@@ -161,43 +191,44 @@ class SlaveDriver(Task):
         return a reply (in the usual form of a list of strings) or ``None`` if
         no reply should be sent (e.g. for a final "BYE" message).
         """
+        address, empty, msg = queue.recv_multipart()
         try:
-            address, empty, msg = queue.recv_multipart()
-        except ValueError:
-            self.logger.error('invalid message structure from slave')
-        else:
             msg, *args = pickle.loads(msg)
-            self.logger.debug('RX: %s %r', msg, args)
+        except (ValueError, pickle.UnpicklingError):
+            self.logger.error('invalid message structure from slave')
+            return
 
-            try:
-                slave = self.slaves[address]
-            except KeyError:
-                if msg == 'HELLO':
-                    slave = SlaveState(address, *args)
-                else:
-                    self.logger.error('invalid first message from slave: %s',
-                                      msg)
-                    return
-
-            slave.request = [msg] + args
-            try:
-                handler = {
-                    'HELLO': self.do_hello,
-                    'BYE': self.do_bye,
-                    'IDLE': self.do_idle,
-                    'BUILT': self.do_built,
-                    'SENT': self.do_sent,
-                }[msg]
-            except KeyError:
-                self.logger.error(
-                    'slave %d (%s): protocol error (%s)',
-                    slave.slave_id, slave.label, msg)
+        self.logger.debug('RX: %s %r', msg, args)
+        try:
+            slave = self.slaves[address]
+        except KeyError:
+            if msg == 'HELLO':
+                slave = SlaveState(address, *args)
             else:
-                reply = handler(slave)
-                if reply is not None:
-                    slave.reply = reply
-                    queue.send_multipart([address, empty, pickle.dumps(reply)])
-                    self.logger.debug('TX: %r', reply)
+                self.logger.error('invalid first message from slave: %s',
+                                  msg)
+                return
+
+        slave.request = [msg] + args
+        try:
+            handler = {
+                'HELLO': self.do_hello,
+                'BYE': self.do_bye,
+                'IDLE': self.do_idle,
+                'BUILT': self.do_built,
+                'SENT': self.do_sent,
+            }[msg]
+        except KeyError:
+            self.logger.error(
+                'slave %d (%s): protocol error (%s)',
+                slave.slave_id, slave.label, msg)
+            # XXX Reply? Remove the slave?
+        else:
+            reply = handler(slave)
+            if reply is not None:
+                slave.reply = reply
+                queue.send_multipart([address, empty, pickle.dumps(reply)])
+                self.logger.debug('TX: %r', reply)
 
     def do_hello(self, slave):
         """
@@ -262,11 +293,12 @@ class SlaveDriver(Task):
                 slave.slave_id, slave.label)
             return ['SLEEP']
         else:
-            self.builds_queue.send_pyobj(slave.native_abi)
-            task = self.builds_queue.recv_pyobj()
-            if task is not None:
-                if task not in self.active_builds():
-                    package, version = task
+            try:
+                package, version = self.abi_queues[slave.native_abi].pop()
+            except KeyError:
+                pass
+            else:
+                if (package, version) not in self.active_builds():
                     self.logger.info(
                         'slave %d: build %s %s',
                         slave.slave_id, package, version)
@@ -350,7 +382,7 @@ class SlaveDriver(Task):
                                  slave.build.next_file)
                 return ['SEND', slave.build.next_file]
         else:
-            self.logger.info('slave %d (%s): send %s',
+            self.logger.info('slave %d (%s): re-send %s',
                              slave.slave_id, slave.label,
                              slave.build.next_file)
             return ['SEND', slave.build.next_file]
@@ -369,7 +401,8 @@ class SlaveDriver(Task):
 def build_armv6l_hack(build):
     """
     A dirty hack for armv6l wheels; if the build contains any arch-specific
-    wheels for armv7l, generate equivalent armv6l entries from them.
+    wheels for armv7l, generate equivalent armv6l entries from them (with
+    the transferred flag set to True as nothing actually needs transferring).
     """
     for file in list(build.files.values()):
         if file.platform_tag == 'linux_armv7l':

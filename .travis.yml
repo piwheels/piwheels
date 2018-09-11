@@ -1,0 +1,16 @@
+addons:
+    postgresql: "9.4"
+language: python
+python:
+    - "3.6"
+    - "3.5"
+    - "3.4"
+before_install:
+    - pip install codecov
+install: "pip install -e .[master,slave,test]"
+before_script:
+    - psql -U postgres -c "create user piwheels password 'piwheels'"
+    - psql -U postgres -c "create database piwheels_test"
+script: make test
+after_success:
+    - codecov

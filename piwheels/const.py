@@ -34,7 +34,7 @@ command line or, in certain cases, environment variables.
 
 DSN = 'postgres:///piwheels'
 USER = 'piwheels'
-PYPI_ROOT = 'https://pypi.python.org/'
+PYPI_ROOT = 'https://pypi.org/'
 PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
 OUTPUT_PATH = '/var/www'
@@ -42,12 +42,13 @@ STATUS_QUEUE = 'ipc:///tmp/piw-status'
 CONTROL_QUEUE = 'ipc:///tmp/piw-control'
 INDEX_QUEUE = 'inproc://indexes'
 BUILDS_QUEUE = 'inproc://builds'
+STATS_QUEUE = 'inproc://stats'
 DB_QUEUE = 'inproc://db'
 FS_QUEUE = 'inproc://fs'
 SLAVE_QUEUE = 'tcp://*:5555'
 FILE_QUEUE = 'tcp://*:5556'
 IMPORT_QUEUE = 'ipc:///tmp/piw-import'
-LOGGER_QUEUE = 'ipc:///tmp/piw-logger'
+LOG_QUEUE = 'ipc:///tmp/piw-logger'
 
 # NOTE: The following queues are *not* configurable and should always be an
 # inproc queue

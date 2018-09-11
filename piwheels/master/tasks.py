@@ -76,8 +76,18 @@ class Task(Thread):
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(zmq.PUSH)
+        self.quit_queue.hwm = 1
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
+
+    def close(self):
+        """
+        Close all registered queues. This should be overridden to close any
+        additional queues the task holds which aren't registered.
+        """
+        for queue in self.handlers:
+            queue.close()
+        self.quit_queue.close()
 
     def register(self, queue, handler, flags=zmq.POLLIN):
         """
@@ -101,9 +111,11 @@ class Task(Thread):
 
     def _ctrl(self, msg):
         queue = self.ctx.socket(zmq.PUSH)
-        queue.connect('inproc://ctrl-%s' % self.name)
-        queue.send_pyobj(msg)
-        queue.close()
+        try:
+            queue.connect('inproc://ctrl-%s' % self.name)
+            queue.send_pyobj(msg)
+        finally:
+            queue.close()
 
     def pause(self):
         """
@@ -138,6 +150,16 @@ class Task(Thread):
         msg, *args = queue.recv_pyobj()
         if msg == 'QUIT':
             raise TaskQuit
+        else:
+            self.logger.error('invalid control message: %s', msg)
+
+    def once(self):
+        """
+        This method is called once before the task loop starts. It the task
+        needs to do some initialization or setup within the task thread, this
+        is the place to do it.
+        """
+        pass
 
     def loop(self):
         """
@@ -159,7 +181,7 @@ class Task(Thread):
                 for queue in socks:
                     self.handlers[queue](queue)
             except zmq.error.Again:
-                continue
+                continue  # pragma: no cover
             break
 
     def run(self):
@@ -169,16 +191,18 @@ class Task(Thread):
         any finalization required.
         """
         self.logger.info('starting')
-        while True:
-            try:
+        try:
+            self.once()
+            while True:
                 self.loop()
                 self.poll()
-            except TaskQuit:
-                self.logger.info('closing')
-                break
-            except:
-                self.quit_queue.send_pyobj(['QUIT'])
-                raise
+        except TaskQuit:
+            self.logger.info('closing')
+        except:
+            self.quit_queue.send_pyobj(['QUIT'])
+            raise
+        finally:
+            self.close()
 
 
 class PauseableTask(Task):
@@ -202,3 +226,7 @@ class PauseableTask(Task):
                     raise TaskQuit
                 elif msg == 'RESUME':
                     break
+                else:
+                    self.logger.error('invalid control message: %s', msg)
+        else:
+            self.logger.error('invalid control message: %s', msg)

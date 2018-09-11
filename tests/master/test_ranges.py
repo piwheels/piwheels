@@ -26,53 +26,33 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""
-Defines :class:`TheArchitect` task; see class for more details.
 
-.. autoclass:: TheArchitect
-    :members:
-"""
-
-import zmq
-
-from .tasks import Task
-from .db import Database
+from piwheels.master.ranges import (
+    consolidate,
+    split,
+    exclude,
+    intersect,
+)
 
 
-class TheArchitect(Task):
-    """
-    This task queries the backend database to determine which versions of
-    packages have yet to be built (and aren't marked to be skipped). It places
-    a tuple of (package, version) for each such build into the internal
-    "builds" queue for :class:`~.slave_driver.SlaveDriver` to read.
-    """
-    name = 'master.the_architect'
+def test_consolidate():
+    assert list(consolidate([range(5), range(4, 10)])) == [range(10)]
+    assert list(consolidate([range(5), range(5, 10)])) == [range(10)]
+    assert list(consolidate([range(5), range(6, 10)])) == [range(5), range(6, 10)]
 
-    def __init__(self, config):
-        super().__init__(config)
-        self.db = Database(config.dsn)
-        self.query = self.db.get_build_queue()
-        self.builds_queue = self.ctx.socket(zmq.PUSH)
-        self.builds_queue.hwm = 10
-        self.builds_queue.bind(config.builds_queue)
 
-    def close(self):
-        self.db.close()
-        super().close()
+def test_split():
+    assert list(split([range(10)], 5)) == [range(5), range(5, 10)]
+    assert list(split([range(10)], 0)) == [range(10)]
+    assert list(split([range(10)], 20)) == [range(10)]
 
-    def loop(self):
-        """
-        The architect simply runs the build queue query repeatedly. On each
-        loop iteration, an entry from the result set is added to the relevant
-        ABI queue. The queues are limited in length to prevent silly memory
-        usage on the initial run (which will involve millions of entries). This
-        does mean that a single loop over the query will potentially miss
-        entries, but that's fine as it'll just be repeated again.
-        """
-        try:
-            row = next(self.query)
-            self.builds_queue.send_pyobj(
-                (row.abi_tag, row.package, row.version)
-            )
-        except StopIteration:
-            self.query = self.db.get_build_queue()
+
+def test_exclude():
+    assert list(exclude([range(10)], range(2))) == [range(2, 10)]
+    assert list(exclude([range(10)], range(2, 4))) == [range(2), range(4, 10)]
+
+
+def test_intersect():
+    assert intersect(range(10), range(5)) == range(5)
+    assert intersect(range(10), range(10, 2)) is None
+    assert intersect(range(10), range(2, 5)) == range(2, 5)
