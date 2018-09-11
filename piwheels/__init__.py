@@ -64,7 +64,7 @@ __requires__ = ['configargparse', 'pyzmq']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
-    'master':  ['sqlalchemy', 'psycopg-binary'],
+    'master':  ['sqlalchemy', 'psycopg2-binary'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
     'log':     ['lars'],
     'test':    ['pytest', 'coverage'],
