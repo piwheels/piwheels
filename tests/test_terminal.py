@@ -89,9 +89,9 @@ def test_yes_no_prompt(capsys):
         _input.return_value = ''
         assert yes_no_prompt('Foo') == True
         assert _input.call_args == mock.call('Foo [Y/n] ')
-        captured = capsys.readouterr()
-        assert captured.out == '\n'
+        out, err = capsys.readouterr()
+        assert out == '\n'
         _input.side_effect = ['foo', 'NO']
         assert yes_no_prompt('Bar') == False
-        captured = capsys.readouterr()
-        assert captured.out == '\nInvalid response\n'
+        out, err = capsys.readouterr()
+        assert out == '\nInvalid response\n'
