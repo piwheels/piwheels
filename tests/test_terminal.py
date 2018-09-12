@@ -85,7 +85,7 @@ def test_error_handler():
 
 
 def test_yes_no_prompt(capsys):
-    with mock.patch('piwheels.terminal.input') as _input:
+    with mock.patch('builtins.input') as _input:
         _input.return_value = ''
         assert yes_no_prompt('Foo') == True
         assert _input.call_args == mock.call('Foo [Y/n] ')

@@ -72,7 +72,7 @@ def wait_for_file(path, timeout=1):
 
 class ContainsParser(HTMLParser):
     def __init__(self, find_tag, find_attrs):
-        super().__init__()
+        super().__init__(convert_charrefs=True)
         self.found = False
         self.find_tag = find_tag
         self.find_attrs = set(find_attrs)
