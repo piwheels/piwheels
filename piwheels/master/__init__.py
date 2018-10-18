@@ -45,7 +45,8 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const, systemd
+from .. import __version__, terminal, const
+from ..systemd import Systemd
 from .tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
@@ -196,10 +197,11 @@ write access to the output directory.
         for task in self.tasks:
             task.start()
         self.logger.info('started all tasks')
+        systemd = Systemd()
         signal.signal(signal.SIGTERM, sig_term)
         try:
             systemd.ready()
-            self.main_loop()
+            self.main_loop(systemd)
         except TaskQuit:
             pass
         except SystemExit:
@@ -215,15 +217,13 @@ write access to the output directory.
                 systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
             self.control_queue.close()
-            print('closing int_status')
             self.int_status_queue.close()
-            print('closed')
             self.ext_status_queue.close()
             self.logger.info('closed all queues')
             ctx.destroy(linger=1000)
             ctx.term()
 
-    def main_loop(self):
+    def main_loop(self, systemd):
         """
         This is the main loop of the :program:`piw-master` script. It receives
         messages from the internal status queue and forwards them onto the

@@ -31,184 +31,143 @@
 """
 Provides a simple interface to systemd's notification and watchdog services.
 
-
-.. autofunction:: available
-
-.. autofunction:: notify
-
-.. autofunction:: ready
-
-.. autofunction:: reloading
-
-.. autofunction:: stopping
-
-.. autofunction:: watchdog_ping
-
-.. autofunction:: watchdog_reset
-
-.. autofunction:: watchdog_period
-
-.. autofunction:: watchdog_clean
-
-.. autofunction:: main_pid
+.. autoclass:: Systemd
 """
 
 import os
 import socket
 
 
-def _init_socket():
-    # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
-    addr = os.environ.pop('NOTIFY_SOCKET', None)
-    if addr is not None:
-        print(addr)
-        if len(addr) <= 1 or addr[0] not in ('@', '/'):
-            return None
-        if addr[0] == '@':
-            addr = '\0' + addr[1:] # abstract namespace socket
-        s = socket.socket(socket.AF_UNIX,
-                          socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
-        try:
-            s.connect(addr)
-        except IOError:
-            return None
-        return s
+class Systemd:
+    """
+    Provides a simple interface to systemd's notification and watchdog
+    services. It is suggested applications construct a single, top-level
+    instance of this class and use it to communicate with systemd.
+    """
 
+    __slots__ = ('_socket',)
 
-_notify_socket = _init_socket()
+    def __init__(self, address=None):
+        # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
+        self._socket = None
+        if address is None:
+            address = os.environ.pop('NOTIFY_SOCKET', None)
+        if address is not None:
+            if len(address) <= 1 or address[0] not in ('@', '/'):
+                return None
+            if address[0] == '@':
+                address = '\0' + address[1:] # abstract namespace socket
+            self._socket = socket.socket(socket.AF_UNIX,
+                              socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
+            try:
+                self._socket.connect(address)
+            except IOError:
+                self._socket = None
 
-
-if _notify_socket is None:
-    def available():
+    def available(self):
         """
         If systemd's notification socket is not available, raises
         :exc:`RuntimeError`. Services expecting systemd notifications to be
         available can call this to assert that notifications will be noticed.
         """
-        raise RuntimeError("systemd notification socket unavailable")
+        if self._socket is None:
+            raise RuntimeError("systemd notification socket unavailable")
 
-
-    def notify(state):
+    def notify(self, state):
         """
         Send a notification to systemd. *state* is a string type (if it is a
         unicode string it will be encoded with the 'ascii' codec).
         """
-        pass
+        if self._socket is not None:
+            if isinstance(state, str):
+                state = state.encode('ascii')
+            self._socket.sendall(state)
 
-
-else:
-    def available():
+    def ready(self):
         """
-        If systemd's notification socket is not available, raises
-        :exc:`RuntimeError`. Services expecting systemd notifications to be
-        available can call this to assert that notifications will be noticed.
+        Notify systemd that service startup is complete.
         """
+        self.notify(b'READY=1')
 
-
-    def notify(state):
+    def reloading(self):
         """
-        Send a notification to systemd. *state* is a string type (if it is a
-        unicode string it will be encoded with the 'ascii' codec).
+        Notify systemd that the service is reloading its configuration. Call
+        :func:`ready` when reload is complete.
         """
-        if isinstance(state, str):
-            state = state.encode('ascii')
-        _notify_socket.sendall(state)
+        self.notify(b'RELOADING=1')
 
+    def stopping(self):
+        """
+        Notify systemd that the service is stopping.
+        """
+        self.notify(b'STOPPING=1')
 
-def ready():
-    """
-    Notify systemd that service startup is complete.
-    """
-    notify(b'READY=1')
+    def extend_timeout(self, timeout):
+        """
+        Notify systemd to extend the start / stop timeout by *timeout* seconds.
+        A timeout will occur if the service does not call :func:`ready` or
+        terminate within *timeout* seconds but *only* if the original timeout
+        (set in the systemd configuration) has already been exceeded.
 
+        For example, if the stopping timeout is configured as 90s, and the
+        service calls :func:`stopping`, systemd expects the service to
+        terminate within 90s. After 10s the service calls
+        :func:`extend_timeout` with a *timeout* of 10s. 20s later the service
+        has not yet terminated but systemd does *not* consider the timeout
+        expired as only 30s have elapsed of the original 90s timeout.
+        """
+        self.notify('EXTEND_TIMEOUT_USEC=%d' % int(timeout * 1000000))
 
-def reloading():
-    """
-    Notify systemd that the service is reloading its configuration. Call
-    :func:`ready` when reload is complete.
-    """
-    notify(b'RELOADING=1')
+    def watchdog_ping(self):
+        """
+        Ping the systemd watchdog. This must be done periodically if
+        :func:`watchdog_period` returns a value other than ``None``.
+        """
+        self.notify(b'WATCHDOG=1')
 
+    def watchdog_reset(self, timeout):
+        """
+        Reset the systemd watchdog timer to *timeout* seconds.
+        """
+        self.notify('WATCHDOG_USEC=%d' % int(timeout * 1000000))
 
-def stopping():
-    """
-    Notify systemd that the service is stopping.
-    """
-    notify(b'STOPPING=1')
+    def watchdog_period(self):
+        """
+        Returns the time (in seconds) before which systemd expects the process
+        to call :func:`watchdog_ping`. If a watchdog timeout is not set, the
+        function returns ``None``.
+        """
+        timeout = os.environ.get('WATCHDOG_USEC')
+        if timeout is not None:
+            pid = os.environ.get('WATCHDOG_PID')
+            if pid is None or int(pid) == os.getpid():
+                return int(timeout) / 1000000
+        return None
 
+    def watchdog_clean(self):
+        """
+        Unsets the watchdog environment variables so that no future child
+        processes will inherit them.
 
-def extend_timeout(timeout):
-    """
-    Notify systemd to extend the start / stop timeout by *timeout* seconds.
-    A timeout will occur if the service does not call :func:`ready` or
-    terminate within *timeout* seconds but *only* if the original timeout
-    (set in the systemd configuration) has already been exceeded.
+        .. warning::
 
-    For example, if the stopping timeout is configured as 90s, and the service
-    calls :func:`stopping`, systemd expects the service to terminate within
-    90s. After 10s the service calls :func:`extend_timeout` with a *timeout*
-    of 10s. 20s later the service has not yet terminated but systemd does
-    *not* consider the timeout expired as only 30s have elapsed of the original
-    90s timeout.
-    """
-    notify('EXTEND_TIMEOUT_USEC=%d' % int(timeout * 1000000))
+            After calling this function, :func:`watchdog_period` will return
+            ``None`` but systemd will continue expecting :func:`watchdog_ping`
+            to be called periodically. In other words, you should call
+            :func:`watchdog_period` first and store its result somewhere before
+            calling this function.
+        """
+        os.environ.pop('WATCHDOG_USEC', None)
+        os.environ.pop('WATCHDOG_PID', None)
 
+    def main_pid(self, pid=None):
+        """
+        Report the main PID of the process to systemd (for services that
+        confuse systemd with their forking behaviour). If *pid* is None,
+        :func:`os.getpid` is called to determine the calling process' PID.
+        """
+        if pid is None:
+            pid = os.getpid()
+        self.notify('MAINPID=%d' % pid)
 
-def watchdog_ping():
-    """
-    Ping the systemd watchdog. This must be done periodically if
-    :func:`watchdog_period` returns a value other than ``None``.
-    """
-    notify(b'WATCHDOG=1')
-
-
-def watchdog_reset(timeout):
-    """
-    Reset the systemd watchdog timer to *timeout* seconds.
-    """
-    notify('WATCHDOG_USEC=%d' % int(timeout * 1000000))
-
-
-def watchdog_period():
-    """
-    Returns the time (in seconds) before which systemd expects the process
-    to call :func:`watchdog_ping`. If a watchdog timeout is not set, the
-    function returns ``None``.
-    """
-    timeout = os.environ.get('WATCHDOG_USEC')
-    if timeout is not None:
-        pid = os.environ.get('WATCHDOG_PID')
-        if pid is None or int(pid) == os.getpid():
-            return int(timeout) / 1000000
-    return None
-
-
-def watchdog_clean():
-    """
-    Unsets the watchdog environment variables so that no future child processes
-    will inherit them.
-
-    .. warning::
-
-        After calling this function, :func:`watchdog_period` will return
-        ``None`` but systemd will continue expecting :func:`watchdog_ping` to
-        be called periodically. In other words, you should call
-        :func:`watchdog_period` first and store its result somewhere before
-        calling this function.
-    """
-    os.environ.pop('WATCHDOG_USEC', None)
-    os.environ.pop('WATCHDOG_PID', None)
-
-
-def main_pid(pid=None):
-    """
-    Report the main PID of the process to systemd (for services that confuse
-    systemd with their forking behaviour). If *pid* is None, :func:`os.getpid`
-    is called to determine the calling process' PID.
-    """
-    if pid is None:
-        pid = os.getpid()
-    notify('MAINPID=%d' % pid)
-
-
-# TODO fd storage, retrieval, and listening
+    # TODO fd storage, retrieval, and listening

@@ -35,7 +35,6 @@ from threading import Thread, Event
 import zmq
 import pytest
 
-import piwheels.systemd
 from piwheels import __version__
 from piwheels.master import main
 
@@ -46,14 +45,20 @@ def module_setup(module):
 
 @pytest.fixture()
 def mock_context(request, zmq_context):
-    ctx_patch = mock.patch('zmq.Context.instance')
-    ctx_mock = ctx_patch.start()
-    # Pass thru calls to Context.socket, but ignore everything else (in
-    # particular, destroy and term calls as we want the testing context to
-    # stick around)
-    ctx_mock().socket.side_effect = zmq_context.socket
-    yield ctx_mock
-    ctx_patch.stop()
+    with mock.patch('zmq.Context.instance') as ctx_mock:
+        # Pass thru calls to Context.socket, but ignore everything else (in
+        # particular, destroy and term calls as we want the testing context to
+        # stick around)
+        ctx_mock().socket.side_effect = zmq_context.socket
+        yield ctx_mock
+
+
+@pytest.fixture()
+def mock_systemd(request):
+    with mock.patch('piwheels.master.Systemd') as sysd_mock:
+        ready = Event()
+        sysd_mock().ready.side_effect = ready.set
+        yield ready
 
 
 def test_help(capsys):
@@ -71,13 +76,11 @@ def test_version(capsys):
     assert out.strip() == __version__
 
 
-def test_quit_control(tmpdir, db_url, db, with_schema, mock_context):
+def test_quit_control(mock_context, mock_systemd,
+                      tmpdir, db_url, db, with_schema):
     with mock.patch('xmlrpc.client.ServerProxy') as proxy, \
-            mock.patch('piwheels.systemd.ready') as ready, \
             mock.patch('signal.signal') as signal:
         proxy().changelog_since_serial.return_value = []
-        ready_event = Event()
-        ready.side_effect = ready_event.set
         main_thread = Thread(daemon=True, target=main, args=([
             '--dsn', db_url,
             '--output-path', str(tmpdir.join('output')),
@@ -89,7 +92,7 @@ def test_quit_control(tmpdir, db_url, db, with_schema, mock_context):
             '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
         ],))
         main_thread.start()
-        assert ready_event.wait(10)
+        assert mock_systemd.wait(10)
         ctrl = mock_context().socket(zmq.PUSH)
         ctrl.connect('ipc://' + str(tmpdir.join('control-queue')))
         ctrl.send_pyobj(['QUIT'])

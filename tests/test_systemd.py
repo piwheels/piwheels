@@ -36,20 +36,18 @@ from unittest import mock
 
 import pytest
 
-import piwheels.systemd
+from piwheels.systemd import Systemd
 
 
 @pytest.fixture()
 def mock_sock(request, tmpdir):
     save_addr = os.environ.get('NOTIFY_SOCKET')
-    save_sock = piwheels.systemd._notify_socket
     addr = tmpdir.join('notify')
     os.environ['NOTIFY_SOCKET'] = str(addr)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind(str(addr))
     yield s
     s.close()
-    piwheels.systemd._notify_socket = save_sock
     if save_addr is None:
         os.environ.pop('NOTIFY_SOCKET', None)
     else:
@@ -57,104 +55,106 @@ def mock_sock(request, tmpdir):
 
 
 def test_available_undefined():
-    importlib.reload(piwheels.systemd)
+    intf = Systemd()
     with pytest.raises(RuntimeError):
-        piwheels.systemd.available()
+        intf.available()
 
 
 def test_available_invalid():
     with mock.patch.dict('os.environ'):
         os.environ['NOTIFY_SOCKET'] = 'FOO'
-        importlib.reload(piwheels.systemd)
+        intf = Systemd()
         with pytest.raises(RuntimeError):
-            piwheels.systemd.available()
+            intf.available()
 
 
 def test_available_ioerror(tmpdir):
     with mock.patch.dict('os.environ'):
         os.environ['NOTIFY_SOCKET'] = str(tmpdir.join('FOO'))
-        importlib.reload(piwheels.systemd)
+        intf = Systemd()
         with pytest.raises(RuntimeError):
-            piwheels.systemd.available()
+            intf.available()
 
 
 def test_notify_not():
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.notify('foo')
-    piwheels.systemd.notify(b'foo')
+    intf = Systemd()
+    intf.notify('foo')
+    intf.notify(b'foo')
 
 
 def test_available(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.available()
+    intf = Systemd()
+    intf.available()
 
 
 def test_available(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.notify('foo')
+    intf = Systemd()
+    intf.notify('foo')
     assert mock_sock.recv(64) == b'foo'
-    piwheels.systemd.notify(b'bar')
+    intf.notify(b'bar')
     assert mock_sock.recv(64) == b'bar'
 
 
 def test_ready(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.ready()
+    intf = Systemd()
+    intf.ready()
     assert mock_sock.recv(64) == b'READY=1'
 
 
 def test_reloading(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.reloading()
+    intf = Systemd()
+    intf.reloading()
     assert mock_sock.recv(64) == b'RELOADING=1'
 
 
 def test_stopping(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.stopping()
+    intf = Systemd()
+    intf.stopping()
     assert mock_sock.recv(64) == b'STOPPING=1'
 
 
 def test_extend_timeout(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.extend_timeout(5)
+    intf = Systemd()
+    intf.extend_timeout(5)
     assert mock_sock.recv(64) == b'EXTEND_TIMEOUT_USEC=5000000'
 
 
 def test_watchdog_ping(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.watchdog_ping()
+    intf = Systemd()
+    intf.watchdog_ping()
     assert mock_sock.recv(64) == b'WATCHDOG=1'
 
 
 def test_watchdog_reset(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.watchdog_reset(3)
+    intf = Systemd()
+    intf.watchdog_reset(3)
     assert mock_sock.recv(64) == b'WATCHDOG_USEC=3000000'
 
 
 def test_watchdog_period():
     with mock.patch.dict('os.environ'):
+        intf = Systemd()
         os.environ.pop('WATCHDOG_USEC', None)
-        assert piwheels.systemd.watchdog_period() is None
+        assert intf.watchdog_period() is None
         os.environ['WATCHDOG_USEC'] = '5000000'
-        assert piwheels.systemd.watchdog_period() == 5
+        assert intf.watchdog_period() == 5
         os.environ['WATCHDOG_PID'] = '1'
-        assert piwheels.systemd.watchdog_period() is None
+        assert intf.watchdog_period() is None
 
 
 def test_watchdog_clean():
     with mock.patch.dict('os.environ'):
+        intf = Systemd()
         os.environ['WATCHDOG_USEC'] = '5000000'
         os.environ['WATCHDOG_PID'] = str(os.getpid())
-        piwheels.systemd.watchdog_clean()
+        intf.watchdog_clean()
         assert 'WATCHDOG_USEC' not in os.environ
         assert 'WATCHDOG_PID' not in os.environ
 
 
 def test_main_pid(mock_sock):
-    importlib.reload(piwheels.systemd)
-    piwheels.systemd.main_pid(10)
+    intf = Systemd()
+    intf.main_pid(10)
     assert mock_sock.recv(64) == b'MAINPID=10'
-    piwheels.systemd.main_pid()
+    intf.main_pid()
     assert mock_sock.recv(64) == ('MAINPID=%d' % os.getpid()).encode('ascii')
