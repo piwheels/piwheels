@@ -61,6 +61,7 @@ def _init_socket():
     # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
     addr = os.environ.pop('NOTIFY_SOCKET', None)
     if addr is not None:
+        print(addr)
         if len(addr) <= 1 or addr[0] not in ('@', '/'):
             return None
         if addr[0] == '@':

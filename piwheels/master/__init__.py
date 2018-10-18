@@ -214,6 +214,12 @@ write access to the output directory.
                 task.join()
                 systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
+            self.control_queue.close()
+            print('closing int_status')
+            self.int_status_queue.close()
+            print('closed')
+            self.ext_status_queue.close()
+            self.logger.info('closed all queues')
             ctx.destroy(linger=1000)
             ctx.term()
 

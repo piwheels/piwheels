@@ -42,17 +42,18 @@ import piwheels.systemd
 @pytest.fixture()
 def mock_sock(request, tmpdir):
     save_addr = os.environ.get('NOTIFY_SOCKET')
+    save_sock = piwheels.systemd._notify_socket
     addr = tmpdir.join('notify')
     os.environ['NOTIFY_SOCKET'] = str(addr)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind(str(addr))
-    def fin():
-        if save_addr is None:
-            os.environ.pop('NOTIFY_SOCKET', None)
-        else:
-            os.environ['NOTIFY_SOCKET'] = save_addr
-    request.addfinalizer(fin)
-    return s
+    yield s
+    s.close()
+    piwheels.systemd._notify_socket = save_sock
+    if save_addr is None:
+        os.environ.pop('NOTIFY_SOCKET', None)
+    else:
+        os.environ['NOTIFY_SOCKET'] = save_addr
 
 
 def test_available_undefined():

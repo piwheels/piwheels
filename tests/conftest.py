@@ -119,13 +119,26 @@ def download_state(request, file_state):
 
 
 @pytest.fixture(scope='session')
-def db_engine(request):
-    url = 'postgres://{username}:{password}@/{db}'.format(
+def db_url(request):
+    return 'postgres://{username}:{password}@/{db}'.format(
+        username=PIWHEELS_USER,
+        password=PIWHEELS_PASS,
+        db=PIWHEELS_TESTDB
+    )
+
+
+@pytest.fixture(scope='session')
+def db_super_url(request):
+    return 'postgres://{username}:{password}@/{db}'.format(
         username=PIWHEELS_SUPERUSER,
         password=PIWHEELS_SUPERPASS,
         db=PIWHEELS_TESTDB
     )
-    engine = create_engine(url)
+
+
+@pytest.fixture(scope='session')
+def db_engine(request, db_super_url):
+    engine = create_engine(db_super_url)
     yield engine
     engine.dispose()
 
