@@ -15,8 +15,9 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim python3-zmq python-dev python3-dev zlib1g-dev $LIBPNG_DEV \
-    $LIBMYSQL_DEV libpq-dev libffi-dev libxml2-dev libxslt-dev libgmp-dev \
+apt -y install vim ssh-import-id python-dev python3-dev python3-zmq
+    zlib1g-dev $LIBPNG_DEV $LIBMYSQL_DEV libpq-dev libffi-dev
+    libxml2-dev libxslt-dev libgmp-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
     libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
     libblas-dev liblapack-dev liblapacke-dev libgles2-mesa-dev libcurl4-openssl-dev \
