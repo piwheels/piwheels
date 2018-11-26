@@ -61,12 +61,12 @@
 extra-index-url=https://www.piwheels.org/simple</pre>
 
               <h3>Raspbian Jessie:</h3>
-              <p>Upgrade pip to 9.0.1 using <code>sudo pip3 install pip
+              <p>Upgrade pip to >=9.0.1 using <code>sudo pip3 install pip
                 --upgrade</code> and follow the Raspbian Stretch
               instructions.</p>
 
               <h3>Other operating systems:</h3>
-              <p>Install pip 9.0.1, and follow the Raspbian Stretch
+              <p>Install pip >=9.0.1, and follow the Raspbian Stretch
               instructions.</p>
             </div>
           </div>
@@ -76,7 +76,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               piwheels within a virtual environment?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>If you had to upgrade pip to 9.0.1 you may also need to
+              <p>If you had to upgrade pip to >=9.0.1 you may also need to
               upgrade pip within the virtual environment with <code>pip install
               pip --upgrade</code>. If not (e.g. in Raspbian Stretch), pip
               should honour your <code>/etc/pip.conf</code> file and use
@@ -89,7 +89,15 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               piwheels without changing my pip configuration?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>To explicitly use piwheels, simply use the <code>-i</code> or
+            <p>You can use piwheels as an additional index,
+            which will allow pip to fall back to PyPI if the requested
+            package (or one of its dependencies) is not available on
+            piwheels, by using the <code>--extra-index-url</code> option, for
+            example:</p>
+
+            <pre>$ sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
+
+              <p>Alternatively, to only use piwheels, use the <code>-i</code> or
               <code>--index-url</code> option, for example:</p>
 
               <pre>$ sudo pip3 install numpy -i https://www.piwheels.org/simple</pre>
@@ -97,14 +105,6 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               <p>or</p>
 
               <pre>$ sudo pip3 install numpy --index-url https://www.piwheels.org/simple</pre>
-
-              <p>Alternatively, you can use piwheels as an additional index,
-              which will allow pip to fall back to PyPI if the requested
-              package (or one of its dependencies) is not available on
-              piwheels, by using the <code>--extra-index-url</code> option, for
-              example:</p>
-
-              <pre>$ sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
             </div>
           </div>
 
@@ -117,10 +117,15 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               PyPI instead, you can either remove the
               <code>extra-index-url</code> configuration in
               <code>/etc/pip.conf</code> to avoid piwheels permanently, or you
-              can explicitly request PyPI in the installation command, for
-              example:</p>
+              can explicitly request no binary distribution in the installation
+              command, and you'll get source distribution from PyPI, for example:</p>
 
-              <pre>$ sudo pip3 install numpy -i https://pypi.python.org/simple</pre>
+              <pre>$ sudo pip3 install numpy --no-binary :all: https://pypi.python.org/simple</pre>
+
+              or to use the no-binary option for a single package (e.g. get the
+              tensorflow wheel but force a build of one of its dependencies - grpcio:
+
+              <pre>$ sudo pip3 install tensorflow --no-binary grpcio https://pypi.python.org/simple</pre>
             </div>
           </div>
 
@@ -132,7 +137,8 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               Pi model used. Some packages usually require significant build
               time, which is avoided by using piwheels. Many packages are
               usually quite quick to install anyway, and only a small amount of
-              time is saved.</p>
+              time is saved. Build time on Pi 1 and Pi Zero is much longer than
+              Pi 3 (roughly 6x), so the biggest gains are there.</p>
             </div>
           </div>
 
@@ -156,7 +162,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               Raspberry Pi 3 with a Raspbian Lite image by running pip3 wheel
               &lt;package&gt;. If you find you are able to successfully build
               the package (for example, by installing some build dependencies),
-              please <a href="https://github.com/bennuttall/piwheels/issues/new">open
+              please <a href="https://github.com/bennuttall/piwheels/issues/new?template=missing-package.md">open
               an issue on github</a> and we'll try to resolve it.</p>
             </div>
           </div>
@@ -171,7 +177,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               will not be available on piwheels. While some versions of a given
               package may be available, others may not have been built
               successfully. If you maintain the package or otherwise have a
-              solution for the build, please <a href="https://github.com/bennuttall/piwheels/issues/new">open
+              solution for the build, please <a href="https://github.com/bennuttall/piwheels/issues/new?template=missing-package.md">open
               an issue on github</a> and we'll try to resolve it.
             </div>
           </div>
@@ -219,13 +225,13 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               by packages provided by piwheels?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>All current Raspberry Pi models (as of September 2017) are
+              <p>All current Raspberry Pi models (as of November 2018) are
               supported:</p>
 
               <ul>
-                <li>Raspberry Pi 3
+                <li>Raspberry Pi 3 (including B+/A+)
                 <li>Raspberry Pi 2
-                <li>Raspberry Pi 1
+                <li>Raspberry Pi 1 (including B+/A+)
                 <li>Raspberry Pi Zero
               </ul>
 
@@ -247,7 +253,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               <code>matplotlib</code> without <code>pyqt</code>.</p>
 
               <p>If you find an issue with a package installed from piwheels,
-              please <a href="https://github.com/bennuttall/piwheels/issues/new">submit
+              please <a href="https://github.com/bennuttall/piwheels/issues/new?template=broken-package.md">submit
               an issue on github</a>.</p>
             </div>
           </div>
@@ -273,6 +279,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
               <ul>
                 <li>Python 3.6</li>
+                <li>Python 3.7</li>
                 <li>Python 2.7</li>
               </ul>
             </div>
@@ -333,7 +340,9 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               <p>However, wheels built on a Raspberry Pi 2 or 3 are tagged
               <code>armv7l</code>. Since wheels built on a Raspberry Pi 3 will
               work on a Pi 2, 1 or Zero, we simply provide Pi 3-built wheels
-              renamed <code>armv6l</code>.</p>
+              renamed <code>armv6l</code>, with a few exceptions (some packages,
+              like opencv and tensorflow, are built with optimisations available
+              on Pi 3).</p>
             </div>
           </div>
 
@@ -366,7 +375,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               my PC/Mac to speed up installations?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>Pure Python wheels will certainly work, but there's a much
+              <p>Pure Python wheels will likely work, but there's a much
               smaller speed increase installing from wheels over source
               distribution.  Packages requiring compilation are built for a
               specific architecture, so they will not be useful on non-Arm
@@ -391,23 +400,41 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               an Arm wheel to PyPI?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>The current PyPI website does not allow Arm wheels to be
-              uploaded.  The next-generation PyPI project (pypi.org) does allow
-              uploading Armv6 and Armv7 wheels (by setting
-              <code>repository=https://upload.pypi.io/legacy/</code> for PyPI
-              in your <code>~/.pypirc</code> file) but it should be noted that
-              wheels built on a Raspberry Pi 3, although tagged
-              <code>armv7l</code> are not truly Armv7, and may be incompatible
-              with other Arm platforms. If your package is made exclusively for
-              the Raspberry Pi platform, there is no harm in uploading Arm
-              wheels to PyPI, and this will speed up the installation for users
-              who do not have pip configured to use piwheels.</p>
+              <p>PyPI now allows uploading Armv6 and Armv7 wheels, but we
+              recommend that you don't upload Arm wheels to PyPI for
+              incompatibility reasons and other complications.</p>
+
+              <p>Wheels built on a Raspberry Pi 3, although tagged <code>armv7l</code>
+              are not truly Armv7, and may be incompatible with other Arm platforms.
+              If your package is made exclusively for the Raspberry Pi platform,
+              there is no harm in uploading Arm wheels to PyPI, and this will
+              speed up the installation for users who do not have pip
+              configured to use piwheels. However, it is not possible to
+              upload two indentical wheel files with <code>armv6l</code> and
+              <code>armv7l</code> platform tags, so the second one will be
+              rejected by PyPI.</p>
 
               <p>If you intend for your package to be installed by users in
               multiple Arm platforms, you may be best not to upload Arm wheels
               to PyPI and instead leave Raspberry Pi users to get a wheel from
               piwheels, and leave other Arm platform users to build from
               source.</p>
+            </div>
+          </div>
+
+          <div class="accordion-item" data-accordion-item>
+            <a href="#" class="accordion-title">I installed a package from piwheels
+            and I get an <code>ImportError</code> with the message
+            <code>cannot open shared object file</code>.</a>
+
+            <div class="accordion-content" data-tab-content>
+              <p>Packages built by piwheels may depend on the presence of certain
+              shared libraries. This is resolved by installing apt packages which
+              provide the required shared objects.</p>
+
+              <p>It is possible to discover which packages are required by using
+              <code>ldd</code> and <code>apt-file</code>. Read more about this
+              process on the <a href="https://blog.piwheels.org/how-to-work-out-the-missing-dependencies-for-a-python-package/">piwheels blog</a>.</p>
             </div>
           </div>
         </div>
