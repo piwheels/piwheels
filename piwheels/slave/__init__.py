@@ -70,6 +70,8 @@ class PiWheelsSlave:
 
     .. _PyPI: https://pypi.python.org/
     """
+    systemd = systemd.Systemd()
+
     def __init__(self):
         self.logger = logging.getLogger('slave')
         self.label = socket.gethostname()
@@ -105,6 +107,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.error('Slave must not be run as root')
             return 1
+        PiWheelsBuilder.systemd = PiWheelsSlave.systemd
         ctx = zmq.Context.instance()
         queue = None
         try:
@@ -114,15 +117,15 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                 queue.ipv6 = True
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
-                systemd.ready()
+                self.systemd.ready()
                 try:
                     self.main_loop(queue)
                 except MasterTimeout:
-                    systemd.reloading()
+                    self.systemd.reloading()
                     self.logger.warning('Resetting connection')
                     queue.close(linger=1000)
         finally:
-            systemd.stopping()
+            self.systemd.stopping()
             queue.send_pyobj(['BYE'])
             ctx.destroy(linger=1000)
             ctx.term()
@@ -155,7 +158,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             queue.send_pyobj(request)
             start = time()
             while True:
-                systemd.watchdog_ping()
+                self.systemd.watchdog_ping()
                 if queue.poll(60000):
                     reply, *args = queue.recv_pyobj()
                     request = self.handle_reply(reply, *args)
@@ -225,7 +228,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.slave_id is not None, 'Build before hello'
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
-        self.builder = PiWheelsBuilder(package, version)
+        self.builder = PiWheelsBuilder(package, version, systemd=self.systemd)
         if self.builder.build(self.config.timeout, self.pypi_url):
             self.logger.info('Build succeeded')
         else:

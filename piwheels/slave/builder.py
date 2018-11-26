@@ -46,8 +46,6 @@ from time import time
 from pathlib import Path
 from subprocess import Popen, DEVNULL, TimeoutExpired
 
-from .. import systemd
-
 
 class PiWheelsPackage:
     """
@@ -189,7 +187,7 @@ class PiWheelsPackage:
                     # Transfers are generally very fast but if we wind up
                     # having to restart there's a possibility we'll miss the
                     # watchdog timer, so ping it each time the poll fails
-                    systemd.watchdog_ping()
+                    self.systemd.watchdog_ping()
                 req, *args = queue.recv_multipart()
                 if req == b'DONE':
                     return
@@ -209,6 +207,8 @@ class PiWheelsBuilder:
     :param str version:
         The version of the package to attempt to build.
     """
+    systemd = None
+
     def __init__(self, package, version):
         self.wheel_dir = None
         self.package = package
@@ -295,7 +295,7 @@ class PiWheelsBuilder:
                 # Builds frequently exceed the watchdog timeout (2 minutes) so
                 # ping every 60 seconds
                 while True:
-                    systemd.watchdog_ping()
+                    self.systemd.watchdog_ping()
                     try:
                         proc.wait(60)
                     except TimeoutExpired:
