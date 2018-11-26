@@ -321,6 +321,9 @@ class FsClient:
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config.fs_queue)
 
+    def close(self):
+        self.fs_queue.close()
+
     def _execute(self, msg):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)

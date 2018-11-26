@@ -91,9 +91,12 @@ class SlaveDriver(Task):
         self.pypi_simple = config.pypi_simple
 
     def close(self):
-        self.status_queue.close()
-        self.index_queue.close()
+        self.fs.close()
+        self.db.close()
         self.stats_queue.close()
+        self.index_queue.close()
+        self.status_queue.close()
+        SlaveState.status_queue = None
         super().close()
 
     def list_slaves(self):

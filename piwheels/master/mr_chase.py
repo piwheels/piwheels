@@ -73,6 +73,13 @@ class MrChase(PauseableTask):
         self.fs = FsClient(config)
         self.states = {}
 
+    def close(self):
+        self.fs.close()
+        self.db.close()
+        self.index_queue.close()
+        self.status_queue.close()
+        super().close()
+
     def handle_import(self, queue):
         """
         Handle requests from :program:`piw-import` instances.

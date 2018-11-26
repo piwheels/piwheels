@@ -85,9 +85,9 @@ class BigBrother(PauseableTask):
         self.db = DbClient(config)
 
     def close(self):
-        self.status_queue.close()
-        self.index_queue.close()
         self.db.close()
+        self.index_queue.close()
+        self.status_queue.close()
         super().close()
 
     def handle_stats(self, queue):

@@ -61,6 +61,44 @@ def mock_systemd(request):
         yield ready
 
 
+@pytest.fixture()
+def mock_pypi(request):
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = []
+        yield proxy
+
+
+@pytest.fixture()
+def mock_signal(request):
+    with mock.patch('signal.signal') as signal:
+        yield signal
+
+
+@pytest.fixture()
+def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
+                  tmpdir, db_url, db, with_schema):
+    main_thread = Thread(daemon=True, target=main, args=([
+        '--dsn', db_url,
+        '--output-path', str(tmpdir.join('output')),
+        '--status-queue',  'ipc://' + str(tmpdir.join('status-queue')),
+        '--control-queue', 'ipc://' + str(tmpdir.join('control-queue')),
+        '--slave-queue',   'ipc://' + str(tmpdir.join('slave-queue')),
+        '--file-queue',    'ipc://' + str(tmpdir.join('file-queue')),
+        '--import-queue',  'ipc://' + str(tmpdir.join('import-queue')),
+        '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
+    ],))
+    yield main_thread
+    assert not main_thread.is_alive()
+
+
+@pytest.fixture()
+def master_control(tmpdir, mock_context):
+    control = mock_context().socket(zmq.PUSH)
+    control.connect('ipc://' + str(tmpdir.join('control-queue')))
+    yield control
+    control.close()
+
+
 def test_help(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
@@ -76,26 +114,32 @@ def test_version(capsys):
     assert out.strip() == __version__
 
 
-def test_quit_control(mock_context, mock_systemd,
-                      tmpdir, db_url, db, with_schema):
-    with mock.patch('xmlrpc.client.ServerProxy') as proxy, \
-            mock.patch('signal.signal') as signal:
-        proxy().changelog_since_serial.return_value = []
-        main_thread = Thread(daemon=True, target=main, args=([
-            '--dsn', db_url,
-            '--output-path', str(tmpdir.join('output')),
-            '--status-queue',  'ipc://' + str(tmpdir.join('status-queue')),
-            '--control-queue', 'ipc://' + str(tmpdir.join('control-queue')),
-            '--slave-queue',   'ipc://' + str(tmpdir.join('slave-queue')),
-            '--file-queue',    'ipc://' + str(tmpdir.join('file-queue')),
-            '--import-queue',  'ipc://' + str(tmpdir.join('import-queue')),
-            '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
-        ],))
-        main_thread.start()
-        assert mock_systemd.wait(10)
-        ctrl = mock_context().socket(zmq.PUSH)
-        ctrl.connect('ipc://' + str(tmpdir.join('control-queue')))
-        ctrl.send_pyobj(['QUIT'])
-        ctrl.close()
-        main_thread.join(10)
-        assert not main_thread.is_alive()
+def test_no_root(caplog):
+    with mock.patch('os.geteuid') as geteuid:
+        geteuid.return_value = 0
+        assert main([]) != 0
+        for record in caplog.records:
+            if record.message.endswith('must not be run as root'):
+                return
+        assert False, "didn't find error log message about running as root"
+
+
+def test_quit_control(mock_systemd, master_thread, master_control):
+    master_thread.start()
+    assert mock_systemd.wait(10)
+    master_control.send_pyobj(['QUIT'])
+    master_thread.join(10)
+    assert not master_thread.is_alive()
+
+
+def test_bad_control(mock_systemd, master_thread, master_control, caplog):
+    master_thread.start()
+    assert mock_systemd.wait(10)
+    master_control.send_pyobj(['FOO'])
+    master_control.send_pyobj(['QUIT'])
+    master_thread.join(10)
+    assert not master_thread.is_alive()
+    for record in caplog.records:
+        if record.message == 'ignoring invalid FOO message':
+            return
+    assert False, "didn't find error log message about FOO"

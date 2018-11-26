@@ -58,6 +58,7 @@ class TheArchitect(Task):
 
     def close(self):
         self.db.close()
+        self.builds_queue.close()
         super().close()
 
     def loop(self):

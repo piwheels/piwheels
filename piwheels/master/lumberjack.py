@@ -56,6 +56,10 @@ class Lumberjack(PauseableTask):
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config)
 
+    def close(self):
+        self.db.close()
+        super().close()
+
     def handle_log(self, queue):
         """
         Handle requests from :program:`piw-logger` instances.

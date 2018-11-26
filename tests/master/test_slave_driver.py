@@ -76,8 +76,6 @@ def task(request, zmq_context, builds_queue, index_queue, stats_queue,
     task = SlaveDriver(master_config)
     yield task
     task.close()
-    SlaveState.status_queue.close()
-    SlaveState.status_queue = None
     SlaveState.counter = 0
 
 
