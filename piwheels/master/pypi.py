@@ -111,13 +111,17 @@ class PyPIEvents:
             if events:
                 # pylint: disable=unused-variable
                 for (package, version, timestamp, action, serial) in events:
-                    # If the event is adding a file, report a new version
-                    # (we're only interested in versions with associated file
-                    # releases)
-                    if re.search('^add [^ ]+ file', action):
+                    if re.search('^add source file', action):
+                        # If the event is adding a source file, report a new
+                        # version (we're only interested in versions with
+                        # associated source releases)
                         if (package, version) not in self.cache:
                             self.cache.append((package, version))
                             yield (package, version)
+                    elif re.search('^create', action):
+                        # Notify clients of package creation by yielding a
+                        # package name with no version
+                        yield (package, None)
                     self.serial = serial
             else:
                 # If the read is empty we've reached the end of the event log
