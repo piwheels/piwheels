@@ -7,6 +7,7 @@ python:
     - "3.4"
 before_install:
     - pip install codecov
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then pip install --upgrade "pytest==3.7.1"; fi
 install: "pip install -e .[master,slave,test]"
 before_script:
     - psql -U postgres -c "create user piwheels password 'piwheels'"
