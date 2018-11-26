@@ -55,6 +55,8 @@ class PiWheelsPackage:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
     """
+    systemd = None
+
     def __init__(self, path):
         self.wheel_file = path
         self._filesize = path.stat().st_size
