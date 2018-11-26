@@ -228,7 +228,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.slave_id is not None, 'Build before hello'
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
-        self.builder = PiWheelsBuilder(package, version, systemd=self.systemd)
+        self.builder = PiWheelsBuilder(package, version)
         if self.builder.build(self.config.timeout, self.pypi_url):
             self.logger.info('Build succeeded')
         else:
