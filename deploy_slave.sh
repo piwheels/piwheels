@@ -44,7 +44,8 @@ apt -y install vim ssh-import-id python-dev python3-dev python3-zmq \
     xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev \
     libusb-1.0-0-dev libudev-dev $POSTGRES_SERVER_DEV libopus-dev libvpx-dev
 
-pip3 install pip setuptools --upgrade
+pip3 install setuptools --upgrade
+pip3 install pip --upgrade
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build \
