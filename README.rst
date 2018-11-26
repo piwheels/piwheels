@@ -3,7 +3,7 @@ piwheels
 ========
 
 piwheels is Python package repository providing `wheels`_ (pre-built binaries)
-for the ARMv6 and ARMv7 architectures used by `Raspberry Pi`_.
+for the Armv6 and Armv7 architectures used by `Raspberry Pi`_.
 
 This repository contains the source code for building armv6 and armv7 wheels
 for packages found on `PyPI`_, and the project's future will be discussed in
