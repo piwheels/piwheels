@@ -90,11 +90,11 @@ class Renderer:
 
 class MainRenderer(Renderer):
     """
-    The :class:`MainRenderer` is responsible for rendering the main screen
-    in the application (the first screen shown on start). It consists of two
-    simple bar charts at the top of the screen indicating remaining disk space
-    and number of packages left in the queue. The status of each slave is
-    depicted as a single pixel below these two rows.
+    The :class:`MainRenderer` is responsible for rendering the main screen in
+    the application (the first screen shown on start). It consists of three
+    simple bar charts at the top of the screen indicating last ping time,
+    remaining disk space, and number of packages left in the queue. The status
+    of each slave is depicted as a single pixel below these three rows.
     """
     def __init__(self):
         super().__init__()
@@ -281,8 +281,7 @@ class StatusRenderer(Renderer):
             self.back = np.flipud(self.back)
         elif x == 2:
             pkgs = min(
-                64, self.main.status.get('versions_count', 0) -
-                self.main.status.get('versions_tried', 0))
+                64, self.main.status.get('builds_pending', 0))
             self.back = array([
                 Color('blue') if i < pkgs else
                 Color('black')
@@ -312,9 +311,8 @@ class StatusRenderer(Renderer):
             1: 'Disk Free: {}%'.format(
                 100 * self.main.status.get('disk_free', 0) //
                 self.main.status.get('disk_size', 1)),
-            2: 'Queue Size: {}'.format(max(0,
-                self.main.status.get('versions_count', 0) -
-                self.main.status.get('versions_tried', 0))),
+            2: 'Queue Size: {}'.format(
+                self.main.status.get('builds_pending', 0)),
             3: 'Builds/Hour: {}'.format(
                 self.main.status.get('builds_last_hour', 0)),
             4: 'Build Time: {}'.format(time),
