@@ -33,6 +33,8 @@ Defines the :class:`CloudGazer` task; see class for more details.
     :members:
 """
 
+import zmq
+
 from .tasks import PauseableTask
 from .pypi import PyPIEvents
 from .the_oracle import DbClient
@@ -50,10 +52,14 @@ class CloudGazer(PauseableTask):
         super().__init__(config)
         self.db = DbClient(config)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
+        self.index_queue = self.ctx.socket(zmq.PUSH)
+        self.index_queue.hwm = 10
+        self.index_queue.connect(config.index_queue)
         self.serial = -1
         self.packages = None
 
     def close(self):
+        self.index_queue.close()
         self.db.set_pypi_serial(self.serial)
         super().close()
 
@@ -64,11 +70,14 @@ class CloudGazer(PauseableTask):
         self.logger.info('querying upstream')
 
     def loop(self):
+        print(self.packages)
         for package, version in self.pypi:
             if package not in self.packages:
                 self.packages.add(package)
                 if self.db.add_new_package(package):
+                    print('adding package %s' % package)
                     self.logger.info('added package %s', package)
+                    self.index_queue.send_pyobj(['PKG', package])
             if version is not None:
                 if self.db.add_new_package_version(package, version):
                     self.logger.info('added package %s version %s',
