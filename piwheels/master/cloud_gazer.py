@@ -70,12 +70,10 @@ class CloudGazer(PauseableTask):
         self.logger.info('querying upstream')
 
     def loop(self):
-        print(self.packages)
         for package, version in self.pypi:
             if package not in self.packages:
                 self.packages.add(package)
                 if self.db.add_new_package(package):
-                    print('adding package %s' % package)
                     self.logger.info('added package %s', package)
                     self.index_queue.send_pyobj(['PKG', package])
             if version is not None:
