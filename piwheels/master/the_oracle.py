@@ -314,7 +314,7 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        self._execute(['LOGDOWNLOAD', download])
+        return self._execute(['LOGDOWNLOAD', download])
 
     def log_build(self, build):
         """
