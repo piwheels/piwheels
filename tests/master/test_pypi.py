@@ -44,7 +44,7 @@ def test_pypi_read_normal():
             ('bar', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 3),
         ]
         events = PyPIEvents()
-        assert list(events) == [('foo', '0.1'), ('bar', '1.0')]
+        assert list(events) == [('foo', None), ('foo', '0.1'), ('bar', None)]
 
 
 def test_pypi_ignore_dupes():
@@ -59,7 +59,7 @@ def test_pypi_ignore_dupes():
             ('bar', '1.0', 1531327392, 'add cp35 file bar-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
         ]
         events = PyPIEvents()
-        assert list(events) == [('foo', '0.1'), ('bar', '1.0')]
+        assert list(events) == [('foo', None), ('foo', '0.1'), ('bar', None), ('bar', '1.0')]
 
 
 def test_pypi_backoff():
@@ -71,7 +71,7 @@ def test_pypi_backoff():
             ('bar', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 3),
         ]
         events = PyPIEvents()
-        assert list(events) == [('foo', '0.1'), ('bar', '1.0')]
+        assert list(events) == [('foo', None), ('foo', '0.1'), ('bar', None)]
         proxy().changelog_since_serial.return_value = []
         assert list(events) == []
         proxy().changelog_since_serial.return_value = [
