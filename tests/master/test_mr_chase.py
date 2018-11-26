@@ -123,7 +123,7 @@ def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
     bsh = build_state_hacked
     bsh._slave_id = 0
     for f in bsh.files.values():
-        # Make the ARMv6 file a "real" transfer
+        # Make the Armv6 file a "real" transfer
         f._transferred = False
 
     import_queue.send_pyobj([

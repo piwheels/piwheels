@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>piwheels - Home</title>
+    <title>piwheels - FAQ</title>
     <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/css/foundation-float.min.css">
     <link rel="stylesheet" href="styles.css" type="text/css"/>
   </head>
@@ -31,6 +31,10 @@
             <ul class="menu">
               <li><a class="button" href="packages.html">Package List</a></li>
               <li><a class="button secondary" href="faq.html">FAQ</a></li>
+              <li><a class="button" href="https://blog.piwheels.org/">Blog</a></li>
+              <li><a class="button" href="https://github.com/bennuttall/piwheels">GitHub</a></li>
+              <li><a class="button" href="https://piwheels.readthedocs.io/">Documentation</a></li>
+              <li><a class="button" href="https://twitter.com/piwheels">Twitter</a></li>
             </ul>
           </div>
         </div>
@@ -317,14 +321,14 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
           <div class="accordion-item" data-accordion-item>
             <a href="#" class="accordion-title">Why are the wheel files are tagged with
-              ARMv6 and ARMv7? What about ARMv8?</a>
+              Armv6 and Armv7? What about Armv8?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>While the hardware in Raspberry Pi 1 and Zero is ARMv6, Pi 2
-              is ARMv7, Pi 3 is ARMv8, the Raspbian operating system images
+              <p>While the hardware in Raspberry Pi 1 and Zero is Armv6, Pi 2
+              is Armv7, Pi 3 is Armv8, the Raspbian operating system images
               provided on raspberrypi.org are made to support all three
               architectures (and are compatible with all Raspberry Pi products
-              to date) by operating in ARMv6 userland.</p>
+              to date) by operating in Armv6 userland.</p>
 
               <p>However, wheels built on a Raspberry Pi 2 or 3 are tagged
               <code>armv7l</code>. Since wheels built on a Raspberry Pi 3 will
@@ -335,15 +339,15 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
           <div class="accordion-item" data-accordion-item>
             <a href="#" class="accordion-title">Will wheels provided on piwheels work
-              on other ARM platforms?</a>
+              on other Arm platforms?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>Some wheels may work on other ARM platforms, but we can't
+              <p>Some wheels may work on other Arm platforms, but we can't
               guarantee this.  Pure Python wheels will certainly work, but
               there's a much smaller speed increase installing from wheels over
-              source distribution.  ARM platform wheels on piwheels are tagged
+              source distribution.  Arm platform wheels on piwheels are tagged
               <code>armv6l</code> and <code>armv7l</code> but actually both
-              contain ARMv6-compatible code, which may not work on true ARMv7
+              contain Armv6-compatible code, which may not work on true Armv7
               platforms.</p>
             </div>
           </div>
@@ -365,7 +369,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               <p>Pure Python wheels will certainly work, but there's a much
               smaller speed increase installing from wheels over source
               distribution.  Packages requiring compilation are built for a
-              specific architecture, so they will not be useful on non-ARM
+              specific architecture, so they will not be useful on non-Arm
               platforms and will be ignored.  Assuming your pip configuration
               is set to fall back to PyPI, installation will continue from
               there, which may involve building from source.</p>
@@ -384,25 +388,25 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
           <div class="accordion-item" data-accordion-item>
             <a href="#" class="accordion-title">I'm a package maintainer. Can I upload
-              an ARM wheel to PyPI?</a>
+              an Arm wheel to PyPI?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>The current PyPI website does not allow ARM wheels to be
+              <p>The current PyPI website does not allow Arm wheels to be
               uploaded.  The next-generation PyPI project (pypi.org) does allow
-              uploading ARMv6 and ARMv7 wheels (by setting
+              uploading Armv6 and Armv7 wheels (by setting
               <code>repository=https://upload.pypi.io/legacy/</code> for PyPI
               in your <code>~/.pypirc</code> file) but it should be noted that
               wheels built on a Raspberry Pi 3, although tagged
-              <code>armv7l</code> are not truly ARMv7, and may be incompatible
-              with other ARM platforms. If your package is made exclusively for
-              the Raspberry Pi platform, there is no harm in uploading ARM
+              <code>armv7l</code> are not truly Armv7, and may be incompatible
+              with other Arm platforms. If your package is made exclusively for
+              the Raspberry Pi platform, there is no harm in uploading Arm
               wheels to PyPI, and this will speed up the installation for users
               who do not have pip configured to use piwheels.</p>
 
               <p>If you intend for your package to be installed by users in
-              multiple ARM platforms, you may be best not to upload ARM wheels
+              multiple Arm platforms, you may be best not to upload Arm wheels
               to PyPI and instead leave Raspberry Pi users to get a wheel from
-              piwheels, and leave other ARM platform users to build from
+              piwheels, and leave other Arm platform users to build from
               source.</p>
             </div>
           </div>
@@ -414,8 +418,8 @@ extra-index-url=https://www.piwheels.org/simple</pre>
       <div class="row">
         <div class="small-12 columns">
           <p>piwheels is a community project by <a
-          href="https://github.com/bennuttall">Ben Nuttall</a> and <a
-          href="https://github.com/waveform80">Dave Jones</a>. Hosting is kindly donated by
+          href="https://twitter.com/ben_nuttall">Ben Nuttall</a> and <a
+          href="https://twitter.com/waveform80">Dave Jones</a>. Hosting is kindly donated by
           <a href="https://www.mythic-beasts.com/">Mythic Beasts</a>. Project <a
            href="https://github.com/bennuttall/piwheels">source code</a> is available from GitHub.</p>
         </div>
