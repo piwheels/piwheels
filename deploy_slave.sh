@@ -43,10 +43,12 @@ apt -y install vim ssh-import-id python-dev python3-dev python3-zmq \
     libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm musescore-soundfont-gm libsystemd-dev \
     libusb-1.0-0-dev libudev-dev $POSTGRES_SERVER_DEV libopus-dev libvpx-dev
-    
-pip3 install pip setuptools pypandoc versioneer kervi scikit-build \
-    --upgrade --extra-index-url https://www.piwheels.org/simple
+
+pip3 install pip setuptools --upgrade
 hash -r
+
+pip3 install pypandoc versioneer kervi scikit-build \
+    --extra-index-url https://www.piwheels.org/simple
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
