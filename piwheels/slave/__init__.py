@@ -51,7 +51,7 @@ import dateutil.parser
 from wheel import pep425tags
 
 from .. import __version__, terminal, systemd
-from .builder import PiWheelsBuilder
+from .builder import PiWheelsBuilder, PiWheelsPackage
 
 
 class MasterTimeout(IOError):
@@ -108,6 +108,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.error('Slave must not be run as root')
             return 1
         PiWheelsBuilder.systemd = PiWheelsSlave.systemd
+        PiWheelsPackage.systemd = PiWheelsSlave.systemd
         ctx = zmq.Context.instance()
         queue = None
         try:
