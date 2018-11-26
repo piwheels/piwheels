@@ -128,8 +128,8 @@ def error_handler(exc_type, exc_value, exc_trace):
     full stack trace.
     """
     if issubclass(exc_type, (SystemExit,)):
-        # Exit with 0 ("success") for system exit (as it was intentional)
-        return 0
+        # Exit with whatever exit code the exception holds
+        return exc_value
     elif issubclass(exc_type, (KeyboardInterrupt,)):
         # Exit with 2 if the user deliberately terminates with Ctrl+C
         return 2

@@ -123,7 +123,6 @@ take a backup of your database before using this script for upgrades.
         logging.error(str(err))
         return 1
     except:  # pylint: disable=bare-except
-        logging.error("Terminating on error, rolled back work")
         return terminal.error_handler(*sys.exc_info())
 
 
