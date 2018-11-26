@@ -196,19 +196,24 @@ class Database:
         pip's user-agent.
         """
         with self._conn.begin():
-            self._conn.execute(
-                self._downloads.insert(),
-                filename=download.filename,
-                accessed_by=download.host,
-                accessed_at=download.timestamp,
-                arch=download.arch,
-                distro_name=download.distro_name,
-                distro_version=download.distro_version,
-                os_name=download.os_name,
-                os_version=download.os_version,
-                py_name=download.py_name,
-                py_version=download.py_version,
-            )
+            try:
+                self._conn.execute(
+                    self._downloads.insert(),
+                    filename=download.filename,
+                    accessed_by=download.host,
+                    accessed_at=download.timestamp,
+                    arch=download.arch,
+                    distro_name=download.distro_name,
+                    distro_version=download.distro_version,
+                    os_name=download.os_name,
+                    os_version=download.os_version,
+                    py_name=download.py_name,
+                    py_version=download.py_version,
+                )
+            except IntegrityError:
+                return False
+            else:
+                return True
 
     def log_build(self, build):
         """
