@@ -118,11 +118,13 @@ def test_test_package_version(db_intf, db, with_package):
 def test_log_download(db_intf, db, with_files, download_state):
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (0,)
-    db_intf.log_download(download_state)
+    assert db_intf.log_download(download_state)
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (1,)
     assert db.execute(
         "SELECT filename FROM downloads").first() == (download_state.filename,)
+    assert not db_intf.log_download(download_state._replace(
+        filename=download_state.filename.replace('foo', 'bar')))
 
 
 def test_log_build(db_intf, db, with_package_version, build_state):

@@ -53,3 +53,24 @@ def test_router(zmq_context, master_config):
     finally:
         seraph.quit()
         seraph.join()
+
+
+def test_router_no_workers(zmq_context, master_config):
+    seraph = Seraph(master_config)
+    seraph.start()
+    try:
+        client = zmq_context.socket(zmq.REQ)
+        client.connect(master_config.db_queue)
+        client.send_pyobj(['FOO'])
+        with pytest.raises(zmq.ZMQError):
+            client.recv_pyobj(flags=zmq.NOBLOCK)
+        worker = zmq_context.socket(zmq.REQ)
+        worker.connect(const.ORACLE_QUEUE)
+        worker.send(b'READY')
+        client_addr, empty, msg = worker.recv_multipart()
+        assert pickle.loads(msg) == ['FOO']
+        worker.send_multipart([client_addr, empty, pickle.dumps(['BAR'])])
+        assert client.recv_pyobj() == ['BAR']
+    finally:
+        seraph.quit()
+        seraph.join()

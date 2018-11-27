@@ -121,6 +121,17 @@ def task(request, master_config):
     task.close()
 
 
+def test_gen_skip(master_status_queue, index_queue, task):
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        task.loop()  # crank the handle once
+        with pytest.raises(zmq.ZMQError):
+            master_status_queue.recv_pyobj(flags=zmq.NOBLOCK)
+        with pytest.raises(zmq.ZMQError):
+            index_queue.recv_pyobj(flags=zmq.NOBLOCK)
+
+
 def test_gen_stats(db_queue, master_status_queue, index_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
