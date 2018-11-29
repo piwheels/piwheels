@@ -49,17 +49,21 @@ class SlaveList:
     on the external status queue.
     """
     def __init__(self):
-        self.slaves = OrderedDict()
+        self.slaves = {}
 
     def __len__(self):
         return len(self.slaves)
 
     def __getitem__(self, index):
-        return list(self.slaves.values())[index]
+        return self._sorted_list()[index]
 
     def __iter__(self):
-        for slave in self.slaves.values():
+        for slave in self._sorted_list():
             yield slave
+
+    def _sorted_list(self):
+        return sorted(self.slaves.values(),
+                      key=lambda slave: (slave.abi, slave.label))
 
     def prune(self):
         now = datetime.utcnow()

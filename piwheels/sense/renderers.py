@@ -41,6 +41,7 @@ Implements the screen rendering classes for the Sense HAT monitor.
 """
 
 import signal
+from math import log
 from datetime import datetime, timedelta
 from functools import partial
 from itertools import cycle, chain
@@ -56,6 +57,16 @@ from .states import SlaveList
 def bounce(it):
     # bounce('ABC') -> A B C C B A A B C ...
     return cycle(chain(it, reversed(it)))
+
+
+def format_size(size):
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    try:
+        index = min(len(suffixes) - 1, int(log(size, 2) // 10))
+    except ValueError:
+        return '0B'
+    else:
+        return '%d%s' % (size / 2 ** (index * 10), suffixes[index])
 
 
 class Renderer:
@@ -103,6 +114,7 @@ class MainRenderer(Renderer):
         self.position = (0, 3)
         self.limits = (0, 3, 7, 7)
         self.last_message = datetime(1970, 1, 1)
+        self.blue_grad = list(Color('blue').gradient(Color('white'), 32))
 
     def message(self, slave_id, timestamp, msg, *args):
         self.last_message = datetime.utcnow()
@@ -149,7 +161,6 @@ class MainRenderer(Renderer):
 
     def _render_ping(self, buf, pulse):
         # Render the ping bar at the top
-        grad = list(Color('blue').gradient(Color('white'), 32))
         ping = 8 * max(
             timedelta(0),
             datetime.utcnow() - self.last_message).total_seconds() / 30
@@ -158,31 +169,29 @@ class MainRenderer(Renderer):
         else:
             buf[0, :] = [
                 Color('white') if x < int(ping) else
-                grad[int(32 * (ping - int(ping)))] if x < ping else
+                self.blue_grad[int(32 * (ping - int(ping)))] if x < ping else
                 Color('blue')
                 for x in range(8)
             ]
 
     def _render_disk(self, buf, pulse):
         # Then the disk-free bar
-        grad = list(Color('blue').gradient(Color('white'), 32))
         disk = (
             8 * self.status.get('disk_free', 0) /
             self.status.get('disk_size', 1))
         buf[1, :] = [
             Color('white') if x < int(disk) else
-            grad[int(32 * (disk - int(disk)))] if x < disk else
+            self.blue_grad[int(32 * (disk - int(disk)))] if x < disk else
             Color('blue')
             for x in range(8)
         ]
 
     def _render_queue(self, buf, pulse):
         # Then the queue length bar
-        grad = list(Color('blue').gradient(Color('white'), 32))
         pkgs = 8 * max(0, self.status.get('builds_pending', 0)) / 64
         buf[2, :] = [
             Color('white') if x < int(pkgs) else
-            grad[int(32 * (pkgs - int(pkgs)))] if x < pkgs else
+            self.blue_grad[int(32 * (pkgs - int(pkgs)))] if x < pkgs else
             Color('blue')
             for x in range(8)
         ]
@@ -228,11 +237,9 @@ class StatusRenderer(Renderer):
         self.back = None
         self.text = None
         self.ping_grad = list(
-            Color('green').gradient(Color('red'), steps=64)
-        )
+            Color('green').gradient(Color('red'), steps=64))
         self.disk_grad = list(
-            Color('red').gradient(Color('green'), steps=64, easing=ease_out)
-        )
+            Color('red').gradient(Color('green'), steps=64, easing=ease_out))
         self.offset = cycle([8])
         self.update_back()
         self.update_text()
@@ -289,10 +296,12 @@ class StatusRenderer(Renderer):
             ])
             self.back = np.flipud(self.back)
         elif x == 3:
-            bph = min(
-                64, self.main.status.get('builds_last_hour', 0))
+            bph = (
+                64 * self.main.status.get('builds_last_hour', 0) /
+                1000)
             self.back = array([
-                Color('blue') if i < bph else
+                Color('blue') if i < int(bph) else
+                Color('blue') * Lightness(bph - int(bph)) if i < bph else
                 Color('black')
                 for i in range(64)
             ])
@@ -316,8 +325,8 @@ class StatusRenderer(Renderer):
             3: 'Builds/Hour: {}'.format(
                 self.main.status.get('builds_last_hour', 0)),
             4: 'Build Time: {}'.format(time),
-            5: 'Build Size: {}Mb'.format(
-                self.main.status.get('builds_size', 0) // 1048576),
+            5: 'Build Size: {}'.format(format_size(
+                self.main.status.get('builds_size', 0))),
         }[x]
         self.text = array(
             draw_text(text, foreground=Color('gray'), padding=(8, 0, 8, 1)))
