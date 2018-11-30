@@ -31,7 +31,6 @@
 
 import os
 import socket
-import importlib
 from unittest import mock
 
 import pytest

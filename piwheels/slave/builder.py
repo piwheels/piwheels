@@ -149,11 +149,11 @@ class PiWheelsPackage:
         """
         return self._parts[2] if len(self._parts) == 6 else None
 
-    def open(self, mode='rb'):
+    def open(self):
         """
         Open the wheel in binary mode and return the open file object.
         """
-        return self.wheel_file.open(mode)
+        return self.wheel_file.open('rb')
 
     @property
     def metadata(self):
@@ -245,7 +245,7 @@ class PiWheelsBuilder:
             }
         ]
 
-    def build(self, timeout=None, pypi_index='https://pypi.python.org/simple'):
+    def build(self, timeout=300, pypi_index='https://pypi.python.org/simple'):
         """
         Attempt to build the package within the specified *timeout*.
 

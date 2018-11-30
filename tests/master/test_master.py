@@ -221,4 +221,3 @@ def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
         assert not master_thread.is_alive()
         assert find_message(caplog.records, 'sending status to new monitor')
         assert list_slaves.call_args == mock.call()
-

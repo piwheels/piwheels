@@ -114,7 +114,7 @@ develop: tags
 	$(PIP) install -e .[doc,test,master,slave,monitor,log]
 
 test:
-	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) tests
+	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) -v tests
 	$(COVERAGE) report --rcfile coverage.cfg
 
 clean:
