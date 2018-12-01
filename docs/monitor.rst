@@ -51,7 +51,7 @@ Description
 Usage
 =====
 
-The monitor application can should be started on the same machine as the master
+The monitor application should be started on the same machine as the master
 after the :program:`piw-master` script has been started. After initialization
 it will request the current status of all build slaves from the master,
 displaying this in a list in the middle of the screen.

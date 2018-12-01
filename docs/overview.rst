@@ -23,6 +23,9 @@ following components:
 | :doc:`monitor`  | Provides a friendly curses-based UI for           |
 |                 | interacting with the piwheels master.             |
 +-----------------+---------------------------------------------------+
+| :doc:`sense`    | Provides a friendly Sense HAT-based UI for        |
+|                 | interacting with the piwheels master.             |
++-----------------+---------------------------------------------------+
 | :doc:`initdb`   | A simple maintenance script for initializing or   |
 |                 | upgrading the database to the current version.    |
 +-----------------+---------------------------------------------------+

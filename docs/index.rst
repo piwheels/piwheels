@@ -28,6 +28,7 @@ Table of Contents
     master
     slaves
     monitor
+    sense
     initdb
     importer
     remove
