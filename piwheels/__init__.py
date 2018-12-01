@@ -28,14 +28,11 @@
 
 """
 The piwheels project provides a set of tools for generating wheels from the
-PyPI repository for a given set of Python ABIs. Currently, three scripts are
-defined:
+PyPI repository for a given set of Python ABIs. Currently, the following
+scripts are defined:
 
-* ``piw-slave`` - this is the simple build slave script. Build slaves should be
-  deployed using the ``deploy_slave.sh`` script from the source repository.
-  This ensures that slaves are set up with a non-root user for building which
-  has no write access to its own source code, and that common library
-  dependencies for various builds are pre-installed.
+* ``piw-initdb`` - handles constructing and upgrading the PostgreSQL database
+  that backs the piwheels master.
 
 * ``piw-master`` - this is the coordinating server script. It handles querying
   PyPI for packages to build, handing jobs to build slaves, receiving the
@@ -43,10 +40,27 @@ defined:
   package index, and keeping the PostgreSQL database up to date. In future this
   may be split into several scripts for performance or security reasons.
 
+* ``piw-slave`` - this is the simple build slave script. Build slaves should be
+  deployed using the ``deploy_slave.sh`` script from the source repository.
+  This ensures that slaves are set up with a non-root user for building which
+  has no write access to its own source code, and that common library
+  dependencies for various builds are pre-installed.
+
 * ``piw-monitor`` - this is the curses-style monitoring client which can be run
   to watch the state of ``piw-master``. It also provides interactive functions
   for killing build slaves, and pausing / resuming / killing the master process
   itself.
+
+* ``piw-logger`` - bridges Apache (or similar web-servers) to the master,
+  permitting downloads to be tracked in the database.
+
+* ``piw-remove`` - a simple tool for removing packages from the service.
+
+* ``piw-import`` - a simple tool for injecting manually built wheels into the
+  service.
+
+* ``piw-sense`` - a fun little monitor that runs on a Raspberry Pi with a
+  Sense HAT as the physical interface.
 """
 
 # Stop pylint's crusade against nicely aligned code
@@ -69,6 +83,7 @@ __extra_requires__ = {
     'log':     ['lars'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
+    'sense':   ['pisense'],
 }
 
 __classifiers__ = [
@@ -90,5 +105,6 @@ __entry_points__ = {
         'piw-import = piwheels.importer:main',
         'piw-remove = piwheels.remove:main',
         'piw-logger = piwheels.logger:main',
+        'piw-sense = piwheels.sense:main',
     ],
 }

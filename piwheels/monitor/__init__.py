@@ -39,12 +39,24 @@ or terminate the master itself.
 """
 
 import sys
+from math import log
 from datetime import datetime, timedelta
+from time import sleep
 
 import zmq
 
 from .. import terminal, const
 from . import widgets
+
+
+def format_size(size):
+    suffixes = ['Bytes', 'KBytes', 'MBytes', 'GBytes', 'TBytes', 'PBytes']
+    try:
+        index = min(len(suffixes) - 1, int(log(size, 2) // 10))
+    except ValueError:
+        return '0 Bytes'
+    else:
+        return '%d %s' % (size / 2 ** (index * 10), suffixes[index])
 
 
 class PiWheelsMonitor:
@@ -95,6 +107,7 @@ class PiWheelsMonitor:
         self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        sleep(1)
         self.ctrl_queue = ctx.socket(zmq.PUSH)
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_pyobj(['HELLO'])
@@ -118,18 +131,12 @@ class PiWheelsMonitor:
         loop constructor.
         """
         actions_box = widgets.AttrMap(
-            widgets.Pile([
-                widgets.AttrMap(
-                    widgets.Divider('\N{UPPER HALF BLOCK}'),
-                    'coltrans'
-                ),
-                widgets.Columns([
-                    build_button('Pause', self.pause),
-                    build_button('Resume', self.resume),
-                    build_button('Kill slave', self.kill_slave),
-                    build_button('Terminate master', self.terminate_master),
-                    build_button('Quit', self.quit),
-                ])
+            widgets.Columns([
+                build_button('Pause', self.pause),
+                build_button('Resume', self.resume),
+                build_button('Kill slave', self.kill_slave),
+                build_button('Terminate master', self.terminate_master),
+                build_button('Quit', self.quit),
             ]),
             'footer'
         )
@@ -138,15 +145,15 @@ class PiWheelsMonitor:
         self.builds_label = widgets.Text('-/- pkgs')
         self.build_rate_label = widgets.Text('- pkgs/hour')
         self.build_time_label = widgets.Text('-:--:--')
-        self.build_size_label = widgets.Text('- bytes')
+        self.build_size_label = widgets.Text('- Bytes')
         self.list_header = widgets.AttrMap(
             widgets.Columns([
                 (2, widgets.Text('S')),
                 (2, widgets.Text('#')),
-                (6, widgets.Text('Label')),
+                (6, widgets.Text('Label^')),
                 (7, widgets.Text('UpTime')),
                 (9, widgets.Text('TaskTime')),
-                (4, widgets.Text('ABI')),
+                (4, widgets.Text('ABI^')),
                 widgets.Text('Task'),
             ]),
             'colheader'
@@ -171,10 +178,6 @@ class PiWheelsMonitor:
                         self.build_size_label,
                     ]),
                 ]),
-                widgets.AttrMap(
-                    widgets.Divider('\N{LOWER HALF BLOCK}'),
-                    'coltrans'
-                ),
                 self.list_header,
             ]),
             'header'
@@ -287,7 +290,7 @@ class PiWheelsMonitor:
         self.build_rate_label.set_text(
             '{} pkgs/hour'.format(status_info['builds_last_hour']))
         self.build_size_label.set_text(
-            '{} Mbytes'.format(status_info['builds_size'] // 1048576))
+            '{}'.format(format_size(status_info['builds_size'])))
         time = status_info['builds_time']
         time -= timedelta(microseconds=time.microseconds)
         self.build_time_label.set_text('{}'.format(time))
@@ -428,6 +431,14 @@ class SlaveListWalker(widgets.ListWalker):
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
         state.update(timestamp, msg, *args)
+        if msg == 'HELLO':
+            # ABI and/or label of a slave have potentially changed; time to
+            # re-sort the widget list
+            self.widgets = [
+                state.widget for state in sorted(
+                    self.slaves.values(),
+                    key=lambda state: (state.abi, state.label))
+            ]
         self.update()
 
     def tick(self):
@@ -440,6 +451,7 @@ class SlaveListWalker(widgets.ListWalker):
         now = datetime.utcnow()
         for slave_id, state in list(self.slaves.items()):
             if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
+                # Be careful not to change the sort-order here...
                 self.widgets.remove(state.widget)
                 del self.slaves[slave_id]
         if self.widgets:
