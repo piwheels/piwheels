@@ -171,3 +171,11 @@ class Systemd:
         self.notify('MAINPID=%d' % pid)
 
     # TODO fd storage, retrieval, and listening
+
+
+_SYSTEMD = None
+def get_systemd():
+    global _SYSTEMD
+    if _SYSTEMD is None:
+        _SYSTEMD = Systemd()
+    return _SYSTEMD
