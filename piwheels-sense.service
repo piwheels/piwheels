@@ -1,0 +1,12 @@
+[Unit]
+Description=Use the Sense HAT to monitor piwheels
+After=local-fs.target network.target piwheels-tunnel.service
+
+[Service]
+Type=simple
+User=piwheels
+ExecStart=/usr/local/bin/piw-sense -r 0
+
+[Install]
+WantedBy=multi-user.target
+

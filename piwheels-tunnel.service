@@ -1,0 +1,12 @@
+[Unit]
+Description=Set up a secure tunnel for piwheels monitoring
+After=local-fs.target network.target
+
+[Service]
+User=piwheels
+ExecStart=/usr/bin/ssh -NT -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -L /tmp/piw-status:/tmp/piw-status -L /tmp/piw-control:/tmp/piw-control piwmon@ssh.piwheels.hostedpi.com
+RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
