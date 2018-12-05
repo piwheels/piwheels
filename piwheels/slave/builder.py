@@ -46,6 +46,8 @@ from time import time
 from pathlib import Path
 from subprocess import Popen, DEVNULL, TimeoutExpired
 
+from .. import systemd
+
 
 class PiWheelsPackage:
     """
@@ -55,7 +57,7 @@ class PiWheelsPackage:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
     """
-    systemd = None
+    systemd = systemd.get_systemd()
 
     def __init__(self, path):
         self.wheel_file = path
@@ -209,7 +211,7 @@ class PiWheelsBuilder:
     :param str version:
         The version of the package to attempt to build.
     """
-    systemd = None
+    systemd = systemd.get_systemd()
 
     def __init__(self, package, version):
         self.wheel_dir = None

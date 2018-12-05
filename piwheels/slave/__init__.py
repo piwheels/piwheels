@@ -70,7 +70,7 @@ class PiWheelsSlave:
 
     .. _PyPI: https://pypi.python.org/
     """
-    systemd = systemd.Systemd()
+    systemd = systemd.get_systemd()
 
     def __init__(self):
         self.logger = logging.getLogger('slave')
@@ -107,8 +107,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.error('Slave must not be run as root')
             return 1
-        PiWheelsBuilder.systemd = PiWheelsSlave.systemd
-        PiWheelsPackage.systemd = PiWheelsSlave.systemd
         ctx = zmq.Context.instance()
         queue = None
         try:
