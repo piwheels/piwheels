@@ -4,11 +4,6 @@ set -eu
 
 source /etc/os-release
 
-# temporary hack for unreleased debian version (has no version id)
-if [ ! $VERSION_ID ]; then
-    VERSION_ID=10
-fi
-
 LIBXLST=libxslt-dev
 SOUNDFONT=musescore-soundfont-gm
 LIBPNG_DEV=libpng-dev
@@ -18,6 +13,10 @@ TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
 
 if [ $ID = raspbian ]; then
+    # temporary hack for unreleased debian version (has no version id)
+    if [ ! $VERSION_ID ]; then
+        VERSION_ID=10
+    fi
     if [ $VERSION_ID -eq 8 ]; then
         LIBPNG_DEV=libpng12-dev
         LIBMYSQL_DEV=libmysqlclient-dev
