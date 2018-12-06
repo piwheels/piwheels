@@ -4,6 +4,11 @@ set -eu
 
 source /etc/os-release
 
+# temporary hack for unreleased debian version (has no version id)
+if [ ! $VERSION_ID ]; then
+    VERSION_ID=10
+fi
+
 LIBXLST=libxslt-dev
 SOUNDFONT=musescore-soundfont-gm
 LIBPNG_DEV=libpng-dev
@@ -19,7 +24,7 @@ if [ $ID = raspbian ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
     elif [ $VERSION_ID -eq 9 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
-    else # if [ $VERSION_ID -eq 10 ]; then
+    elif [ $VERSION_ID -eq 10 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-11
         LIBGLES=libgles2-mesa-dev
         TURBOGEARS=python-turbogears2
