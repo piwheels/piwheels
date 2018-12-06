@@ -40,7 +40,7 @@ fi
 apt update
 apt -y upgrade
 apt -y install vim ssh-import-id tree byobu htop pkg-config gfortran cmake \
-    qt4-qmake qt5-qmake python-dev python3-dev \
+    qipython ipython3 git t4-qmake qt5-qmake python-dev python3-dev \
     $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
     $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
@@ -58,13 +58,13 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config gfortran cmake \
     python3-django python-flask python3-flask python-cherrypy \
     python3-cherrypy3 python-tornado python3-tornado python-pip python3-pip \
     python-redis python3-redis python-dateutil python3-dateutil \
-    python-dnspython python3-dnspython python-sphinx python3-sphinx \ 
+    python-dnspython python3-dnspython python-sphinx python3-sphinx \
     python-boto python3-boto python-gi python3-gi python-gi-cairo python3-zmq \
-    python3-gi-cairo python-cairocffi python3-cairocffi ipython ipython3 git \
-    libsdl-image1.2-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev \
-    libportmidi-dev libtiff5-dev libx11-6 libx11-dev xfonts-base \
-    xfonts-100dpi xfonts-75dpi xfonts-cyrillic fluid-soundfont-gm \
-    libsystemd-dev libusb-1.0-0-dev libudev-dev libopus-dev libvpx-dev
+    python3-gi-cairo python-cairocffi python3-cairocffi libsdl-image1.2-dev \
+    libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev \
+    libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
+    xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
+    libudev-dev libopus-dev libvpx-dev
 
 pip3 install setuptools --upgrade
 pip3 install pip --upgrade
