@@ -24,6 +24,7 @@ if [ $ID = raspbian ]; then
     elif [ $VERSION_ID -eq 9 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
     elif [ $VERSION_ID -eq 10 ]; then
+        LIBXLST=libxslt1-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-11
         LIBGLES=libgles2-mesa-dev
         TURBOGEARS=python-turbogears2
@@ -40,7 +41,7 @@ fi
 apt update
 apt -y upgrade
 apt -y install vim ssh-import-id tree byobu htop pkg-config gfortran cmake \
-    qipython ipython3 git t4-qmake qt5-qmake python-dev python3-dev \
+    ipython ipython3 git qt4-qmake qt5-qmake python-dev python3-dev \
     $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
     $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
