@@ -40,31 +40,31 @@ fi
 apt update
 apt -y upgrade
 apt -y install vim ssh-import-id tree byobu htop pkg-config gfortran cmake \
-	qt4-qmake qt5-qmake python-dev python3-dev \
-	$LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
-	$POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
-	libhdf5-dev	libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
-	libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
-	libblas-dev	liblapack-dev liblapacke-dev libcurl4-openssl-dev libgmp-dev \
-	libgstreamer1.0-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
-	libsdl2-ttf-dev libssl-dev libsasl2-dev libldap2-dev libavcodec-dev \
-	libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
-	libgtk2.0-dev libgtk-3-dev libatlas-base-dev python-numpy python3-numpy \
-	python-scipy python3-scipy python-matplotlib python3-matplotlib \
-	python-pandas python3-pandas cython cython3 python-yaml python3-yaml \
+    qt4-qmake qt5-qmake python-dev python3-dev \
+    $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
+    $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
+    libhdf5-dev	libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
+    libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
+    libblas-dev	liblapack-dev liblapacke-dev libcurl4-openssl-dev libgmp-dev \
+    libgstreamer1.0-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
+    libsdl2-ttf-dev libssl-dev libsasl2-dev libldap2-dev libavcodec-dev \
+    libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
+    libgtk2.0-dev libgtk-3-dev libatlas-base-dev python-numpy python3-numpy \
+    python-scipy python3-scipy python-matplotlib python3-matplotlib \
+    python-pandas python3-pandas cython cython3 python-yaml python3-yaml \
     python-lxml python3-lxml python-cffi python3-cffi python-bs4 python3-bs4 \
     python-click python3-click python-sqlalchemy python3-sqlalchemy \
     python-pil python3-pil python-pymongo python3-pymongo python-django \
-	python3-django python-flask python3-flask python-cherrypy \
+    python3-django python-flask python3-flask python-cherrypy \
     python3-cherrypy3 python-tornado python3-tornado python-pip python3-pip \
     python-redis python3-redis python-dateutil python3-dateutil \
-	python-dnspython python3-dnspython python-sphinx python3-sphinx \ 
-	python-boto python3-boto python-gi python3-gi python-gi-cairo python3-zmq \
-	python3-gi-cairo python-cairocffi python3-cairocffi ipython ipython3 git \
-	libsdl-image1.2-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev \
+    python-dnspython python3-dnspython python-sphinx python3-sphinx \ 
+    python-boto python3-boto python-gi python3-gi python-gi-cairo python3-zmq \
+    python3-gi-cairo python-cairocffi python3-cairocffi ipython ipython3 git \
+    libsdl-image1.2-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev \
     libportmidi-dev libtiff5-dev libx11-6 libx11-dev xfonts-base \
-	xfonts-100dpi xfonts-75dpi xfonts-cyrillic fluid-soundfont-gm \
-	libsystemd-dev libusb-1.0-0-dev libudev-dev libopus-dev libvpx-dev
+    xfonts-100dpi xfonts-75dpi xfonts-cyrillic fluid-soundfont-gm \
+    libsystemd-dev libusb-1.0-0-dev libudev-dev libopus-dev libvpx-dev
 
 pip3 install setuptools --upgrade
 pip3 install pip --upgrade
