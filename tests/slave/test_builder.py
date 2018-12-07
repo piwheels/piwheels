@@ -136,6 +136,15 @@ def test_package_noabi(mock_package):
     assert pkg.build_tag is None
 
 
+def test_package_hash_cache(mock_package):
+    filesize, filehash = mock_package
+    path = Path('/tmp/abc123/foo-0.1-cp34-noabi-any.whl')
+    pkg = builder.PiWheelsPackage(path)
+    assert pkg.filehash == filehash
+    # Second retrieval is cached
+    assert pkg.filehash == filehash
+
+
 def test_package_open(mock_package):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.PiWheelsPackage(path)

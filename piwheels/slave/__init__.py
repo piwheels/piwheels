@@ -50,7 +50,8 @@ import zmq
 import dateutil.parser
 from wheel import pep425tags
 
-from .. import __version__, terminal, systemd
+from .. import __version__, terminal
+from ..systemd import get_systemd
 from .builder import PiWheelsBuilder, PiWheelsPackage
 
 
@@ -70,8 +71,6 @@ class PiWheelsSlave:
 
     .. _PyPI: https://pypi.python.org/
     """
-    systemd = systemd.get_systemd()
-
     def __init__(self):
         self.logger = logging.getLogger('slave')
         self.label = socket.gethostname()
@@ -79,6 +78,7 @@ class PiWheelsSlave:
         self.slave_id = None
         self.builder = None
         self.pypi_url = None
+        self.systemd = None
 
     def __call__(self, args=None):
         sys.excepthook = terminal.error_handler
@@ -107,6 +107,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.error('Slave must not be run as root')
             return 1
+        self.systemd = get_systemd()
         ctx = zmq.Context.instance()
         queue = None
         try:
@@ -126,6 +127,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         finally:
             self.systemd.stopping()
             queue.send_pyobj(['BYE'])
+            queue.close()
             ctx.destroy(linger=1000)
             ctx.term()
 
@@ -158,7 +160,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             start = time()
             while True:
                 self.systemd.watchdog_ping()
-                if queue.poll(60000):
+                if queue.poll(1000):
                     reply, *args = queue.recv_pyobj()
                     request = self.handle_reply(reply, *args)
                     break
@@ -247,7 +249,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.builder, 'Send before build / after failed build'
         assert self.builder.status, 'Send after failed build'
         pkg = [f for f in self.builder.files if f.filename == filename][0]
-        self.logger.info('Sending %s to master on localhost', pkg.filename)
+        self.logger.info('Sending %s to master on %s', pkg.filename)
         ctx = zmq.Context.instance()
         queue = ctx.socket(zmq.DEALER)
         queue.ipv6 = True

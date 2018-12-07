@@ -40,13 +40,16 @@ from piwheels.master import main, const
 
 
 @pytest.fixture()
-def mock_context(request, zmq_context):
-    with mock.patch('zmq.Context.instance') as ctx_mock:
-        # Pass thru calls to Context.socket, but ignore everything else (in
-        # particular, destroy and term calls as we want the testing context to
-        # stick around)
-        ctx_mock().socket.side_effect = zmq_context.socket
-        yield ctx_mock
+def mock_pypi(request):
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = []
+        yield proxy
+
+
+@pytest.fixture()
+def mock_signal(request):
+    with mock.patch('signal.signal') as signal:
+        yield signal
 
 
 @pytest.fixture()
@@ -58,16 +61,13 @@ def mock_systemd(request):
 
 
 @pytest.fixture()
-def mock_pypi(request):
-    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
-        proxy().changelog_since_serial.return_value = []
-        yield proxy
-
-
-@pytest.fixture()
-def mock_signal(request):
-    with mock.patch('signal.signal') as signal:
-        yield signal
+def mock_context(request, zmq_context):
+    with mock.patch('zmq.Context.instance') as ctx_mock:
+        # Pass thru calls to Context.socket, but ignore everything else (in
+        # particular, destroy and term calls as we want the testing context to
+        # stick around)
+        ctx_mock().socket.side_effect = zmq_context.socket
+        yield ctx_mock
 
 
 @pytest.fixture()
@@ -114,6 +114,7 @@ def test_help(capsys):
     out, err = capsys.readouterr()
     assert out.startswith('usage:')
     assert '--pypi-xmlrpc' in out
+
 
 def test_version(capsys):
     with pytest.raises(SystemExit):
