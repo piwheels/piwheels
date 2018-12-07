@@ -42,7 +42,7 @@ from piwheels.slave import PiWheelsSlave, MasterTimeout
 
 @pytest.fixture()
 def mock_systemd(request):
-    with mock.patch('piwheels.slave.Systemd') as sysd_mock:
+    with mock.patch('piwheels.slave.get_systemd') as sysd_mock:
         ready = Event()
         reloading = Event()
         sysd_mock().ready.side_effect = ready.set

@@ -82,12 +82,10 @@ def mock_package(request, mock_archive):
 
 @pytest.fixture()
 def mock_systemd(request):
-    with mock.patch('piwheels.systemd.Systemd') as sysd_mock:
+    with mock.patch('piwheels.slave.builder.get_systemd') as sysd_mock:
         ready = Event()
         sysd_mock().ready.side_effect = ready.set
-        with mock.patch('piwheels.slave.builder.PiWheelsPackage.systemd', sysd_mock), \
-                mock.patch('piwheels.slave.builder.PiWheelsBuilder.systemd', sysd_mock):
-            yield ready
+        yield ready
 
 
 @pytest.fixture()
