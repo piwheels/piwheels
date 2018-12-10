@@ -128,6 +128,9 @@ clean:
 tags: $(PY_SOURCES)
 	ctags -R --exclude="build/*" --exclude="debian/*" --exclude="docs/*" --languages="Python"
 
+lint: $(PY_SOURCES)
+	pylint piwheels
+
 $(SUBDIRS):
 	$(MAKE) -C $@
 

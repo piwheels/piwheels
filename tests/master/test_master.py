@@ -28,7 +28,6 @@
 
 
 import os
-import importlib
 from unittest import mock
 from threading import Thread, Event
 
@@ -101,11 +100,7 @@ def master_control(request, tmpdir, mock_context):
 
 
 def find_message(records, message):
-    for record in records:
-        if record.message == message:
-            return True
-    else:
-        return False
+    return any(record.message == message for record in records)
 
 
 def test_help(capsys):

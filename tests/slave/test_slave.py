@@ -29,7 +29,6 @@
 
 import os
 import pickle
-import importlib
 from unittest import mock
 from threading import Thread, Event
 from subprocess import DEVNULL
@@ -103,11 +102,7 @@ def slave_thread(request, mock_context, mock_systemd, tmpdir):
 
 
 def find_message(records, message):
-    for record in records:
-        if record.message == message:
-            return True
-    else:
-        return False
+    return any(record.message == message for record in records)
 
 
 def test_help(capsys):
