@@ -61,6 +61,7 @@ def main(args=None):
     passed to it in order to build all the requried information that
     :class:`~.mr_chase.MrChase` needs.
     """
+    sys.excepthook = terminal.error_handler
     logging.getLogger().name = 'import'
     parser = terminal.configure_parser("""\
 The piw-import script is used to inject the specified file(s) manually into
@@ -103,47 +104,40 @@ node as the piw-master script.
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-import (default: "
         "(%(default)s); this should always be an ipc address")
-    try:
-        config = parser.parse_args(args)
-        terminal.configure_logging(config.log_level, config.log_file)
+    config = parser.parse_args(args)
+    terminal.configure_logging(config.log_level, config.log_file)
 
-        logging.info("PiWheels Importer version %s", __version__)
+    logging.info("PiWheels Importer version %s", __version__)
 
-        # NOTE: If any of the files are unreadable, this'll fail (it attempts
-        # to calculate the hash of the file which requires reading it)
-        packages = [
-            PiWheelsPackage(Path(filename))
-            for filename in config.files
-        ]
-        builder = PiWheelsBuilder(
-            config.package if config.package is not None else
-            packages[0].metadata['Name'],
-            config.version if config.version is not None else
-            packages[0].metadata['Version'])
-        builder.duration = config.duration
-        if config.output is not None:
-            builder.output = config.output.read()
-        else:
-            builder.output = 'Imported manually via piw-import'
-        builder.status = True
-        builder.files = packages
-        if not config.yes:
-            print_builder(config, builder)
-            if not terminal.yes_no_prompt('Proceed?'):
-                logging.warning('User aborted import')
-                return 2
-        logging.info('Connecting to master at %s', config.import_queue)
-        do_import(config, builder)
-        if config.delete:
-            for package in builder.files:
-                package.wheel_file.unlink()
-    except RuntimeError as err:
-        logging.error(err)
-        return 1
-    except:  # pylint: disable=bare-except
-        return terminal.error_handler(*sys.exc_info())
+    # NOTE: If any of the files are unreadable, this'll fail (it attempts
+    # to calculate the hash of the file which requires reading it)
+    packages = [
+        PiWheelsPackage(Path(filename))
+        for filename in config.files
+    ]
+    builder = PiWheelsBuilder(
+        config.package if config.package is not None else
+        packages[0].metadata['Name'],
+        config.version if config.version is not None else
+        packages[0].metadata['Version'])
+    builder.duration = config.duration
+    if config.output is not None:
+        builder.output = config.output.read()
     else:
-        return 0
+        builder.output = 'Imported manually via piw-import'
+    builder.status = True
+    builder.files = packages
+    if not config.yes:
+        print_builder(config, builder)
+        if not terminal.yes_no_prompt('Proceed?'):
+            logging.warning('User aborted import')
+            return 2
+    logging.info('Connecting to master at %s', config.import_queue)
+    do_import(config, builder)
+    if config.delete:
+        for package in builder.files:
+            package.wheel_file.unlink()
+    return 0
 
 
 def print_builder(config, builder):
@@ -201,14 +195,14 @@ def do_import(config, builder):
         queue.send_pyobj(['IMPORT', abi(config, builder)] + builder.as_message)
         msg, *args = queue.recv_pyobj()
         if msg == 'ERROR':
-            raise RuntimeError(*args)
+            raise IOError(*args)
         logging.info('Registered build successfully')
         while msg == 'SEND':
             do_send(builder, args[0])
             queue.send_pyobj(['SENT'])
             msg, *args = queue.recv_pyobj()
         if msg != 'DONE':
-            raise RuntimeError('Unexpected response from master')
+            raise IOError('Unexpected response from master')
     finally:
         queue.close()
         ctx.destroy(linger=1000)
