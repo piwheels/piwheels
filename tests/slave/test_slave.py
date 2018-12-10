@@ -32,6 +32,8 @@ import pickle
 import importlib
 from unittest import mock
 from threading import Thread, Event
+from subprocess import DEVNULL
+from itertools import chain, cycle
 
 import zmq
 import pytest
@@ -130,7 +132,7 @@ def test_no_root(caplog):
     with mock.patch('os.geteuid') as geteuid:
         geteuid.return_value = 0
         assert main([]) != 0
-        assert find_message(caplog.records, 'Slave must not be run as root')
+    assert find_message(caplog.records, 'Slave must not be run as root')
 
 
 def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
@@ -158,17 +160,23 @@ def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
     assert not slave_thread.is_alive()
 
 
-def test_connection_reset(mock_systemd, slave_thread, mock_slave_driver):
-    ready, reloading = mock_systemd
-    with mock.patch('piwheels.slave.PiWheelsSlave.main_loop') as main_loop:
-        main_loop.side_effect = [MasterTimeout(), SystemExit(0)]
+def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplog):
+    with mock.patch('piwheels.slave.time') as time_mock:
+        time_mock.side_effect = chain([1.0, 401.0, 402.0], cycle([403.0]))
+        ready, reloading = mock_systemd
         slave_thread.start()
         assert ready.wait(10)
-        assert reloading.wait(10)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        # Allow timeout (time_mock takes care of faking this)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data) == ['BYE']
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+    assert find_message(caplog.records, 'Timed out waiting for master')
 
 
 def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
@@ -220,3 +228,106 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
         assert pickle.loads(data) == ['BYE']
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+
+
+def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplog):
+    with mock.patch('piwheels.slave.builder.Popen') as popen_mock:
+        popen_mock().returncode = 1
+        ready, reloading = mock_systemd
+        slave_thread.start()
+        assert ready.wait(10)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        mock_slave_driver.send_multipart([
+            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['IDLE']
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BUILD', 'foo', '1.0'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'BUILT'
+        assert popen_mock.call_args == mock.call([
+            'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
+            mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
+            '--exists-action=w', '--disable-pip-version-check',
+            'foo==1.0'],
+            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
+        )
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['BYE']
+        slave_thread.join(10)
+        assert not slave_thread.is_alive()
+    assert find_message(caplog.records, 'Build failed')
+
+
+def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_driver, caplog):
+    with mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.time') as time_mock:
+        time_mock.side_effect = cycle([1.0])
+        ready, reloading = mock_systemd
+        slave_thread.start()
+        assert ready.wait(10)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        mock_slave_driver.send_multipart([
+            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['IDLE']
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BUILD', 'foo', '1.0'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'BUILT'
+        time_mock.side_effect = chain([400.0], cycle([800.0]))
+        # Allow timeout (time_mock takes care of faking this)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['BYE']
+        slave_thread.join(10)
+        assert not slave_thread.is_alive()
+    assert find_message(caplog.records, 'Build failed')
+    assert find_message(caplog.records, 'Timed out waiting for master')
+
+
+def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tmpdir, caplog):
+    with mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock, \
+            mock.patch('piwheels.slave.builder.tempfile.TemporaryDirectory') as tmpdir_mock:
+        popen_mock().returncode = 0
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').ensure()
+        ready, reloading = mock_systemd
+        slave_thread.start()
+        assert ready.wait(10)
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'HELLO'
+        mock_slave_driver.send_multipart([
+            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['IDLE']
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps([
+            'BUILD', 'foo', '1.0'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data)[0] == 'BUILT'
+        assert popen_mock.call_args == mock.call([
+            'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
+            mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
+            '--exists-action=w', '--disable-pip-version-check',
+            'foo==1.0'],
+            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
+        )
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps([
+            'SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['SENT']
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['DONE'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['IDLE']
+        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
+        addr, sep, data = mock_slave_driver.recv_multipart()
+        assert pickle.loads(data) == ['BYE']
+        slave_thread.join(10)
+        assert not slave_thread.is_alive()
+    assert find_message(caplog.records, 'Build succeeded')
+    assert find_message(caplog.records, 'Sending foo-0.1-cp34-cp34m-linux_armv7l.whl to master on localhost')
+    assert find_message(caplog.records, 'Removing temporary build directories')

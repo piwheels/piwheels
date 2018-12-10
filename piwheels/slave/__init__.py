@@ -249,7 +249,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.builder, 'Send before build / after failed build'
         assert self.builder.status, 'Send after failed build'
         pkg = [f for f in self.builder.files if f.filename == filename][0]
-        self.logger.info('Sending %s to master on %s', pkg.filename)
+        self.logger.info(
+            'Sending %s to master on %s', pkg.filename, self.config.master)
         ctx = zmq.Context.instance()
         queue = ctx.socket(zmq.DEALER)
         queue.ipv6 = True
