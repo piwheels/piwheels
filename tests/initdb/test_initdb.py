@@ -35,7 +35,7 @@ import pytest
 
 from conftest import find_message, PIWHEELS_USER, PIWHEELS_SUPERUSER
 from piwheels import __version__
-from piwheels.initdb import main
+from piwheels.initdb import main, detect_version, parse_statements
 
 
 def test_help(capsys):
@@ -95,18 +95,130 @@ def test_current_version(db, with_schema, db_super_url, caplog):
     assert find_message(caplog.records, 'Database is the current version')
 
 
-def test_too_ancient(db, with_schema, db_super_url, caplog):
-    with db.begin():
-        db.execute("DROP TABLE configuration")
-        db.execute("DROP VIEW statistics")
-        db.execute("DROP TABLE files CASCADE")
-    with pytest.raises(RuntimeError) as exc:
-        main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes'])
-        assert 'Database version older than 0.4' in str(exc)
-
-
 def test_no_path(db, with_schema, db_super_url, caplog):
     with mock.patch('piwheels.initdb.__version__', 'foo'):
         with pytest.raises(RuntimeError) as exc:
             main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes'])
             assert 'Unable to find upgrade path' in str(exc)
+
+
+def test_too_ancient(db, with_schema):
+    with db.begin():
+        db.execute("DROP TABLE configuration")
+        db.execute("DROP VIEW statistics")
+        db.execute("DROP TABLE files CASCADE")
+    with pytest.raises(RuntimeError) as exc:
+        detect_version(db)
+        assert 'Database version older than 0.4' in str(exc)
+
+
+def test_detect_04(db, with_schema):
+    with db.begin():
+        db.execute("DROP TABLE configuration")
+        db.execute("DROP VIEW statistics")
+    assert detect_version(db) == '0.4'
+
+
+def test_detect_05(db, with_schema):
+    with db.begin():
+        db.execute("DROP TABLE configuration")
+    assert detect_version(db) == '0.5'
+
+
+def test_parse_statements():
+    assert list(parse_statements('-- This is a comment\nDROP TABLE foo;')) == ['DROP TABLE foo;']
+    assert list(parse_statements("VALUES (-1, '- not a comment -')")) == ["VALUES (-1, '- not a comment -')"]
+    assert list(parse_statements('DROP TABLE bar;\nDROP TABLE foo\n')) == ['DROP TABLE bar;', 'DROP TABLE foo']
+    assert list(parse_statements("VALUES (';');")) == ["VALUES (';');"]
+    assert list(parse_statements('DROP TABLE "little;bobby;tables";')) == ['DROP TABLE "little;bobby;tables";']
+    fn = """
+CREATE FUNCTION foo(i integer) RETURNS text
+LANGUAGE SQL
+AS $sql$
+   VALUES ('foo');
+$sql$;"""
+    assert list(parse_statements(fn)) == [fn.strip()]
+
+
+def test_init(db, with_clean_db, db_super_url, caplog):
+    assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
+    with db.begin():
+        for row in db.execute("SELECT version FROM configuration"):
+            assert row[0] == __version__
+            break
+        else:
+            assert False, "Didn't find version row in configuration"
+    assert find_message(caplog.records,
+                        'Initializing database at version %s' % __version__)
+
+
+def test_full_upgrade(db, with_clean_db, db_super_url, caplog):
+    # The following is the creation script from the ancient 0.4 version; this
+    # is deliberately picked so we run through all subsequent update scripts
+    # testing they all apply cleanly
+    create_04 = """
+CREATE TABLE packages (
+    package VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
+    CONSTRAINT packages_pk PRIMARY KEY (package)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON packages TO piwheels;
+CREATE INDEX packages_skip ON packages(skip);
+CREATE TABLE versions (
+    package VARCHAR(200) NOT NULL,
+    version VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
+    CONSTRAINT versions_pk PRIMARY KEY (package, version),
+    CONSTRAINT versions_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE RESTRICT
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON versions TO piwheels;
+CREATE INDEX versions_skip ON versions(skip);
+CREATE TABLE builds (
+    build_id        SERIAL NOT NULL,
+    package         VARCHAR(200) NOT NULL,
+    version         VARCHAR(200) NOT NULL,
+    built_by        INTEGER NOT NULL,
+    built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    duration        INTERVAL NOT NULL,
+    status          BOOLEAN DEFAULT true NOT NULL,
+    output          TEXT NOT NULL,
+    CONSTRAINT builds_pk PRIMARY KEY (build_id),
+    CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
+    CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
+        REFERENCES versions ON DELETE CASCADE,
+    CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON builds TO piwheels;
+CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
+CREATE INDEX builds_pkgver ON builds(package, version);
+CREATE TABLE files (
+    filename            VARCHAR(255) NOT NULL,
+    build_id            INTEGER NOT NULL,
+    filesize            INTEGER NOT NULL,
+    filehash            CHAR(64) NOT NULL,
+    package_version_tag VARCHAR(100) NOT NULL,
+    py_version_tag      VARCHAR(100) NOT NULL,
+    abi_tag             VARCHAR(100) NOT NULL,
+    platform_tag        VARCHAR(100) NOT NULL,
+
+    CONSTRAINT files_pk PRIMARY KEY (filename),
+    CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
+        REFERENCES builds (build_id) ON DELETE CASCADE
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON files TO piwheels;
+CREATE UNIQUE INDEX files_pkgver ON files(build_id);
+CREATE INDEX files_size ON files(filesize);
+"""
+    with db.begin():
+        for statement in parse_statements(create_04):
+            db.execute(statement)
+    assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
+    with db.begin():
+        for row in db.execute("SELECT version FROM configuration"):
+            assert row[0] == __version__
+            break
+        else:
+            assert False, "Didn't find version row in configuration"
+    assert find_message(caplog.records,
+                        'Upgrading database to version %s' % __version__)

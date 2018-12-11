@@ -280,8 +280,9 @@ def parse_statements(script):
         elif quote == '--':
             if char == '\n':
                 quote = None
-        elif quote.startswith('$'):
-            if quote != '$' and quote.endswith('$'):
+        else:
+            assert quote.startswith('$')
+            if len(quote) > 1 and quote.endswith('$'):
                 if stmt.endswith(quote):
                     quote = None
             else:
