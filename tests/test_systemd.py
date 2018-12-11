@@ -31,7 +31,6 @@
 
 import os
 import socket
-import importlib
 from unittest import mock
 
 import pytest
@@ -46,6 +45,21 @@ def mock_sock(request, tmpdir):
     os.environ['NOTIFY_SOCKET'] = str(addr)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind(str(addr))
+    yield s
+    s.close()
+    if save_addr is None:
+        os.environ.pop('NOTIFY_SOCKET', None)
+    else:
+        os.environ['NOTIFY_SOCKET'] = save_addr
+
+
+@pytest.fixture()
+def mock_abstract_sock(request, tmpdir):
+    save_addr = os.environ.get('NOTIFY_SOCKET')
+    addr = tmpdir.join('abstract')
+    os.environ['NOTIFY_SOCKET'] = '@' + str(addr)
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
+    s.bind('\0' + str(addr))
     yield s
     s.close()
     if save_addr is None:
@@ -87,6 +101,22 @@ def test_available(mock_sock):
     intf.available()
 
 
+def test_abstract_available(mock_abstract_sock):
+    intf = Systemd()
+    intf.available()
+
+
+def test_known_available(tmpdir):
+    addr = tmpdir.join('known')
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
+    s.bind(str(addr))
+    try:
+        intf = Systemd(str(addr))
+        intf.available()
+    finally:
+        s.close()
+
+
 def test_available(mock_sock):
     intf = Systemd()
     intf.notify('foo')
@@ -99,6 +129,12 @@ def test_ready(mock_sock):
     intf = Systemd()
     intf.ready()
     assert mock_sock.recv(64) == b'READY=1'
+
+
+def test_abstract_ready(mock_abstract_sock):
+    intf = Systemd()
+    intf.ready()
+    assert mock_abstract_sock.recv(64) == b'READY=1'
 
 
 def test_reloading(mock_sock):

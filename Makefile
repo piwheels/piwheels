@@ -114,7 +114,7 @@ develop: tags
 	$(PIP) install -e .[doc,test,master,slave,monitor,log]
 
 test:
-	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) tests
+	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) -v tests
 	$(COVERAGE) report --rcfile coverage.cfg
 
 clean:
@@ -127,6 +127,9 @@ clean:
 
 tags: $(PY_SOURCES)
 	ctags -R --exclude="build/*" --exclude="debian/*" --exclude="docs/*" --languages="Python"
+
+lint: $(PY_SOURCES)
+	pylint piwheels
 
 $(SUBDIRS):
 	$(MAKE) -C $@

@@ -88,6 +88,15 @@ def slave_queue(request, zmq_context, master_config):
     queue.close()
 
 
+@pytest.fixture()
+def slave2_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(zmq.REQ)
+    queue.hwm = 1
+    queue.connect(master_config.slave_queue)
+    yield queue
+    queue.close()
+
+
 def test_control_quit(task):
     with pytest.raises(TaskQuit):
         task.quit()
@@ -331,6 +340,29 @@ def test_slave_says_idle_with_build(task, slave_queue, builds_queue,
     slave_queue.send_pyobj(['IDLE'])
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
+
+
+def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
+                                           builds_queue, master_config):
+    task.logger = mock.Mock()
+    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
+                            'linux_armv7l', 'piwheels1'])
+    task.poll()
+    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
+    slave2_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
+                            'linux_armv7l', 'piwheels2'])
+    task.poll()
+    assert slave2_queue.recv_pyobj() == ['HELLO', 2, master_config.pypi_simple]
+    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    task.poll()
+    slave_queue.send_pyobj(['IDLE'])
+    task.poll()
+    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
+    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    task.poll()
+    slave2_queue.send_pyobj(['IDLE'])
+    task.poll()
+    assert slave2_queue.recv_pyobj() == ['SLEEP']
 
 
 def test_slave_says_idle_when_paused(task, slave_queue, builds_queue,

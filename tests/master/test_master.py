@@ -28,37 +28,15 @@
 
 
 import os
-import importlib
 from unittest import mock
-from threading import Thread, Event
+from threading import Thread
 
 import zmq
 import pytest
 
+from conftest import find_message
 from piwheels import __version__
-from piwheels.master import main
-
-
-def module_setup(module):
-    importlib.reload(piwheels.systemd)
-
-
-@pytest.fixture()
-def mock_context(request, zmq_context):
-    with mock.patch('zmq.Context.instance') as ctx_mock:
-        # Pass thru calls to Context.socket, but ignore everything else (in
-        # particular, destroy and term calls as we want the testing context to
-        # stick around)
-        ctx_mock().socket.side_effect = zmq_context.socket
-        yield ctx_mock
-
-
-@pytest.fixture()
-def mock_systemd(request):
-    with mock.patch('piwheels.master.Systemd') as sysd_mock:
-        ready = Event()
-        sysd_mock().ready.side_effect = ready.set
-        yield ready
+from piwheels.master import main, const
 
 
 @pytest.fixture()
@@ -75,6 +53,16 @@ def mock_signal(request):
 
 
 @pytest.fixture()
+def mock_context(request, zmq_context):
+    with mock.patch('zmq.Context.instance') as ctx_mock:
+        # Pass thru calls to Context.socket, but ignore everything else (in
+        # particular, destroy and term calls as we want the testing context to
+        # stick around)
+        ctx_mock().socket.side_effect = zmq_context.socket
+        yield ctx_mock
+
+
+@pytest.fixture()
 def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
                   tmpdir, db_url, db, with_schema):
     main_thread = Thread(daemon=True, target=main, args=([
@@ -88,11 +76,16 @@ def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
         '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
     ],))
     yield main_thread
-    assert not main_thread.is_alive()
+    if main_thread.is_alive():
+        with mock_context().socket(zmq.PUSH) as control:
+            control.connect('ipc://' + str(tmpdir.join('control-queue')))
+            control.send_pyobj(['QUIT'])
+        main_thread.join(10)
+        assert not main_thread.is_alive()
 
 
 @pytest.fixture()
-def master_control(tmpdir, mock_context):
+def master_control(request, tmpdir, mock_context):
     control = mock_context().socket(zmq.PUSH)
     control.connect('ipc://' + str(tmpdir.join('control-queue')))
     yield control
@@ -118,28 +111,98 @@ def test_no_root(caplog):
     with mock.patch('os.geteuid') as geteuid:
         geteuid.return_value = 0
         assert main([]) != 0
-        for record in caplog.records:
-            if record.message.endswith('must not be run as root'):
-                return
-        assert False, "didn't find error log message about running as root"
+        assert find_message(caplog.records, 'Master must not be run as root')
 
 
 def test_quit_control(mock_systemd, master_thread, master_control):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     master_control.send_pyobj(['QUIT'])
     master_thread.join(10)
     assert not master_thread.is_alive()
+
+
+def test_system_exit(mock_systemd, master_thread, caplog):
+    with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
+        main_loop.side_effect = SystemExit(1)
+        master_thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_thread.join(10)
+        assert not master_thread.is_alive()
+    assert find_message(caplog.records, 'shutting down on SIGTERM')
+
+
+def test_system_ctrl_c(mock_systemd, master_thread, caplog):
+    with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
+        main_loop.side_effect = KeyboardInterrupt()
+        master_thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_thread.join(10)
+        assert not master_thread.is_alive()
+    assert find_message(caplog.records, 'shutting down on Ctrl+C')
 
 
 def test_bad_control(mock_systemd, master_thread, master_control, caplog):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     master_control.send_pyobj(['FOO'])
     master_control.send_pyobj(['QUIT'])
     master_thread.join(10)
     assert not master_thread.is_alive()
-    for record in caplog.records:
-        if record.message == 'ignoring invalid FOO message':
-            return
-    assert False, "didn't find error log message about FOO"
+    assert find_message(caplog.records, 'ignoring invalid FOO message')
+
+
+def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
+    master_thread.start()
+    assert mock_systemd._ready.wait(10)
+    with mock_context().socket(zmq.PUSH) as int_status, \
+            mock_context().socket(zmq.SUB) as ext_status:
+        ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
+        ext_status.setsockopt_string(zmq.SUBSCRIBE, '')
+        # Wait for the first statistics message (from BigBrother) to get the
+        # SUB queue working
+        ext_status.recv_pyobj()
+        int_status.connect(const.INT_STATUS_QUEUE)
+        int_status.send_pyobj(['FOO'])
+        # Try several times to read the passed-thru message; other messages
+        # (like stats from BigBrother) will be sent to ext-status too
+        for i in range(3):
+            if ext_status.recv_pyobj() == ['FOO']:
+                break
+        else:
+            assert False, "Didn't see FOO passed-thru the status pipe"
+
+
+def test_kill_control(mock_systemd, master_thread, master_control):
+    with mock.patch('piwheels.master.SlaveDriver.kill_slave') as kill_slave:
+        master_thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_pyobj(['KILL', 1])
+        master_control.send_pyobj(['QUIT'])
+        master_thread.join(10)
+        assert not master_thread.is_alive()
+        assert kill_slave.call_args == mock.call(1)
+
+
+def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
+    master_thread.start()
+    assert mock_systemd._ready.wait(10)
+    master_control.send_pyobj(['PAUSE'])
+    master_control.send_pyobj(['RESUME'])
+    master_control.send_pyobj(['QUIT'])
+    master_thread.join(10)
+    assert not master_thread.is_alive()
+    assert find_message(caplog.records, 'pausing operations')
+    assert find_message(caplog.records, 'resuming operations')
+
+
+def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
+    with mock.patch('piwheels.master.SlaveDriver.list_slaves') as list_slaves:
+        master_thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_pyobj(['HELLO'])
+        master_control.send_pyobj(['QUIT'])
+        master_thread.join(10)
+        assert not master_thread.is_alive()
+        assert find_message(caplog.records, 'sending status to new monitor')
+        assert list_slaves.call_args == mock.call()

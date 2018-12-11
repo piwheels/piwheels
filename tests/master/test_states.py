@@ -236,6 +236,19 @@ def test_slave_recv_reply(build_state, file_state, slave_queue):
         assert slave_state.build is None
 
 
+def test_slave_recv_bad_built(build_state, file_state, slave_queue):
+    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
+                             'linux_armv7l', 'piwheels2')
+    with mock.patch('piwheels.master.states.datetime') as dt:
+        now = datetime.utcnow()
+        dt.utcnow.return_value = now
+        slave_state._reply = ['BUILD', 'foo', '0.1']
+        slave_state.request = ['BUILT']
+        assert slave_state.build is None
+        slave_state.reply = ['DONE']
+        assert slave_state.build is None
+
+
 def test_slave_state_recv_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.utcnow()

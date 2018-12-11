@@ -53,8 +53,8 @@ def test_pypi_ignore_dupes():
             ('foo', '0.1', 1531327388, 'create', 0),
             ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
             ('bar', '1.0', 1531327389, 'create', 2),
-            ('bar', '1.0', 1531327389, 'add source file bar-1.0-py2.py3-none-any.whl', 3),
-            ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
+            ('bar', '1.0', 1531327389, 'add source file bar-1.0.tar.gz', 3),
+            ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 4),
             ('bar', '1.0', 1531327392, 'add cp34 file bar-0.1-cp34-cp34-manylinux1_x86_64.whl', 5),
             ('bar', '1.0', 1531327392, 'add cp35 file bar-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
         ]

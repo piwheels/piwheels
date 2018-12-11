@@ -62,6 +62,11 @@ def main(args=None):
     the piwheels database required by the master or, if it already exists,
     upgrades it to the current version of the application.
     """
+    sys.excepthook = terminal.error_handler
+    terminal.error_handler[RuntimeError] = (
+        terminal.error_handler.exc_message, 1)
+    terminal.error_handler[exc.SQLAlchemyError] = (
+        terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'initdb'
     parser = terminal.configure_parser("""\
 The piw-initdb script is used to initialize or upgrade the piwheels master
@@ -84,46 +89,41 @@ take a backup of your database before using this script for upgrades.
     parser.add_argument(
         '-y', '--yes', action='store_true',
         help="Proceed without prompting before init/upgrades")
-    try:
-        config = parser.parse_args(args)
-        terminal.configure_logging(config.log_level, config.log_file)
+    config = parser.parse_args(args)
+    terminal.configure_logging(config.log_level, config.log_file)
 
-        logging.info("PiWheels Initialize Database version %s", __version__)
-        conn = get_connection(config.dsn)
-        logging.info("Checking username and superuser status")
-        detect_users(conn, config.user)
-        logging.info("Adminstration and master users verified")
-        logging.info("Detecting database version")
-        db_version = detect_version(conn)
+    logging.info("PiWheels Initialize Database version %s", __version__)
+    conn = get_connection(config.dsn)
+    logging.info("Checking username and superuser status")
+    detect_users(conn, config.user)
+    logging.info("Adminstration and master users verified")
+    logging.info("Detecting database version")
+    db_version = detect_version(conn)
+    if db_version is None:
+        logging.warning("Database appears to be uninitialized")
+        prompt = "Do you wish to initialize the database?"
+    elif db_version == __version__:
+        logging.warning("Database is the current version")
+        return 0
+    else:
+        logging.warning("Detected database version %s", db_version)
+        prompt = "Do you wish to proceed with the upgrade to %s?" % __version__
+    script = get_script(db_version)
+    if config.yes or terminal.yes_no_prompt(prompt):
         if db_version is None:
-            logging.warning("Database appears to be uninitialized")
-            prompt = "Do you wish to initialize the database?"
-        elif db_version == __version__:
-            logging.warning("Database is the current version")
-            return 0
+            logging.warning("Initializing database at version %s", __version__)
         else:
-            logging.warning("Detected database version %s", db_version)
-            prompt = "Do you wish to proceed with the upgrade to %s?" % __version__
-        script = get_script(db_version)
-        if config.yes or terminal.yes_no_prompt(prompt):
-            if db_version is None:
-                logging.warning("Initializing database at version %s", __version__)
-            else:
-                logging.warning("Upgrading database to version %s", __version__)
-                logging.warning("Have patience: this can be a long operation!")
-            with conn.begin():
-                for statement in parse_statements(script):
-                    statement = statement.format(username=config.user)
-                    logging.debug(statement)
-                    conn.execute(text(statement))
-                    print('.', end='', flush=True)
-                print("")
-            logging.info("Complete")
-    except (RuntimeError, exc.SQLAlchemyError) as err:
-        logging.error(str(err))
-        return 1
-    except:  # pylint: disable=bare-except
-        return terminal.error_handler(*sys.exc_info())
+            logging.warning("Upgrading database to version %s", __version__)
+            logging.warning("Have patience: this can be a long operation!")
+        with conn.begin():
+            for statement in parse_statements(script):
+                statement = statement.format(username=config.user)
+                logging.debug(statement)
+                conn.execute(text(statement))
+                print('.', end='', flush=True)
+            print("")
+        logging.info("Complete")
+    return 0
 
 
 def get_connection(dsn):
@@ -280,8 +280,9 @@ def parse_statements(script):
         elif quote == '--':
             if char == '\n':
                 quote = None
-        elif quote.startswith('$'):
-            if quote != '$' and quote.endswith('$'):
+        else:
+            assert quote.startswith('$')
+            if len(quote) > 1 and quote.endswith('$'):
                 if stmt.endswith(quote):
                     quote = None
             else:
