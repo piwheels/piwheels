@@ -49,6 +49,9 @@ def main(args=None):
     This is the main function for the :program:`piw-remove` script. It uses
     :class:`~.mr_chase.MrChase` to remove built packages from the system.
     """
+    sys.excepthook = terminal.error_handler
+    terminal.error_handler[RuntimeError] = (
+        terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'import'
     parser = terminal.configure_parser("""\
 The piw-remove script is used to manually remove built packages from the
@@ -68,27 +71,20 @@ system. This script must be run on the same node as the piw-master script.
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-remove (default: "
         "(%(default)s); this should always be an ipc address")
-    try:
-        config = parser.parse_args(args)
-        terminal.configure_logging(config.log_level, config.log_file)
+    config = parser.parse_args(args)
+    terminal.configure_logging(config.log_level, config.log_file)
 
-        logging.info("PiWheels Remover version %s", __version__)
+    logging.info("PiWheels Remover version %s", __version__)
 
-        if not config.yes:
-            logging.warning("Preparing to remove all wheels for %s %s",
-                            config.package, config.version)
-            if not terminal.yes_no_prompt('Proceed?'):
-                logging.warning('User aborted import')
-                return 2
-        logging.info('Connecting to master at %s', config.import_queue)
-        do_remove(config)
-    except RuntimeError as err:
-        logging.error(err)
-        return 1
-    except:  # pylint: disable=bare-except
-        return terminal.error_handler(*sys.exc_info())
-    else:
-        return 0
+    if not config.yes:
+        logging.warning("Preparing to remove all wheels for %s %s",
+                        config.package, config.version)
+        if not terminal.yes_no_prompt('Proceed?'):
+            logging.warning('User aborted removal')
+            return 2
+    logging.info('Connecting to master at %s', config.import_queue)
+    do_remove(config)
+    return 0
 
 
 def do_remove(config):

@@ -78,29 +78,6 @@ def mock_wheel_stats(request, mock_wheel):
 
 
 @pytest.fixture()
-def mock_context(request, zmq_context, tmpdir):
-    with mock.patch('zmq.Context.instance') as inst_mock:
-        ctx_mock = mock.Mock(wraps=zmq_context)
-        inst_mock.return_value = ctx_mock
-        # Neuter the term() and destroy() methods
-        ctx_mock.term = mock.Mock()
-        ctx_mock.destroy = mock.Mock()
-        # Override the socket() method so connect calls on the result get
-        # re-directed to our local sockets above
-        def socket(socket_type, **kwargs):
-            sock = zmq_context.socket(socket_type, **kwargs)
-            def connect(addr):
-                if addr.startswith('tcp://') and addr.endswith(':5556'):
-                    addr = 'ipc://' + str(tmpdir.join('file-juggler-queue'))
-                return sock.connect(addr)
-            sock_mock = mock.Mock(wraps=sock)
-            sock_mock.connect = mock.Mock(side_effect=connect)
-            return sock_mock
-        ctx_mock.socket = mock.Mock(side_effect=socket)
-        yield ctx_mock
-
-
-@pytest.fixture()
 def import_queue_name(request, tmpdir):
     yield 'ipc://' + str(tmpdir.join('import-queue'))
 
