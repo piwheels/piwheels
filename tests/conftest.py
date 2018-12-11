@@ -31,7 +31,7 @@ import os
 from unittest import mock
 from datetime import datetime, timedelta
 from hashlib import sha256
-from threading import Thread
+from threading import Thread, Event
 from time import sleep
 
 import zmq
@@ -58,6 +58,10 @@ PIWHEELS_USER = os.environ.get('PIWHEELS_USER', 'piwheels')
 PIWHEELS_PASS = os.environ.get('PIWHEELS_PASS', 'piwheels')
 PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
 PIWHEELS_SUPERPASS = os.environ.get('PIWHEELS_SUPERPASS', '')
+
+
+def find_message(records, message):
+    return any(record.message == message for record in records)
 
 
 @pytest.fixture()
@@ -152,13 +156,20 @@ def db(request, db_engine):
 
 
 @pytest.fixture(scope='function')
-def with_schema(request, db):
+def with_clean_db(request, db):
     with db.begin():
         # Wipe the public schema and re-create it with standard defaults
         db.execute("DROP SCHEMA public CASCADE")
         db.execute("CREATE SCHEMA public AUTHORIZATION postgres")
         db.execute("GRANT CREATE ON SCHEMA public TO PUBLIC")
         db.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
+    return 'clean'
+
+
+@pytest.fixture(scope='function')
+def with_schema(request, db, with_clean_db):
+    with db.begin():
+        # Create the piwheels structures from the create_*.sql script
         for stmt in parse_statements(get_script()):
             stmt = stmt.format(username=PIWHEELS_USER)
             db.execute(stmt)
@@ -283,6 +294,41 @@ def zmq_context(request):
     yield context
     context.destroy(linger=1000)
     context.term()
+
+
+@pytest.fixture()
+def mock_context(request, zmq_context, tmpdir):
+    with mock.patch('zmq.Context.instance') as inst_mock:
+        ctx_mock = mock.Mock(wraps=zmq_context)
+        inst_mock.return_value = ctx_mock
+        # Neuter the term() and destroy() methods
+        ctx_mock.term = mock.Mock()
+        ctx_mock.destroy = mock.Mock()
+        # Override the socket() method so connect calls on the result get
+        # re-directed to local IPC sockets
+        def socket(socket_type, **kwargs):
+            sock = zmq_context.socket(socket_type, **kwargs)
+            def connect(addr):
+                if addr.startswith('tcp://') and addr.endswith(':5555'):
+                    addr = 'ipc://' + str(tmpdir.join('slave-driver-queue'))
+                elif addr.startswith('tcp://') and addr.endswith(':5556'):
+                    addr = 'ipc://' + str(tmpdir.join('file-juggler-queue'))
+                return sock.connect(addr)
+            sock_mock = mock.Mock(wraps=sock)
+            sock_mock.connect = mock.Mock(side_effect=connect)
+            return sock_mock
+        ctx_mock.socket = mock.Mock(side_effect=socket)
+        yield ctx_mock
+
+
+@pytest.fixture()
+def mock_systemd(request):
+    with mock.patch('piwheels.systemd._SYSTEMD') as sysd_mock:
+        sysd_mock._ready = Event()
+        sysd_mock.ready.side_effect = sysd_mock._ready.set
+        sysd_mock._reloading = Event()
+        sysd_mock.reloading.side_effect = sysd_mock._reloading.set
+        yield sysd_mock
 
 
 @pytest.fixture(scope='function')

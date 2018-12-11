@@ -29,11 +29,12 @@
 
 import os
 from unittest import mock
-from threading import Thread, Event
+from threading import Thread
 
 import zmq
 import pytest
 
+from conftest import find_message
 from piwheels import __version__
 from piwheels.master import main, const
 
@@ -49,14 +50,6 @@ def mock_pypi(request):
 def mock_signal(request):
     with mock.patch('signal.signal') as signal:
         yield signal
-
-
-@pytest.fixture()
-def mock_systemd(request):
-    with mock.patch('piwheels.master.Systemd') as sysd_mock:
-        ready = Event()
-        sysd_mock().ready.side_effect = ready.set
-        yield ready
 
 
 @pytest.fixture()
@@ -99,10 +92,6 @@ def master_control(request, tmpdir, mock_context):
     control.close()
 
 
-def find_message(records, message):
-    return any(record.message == message for record in records)
-
-
 def test_help(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
@@ -127,7 +116,7 @@ def test_no_root(caplog):
 
 def test_quit_control(mock_systemd, master_thread, master_control):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     master_control.send_pyobj(['QUIT'])
     master_thread.join(10)
     assert not master_thread.is_alive()
@@ -137,7 +126,7 @@ def test_system_exit(mock_systemd, master_thread, caplog):
     with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
         main_loop.side_effect = SystemExit(1)
         master_thread.start()
-        assert mock_systemd.wait(10)
+        assert mock_systemd._ready.wait(10)
         master_thread.join(10)
         assert not master_thread.is_alive()
     assert find_message(caplog.records, 'shutting down on SIGTERM')
@@ -147,7 +136,7 @@ def test_system_ctrl_c(mock_systemd, master_thread, caplog):
     with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
         main_loop.side_effect = KeyboardInterrupt()
         master_thread.start()
-        assert mock_systemd.wait(10)
+        assert mock_systemd._ready.wait(10)
         master_thread.join(10)
         assert not master_thread.is_alive()
     assert find_message(caplog.records, 'shutting down on Ctrl+C')
@@ -155,7 +144,7 @@ def test_system_ctrl_c(mock_systemd, master_thread, caplog):
 
 def test_bad_control(mock_systemd, master_thread, master_control, caplog):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     master_control.send_pyobj(['FOO'])
     master_control.send_pyobj(['QUIT'])
     master_thread.join(10)
@@ -165,7 +154,7 @@ def test_bad_control(mock_systemd, master_thread, master_control, caplog):
 
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     with mock_context().socket(zmq.PUSH) as int_status, \
             mock_context().socket(zmq.SUB) as ext_status:
         ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
@@ -187,7 +176,7 @@ def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
 def test_kill_control(mock_systemd, master_thread, master_control):
     with mock.patch('piwheels.master.SlaveDriver.kill_slave') as kill_slave:
         master_thread.start()
-        assert mock_systemd.wait(10)
+        assert mock_systemd._ready.wait(10)
         master_control.send_pyobj(['KILL', 1])
         master_control.send_pyobj(['QUIT'])
         master_thread.join(10)
@@ -197,7 +186,7 @@ def test_kill_control(mock_systemd, master_thread, master_control):
 
 def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
     master_thread.start()
-    assert mock_systemd.wait(10)
+    assert mock_systemd._ready.wait(10)
     master_control.send_pyobj(['PAUSE'])
     master_control.send_pyobj(['RESUME'])
     master_control.send_pyobj(['QUIT'])
@@ -210,7 +199,7 @@ def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
 def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
     with mock.patch('piwheels.master.SlaveDriver.list_slaves') as list_slaves:
         master_thread.start()
-        assert mock_systemd.wait(10)
+        assert mock_systemd._ready.wait(10)
         master_control.send_pyobj(['HELLO'])
         master_control.send_pyobj(['QUIT'])
         master_thread.join(10)

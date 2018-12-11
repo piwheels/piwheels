@@ -45,8 +45,8 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const
-from ..systemd import Systemd
+from .. import __version__, terminal, const, systemd
+from ..systemd import get_systemd
 from .tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
@@ -197,7 +197,7 @@ write access to the output directory.
         for task in self.tasks:
             task.start()
         self.logger.info('started all tasks')
-        systemd = Systemd()
+        systemd = get_systemd()
         signal.signal(signal.SIGTERM, sig_term)
         try:
             systemd.ready()

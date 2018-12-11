@@ -35,6 +35,7 @@ import sys
 import locale
 import logging
 import traceback
+from collections import OrderedDict, namedtuple
 
 import configargparse
 from configargparse import FileType  # pylint: disable=unused-import
@@ -119,39 +120,78 @@ def configure_logging(log_level, log_filename=None):
     logging.getLogger().setLevel(logging.INFO)
 
 
-def error_handler(exc_type, exc_value, exc_trace):
+class ErrorAction(namedtuple('ErrorAction', ('message', 'exitcode'))):
     """
-    Global application exception handler. For "basic" errors (I/O errors,
-    keyboard interrupt, etc.) just the error message is printed as there's
-    generally no need to confuse the user with a complete stack trace when it's
-    just a missing file. Other exceptions, however, are logged with the usual
-    full stack trace.
+    Named tuple dictating the action to take in response to an unhandled
+    exception of the type it is associated with in :class:`ErrorHandler`.
+    The *message* is an iterable of lines to be output as critical error
+    log messages, and *exitcode* is an integer to return as the exit code of
+    the process.
+
+    Either of these can also be functions which will be called with the
+    exception info (type, value, traceback) and will be expected to return
+    an iterable of lines (for *message*) or an integer (for *exitcode*).
     """
-    if issubclass(exc_type, (SystemExit,)):
-        # Exit with whatever exit code the exception holds
+    pass
+
+
+class ErrorHandler:
+    """
+    Global configurable application exception handler. For "basic" errors (I/O
+    errors, keyboard interrupt, etc.) just the error message is printed as
+    there's generally no need to confuse the user with a complete stack trace
+    when it's just a missing file. Other exceptions, however, are logged with
+    the usual full stack trace.
+
+    The configuration can be augmented with other exception classes that
+    should be handled specially by treated the instance as a dictionary mapping
+    exception classes to :class:`ErrorAction` tuples.
+    """
+    def __init__(self):
+        self._config = OrderedDict({
+            SystemExit:        (None, self.exc_value),
+            KeyboardInterrupt: (None, 2),
+            IOError:           (self.exc_message, 1),
+            configargparse.ArgumentError: (
+                lambda exc_type, exc_value, exc_tb:
+                    [exc_value, 'Try the --help option for more information.'], 2
+            ),
+        })
+
+    @staticmethod
+    def exc_message(exc_type, exc_value, exc_tb):
+        return [exc_value]
+
+    @staticmethod
+    def exc_value(exc_type, exc_value, exc_tb):
         return exc_value
-    elif issubclass(exc_type, (KeyboardInterrupt,)):
-        # Exit with 2 if the user deliberately terminates with Ctrl+C
-        return 2
-    elif issubclass(exc_type, (configargparse.ArgumentError,)):
-        # For option parser errors output the error along with a message
-        # indicating how the help page can be displayed
-        logging.critical(str(exc_value))
-        logging.critical('Try the --help option for more information.')
-        return 2
-    elif issubclass(exc_type, (IOError,)):
-        # For simple errors like IOError just output the message which
-        # should be sufficient for the end user (no need to confuse them
-        # with a full stack trace)
-        logging.critical(str(exc_value))
-        return 1
-    else:
-        # Otherwise, log the stack trace and the exception into the log
-        # file for debugging purposes
-        for line in traceback.format_exception(exc_type, exc_value, exc_trace):
-            for msg in line.rstrip().split('\n'):
-                logging.critical(msg.replace('%', '%%'))
-        return 1
+
+    def __getitem__(self, key):
+        return self._config[key]
+
+    def __setitem__(self, key, value):
+        self._config[key] = ErrorAction(*value)
+
+    def __call__(self, exc_type, exc_value, exc_tb):
+        for exc_class, (message, value) in self._config.items():
+            if issubclass(exc_type, exc_class):
+                if callable(message):
+                    message = message(exc_type, exc_value, exc_tb)
+                if callable(value):
+                    value = value(exc_type, exc_value, exc_tb)
+                if message is not None:
+                    for line in message:
+                        logging.critical(line)
+                return value
+        else:
+            # Otherwise, log the stack trace and the exception into the log
+            # file for debugging purposes
+            for line in traceback.format_exception(exc_type, exc_value, exc_tb):
+                for msg in line.rstrip().split('\n'):
+                    logging.critical(msg.replace('%', '%%'))
+            return 1
+
+error_handler = ErrorHandler()
 
 
 def yes_no_prompt(question):

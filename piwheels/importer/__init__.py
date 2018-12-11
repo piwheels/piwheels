@@ -62,6 +62,8 @@ def main(args=None):
     :class:`~.mr_chase.MrChase` needs.
     """
     sys.excepthook = terminal.error_handler
+    terminal.error_handler[RuntimeError] = (
+        terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'import'
     parser = terminal.configure_parser("""\
 The piw-import script is used to inject the specified file(s) manually into
@@ -195,14 +197,14 @@ def do_import(config, builder):
         queue.send_pyobj(['IMPORT', abi(config, builder)] + builder.as_message)
         msg, *args = queue.recv_pyobj()
         if msg == 'ERROR':
-            raise IOError(*args)
+            raise RuntimeError(*args)
         logging.info('Registered build successfully')
         while msg == 'SEND':
             do_send(builder, args[0])
             queue.send_pyobj(['SENT'])
             msg, *args = queue.recv_pyobj()
         if msg != 'DONE':
-            raise IOError('Unexpected response from master')
+            raise RuntimeError('Unexpected response from master')
     finally:
         queue.close()
         ctx.destroy(linger=1000)
@@ -227,7 +229,7 @@ def do_send(builder, filename):
     """
     Handles sending files when requested by :func:`do_import`.
     """
-    logging.info('Sending %s to master', filename)
+    logging.info('Sending %s to master on localhost', filename)
     pkg = [f for f in builder.files if f.filename == filename][0]
     ctx = zmq.Context.instance()
     queue = ctx.socket(zmq.DEALER)

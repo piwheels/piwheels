@@ -81,14 +81,6 @@ def mock_package(request, mock_archive):
 
 
 @pytest.fixture()
-def mock_systemd(request):
-    with mock.patch('piwheels.slave.builder.get_systemd') as sysd_mock:
-        ready = Event()
-        sysd_mock().ready.side_effect = ready.set
-        yield ready
-
-
-@pytest.fixture()
 def transfer_thread(request, zmq_context, mock_systemd, mock_package):
     with zmq_context.socket(zmq.DEALER) as server_sock, \
             zmq_context.socket(zmq.DEALER) as client_sock:

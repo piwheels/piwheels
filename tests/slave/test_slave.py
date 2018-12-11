@@ -30,25 +30,16 @@
 import os
 import pickle
 from unittest import mock
-from threading import Thread, Event
+from threading import Thread
 from subprocess import DEVNULL
 from itertools import chain, cycle
 
 import zmq
 import pytest
 
+from conftest import find_message
 from piwheels import __version__
 from piwheels.slave import PiWheelsSlave, MasterTimeout
-
-
-@pytest.fixture()
-def mock_systemd(request):
-    with mock.patch('piwheels.slave.get_systemd') as sysd_mock:
-        ready = Event()
-        reloading = Event()
-        sysd_mock().ready.side_effect = ready.set
-        sysd_mock().reloading.side_effect = reloading.set
-        yield ready, reloading
 
 
 @pytest.fixture()
@@ -70,39 +61,10 @@ def mock_file_juggler(request, zmq_context, tmpdir):
 
 
 @pytest.fixture()
-def mock_context(request, zmq_context, tmpdir):
-    with mock.patch('zmq.Context.instance') as inst_mock:
-        ctx_mock = mock.Mock(wraps=zmq_context)
-        inst_mock.return_value = ctx_mock
-        # Neuter the term() and destroy() methods
-        ctx_mock.term = mock.Mock()
-        ctx_mock.destroy = mock.Mock()
-        # Override the socket() method so connect calls on the result get
-        # re-directed to our local sockets above
-        def socket(socket_type, **kwargs):
-            sock = zmq_context.socket(socket_type, **kwargs)
-            def connect(addr):
-                if addr.endswith(':5555'):
-                    addr = 'ipc://' + str(tmpdir.join('slave-driver-queue'))
-                elif addr.endswith(':5556'):
-                    addr = 'ipc://' + str(tmpdir.join('file-juggler-queue'))
-                return sock.connect(addr)
-            sock_mock = mock.Mock(wraps=sock)
-            sock_mock.connect = mock.Mock(side_effect=connect)
-            return sock_mock
-        ctx_mock.socket = mock.Mock(side_effect=socket)
-        yield ctx_mock
-
-
-@pytest.fixture()
 def slave_thread(request, mock_context, mock_systemd, tmpdir):
     main = PiWheelsSlave()
     slave_thread = Thread(daemon=True, target=main, args=([],))
     yield slave_thread
-
-
-def find_message(records, message):
-    return any(record.message == message for record in records)
 
 
 def test_help(capsys):
@@ -131,11 +93,10 @@ def test_no_root(caplog):
 
 
 def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
-    ready, reloading = mock_systemd
     with mock.patch('piwheels.slave.PiWheelsSlave.main_loop') as main_loop:
         main_loop.side_effect = SystemExit(1)
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data) == ['BYE']
         slave_thread.join(10)
@@ -143,9 +104,8 @@ def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
 
 
 def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
-    ready, reloading = mock_systemd
     slave_thread.start()
-    assert ready.wait(10)
+    assert mock_systemd._ready.wait(10)
     addr, sep, data = mock_slave_driver.recv_multipart()
     assert pickle.loads(data)[0] == 'HELLO'
     mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
@@ -158,9 +118,8 @@ def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
 def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplog):
     with mock.patch('piwheels.slave.time') as time_mock:
         time_mock.side_effect = chain([1.0, 401.0, 402.0], cycle([403.0]))
-        ready, reloading = mock_systemd
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data)[0] == 'HELLO'
         # Allow timeout (time_mock takes care of faking this)
@@ -175,9 +134,8 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
 
 
 def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
-    ready, reloading = mock_systemd
     slave_thread.start()
-    assert ready.wait(10)
+    assert mock_systemd._ready.wait(10)
     addr, sep, data = mock_slave_driver.recv_multipart()
     assert pickle.loads(data)[0] == 'HELLO'
     mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['FOO'])])
@@ -188,9 +146,8 @@ def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
 
 
 def test_hello(mock_systemd, slave_thread, mock_slave_driver):
-    ready, reloading = mock_systemd
     slave_thread.start()
-    assert ready.wait(10)
+    assert mock_systemd._ready.wait(10)
     addr, sep, data = mock_slave_driver.recv_multipart()
     assert pickle.loads(data)[0] == 'HELLO'
     mock_slave_driver.send_multipart([
@@ -206,9 +163,8 @@ def test_hello(mock_systemd, slave_thread, mock_slave_driver):
 
 def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
     with mock.patch('piwheels.slave.randint', return_value=0):
-        ready, reloading = mock_systemd
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data)[0] == 'HELLO'
         mock_slave_driver.send_multipart([
@@ -228,9 +184,8 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
 def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplog):
     with mock.patch('piwheels.slave.builder.Popen') as popen_mock:
         popen_mock().returncode = 1
-        ready, reloading = mock_systemd
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data)[0] == 'HELLO'
         mock_slave_driver.send_multipart([
@@ -259,9 +214,8 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
     with mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.time') as time_mock:
         time_mock.side_effect = cycle([1.0])
-        ready, reloading = mock_systemd
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data)[0] == 'HELLO'
         mock_slave_driver.send_multipart([
@@ -291,9 +245,8 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
         popen_mock().returncode = 0
         tmpdir_mock().name = str(tmpdir)
         tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').ensure()
-        ready, reloading = mock_systemd
         slave_thread.start()
-        assert ready.wait(10)
+        assert mock_systemd._ready.wait(10)
         addr, sep, data = mock_slave_driver.recv_multipart()
         assert pickle.loads(data)[0] == 'HELLO'
         mock_slave_driver.send_multipart([

@@ -30,14 +30,17 @@
 import os
 import pickle
 import zipfile
+from hashlib import sha256
 from unittest import mock
 from pathlib import Path
+from threading import Thread
 
 import zmq
 import pytest
 
+from conftest import find_message
 from piwheels import __version__
-from piwheels.importer import *
+from piwheels.importer import main, abi
 
 
 @pytest.fixture()
@@ -65,8 +68,71 @@ Classifier: Programming Language :: Python
     return filename
 
 
-def find_message(records, message):
-    return any(record.message == message for record in records)
+@pytest.fixture()
+def mock_wheel_stats(request, mock_wheel):
+    h = sha256()
+    with Path(mock_wheel) as p:
+        with p.open('rb') as f:
+            h.update(f.read())
+        return p.stat().st_size, h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_context(request, zmq_context, tmpdir):
+    with mock.patch('zmq.Context.instance') as inst_mock:
+        ctx_mock = mock.Mock(wraps=zmq_context)
+        inst_mock.return_value = ctx_mock
+        # Neuter the term() and destroy() methods
+        ctx_mock.term = mock.Mock()
+        ctx_mock.destroy = mock.Mock()
+        # Override the socket() method so connect calls on the result get
+        # re-directed to our local sockets above
+        def socket(socket_type, **kwargs):
+            sock = zmq_context.socket(socket_type, **kwargs)
+            def connect(addr):
+                if addr.startswith('tcp://') and addr.endswith(':5556'):
+                    addr = 'ipc://' + str(tmpdir.join('file-juggler-queue'))
+                return sock.connect(addr)
+            sock_mock = mock.Mock(wraps=sock)
+            sock_mock.connect = mock.Mock(side_effect=connect)
+            return sock_mock
+        ctx_mock.socket = mock.Mock(side_effect=socket)
+        yield ctx_mock
+
+
+@pytest.fixture()
+def import_queue_name(request, tmpdir):
+    yield 'ipc://' + str(tmpdir.join('import-queue'))
+
+
+@pytest.fixture()
+def import_queue(request, mock_context, import_queue_name, tmpdir):
+    queue = mock_context.socket(zmq.REP)
+    queue.hwm = 1
+    queue.bind(import_queue_name)
+    yield queue
+    queue.close()
+
+
+class ImportThread(Thread):
+    def __init__(self, args):
+        super().__init__(target=self.capture_exc, args=(args,), daemon=True)
+        self.exception = None
+        self.exitcode = None
+
+    def capture_exc(self, args):
+        try:
+            self.exitcode = main(args)
+        except Exception as e:
+            self.exception = e
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.join(10)
+        assert not self.is_alive()
 
 
 def test_help(capsys):
@@ -92,6 +158,18 @@ def test_abort(mock_wheel):
         assert main([mock_wheel]) == 2
 
 
+def test_abi():
+    config = mock.Mock()
+    config.abi = None
+    builder = mock.MagicMock()
+    builder.files[0].abi_tag = 'none'
+    assert abi(config, builder, 'foo') == 'foo'
+    builder.files[0].abi_tag = 'cp34m'
+    assert abi(config, builder, 'foo') == 'cp34m'
+    config.abi = 'cp35m'
+    assert abi(config, builder, 'foo') == 'cp35m'
+
+
 def test_auto_package_version(mock_wheel, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
@@ -106,3 +184,150 @@ def test_manual_package_version(mock_wheel, caplog):
         main(['--package', 'bar', '--package-version', '0.2', mock_wheel])
     assert find_message(caplog.records, 'Package:  bar')
     assert find_message(caplog.records, 'Version:  0.2')
+
+
+def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['ERROR', 'Unknown package "foo"'])
+        thread.join(10)
+        assert isinstance(thread.exception, RuntimeError)
+
+
+def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['FOO'])
+        thread.join(10)
+        assert isinstance(thread.exception, RuntimeError)
+
+
+def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['FOO'])
+        thread.join(10)
+        assert isinstance(thread.exception, RuntimeError)
+        assert os.path.exists(mock_wheel)
+
+
+def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['DONE'])
+        thread.join(10)
+        assert thread.exception is None
+        assert thread.exitcode == 0
+        assert os.path.exists(mock_wheel)
+
+
+def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, import_queue, tmpdir):
+    filesize, filehash = mock_wheel_stats
+    output = tmpdir.join('foo_output.txt')
+    output.write('FOO\n')
+    with ImportThread(['-y', '--output', str(output), '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0, 'FOO\n', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['DONE'])
+        thread.join(10)
+        assert thread.exception is None
+        assert thread.exitcode == 0
+        assert os.path.exists(mock_wheel)
+
+
+def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--abi', 'cp35m', '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp35m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['DONE'])
+        thread.join(10)
+        assert thread.exception is None
+        assert thread.exitcode == 0
+        assert os.path.exists(mock_wheel)
+
+
+def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+    filesize, filehash = mock_wheel_stats
+    with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
+            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+        assert import_queue.recv_pyobj() == [
+            'IMPORT', 'cp34m', 'foo', '0.1', True, 0,
+            'Imported manually via piw-import', {
+                'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
+                    filesize, filehash, 'foo', '0.1',
+                    'cp34', 'cp34m', 'linux_armv7l'
+                )
+            }
+        ]
+        import_queue.send_pyobj(['SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])
+        assert import_queue.recv_pyobj() == ['SENT']
+        import_queue.send_pyobj(['DONE'])
+        thread.join(10)
+        assert thread.exception is None
+        assert thread.exitcode == 0
+        assert not os.path.exists(mock_wheel)
