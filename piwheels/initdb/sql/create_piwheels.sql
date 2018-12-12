@@ -15,7 +15,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.13');
+INSERT INTO configuration(id, version) VALUES (1, '0.14');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
@@ -169,7 +169,30 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
-GRANT SELECT,INSERT,UPDATE ON files TO {username};
+GRANT SELECT,INSERT ON files TO {username};
+
+-- dependencies
+-------------------------------------------------------------------------------
+-- The "dependencies" table tracks the libraries that need to be installed for
+-- a given wheel to operate correctly. The primary key is a combination of the
+-- "filename" that the dependency applies to, and the name of the "dependency"
+-- that needs installing. One additional column records the "tool" that the
+-- dependency needs installing with (at the moment this will always be apt but
+-- it's possible in future that pip will be included here).
+-------------------------------------------------------------------------------
+
+CREATE TABLE dependencies (
+    filename            VARCHAR(255) NOT NULL,
+    dependency          VARCHAR(255) NOT NULL,
+    tool                VARCHAR(20) DEFAULT 'apt' NOT NULL,
+
+    CONSTRAINT dependencies_pk PRIMARY KEY (filename, dependency)
+    CONSTRAINT dependencies_files_fk FOREIGN KEY (filename)
+        REFERENCES files(filename) ON DELETE CASCADE,
+    CONSTRAINT dependencies_tool_ck CHECK (tool IN ('apt', 'pip'))
+);
+
+GRANT SELECT,INSERT ON dependencies TO {username};
 
 -- downloads
 -------------------------------------------------------------------------------
