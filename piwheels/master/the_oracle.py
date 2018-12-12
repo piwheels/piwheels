@@ -99,6 +99,7 @@ class TheOracle(Task):
                 'DELBUILD': self.do_delbuild,
                 'PKGFILES': self.do_pkgfiles,
                 'VERFILES': self.do_verfiles,
+                'GETSKIP': self.do_getskip,
                 'PKGEXISTS': self.do_pkgexists,
                 'GETABIS': self.do_getabis,
                 'GETPYPI': self.do_getpypi,
@@ -131,33 +132,33 @@ class TheOracle(Task):
         """
         return self.db.get_all_package_versions()
 
-    def do_newpkg(self, package):
+    def do_newpkg(self, package, skip):
         """
         Handler for "NEWPKG" message, sent by :class:`DbClient` to register a
         new package.
         """
         return self.db.add_new_package(package)
 
-    def do_newver(self, package, version):
+    def do_newver(self, package, version, released, skip):
         """
         Handler for "NEWVER" message, sent by :class:`DbClient` to register a
         new (package, version) tuple.
         """
-        return self.db.add_new_package_version(package, version)
+        return self.db.add_new_package_version(package, version, released, skip)
 
-    def do_skippkg(self, package):
+    def do_skippkg(self, package, reason):
         """
         Handler for "SKIPPKG" message, sent by :class:`DbClient` to skip
         building all versions of a package.
         """
-        self.db.skip_package(package)
+        self.db.skip_package(package, reason)
 
-    def do_skipver(self, package, version):
+    def do_skipver(self, package, version, reason):
         """
         Handler for "SKIPVER" message, sent by :class:`DbClient` to skip
         building a specific version of a package.
         """
-        self.db.skip_package_version(package, version)
+        self.db.skip_package_version(package, version, reason)
 
     def do_logdownload(self, download):
         """
@@ -196,6 +197,13 @@ class TheOracle(Task):
         """
         files = self.db.get_version_files(package, version)
         return set(files)
+
+    def do_getskip(self, package, version):
+        """
+        Handler for "GETSKIP" message, send by :class:`DbClient` to request
+        the reason for skipping builds of *version* of *package*.
+        """
+        return self.db.get_version_skip(package, version)
 
     def do_pkgexists(self, package, version):
         """
@@ -280,29 +288,29 @@ class DbClient:
         # Repackage [p, v] as (p, v)
         return self._execute(['ALLVERS'])
 
-    def add_new_package(self, package):
+    def add_new_package(self, package, skip=None):
         """
         See :meth:`.db.Database.add_new_package`.
         """
-        return self._execute(['NEWPKG', package])
+        return self._execute(['NEWPKG', package, skip])
 
-    def add_new_package_version(self, package, version):
+    def add_new_package_version(self, package, version, released=None, skip=None):
         """
         See :meth:`.db.Database.add_new_package_version`.
         """
-        return self._execute(['NEWVER', package, version])
+        return self._execute(['NEWVER', package, version, released, skip])
 
-    def skip_package(self, package):
+    def skip_package(self, package, reason):
         """
         See :meth:`.db.Database.skip_package`.
         """
-        self._execute(['SKIPPKG', package])
+        self._execute(['SKIPPKG', package, reason])
 
-    def skip_package_version(self, package, version):
+    def skip_package_version(self, package, version, reason):
         """
         See :meth:`.db.Database.skip_package_version`.
         """
-        self._execute(['SKIPVER', package, version])
+        self._execute(['SKIPVER', package, version, reason])
 
     def test_package_version(self, package, version):
         """
@@ -340,6 +348,12 @@ class DbClient:
         See :meth:`.db.Database.get_version_files`.
         """
         return self._execute(['VERFILES', package, version])
+
+    def get_version_skip(self, package, version):
+        """
+        See :meth:`.db.Database.get_version_skip`.
+        """
+        return self._execute(['GETSKIP', package, version])
 
     def get_build_abis(self):
         """

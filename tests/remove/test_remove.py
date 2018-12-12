@@ -97,11 +97,21 @@ def test_abort(caplog):
     assert find_message(caplog.records, 'User aborted removal')
 
 
-def test_removal(mock_context, import_queue_name, import_queue):
+def test_remove(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
-            assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', False]
+            assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
+            import_queue.send_pyobj(['DONE'])
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_and_skip(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
+            assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', 'legal']
             import_queue.send_pyobj(['DONE'])
             thread.join(10)
             assert thread.exitcode == 0
@@ -109,7 +119,7 @@ def test_removal(mock_context, import_queue_name, import_queue):
 
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', False]
+        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
         import_queue.send_pyobj(['ERROR', 'Package foo does not exist'])
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
@@ -118,7 +128,7 @@ def test_failure(mock_context, import_queue_name, import_queue):
 
 def test_unexpected(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', False]
+        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
         import_queue.send_pyobj(['FOO'])
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)

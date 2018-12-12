@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import sys
 from unittest import mock
 
 import pytest
@@ -37,6 +38,7 @@ from piwheels.terminal import (
     configure_logging,
     error_handler,
     yes_no_prompt,
+    ErrorHandler,
 )
 
 
@@ -82,6 +84,23 @@ def test_error_handler():
             fmt_exc.side_effect = lambda t, v, tb: [v]
             assert error_handler(ValueError, 'Foo%bar', None) == 1
             assert logging.critical.call_args == mock.call('Foo%%bar')
+
+
+def test_configure_error_handler():
+    e = ErrorHandler()
+    l = len(e)
+    assert RuntimeError not in e
+    try:
+        raise RuntimeError('Error communicating with master')
+    except RuntimeError:
+        assert e(*sys.exc_info()) == 1
+    e[RuntimeError] = (None, 2)
+    assert len(e) == l + 1
+    assert e[RuntimeError] == (None, 2)
+    try:
+        raise RuntimeError('Error communicating with master')
+    except RuntimeError:
+        assert e(*sys.exc_info()) == 2
 
 
 def test_yes_no_prompt(capsys):

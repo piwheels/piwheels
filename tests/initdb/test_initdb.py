@@ -222,3 +222,4 @@ CREATE INDEX files_size ON files(filesize);
             assert False, "Didn't find version row in configuration"
     assert find_message(caplog.records,
                         'Upgrading database to version %s' % __version__)
+    # FIXME Should test structure of result is equivalent

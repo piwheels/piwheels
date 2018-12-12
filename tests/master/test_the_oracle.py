@@ -28,7 +28,7 @@
 
 
 import pickle
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import zmq
 import pytest
@@ -109,44 +109,46 @@ def test_db_get_all_package_versions(db, with_package_version, db_client):
 def test_db_add_new_package(db, with_schema, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").first() == (0,)
-    db_client.add_new_package('foo')
+    db_client.add_new_package('foo', None)
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").first() == (1,)
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', False)
+            "SELECT package, skip FROM packages").first() == ('foo', None)
 
 
 def test_db_add_new_package_version(db, with_package, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM versions").first() == (0,)
-    db_client.add_new_package_version('foo', '0.1')
+    db_client.add_new_package_version('foo', '0.1',
+                                      datetime(2018, 7, 11, 16, 43, 8))
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM versions").first() == (1,)
         assert db.execute(
-            "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', False)
+            "SELECT package, version, released, skip "
+            "FROM versions").first() == ('foo', '0.1',
+                                         datetime(2018, 7, 11, 16, 43, 8), None)
 
 
 def test_db_skip_package(db, with_package, db_client):
     with db.begin():
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', False)
-    db_client.skip_package('foo')
+            "SELECT package, skip FROM packages").first() == ('foo', None)
+    db_client.skip_package('foo', 'manual build')
     with db.begin():
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', True)
+            "SELECT package, skip FROM packages").first() == ('foo', 'manual build')
 
 
 def test_db_skip_package_version(db, with_package_version, db_client):
     with db.begin():
         assert db.execute(
             "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', False)
-    db_client.skip_package_version('foo', '0.1')
+            "FROM versions").first() == ('foo', '0.1', None)
+    db_client.skip_package_version('foo', '0.1', 'binary only')
     with db.begin():
         assert db.execute(
             "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', True)
+            "FROM versions").first() == ('foo', '0.1', 'binary only')
 
 
 def test_test_package_version(db, with_package_version, db_client):

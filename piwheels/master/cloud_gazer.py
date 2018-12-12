@@ -70,16 +70,27 @@ class CloudGazer(PauseableTask):
         self.logger.info('querying upstream')
 
     def loop(self):
-        for package, version in self.pypi:
+        for package, version, timestamp, source in self.pypi:
             if package not in self.packages:
                 self.packages.add(package)
                 if self.db.add_new_package(package):
                     self.logger.info('added package %s', package)
                     self.index_queue.send_pyobj(['PKG', package])
             if version is not None:
-                if self.db.add_new_package_version(package, version):
-                    self.logger.info('added package %s version %s',
-                                     package, version)
+                if self.db.add_new_package_version(
+                        package, version, timestamp,
+                        skip=None if source else 'binary only'):
+                    self.logger.info(
+                        'added package %s version %s', package, version)
+                    if not source:
+                        self.logger.info(
+                            'disabled package %s version %s (binary only)',
+                            package, version)
+                elif source and self.db.get_version_skip(
+                        package, version) == 'binary only':
+                    self.db.skip_package_version(package, version, None)
+                    self.logger.info(
+                        'enabled package %s version %s', package, version)
             self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial

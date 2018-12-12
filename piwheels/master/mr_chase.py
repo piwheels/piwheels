@@ -224,15 +224,15 @@ class MrChase(PauseableTask):
         Handler for the importer's "REMOVE" message, indicating a request to
         remove a specific version of a package from the system.
         """
-        package, version, skip = state
+        package, version, reason = state
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s-%s',
                               package, version)
             return ['ERROR', 'unknown package version %s-%s' % (
                 package, version)]
         self.logger.info('removing %s %s', package, version)
-        if skip:
-            self.db.skip_package_version(package, version)
+        if reason is not None:
+            self.db.skip_package_version(package, version, reason)
         for filename in self.db.get_version_files(package, version):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)

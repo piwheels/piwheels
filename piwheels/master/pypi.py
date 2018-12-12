@@ -33,7 +33,7 @@ import socket
 import logging
 import http.client
 import xmlrpc.client
-from collections import deque
+from collections import OrderedDict
 from datetime import datetime, timedelta
 
 from .. import __version__
@@ -51,12 +51,12 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
 
 class PyPIEvents:
     """
-    When treated as an iterator, this class yields (package, version) tuples
-    indicating new packages or package versions registered on PyPI (only
-    versions with files are reported). A small attempt is made to avoid
-    duplicate reports, but we don't attempt to avoid reporting stuff already in
-    the database (it's simpler to just start from the beginning of PyPI's log
-    and work through it).
+    When treated as an iterator, this class yields (package, version,
+    timestamp, source) tuples indicating new packages or package versions
+    registered on PyPI. A small attempt is made to avoid duplicate reports, but
+    we don't attempt to avoid reporting stuff already in the database (it's
+    simpler to just start from the beginning of PyPI's log and work through
+    it).
 
     The iterator only retrieves a small batch of entries at a time as PyPI
     (very sensibly) limits the number of entries in a single query (to 50,000
@@ -73,17 +73,24 @@ class PyPIEvents:
     :param int retries:
         The number of retries the class may attempt if the HTTP connection
         fails.
+
+    :param int cache_size:
+        The size of the internal cache used to attempt to avoid duplicate
+        reports.
     """
     # pylint: disable=too-few-public-methods
+    add_file_re = re.compile(r'^add ([^ ]+) file')
+    create_pkg_re = re.compile(r'^create')
 
     def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
-                 serial=0, retries=3):
+                 serial=0, retries=3, cache_size=1000):
         self.retries = retries
         self.next_read = datetime.utcnow()
         self.serial = serial
-        # Keep a list of the last 100 (package, version) tuples so we can make
-        # a vague attempt at reducing duplicate reports
-        self.cache = deque(maxlen=100)
+        # Keep a list of the last cache_size (package, version) tuples so we
+        # can make a vague attempt at reducing duplicate reports
+        self.cache = OrderedDict()
+        self.cache_size = cache_size
         self.transport = PiWheelsTransport()
         self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc, self.transport)
 
@@ -109,19 +116,28 @@ class PyPIEvents:
         if datetime.utcnow() > self.next_read:
             events = self._get_events()
             if events:
-                # pylint: disable=unused-variable
                 for (package, version, timestamp, action, serial) in events:
-                    if re.search('^add source file', action):
-                        # If the event is adding a source file, report a new
-                        # version (we're only interested in versions with
-                        # associated source releases)
-                        if (package, version) not in self.cache:
-                            self.cache.append((package, version))
-                            yield (package, version)
-                    elif re.search('^create', action):
-                        # Notify clients of package creation by yielding a
-                        # package name with no version
-                        yield (package, None)
+                    timestamp = datetime.utcfromtimestamp(timestamp)
+                    match = self.add_file_re.search(action)
+                    if match is not None:
+                        source = match.group(1) == 'source'
+                        try:
+                            self.cache.move_to_end((package, version))
+                        except KeyError:
+                            self.cache[(package, version)] = (timestamp, source)
+                            yield (package, version, timestamp, source)
+                        else:
+                            (last_timestamp, last_source
+                                ) = self.cache[(package, version)]
+                            timestamp = min(last_timestamp, timestamp)
+                            source = last_source or source
+                            if not last_source and source:
+                                yield (package, version, timestamp, source)
+                            self.cache[(package, version)] = (timestamp, source)
+                        while len(self.cache) > self.cache_size:
+                            self.cache.popitem(last=False)
+                    elif self.create_pkg_re.search(action) is not None:
+                        yield (package, None, timestamp, None)
                     self.serial = serial
             else:
                 # If the read is empty we've reached the end of the event log

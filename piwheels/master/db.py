@@ -37,7 +37,7 @@ itself.
 """
 
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import chain
 
 from sqlalchemy import MetaData, Table, select, create_engine
@@ -122,60 +122,69 @@ class Database:
             self._conn.close()
             self._conn = None
 
-    def add_new_package(self, package):
+    def add_new_package(self, package, skip=None):
         """
-        Insert a new package record into the database. Key violations are
-        ignored as packages is effectively an append-only table.
+        Insert a new package record into the database. Returns True if the row
+        was inserted successfully, or False if a key violation occurred.
         """
         with self._conn.begin():
             try:
                 self._conn.execute(
                     self._packages.insert(),
-                    package=package
+                    package=package,
+                    skip=skip
                 )
             except IntegrityError:
                 return False
             else:
                 return True
 
-    def add_new_package_version(self, package, version):
+    def add_new_package_version(self, package, version,
+                                released=None, skip=None):
         """
-        Insert a new package version record into the database. Key violations
-        are ignored as versions is effectively an append-only table.
+        Insert a new package version record into the database. Returns True if
+        the row was inserted successfully, or False if a key violation
+        occurred.
         """
         with self._conn.begin():
             try:
+                if released is None:
+                    released = datetime.utcnow()
                 self._conn.execute(
                     self._versions.insert(),
-                    package=package, version=version
+                    package=package,
+                    version=version,
+                    released=released,
+                    skip=skip
                 )
             except IntegrityError:
                 return False
             else:
                 return True
 
-    def skip_package(self, package):
+    def skip_package(self, package, reason):
         """
-        Mark a package to prevent future builds of all versions (and all
-        future versions).
+        Mark a package with a reason to prevent future builds of all versions
+        (and all future versions).
         """
         with self._conn.begin():
             self._conn.execute(
                 self._packages.update().
                 where(self._packages.c.package == package),
-                skip=True
+                skip=reason
             )
 
-    def skip_package_version(self, package, version):
+    def skip_package_version(self, package, version, reason):
         """
-        Mark a version of a package to prevent future build attempts.
+        Mark a version of a package with a reason to prevent future build
+        attempts.
         """
         with self._conn.begin():
             self._conn.execute(
                 self._versions.update().
                 where(self._versions.c.package == package).
                 where(self._versions.c.version == version),
-                skip=True
+                skip=reason
             )
 
     def test_package_version(self, package, version):
@@ -416,6 +425,17 @@ class Database:
                     where(self._builds.c.version == version)
                 )
             }
+
+    def get_version_skip(self, package, version):
+        """
+        Returns the reason for skipping *version* of *package*
+        """
+        with self._conn.begin():
+            return self._conn.scalar(
+                select([self._versions.c.skip]).
+                where(self._versions.c.package == package).
+                where(self._versions.c.version == version)
+            )
 
     def delete_build(self, package, version):
         """

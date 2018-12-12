@@ -382,7 +382,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
 def test_normal_remove(db_queue, fs_queue, index_queue, task, import_queue,
                        build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, False])
+    import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, None])
     db_queue.expect(['PKGEXISTS', bsh.package, bsh.version])
     db_queue.send(['OK', True])
     db_queue.expect(['VERFILES', bsh.package, bsh.version])
@@ -404,10 +404,10 @@ def test_normal_remove(db_queue, fs_queue, index_queue, task, import_queue,
 def test_remove_with_skip(db_queue, fs_queue, index_queue, task, import_queue,
                           build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, True])
+    import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, 'broken version'])
     db_queue.expect(['PKGEXISTS', bsh.package, bsh.version])
     db_queue.send(['OK', True])
-    db_queue.expect(['SKIPVER', bsh.package, bsh.version])
+    db_queue.expect(['SKIPVER', bsh.package, bsh.version, 'broken version'])
     db_queue.send(['OK', None])
     db_queue.expect(['VERFILES', bsh.package, bsh.version])
     files = [f.filename for f in bsh.files.values()]
