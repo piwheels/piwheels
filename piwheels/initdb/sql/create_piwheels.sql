@@ -15,7 +15,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.12');
+INSERT INTO configuration(id, version) VALUES (1, '0.13');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
@@ -323,7 +323,14 @@ CREATE VIEW statistics AS
         SELECT
             COUNT(*) AS builds_count,
             COUNT(*) FILTER (WHERE status) AS builds_count_success,
-            COALESCE(SUM(duration), INTERVAL '0') AS builds_time
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
         FROM
             builds
     ),
