@@ -423,6 +423,36 @@ extra-index-url=https://www.piwheels.org/simple</pre>
           </div>
 
           <div class="accordion-item" data-accordion-item>
+            <a href="#" class="accordion-title">I'm a package maintainer. How can I
+              remove a wheel from piwheels?</a>
+
+            <div class="accordion-content" data-tab-content>
+              <p><a
+                href="https://github.com/bennuttall/piwheels/issues/new">Open
+                an issue on github</a> and we'll endeavour to remove it as soon
+              as we can. In cases where it's not obvious that the requester
+              owns the package to be removed, we may require further evidence
+              that you are authorized to request its removal (e.g. posting as
+              the GitHub owner of the project, or some similar standard of
+              proof on the relevant hosting service).</p>
+
+              <p>Note that we only currently track package additions from PyPI
+              upstream; we <i>don't</i> honour package removals from PyPI hence
+              removals must be requested manually. Frankly, package removal
+              is an area fraught with difficulty. Even if we remove a given
+              package from piwheels there's no guarantee some downstream mirror
+              hasn't already got it, or another mirror of PyPI. The best
+              solution to ensure your users avoid a given release is to cut a
+              <i>new</i> release of your package with a higher version
+              number.</p>
+
+              <p>If you do request removal, please let us know if you'd like
+              piwheels to avoid building future releases of your package. We
+              can arrange this trivially via a skip flag in our database.</p>
+            </div>
+          </div>
+
+          <div class="accordion-item" data-accordion-item>
             <a href="#" class="accordion-title">I installed a package from piwheels
             and I get an <code>ImportError</code> with the message
             <code>cannot open shared object file</code>.</a>
