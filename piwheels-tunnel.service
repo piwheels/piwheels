@@ -4,7 +4,13 @@ After=local-fs.target network.target
 
 [Service]
 User=piwheels
-ExecStart=/usr/bin/ssh -NT -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -L /tmp/piw-status:/tmp/piw-status -L /tmp/piw-control:/tmp/piw-control piwmon@ssh.piwheels.hostedpi.com
+ExecStart=/usr/bin/ssh -NT \
+  -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes \
+  -o StreamLocalBindUnlink=yes \
+  -L /tmp/piw-status:/tmp/piw-status \
+  -L /tmp/piw-control:/tmp/piw-control \
+  piwmon@ssh.piwheels.hostedpi.com
 RestartSec=5
 Restart=on-failure
 
