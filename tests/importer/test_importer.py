@@ -171,7 +171,7 @@ def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -189,7 +189,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -209,7 +209,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -230,7 +230,7 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -253,7 +253,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
             'IMPORT', 'cp34m', 'foo', '0.1', True, 0, 'FOO\n', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -275,7 +275,7 @@ def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, im
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]
@@ -297,7 +297,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
             'Imported manually via piw-import', {
                 'foo-0.1-cp34-cp34m-linux_armv7l.whl': (
                     filesize, filehash, 'foo', '0.1',
-                    'cp34', 'cp34m', 'linux_armv7l'
+                    'cp34', 'cp34m', 'linux_armv7l', set()
                 )
             }
         ]

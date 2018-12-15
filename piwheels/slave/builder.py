@@ -37,14 +37,21 @@ Defines the classes which use ``pip`` to build wheels.
 """
 
 import os
+import re
 import zipfile
 import hashlib
 import resource
 import tempfile
+import warnings
 import email.parser
 from time import time
 from pathlib import Path
-from subprocess import Popen, DEVNULL, TimeoutExpired
+from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
+
+try:
+    import apt
+except ImportError:
+    apt = None
 
 from ..systemd import get_systemd
 
@@ -57,12 +64,15 @@ class PiWheelsPackage:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
     """
+    apt_cache = None
+
     def __init__(self, path):
         self.systemd = get_systemd()
         self.wheel_file = path
         self._filesize = path.stat().st_size
         self._filehash = None
         self._metadata = None
+        self._dependencies = None
         self._parts = list(path.stem.split('-'))
         # Fix up retired tags (noabi->none)
         if self._parts[-2] == 'noabi':
@@ -160,7 +170,7 @@ class PiWheelsPackage:
         Return the contents of the :file:`METADATA` file inside the wheel.
         """
         if self._metadata is None:
-            with zipfile.ZipFile(self.wheel_file.open('rb')) as wheel:
+            with zipfile.ZipFile(self.open()) as wheel:
                 filename = (
                     '{self.package_tag}-'
                     '{self.package_version_tag}.dist-info/'
@@ -170,6 +180,59 @@ class PiWheelsPackage:
                     parser = email.parser.BytesParser()
                     self._metadata = parser.parse(metadata)
         return self._metadata
+
+    def _calculate_apt_dependencies(self):
+        if PiWheelsPackage.apt_cache is None:
+            PiWheelsPackage.apt_cache = apt.cache.Cache()
+        cache = PiWheelsPackage.apt_cache
+        find_re = re.compile(r'^(.*) => (/.*) \(0x\x+)$')
+        deps = set()
+        libs = set()
+        with tempfile.TemporaryDirectory() as tempdir:
+            with zipfile.ZipFile(self.open()) as wheel:
+                for info in wheel.infolist():
+                    if info.filename.endswith('.so') or '.so.' in info.filename:
+                        with wheel.open(info) as testfile:
+                            is_elf = testfile.read(4) == b'\x7FELF'
+                        if is_elf:
+                            libs.add(wheel.extract(info, path=tempdir))
+            for lib in libs:
+                p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
+                try:
+                    out, errs = p.communicate(timeout=10)
+                except TimeoutExpired:
+                    p.kill()
+                    out, errs = p.communicate()
+                finally:
+                    for line in out.splitlines():
+                        match = find_re.search(line)
+                        if match is not None:
+                            try:
+                                lib_path = Path(match.group(1)).resolve()
+                            except FileNotFoundError:
+                                continue
+                            providers = {
+                                pkg for pkg in cache
+                                if pkg.installed is not None
+                                and lib_path in pkg.installed_files}
+                            assert len(providers) <= 1
+                            try:
+                                deps.add(('apt', providers.pop()))
+                            except KeyError:
+                                deps.add(('', lib_path))
+        return deps
+
+    @property
+    def dependencies(self):
+        if self._dependencies is None:
+            if apt is None:
+                warnings.warn(
+                    Warning('Cannot import apt module; unable to calculate '
+                            'apt dependencies'))
+                self._dependencies = set()
+            else:
+                self._dependencies = self._calculate_apt_dependencies()
+        return self._dependencies
 
     def transfer(self, queue, slave_id):
         """
@@ -238,6 +301,7 @@ class PiWheelsBuilder:
                     pkg.py_version_tag,
                     pkg.abi_tag,
                     pkg.platform_tag,
+                    pkg.dependencies,
                 )
                 for pkg in self.files
             }
