@@ -1,0 +1,10 @@
+<div metal:use-macro="template">
+  <div tal:omit-tag="1" metal:fill-slot="title">${package}</div>
+  <div metal:fill-slot="content">
+    <div class="row">
+      <div class="small-12 medium-8 columns">
+        <h2>${package}</h2>
+      </div>
+    </div>
+  </div>
+</div>

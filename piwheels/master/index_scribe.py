@@ -41,6 +41,7 @@ from pathlib import Path
 
 import zmq
 from pkg_resources import resource_string, resource_stream, resource_listdir
+from chameleon import PageTemplate
 
 from .html import tag
 from .tasks import PauseableTask
@@ -77,6 +78,12 @@ class IndexScribe(PauseableTask):
         self.db = DbClient(config)
         self.package_cache = None
         self.statistics = {}
+        self.template = PageTemplate(
+            resource_string(__name__, 'static/template.html'))
+        self.homepage_template = PageTemplate(
+            resource_string(__name__, 'static/index.html'))
+        self.project_template = PageTemplate(
+            resource_string(__name__, 'static/project.html'))
 
     def close(self):
         self.db.close()
@@ -106,14 +113,25 @@ class IndexScribe(PauseableTask):
             (self.output_path / 'simple').mkdir()
         except FileExistsError:
             pass
+        try:
+            (self.output_path / 'project').mkdir()
+        except FileExistsError:
+            pass
         for filename in resource_listdir(__name__, 'static'):
-            if filename == 'index.html':
-                # Skip template
+            skip_templates = ['index.html', 'project.html']
+            if filename in skip_templates:
                 continue
-            with (self.output_path / filename).open('wb') as f:
-                source = resource_stream(__name__, 'static/' + filename)
-                f.write(source.read())
-                source.close()
+            elif filename.endswith('.html'):
+                with (self.output_path / filename).open('wb') as f:
+                    source = resource_string(__name__, 'static/' + filename)
+                    page = PageTemplate(source)
+                    pagename = filename.replace('.html', '')
+                    f.write(page(template=self.template, page=pagename).encode('utf-8'))
+            else:
+                with (self.output_path / filename).open('wb') as f:
+                    source = resource_stream(__name__, 'static/' + filename)
+                    f.write(source.read())
+                    source.close()
 
     def handle_index(self, queue):
         """
@@ -136,6 +154,7 @@ class IndexScribe(PauseableTask):
                 self.write_root_index()
             self.write_package_index(package,
                                      self.db.get_package_files(package))
+            self.write_project_page(package)
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
@@ -158,7 +177,8 @@ class IndexScribe(PauseableTask):
                                          encoding='utf-8',
                                          delete=False) as index:
             try:
-                index.file.write(self.homepage_template.format(**statistics))
+                index.file.write(self.homepage_template(
+                    template=self.template, page='home', **statistics))
             except BaseException:
                 index.delete = True
                 raise
@@ -204,7 +224,7 @@ class IndexScribe(PauseableTask):
                 index.file.write(
                     tag.html(
                         tag.head(
-                            tag.title('Pi Wheels Simple Index'),
+                            tag.title('piwheels Simple Index'),
                             tag.meta(name='api-version', value=2),
                         ),
                         tag.body(
@@ -251,7 +271,7 @@ class IndexScribe(PauseableTask):
                             ((tag.a(
                                 f.filename,
                                 href='{f.filename}#sha256={f.filehash}'.format(f=f),
-                                rel='internal'), tag.br())
+                                rel='internal'), tag.br(), '\n')
                              for f in files)
                         )
                     )
@@ -288,6 +308,37 @@ class IndexScribe(PauseableTask):
                 except FileExistsError:
                     pass
 
+    def write_project_page(self, package):
+        """
+        (Re)writes the project page of the specified package.
+
+        :param str package:
+            The name of the package to write the index for
+        """
+        self.logger.info('writing project page for %s', package)
+        pkg_dir = self.output_path / 'project' / package
+        mkdir_override_symlink(pkg_dir)
+        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
+                                         encoding='utf-8',
+                                         delete=False) as index:
+            try:
+                package_info = {
+                    'page': 'project',
+                    'package': package,
+                }
+                index.file.write(self.project_template(
+                    template=self.template, **package_info))
+            except BaseException:
+                index.delete = True
+                raise
+            else:
+                os.fchmod(index.file.fileno(), 0o644)
+                os.replace(index.name, str(pkg_dir / 'index.html'))
+                try:
+                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+                    canon_dir.symlink_to(pkg_dir.name)
+                except FileExistsError:
+                    pass
 
 # From pip/_vendor/packaging/utils.py
 # pylint: disable=invalid-name

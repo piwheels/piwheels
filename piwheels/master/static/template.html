@@ -1,0 +1,66 @@
+<foo tal:omit-tag="1" metal:define-macro="template">
+<!doctype html>
+<html class="no-js" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>piwheels - <span metal:define-slot="title"/></title>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/css/foundation-float.min.css">
+    <link rel="stylesheet" href="/styles.css" type="text/css"/>
+  </head>
+  <body>
+    <header>
+      <div class="row">
+        <div class="title-bar" data-responsive-toggle="nav-menu" data-hide-for="medium">
+          <button class="menu-icon" type="button" data-toggle="nav-menu"></button>
+          <div class="title-bar-title">Menu</div>
+        </div>
+
+        <div class="top-bar" id="nav-menu">
+          <div class="top-bar-left">
+            <ul class="menu">
+              <li class="menu-text">
+                <a href="index.html">
+                  <div class="logo"></div>
+                  <h1>piwheels</h1>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="top-bar-right">
+            <ul class="menu">
+              <li><a class="button ${'secondary' if page == 'packages' else ''}" href="/packages.html">Package List</a></li>
+              <li><a class="button ${'secondary' if page == 'faq' else ''}" href="/faq.html">FAQ</a></li>
+              <li><a class="button" href="https://blog.piwheels.org/">Blog</a></li>
+              <li><a class="button" href="https://github.com/bennuttall/piwheels">GitHub</a></li>
+              <li><a class="button" href="https://piwheels.readthedocs.io/">Documentation</a></li>
+              <li><a class="button" href="https://twitter.com/piwheels">Twitter</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div metal:define-slot="content" />
+
+    <footer>
+      <div class="row">
+        <div class="small-12 columns">
+          <p>piwheels is a community project by <a
+            href="https://twitter.com/ben_nuttall">Ben Nuttall</a> and <a
+            href="https://twitter.com/waveform80">Dave Jones</a>. Hosting is kindly donated by
+          <a href="https://www.mythic-beasts.com/">Mythic Beasts</a>. Project <a
+           href="https://github.com/bennuttall/piwheels">source code</a> is available from GitHub.</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="//code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/what-input/4.2.0/what-input.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/js/foundation.min.js"></script>
+    <script>$(document).foundation();</script>
+    <div metal:define-slot="scripts" />
+  </body>
+</html>
+</foo>
