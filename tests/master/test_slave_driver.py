@@ -435,7 +435,7 @@ def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
     slave_queue.send_pyobj([
-        'BUILT', True, 5, 'Woohoo!', {file_state.filename: file_state[1:8]}
+        'BUILT', True, 5, 'Woohoo!', {file_state.filename: file_state[1:9]}
     ])
     db_queue.expect([
         'LOGBUILD', BuildState(
@@ -484,7 +484,7 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:8]}
+        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
     ])
     db_queue.expect(['LOGBUILD', bs])
     db_queue.send(['OK', 1])
@@ -517,7 +517,7 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:8]}
+        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
     ])
     db_queue.expect(['LOGBUILD', bs])
     db_queue.send(['OK', 1])
@@ -553,7 +553,7 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
         'BUILT', bs.status, bs.duration, bs.output, {
-            f.filename: f[1:8] for f in bs.files.values()
+            f.filename: f[1:9] for f in bs.files.values()
         }
     ])
     db_queue.expect(['LOGBUILD', bs])

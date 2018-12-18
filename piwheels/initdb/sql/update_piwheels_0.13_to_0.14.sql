@@ -1,5 +1,9 @@
 UPDATE configuration SET version = '0.14';
 
+REVOKE UPDATE ON files FROM {username};
+GRANT DELETE ON files TO {username};
+ALTER TABLE downloads DROP CONSTRAINT downloads_filename_fk;
+
 CREATE TABLE dependencies (
     filename            VARCHAR(255) NOT NULL,
     tool                VARCHAR(10) DEFAULT 'apt' NOT NULL,

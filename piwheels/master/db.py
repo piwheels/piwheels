@@ -103,6 +103,8 @@ class Database:
                 self._builds = Table('builds', self._meta, autoload=True)
                 self._output = Table('output', self._meta, autoload=True)
                 self._files = Table('files', self._meta, autoload=True)
+                self._dependencies = Table(
+                    'dependencies', self._meta, autoload=True)
                 self._downloads = Table('downloads', self._meta, autoload=True)
                 self._build_abis = Table(
                     'build_abis', self._meta, autoload=True)
@@ -254,34 +256,28 @@ class Database:
         and various tags
         """
         with self._conn.begin():
-            try:
-                with self._conn.begin_nested():
-                    self._conn.execute(
-                        self._files.insert(),
-
-                        filename=file.filename,
-                        build_id=build.build_id,
-                        filesize=file.filesize,
-                        filehash=file.filehash,
-                        package_tag=file.package_tag,
-                        package_version_tag=file.package_version_tag,
-                        py_version_tag=file.py_version_tag,
-                        abi_tag=file.abi_tag,
-                        platform_tag=file.platform_tag
-                    )
-            except IntegrityError:
+            self._conn.execute(
+                self._files.delete().
+                where(self._files.c.filename == file.filename)
+            )
+            self._conn.execute(
+                self._files.insert(),
+                filename=file.filename,
+                build_id=build.build_id,
+                filesize=file.filesize,
+                filehash=file.filehash,
+                package_tag=file.package_tag,
+                package_version_tag=file.package_version_tag,
+                py_version_tag=file.py_version_tag,
+                abi_tag=file.abi_tag,
+                platform_tag=file.platform_tag
+            )
+            for tool, dependency in file.dependencies:
                 self._conn.execute(
-                    self._files.update().
-                    where(self._files.c.filename == file.filename),
-
-                    build_id=build.build_id,
-                    filesize=file.filesize,
-                    filehash=file.filehash,
-                    package_tag=file.package_tag,
-                    package_version_tag=file.package_version_tag,
-                    py_version_tag=file.py_version_tag,
-                    abi_tag=file.abi_tag,
-                    platform_tag=file.platform_tag
+                    self._dependencies.insert(),
+                    filename=file.filename,
+                    tool=tool,
+                    dependency=dependency
                 )
 
     def get_build_abis(self):
@@ -395,6 +391,16 @@ class Database:
             return self._conn.execute(
                 self._files.select().
                 where(self._files.c.build_id == build_id)
+            )
+
+    def get_dependencies(self, filename):
+        """
+        Return all the dependencies for the specified file.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                self._dependencies.select().
+                where(self._dependencies.c.filename == filename)
             )
 
     def get_package_files(self, package):

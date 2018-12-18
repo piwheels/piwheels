@@ -185,7 +185,7 @@ class PiWheelsPackage:
         if PiWheelsPackage.apt_cache is None:
             PiWheelsPackage.apt_cache = apt.cache.Cache()
         cache = PiWheelsPackage.apt_cache
-        find_re = re.compile(r'^(.*) => (/.*) \(0x\x+)$')
+        find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
         deps = set()
         libs = set()
         with tempfile.TemporaryDirectory() as tempdir:
@@ -195,7 +195,7 @@ class PiWheelsPackage:
                         with wheel.open(info) as testfile:
                             is_elf = testfile.read(4) == b'\x7FELF'
                         if is_elf:
-                            libs.add(wheel.extract(info, path=tempdir))
+                            libs.add(wheel.extract(info, path=tempdir.name))
             for lib in libs:
                 p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
                 try:
@@ -208,11 +208,11 @@ class PiWheelsPackage:
                         match = find_re.search(line)
                         if match is not None:
                             try:
-                                lib_path = Path(match.group(1)).resolve()
+                                lib_path = str(Path(match.group(2)).resolve())
                             except FileNotFoundError:
                                 continue
                             providers = {
-                                pkg for pkg in cache
+                                pkg.name for pkg in cache
                                 if pkg.installed is not None
                                 and lib_path in pkg.installed_files}
                             assert len(providers) <= 1

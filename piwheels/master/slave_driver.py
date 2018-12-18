@@ -415,4 +415,4 @@ def build_armv6l_hack(build):
                 build.files[arm6_name] = FileState(
                     arm6_name, file.filesize, file.filehash, file.package_tag,
                     file.package_version_tag, file.py_version_tag,
-                    file.abi_tag, 'linux_armv6l', True)
+                    file.abi_tag, 'linux_armv6l', file.dependencies, True)

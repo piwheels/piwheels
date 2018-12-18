@@ -89,7 +89,7 @@ def test_normal_import(db_queue, fs_queue, index_queue, task, import_queue,
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -131,7 +131,7 @@ def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
         bsh.duration, bsh.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bsh.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -182,7 +182,7 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -223,7 +223,7 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -254,7 +254,7 @@ def test_import_bad_abi(db_queue, task, import_queue, build_state):
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -273,7 +273,7 @@ def test_import_failed_build(task, import_queue, build_state):
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     task.poll()
@@ -305,7 +305,7 @@ def test_import_unknown_pkg(db_queue, task, import_queue, build_state):
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -330,7 +330,7 @@ def test_import_failed_log(db_queue, task, import_queue, build_state,
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])
@@ -356,7 +356,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
         bs.output, {
             fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
                           fs.package_version_tag, fs.py_version_tag,
-                          fs.abi_tag, fs.platform_tag)
+                          fs.abi_tag, fs.platform_tag, fs.dependencies)
             for fs in bs.files.values()
         }])
     db_queue.expect(['GETABIS'])

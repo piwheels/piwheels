@@ -75,7 +75,8 @@ def file_state(request, file_content):
     h.update(file_content)
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
-        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l')
+        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
+        {('apt', 'libc6')})
 
 
 @pytest.fixture()
@@ -85,7 +86,7 @@ def file_state_hacked(request, file_content):
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv6l.whl', len(file_content),
         h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l',
-        transferred=True)
+        {('apt', 'libc6')}, transferred=True)
 
 
 @pytest.fixture()
@@ -94,7 +95,7 @@ def file_state_universal(request, file_content):
     h.update(file_content)
     return FileState(
         'foo-0.1-py2.py3-none-any.whl', len(file_content),
-        h.hexdigest().lower(), 'foo', '0.1', 'py2.py3', 'none', 'any')
+        h.hexdigest().lower(), 'foo', '0.1', 'py2.py3', 'none', 'any', set())
 
 
 @pytest.fixture()
@@ -231,6 +232,11 @@ def with_files(request, db, with_build, file_state, file_state_hacked):
             file_state.filesize, file_state.filehash, file_state.package_tag,
             file_state.package_version_tag, file_state.py_version_tag,
             file_state.abi_tag, file_state.platform_tag)
+        for tool, dependency in file_state.dependencies:
+            db.execute(
+                "INSERT INTO dependencies "
+                "VALUES (%s, %s, %s)",
+                file_state.filename, tool, dependency)
         db.execute(
             "INSERT INTO files "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
@@ -240,6 +246,11 @@ def with_files(request, db, with_build, file_state, file_state_hacked):
             file_state_hacked.package_version_tag,
             file_state_hacked.py_version_tag, file_state_hacked.abi_tag,
             file_state_hacked.platform_tag)
+        for tool, dependency in file_state_hacked.dependencies:
+            db.execute(
+                "INSERT INTO dependencies "
+                "VALUES (%s, %s, %s)",
+                file_state_hacked.filename, tool, dependency)
     return [file_state, file_state_hacked]
 
 

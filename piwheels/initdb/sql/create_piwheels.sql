@@ -169,7 +169,7 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
-GRANT SELECT,INSERT,UPDATE ON files TO {username};
+GRANT SELECT,INSERT,DELETE ON files TO {username};
 
 -- dependencies
 -------------------------------------------------------------------------------
@@ -210,10 +210,7 @@ CREATE TABLE downloads (
     os_name             VARCHAR(100) DEFAULT NULL,
     os_version          VARCHAR(100) DEFAULT NULL,
     py_name             VARCHAR(100) DEFAULT NULL,
-    py_version          VARCHAR(100) DEFAULT NULL,
-
-    CONSTRAINT downloads_filename_fk FOREIGN KEY (filename)
-        REFERENCES files (filename) ON DELETE CASCADE
+    py_version          VARCHAR(100) DEFAULT NULL
 );
 
 CREATE INDEX downloads_files ON downloads(filename);

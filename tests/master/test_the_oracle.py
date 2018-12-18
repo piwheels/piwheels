@@ -108,21 +108,21 @@ def test_db_get_all_package_versions(db, with_package_version, db_client):
 
 def test_db_add_new_package(db, with_schema, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").first() == (0,)
+        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 0
     db_client.add_new_package('foo', None)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").first() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 1
         assert db.execute(
             "SELECT package, skip FROM packages").first() == ('foo', None)
 
 
 def test_db_add_new_package_version(db, with_package, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM versions").first() == (0,)
+        assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 0
     db_client.add_new_package_version('foo', '0.1',
                                       datetime(2018, 7, 11, 16, 43, 8))
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM versions").first() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 1
         assert db.execute(
             "SELECT package, version, released, skip "
             "FROM versions").first() == ('foo', '0.1',
@@ -158,30 +158,30 @@ def test_test_package_version(db, with_package_version, db_client):
 
 def test_db_log_download(db, with_files, download_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM downloads").first() == (0,)
+        assert db.execute("SELECT COUNT(*) FROM downloads").scalar() == 0
     db_client.log_download(download_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM downloads").first() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM downloads").scalar() == 1
         assert db.execute(
-            "SELECT filename FROM downloads").first() == (download_state.filename,)
+            "SELECT filename FROM downloads").scalar() == download_state.filename
 
 
 def test_db_log_build(db, with_package_version, build_state_hacked, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").first() == (0,)
+        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 0
     db_client.log_build(build_state_hacked)
     assert build_state_hacked.build_id is not None
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").first() == (1,)
-        assert db.execute("SELECT COUNT(*) FROM files").first() == (2,)
+        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
+        assert db.execute("SELECT COUNT(*) FROM files").scalar() == 2
 
 
 def test_db_delete_build(db, with_build, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").first() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
     db_client.delete_build('foo', '0.1')
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").first() == (0,)
+        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 0
 
 
 def test_get_package_files(db, with_files, build_state_hacked, db_client):
