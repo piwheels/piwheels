@@ -67,7 +67,7 @@ scripts are defined:
 # pylint: disable=bad-whitespace
 
 __project__      = 'piwheels'
-__version__      = '0.12'
+__version__      = '0.13'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@raspberrypi.org'

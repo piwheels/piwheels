@@ -15,20 +15,19 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.12');
+INSERT INTO configuration(id, version) VALUES (1, '0.13');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
 -------------------------------------------------------------------------------
 -- The "packages" table defines all available packages on PyPI, derived from
--- the list_packages() API. The "skip" column defaults to "false" but can be
--- set to "true" to prevent all versions (and any future versions) of a package
--- from being built.
+-- the list_packages() API. The "skip" column defaults to NULL but can be set
+-- to a non-NULL string indicating why a package should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,
-    skip    BOOLEAN DEFAULT false NOT NULL,
+    skip    VARCHAR(100) DEFAULT NULL,
 
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
@@ -39,14 +38,15 @@ GRANT SELECT,INSERT,UPDATE ON packages TO {username};
 -------------------------------------------------------------------------------
 -- The "versions" table defines all versions of packages *with files* on PyPI;
 -- note that versions without released files (a common occurrence) are
--- excluded. Like the "packages" table, the "skip" column can be set to "true"
--- to prevent particular versions from being built.
+-- excluded. Like the "packages" table, the "skip" column can be set to a
+-- non-NULL string indicating why a version should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE versions (
-    package VARCHAR(200) NOT NULL,
-    version VARCHAR(200) NOT NULL,
-    skip    BOOLEAN DEFAULT false NOT NULL,
+    package  VARCHAR(200) NOT NULL,
+    version  VARCHAR(200) NOT NULL,
+    released TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
+    skip     VARCHAR(100) DEFAULT NULL,
 
     CONSTRAINT versions_pk PRIMARY KEY (package, version),
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
@@ -54,7 +54,7 @@ CREATE TABLE versions (
 );
 
 CREATE INDEX versions_package ON versions(package);
-CREATE INDEX versions_skip ON versions(skip, package);
+CREATE INDEX versions_skip ON versions((skip IS NULL), package);
 GRANT SELECT,INSERT,UPDATE ON versions TO {username};
 
 -- build_abis
@@ -214,7 +214,7 @@ CREATE TABLE searches (
     py_name             VARCHAR(100) DEFAULT NULL,
     py_version          VARCHAR(100) DEFAULT NULL,
 
-    CONSTRAINT packages_package_fk FOREIGN KEY (package)
+    CONSTRAINT searches_package_fk FOREIGN KEY (package)
         REFERENCES packages (package) ON DELETE CASCADE
 );
 
@@ -257,8 +257,8 @@ FROM (
         JOIN versions AS v ON v.package = p.package
         CROSS JOIN build_abis AS b
     WHERE
-        NOT v.skip
-        AND NOT p.skip
+        v.skip IS NULL
+        AND p.skip IS NULL
 
     EXCEPT ALL
 
@@ -308,12 +308,12 @@ CREATE VIEW statistics AS
     WITH package_stats AS (
         SELECT COUNT(*) AS packages_count
         FROM packages
-        WHERE NOT skip
+        WHERE skip IS NULL
     ),
     version_stats AS (
         SELECT COUNT(*) AS versions_count
         FROM packages p JOIN versions v ON p.package = v.package
-        WHERE NOT p.skip AND NOT v.skip
+        WHERE p.skip IS NULL AND v.skip IS NULL
     ),
     build_vers AS (
         SELECT COUNT(*) AS versions_tried
@@ -323,7 +323,14 @@ CREATE VIEW statistics AS
         SELECT
             COUNT(*) AS builds_count,
             COUNT(*) FILTER (WHERE status) AS builds_count_success,
-            COALESCE(SUM(duration), INTERVAL '0') AS builds_time
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
         FROM
             builds
     ),

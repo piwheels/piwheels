@@ -31,9 +31,14 @@ from unittest import mock
 
 import zmq
 import pytest
+from datetime import datetime
 
 from piwheels import const
 from piwheels.master.cloud_gazer import CloudGazer
+
+
+def dt(s):
+    return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 
 
 @pytest.fixture()
@@ -87,7 +92,7 @@ def test_cloud_gazer_new_pkg(pypi_proxy, db_queue, task):
         ('foo', '0.2', 1531327388, 'create', 0),
         ('foo', '0.2', 1531327388, 'add source file foo-0.2.tar.gz', 1),
     ])
-    db_queue.expect(['NEWVER', 'foo', '0.2'])
+    db_queue.expect(['NEWVER', 'foo', '0.2', dt('2018-07-11 16:43:08'), None])
     db_queue.send(['OK', True])
     db_queue.expect(['SETPYPI', 1])
     db_queue.send(['OK', None])
@@ -106,11 +111,11 @@ def test_cloud_gazer_existing_ver(pypi_proxy, db_queue, task):
     db_queue.check()
     pypi_proxy.send_pyobj([
         ('foo', '0.2', 1531327388, 'create', 0),
-        ('foo', '0.2', 1531327388, 'add source file foo-0.2.tar.gz', 1),
+        ('foo', '0.2', 1531327388, 'add cp34 file foo-0.2-cp34-cp34m-manylinux1_x86_64.whl', 1),
     ])
-    db_queue.expect(['NEWPKG', 'foo'])
+    db_queue.expect(['NEWPKG', 'foo', None])
     db_queue.send(['OK', False])
-    db_queue.expect(['NEWVER', 'foo', '0.2'])
+    db_queue.expect(['NEWVER', 'foo', '0.2', dt('2018-07-11 16:43:08'), 'binary only'])
     db_queue.send(['OK', False])
     db_queue.expect(['SETPYPI', 1])
     db_queue.send(['OK', None])
@@ -134,9 +139,9 @@ def test_cloud_gazer_new_ver(pypi_proxy, db_queue, index_queue, task):
         ('bar', '1.0', 1531327392, 'add cp34 file bar-0.1-cp34-cp34-manylinux1_x86_64.whl', 5),
         ('bar', '1.0', 1531327392, 'add cp35 file bar-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
     ])
-    db_queue.expect(['NEWPKG', 'bar'])
+    db_queue.expect(['NEWPKG', 'bar', None])
     db_queue.send(['OK', True])
-    db_queue.expect(['NEWVER', 'bar', '1.0'])
+    db_queue.expect(['NEWVER', 'bar', '1.0', dt('2018-07-11 16:43:09'), None])
     db_queue.send(['OK', True])
     db_queue.expect(['SETPYPI', 6])
     db_queue.send(['OK', None])
@@ -145,3 +150,32 @@ def test_cloud_gazer_new_ver(pypi_proxy, db_queue, index_queue, task):
     assert task.packages == {"foo", "bar"}
     assert task.serial == 6
     assert index_queue.recv_pyobj() == ['PKG', 'bar']
+
+
+def test_cloud_gazer_enable_ver(pypi_proxy, db_queue, task):
+    db_queue.expect(['ALLPKGS'])
+    db_queue.send(['OK', {"foo"}])
+    db_queue.expect(['GETPYPI'])
+    db_queue.send(['OK', 3])
+    task.once()
+    db_queue.check()
+    pypi_proxy.send_pyobj([
+        ('foo', '1.0', 1531327389, 'add py2.py3 file foo-1.0-py2.py3-none-any.whl', 3),
+        ('foo', '1.0', 1531327389, 'add cp34 file foo-0.1-cp34-cp34-manylinux1_x86_64.whl', 4),
+        ('foo', '1.0', 1531327392, 'add source file foo-1.0-py2.py3-none-any.whl', 5),
+        ('foo', '1.0', 1531327392, 'add cp35 file foo-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
+    ])
+    db_queue.expect(['NEWVER', 'foo', '1.0', dt('2018-07-11 16:43:09'), 'binary only'])
+    db_queue.send(['OK', True])
+    db_queue.expect(['NEWVER', 'foo', '1.0', dt('2018-07-11 16:43:09'), None])
+    db_queue.send(['OK', False])
+    db_queue.expect(['GETSKIP', 'foo', '1.0'])
+    db_queue.send(['OK', 'binary only'])
+    db_queue.expect(['SKIPVER', 'foo', '1.0', None])
+    db_queue.send(['OK', None])
+    db_queue.expect(['SETPYPI', 6])
+    db_queue.send(['OK', None])
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 6

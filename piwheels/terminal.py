@@ -166,6 +166,12 @@ class ErrorHandler:
     def exc_value(exc_type, exc_value, exc_tb):
         return exc_value
 
+    def __len__(self):
+        return len(self._config)
+
+    def __contains__(self, key):
+        return key in self._config
+
     def __getitem__(self, key):
         return self._config[key]
 
