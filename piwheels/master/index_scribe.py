@@ -118,7 +118,7 @@ class IndexScribe(PauseableTask):
         except FileExistsError:
             pass
         for filename in resource_listdir(__name__, 'static'):
-            skip_templates = ['index.html', 'project.html']
+            skip_templates = ['index.html', 'project.html', 'stats.html']
             if filename in skip_templates:
                 continue
             elif filename.endswith('.html'):

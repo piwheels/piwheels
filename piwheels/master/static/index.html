@@ -8,7 +8,7 @@
         <p>piwheels is a <a href="https://python.org">Python</a> package
         repository providing Arm platform <a href="http://pythonwheels.com/">wheels</a>
         (pre-compiled binary Python packages) specifically for the
-        <a href="https://raspberrypi.org">Raspberry Pi</a>, making pip installations
+        <a href="https://www.raspberrypi.org/">Raspberry Pi</a>, making pip installations
         much faster. Packages are natively compiled on Raspberry Pi 3 hardware using the
         <a href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts Pi cloud</a>.</p>
       </div>
@@ -39,16 +39,16 @@
         should now search piwheels for built distributions of packages and use
         them in preference to building from source. You can test this out by
         creating a virtual environment and attempting to install <a
-        href="https://numpy.org/">numpy</a> which usually involves a fairly
+        href="https://www.scipy.org/">scipy</a> which usually involves a fairly
         lengthy compilation:</p>
 
         <pre>$ sudo apt install virtualenv python3-virtualenv -y
-    $ virtualenv -p /usr/bin/python3 testpip
-    $ source testpip/bin/activate
-    (testpip) $ pip install numpy
-    ...
-    (testpip) $ deactivate
-    $ rm -fr testpip/</pre>
+$ virtualenv -p /usr/bin/python3 testpip
+$ source testpip/bin/activate
+(testpip) $ pip install scipy
+...
+(testpip) $ deactivate
+$ rm -rf testpip/</pre>
       </div>
     </div>
 
