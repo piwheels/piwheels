@@ -275,19 +275,6 @@ class DbClient:
         else:
             raise IOError(result)
 
-    def get_all_packages(self):
-        """
-        See :meth:`.db.Database.get_all_packages`.
-        """
-        return self._execute(['ALLPKGS'])
-
-    def get_all_package_versions(self):
-        """
-        See :meth:`.db.Database.get_all_package_versions`.
-        """
-        # Repackage [p, v] as (p, v)
-        return self._execute(['ALLVERS'])
-
     def add_new_package(self, package, skip=None):
         """
         See :meth:`.db.Database.add_new_package`.
@@ -331,11 +318,52 @@ class DbClient:
         build_id = self._execute(['LOGBUILD', build])
         build.logged(build_id)
 
-    def delete_build(self, package, version):
+    def get_build_abis(self):
         """
-        See :meth:`.db.Database.delete_build`.
+        See :meth:`.db.Database.get_build_abis`.
         """
-        self._execute(['DELBUILD', package, version])
+        return self._execute(['GETABIS'])
+
+    def get_pypi_serial(self):
+        """
+        See :meth:`.db.Database.get_pypi_serial`.
+        """
+        return self._execute(['GETPYPI'])
+
+    def set_pypi_serial(self, serial):
+        """
+        See :meth:`.db.Database.set_pypi_serial`.
+        """
+        self._execute(['SETPYPI', serial])
+
+    def get_all_packages(self):
+        """
+        See :meth:`.db.Database.get_all_packages`.
+        """
+        return self._execute(['ALLPKGS'])
+
+    def get_all_package_versions(self):
+        """
+        See :meth:`.db.Database.get_all_package_versions`.
+        """
+        # Repackage [p, v] as (p, v)
+        return self._execute(['ALLVERS'])
+
+    def get_statistics(self):
+        """
+        See :meth:`.db.Database.get_statistics`.
+        """
+        rec = self._execute(['GETSTATS'])
+        if DbClient.stats_type is None:
+            DbClient.stats_type = namedtuple('Statistics',
+                                             tuple(k for k, v in rec))
+        return DbClient.stats_type(**{k: v for k, v in rec})
+
+    def get_downloads_recent(self):
+        """
+        See :meth:`.db.Database.get_downloads_recent`.
+        """
+        return self._execute(['GETDL'])
 
     def get_package_files(self, package):
         """
@@ -355,36 +383,8 @@ class DbClient:
         """
         return self._execute(['GETSKIP', package, version])
 
-    def get_build_abis(self):
+    def delete_build(self, package, version):
         """
-        See :meth:`.db.Database.get_build_abis`.
+        See :meth:`.db.Database.delete_build`.
         """
-        return self._execute(['GETABIS'])
-
-    def get_pypi_serial(self):
-        """
-        See :meth:`.db.Database.get_pypi_serial`.
-        """
-        return self._execute(['GETPYPI'])
-
-    def set_pypi_serial(self, serial):
-        """
-        See :meth:`.db.Database.set_pypi_serial`.
-        """
-        self._execute(['SETPYPI', serial])
-
-    def get_statistics(self):
-        """
-        See :meth:`.db.Database.get_statistics`.
-        """
-        rec = self._execute(['GETSTATS'])
-        if DbClient.stats_type is None:
-            DbClient.stats_type = namedtuple('Statistics',
-                                             tuple(k for k, v in rec))
-        return DbClient.stats_type(**{k: v for k, v in rec})
-
-    def get_downloads_recent(self):
-        """
-        See :meth:`.db.Database.get_downloads_recent`.
-        """
-        return self._execute(['GETDL'])
+        self._execute(['DELBUILD', package, version])

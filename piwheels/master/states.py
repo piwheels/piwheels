@@ -292,49 +292,6 @@ class BuildState:
             )
         )
 
-    @classmethod
-    def from_db(cls, db, build_id):
-        """
-        Construct an instance by querying the database for the specified
-        *build_id*.
-
-        :param Database db:
-            A :class:`~.db.Database` instance to query.
-
-        :param int build_id:
-            The integer identifier of an attempted build.
-        """
-        for brec in db.get_build(build_id):
-            return BuildState(
-                brec.built_by,
-                brec.package,
-                brec.version,
-                brec.abi_tag,
-                brec.status,
-                brec.duration.total_seconds(),
-                brec.output,
-                {
-                    frec.filename: FileState(
-                        frec.filename,
-                        frec.filesize,
-                        frec.filehash,
-                        frec.package_tag,
-                        frec.package_version_tag,
-                        frec.py_version_tag,
-                        frec.abi_tag,
-                        frec.platform_tag,
-                        {
-                            (drec.tool, drec.dependency)
-                            for drec in db.get_dependencies(frec.filename)
-                        },
-                        transferred=True
-                    )
-                    for frec in db.get_files(build_id)
-                },
-                build_id
-            )
-        raise ValueError('Unknown build id %d' % build_id)
-
     @property
     def slave_id(self):
         return self._slave_id
