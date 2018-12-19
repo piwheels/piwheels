@@ -165,7 +165,7 @@ class TheOracle(Task):
         Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
         register a new download.
         """
-        return self.db.log_download(download)
+        self.db.log_download(download)
 
     def do_logbuild(self, build):
         """
@@ -309,7 +309,7 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        return self._execute(['LOGDOWNLOAD', download])
+        self._execute(['LOGDOWNLOAD', download])
 
     def log_build(self, build):
         """

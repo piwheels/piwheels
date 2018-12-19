@@ -118,7 +118,7 @@ def test_test_package_version(db_intf, db, with_package):
 def test_log_download(db_intf, db, with_files, download_state):
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (0,)
-    assert db_intf.log_download(download_state)
+    db_intf.log_download(download_state)
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (1,)
     assert db.execute(
