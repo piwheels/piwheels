@@ -1,4 +1,4 @@
-<div metal:use-macro="template">
+<div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">FAQ</div>
   <div metal:fill-slot="content">
     <div class="row">
@@ -21,12 +21,12 @@
   extra-index-url=https://www.piwheels.org/simple</pre>
 
               <h3>Raspbian Jessie:</h3>
-              <p>Upgrade pip to >=9.0.1 using <code>sudo pip3 install pip
+              <p>Upgrade pip to &gt;=9.0.1 using <code>sudo pip3 install pip
                 --upgrade</code> and follow the Raspbian Stretch
               instructions.</p>
 
               <h3>Other operating systems:</h3>
-              <p>Install pip >=9.0.1, and follow the Raspbian Stretch
+              <p>Install pip &gt;=9.0.1, and follow the Raspbian Stretch
               instructions.</p>
             </div>
           </div>
@@ -36,7 +36,7 @@
               piwheels within a virtual environment?</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>If you had to upgrade pip to >=9.0.1 you may also need to
+              <p>If you had to upgrade pip to &gt;=9.0.1 you may also need to
               upgrade pip within the virtual environment with <code>pip install
               pip --upgrade</code>. If not (e.g. in Raspbian Stretch), pip
               should honour your <code>/etc/pip.conf</code> file and use

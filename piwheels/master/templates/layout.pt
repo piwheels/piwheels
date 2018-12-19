@@ -1,5 +1,4 @@
-<foo tal:omit-tag="1" metal:define-macro="template">
-<!doctype html>
+<foo tal:omit-tag="1" metal:define-macro="layout"><!doctype html>
 <html class="no-js" lang="en" dir="ltr">
   <head>
     <meta charset="utf-8">

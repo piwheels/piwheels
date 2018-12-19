@@ -41,8 +41,8 @@ import tempfile
 from pathlib import Path
 
 import zmq
-from pkg_resources import resource_string, resource_stream, resource_listdir
-from chameleon import PageTemplate
+import pkg_resources
+from chameleon import PageTemplateLoader
 
 from .html import tag
 from .tasks import PauseableTask
@@ -51,6 +51,20 @@ from .states import mkdir_override_symlink
 
 
 class AtomicReplaceFile:
+    """
+    A context manager for atomically replacing a target file.
+
+    Uses :class:`tempfile.NamedTemporaryFile` to construct a temporary file in
+    the same directory as the target file. The associated file-like object is
+    returned as the context manager's variable; you should write the content
+    you wish to this object.
+
+    When the context manager exits, if no exception has occurred, the temporary
+    file will be renamed over the target file atomically (and sensible
+    permissions will be set, i.e. 0644 & umask).  If an exception occurs during
+    the context manager's block, the temporary file will be deleted leaving the
+    original target file unaffected and the exception will be re-raised.
+    """
     def __init__(self, filename, encoding=None):
         self._path = Path(filename)
         self._tempfile = tempfile.NamedTemporaryFile(
@@ -98,16 +112,16 @@ class IndexScribe(PauseableTask):
         self.db = DbClient(config)
         self.package_cache = None
         self.statistics = {}
-        self.template = PageTemplate(
-            resource_string(__name__, 'templates/layout.pt'))
-        self.homepage_template = PageTemplate(
-            resource_string(__name__, 'templates/index.pt'))
-        self.project_template = PageTemplate(
-            resource_string(__name__, 'templates/project.pt'))
+        self.templates = PageTemplateLoader(
+            search_path=[
+                pkg_resources.resource_filename(__name__, 'templates')
+            ],
+            default_extension='.pt')
 
     def close(self):
         self.db.close()
         super().close()
+        pkg_resources.cleanup_resources()
 
     def once(self):
         self.setup_output_path()
@@ -135,21 +149,21 @@ class IndexScribe(PauseableTask):
                 path.mkdir()
             except FileExistsError:
                 pass
-        for filename in resource_listdir(__name__, 'static'):
+        for filename in pkg_resources.resource_listdir(__name__, 'static'):
+            source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(str(self.output_path / filename)) as f:
-                source = resource_stream(__name__, 'static/' + filename)
                 shutil.copyfileobj(source, f)
-        skip_templates = {'index.pt', 'project.pt', 'stats.pt', 'layout.pt'}
-        for filename in resource_listdir(__name__, 'templates'):
-            if filename not in skip_templates:
+        startup_templates = {'faq.pt', 'packages.pt'}
+        for filename in pkg_resources.resource_listdir(__name__, 'templates'):
+            if filename in startup_templates:
+                source = self.templates[filename](
+                        layout=self.templates['layout']['layout'],
+                        page=filename.replace('.html', '')
+                    )
                 with AtomicReplaceFile(
                         str((self.output_path / filename).with_suffix('.html')),
                         encoding='utf-8') as f:
-                    page = PageTemplate(
-                        resource_string(__name__, 'templates/' + filename))
-                    f.write(page(
-                        template=self.template,
-                        page=filename.replace('.html', '')))
+                    f.write(source)
 
     def handle_index(self, queue):
         """
@@ -193,8 +207,8 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing homepage')
         with AtomicReplaceFile(str(self.output_path / 'index.html'),
                                encoding='utf-8') as index:
-            index.file.write(self.homepage_template(
-                template=self.template,
+            index.file.write(self.templates['index'](
+                layout=self.templates['layout']['layout'],
                 page='home',
                 **statistics))
 
@@ -304,8 +318,8 @@ class IndexScribe(PauseableTask):
         mkdir_override_symlink(pkg_dir)
         with AtomicReplaceFile(str(pkg_dir / 'index.html'),
                                encoding='utf-8') as index:
-            index.file.write(self.project_template(
-                template=self.template,
+            index.file.write(self.templates['project'](
+                layout=self.templates['layout']['layout'],
                 package=package,
                 page='project'))
         try:
