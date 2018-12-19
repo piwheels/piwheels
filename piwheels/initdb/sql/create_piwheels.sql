@@ -242,6 +242,33 @@ CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
 GRANT SELECT,INSERT ON searches TO {username};
 
+-- versions_detail
+-------------------------------------------------------------------------------
+-- The "versions_detail" view augments the columns from "versions" with
+-- additional details required for building the top page on packages' project
+-- pages. This includes the number of successful and failed builds for each
+-- version and whether or not versions are marked for skipping, whether at the
+-- package or version level.
+-------------------------------------------------------------------------------
+
+CREATE VIEW versions_detail AS
+SELECT
+    v.package,
+    v.version,
+    (p.skip IS NOT NULL) or (v.skip IS NOT NULL) AS skipped,
+    COUNT(*) FILTER (WHERE b.status) AS builds_succeeded,
+    COUNT(*) FILTER (WHERE NOT b.status) AS builds_failed
+FROM
+    packages p
+    JOIN versions v ON p.package = v.package
+    JOIN builds b ON v.package = b.package AND v.version = b.version
+GROUP BY
+    v.package,
+    v.version,
+    skipped;
+
+GRANT SELECT ON versions_detail TO {username};
+
 -- builds_pending
 -------------------------------------------------------------------------------
 -- The "builds_pending" view is the basis of the build queue in the master. The
@@ -249,7 +276,7 @@ GRANT SELECT,INSERT ON searches TO {username};
 -- to be built. The "builds" and "files" tables define what's been attempted,
 -- what's succeeded, and for which ABIs. This view combines all this
 -- information and returns "package", "version", "abi" tuples defining what
--- requires building next.
+-- requires building next and on which ABI.
 --
 -- There are some things to note about the behaviour of the queue. When no
 -- builds of a package have been attempted, only the "lowest" ABI is attempted.
@@ -258,8 +285,10 @@ GRANT SELECT,INSERT ON searches TO {username};
 -- dependencies in later Python versions are incompatible with earlier
 -- versions. Once a package has a file with the "none" ABI, no further builds
 -- are attempted (naturally). Only if the initial build generated something
--- with a specific ABI (something other than "none") are builds for the other
--- ABIs listed in "build_abis" attempted.
+-- with a specific ABI (something other than "none"), or if the initial build
+-- fails are builds for the other ABIs listed in "build_abis" attempted. Each
+-- ABI is attempted in order until a build succeeds in producing an ABI "none"
+-- package, or we run out of active ABIs.
 -------------------------------------------------------------------------------
 
 CREATE VIEW builds_pending AS
