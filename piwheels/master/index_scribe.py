@@ -77,12 +77,13 @@ class AtomicReplaceFile:
         return self._withfile
 
     def __exit__(self, exc_type, exc_value, exc_tb):
+        os.fchmod(self._withfile.file.fileno(), 0o644)
+        result = self._tempfile.__exit__(exc_type, exc_value, exc_tb)
         if exc_type is None:
-            os.fchmod(self._withfile.file.fileno(), 0o644)
-            os.replace(self._withfile.name, str(self._path))
+            os.rename(self._withfile.name, str(self._path))
         else:
-            self._withfile.delete = True
-        return self._tempfile.__exit__(exc_type, exc_value, exc_tb)
+            os.unlink(self._withfile.name)
+        return result
 
 
 class IndexScribe(PauseableTask):

@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import os
 import json
 from unittest import mock
 from pathlib import Path
@@ -39,7 +40,7 @@ import zmq
 import pytest
 from pkg_resources import resource_listdir
 
-from piwheels.master.index_scribe import IndexScribe
+from piwheels.master.index_scribe import IndexScribe, AtomicReplaceFile
 
 
 Row = namedtuple('Row', ('filename', 'filehash'))
@@ -93,6 +94,24 @@ def contains_elem(path, tag, attrs):
             if parser.found:
                 return True
     return False
+
+
+def test_atomic_write_success(tmpdir):
+    with AtomicReplaceFile(str(tmpdir.join('foo'))) as f:
+        f.write(b'\x00' * 4096)
+        temp_name = f.name
+    assert os.path.exists(str(tmpdir.join('foo')))
+    assert not os.path.exists(temp_name)
+
+
+def test_atomic_write_failed(tmpdir):
+    with pytest.raises(IOError):
+        with AtomicReplaceFile(str(tmpdir.join('foo'))) as f:
+            f.write(b'\x00' * 4096)
+            temp_name = f.name
+            raise IOError("Something went wrong")
+        assert not os.path.exists(str(tmpdir.join('foo')))
+        assert not os.path.exists(temp_name)
 
 
 def test_scribe_first_start(db_queue, task, master_config):
