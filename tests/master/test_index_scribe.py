@@ -105,7 +105,7 @@ def test_scribe_first_start(db_queue, task, master_config):
     assert contains_elem(root / 'simple' / 'index.html', 'a', [('href', 'foo')])
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
     for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
-        if filename != 'index.html':
+        if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
 
@@ -114,6 +114,7 @@ def test_scribe_second_start(db_queue, task, master_config):
     # exist
     root = Path(master_config.output_path)
     (root / 'index.html').touch()
+    (root / 'stats.html').touch()
     (root / 'simple').mkdir()
     (root / 'simple' / 'index.html').touch()
     db_queue.expect(['ALLPKGS'])
@@ -122,7 +123,7 @@ def test_scribe_second_start(db_queue, task, master_config):
     db_queue.check()
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
     for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
-        if filename != 'index.html':
+        if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
 
@@ -170,7 +171,7 @@ def test_write_homepage_fails(db_queue, task, index_queue, master_config):
     db_queue.send(['OK', {'foo'}])
     index_queue.send_pyobj(['HOME', {}])
     task.once()
-    with pytest.raises(KeyError):
+    with pytest.raises(NameError):
         task.poll()
     db_queue.check()
     root = Path(master_config.output_path)

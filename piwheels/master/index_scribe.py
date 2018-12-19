@@ -36,6 +36,7 @@ Defines the :class:`IndexScribe` task; see class for more details.
 import re
 import os
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -47,6 +48,27 @@ from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .states import mkdir_override_symlink
+
+
+class AtomicReplaceFile:
+    def __init__(self, filename, encoding=None):
+        self._path = Path(filename)
+        self._tempfile = tempfile.NamedTemporaryFile(
+            mode='wb' if encoding is None else 'w',
+            dir=str(self._path.parent), encoding=encoding, delete=False)
+        self._withfile = None
+
+    def __enter__(self):
+        self._withfile = self._tempfile.__enter__()
+        return self._withfile
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        if exc_type is None:
+            os.fchmod(self._withfile.file.fileno(), 0o644)
+            os.replace(self._withfile.name, str(self._path))
+        else:
+            self._withfile.delete = True
+        return self._tempfile.__exit__(exc_type, exc_value, exc_tb)
 
 
 class IndexScribe(PauseableTask):
@@ -68,8 +90,6 @@ class IndexScribe(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        self.homepage_template = resource_string(
-            __name__, 'static/index.html').decode('utf-8')
         self.output_path = Path(config.output_path)
         index_queue = self.ctx.socket(zmq.PULL)
         index_queue.hwm = 100
@@ -79,11 +99,11 @@ class IndexScribe(PauseableTask):
         self.package_cache = None
         self.statistics = {}
         self.template = PageTemplate(
-            resource_string(__name__, 'static/template.html'))
+            resource_string(__name__, 'templates/layout.pt'))
         self.homepage_template = PageTemplate(
-            resource_string(__name__, 'static/index.html'))
+            resource_string(__name__, 'templates/index.pt'))
         self.project_template = PageTemplate(
-            resource_string(__name__, 'static/project.html'))
+            resource_string(__name__, 'templates/project.pt'))
 
     def close(self):
         self.db.close()
@@ -105,33 +125,31 @@ class IndexScribe(PauseableTask):
         path (and to make sure the output path exists as a directory).
         """
         self.logger.info('setting up output path')
-        try:
-            self.output_path.mkdir()
-        except FileExistsError:
-            pass
-        try:
-            (self.output_path / 'simple').mkdir()
-        except FileExistsError:
-            pass
-        try:
-            (self.output_path / 'project').mkdir()
-        except FileExistsError:
-            pass
+        required_paths = (
+            self.output_path,
+            self.output_path / 'simple',
+            self.output_path / 'project',
+        )
+        for path in required_paths:
+            try:
+                path.mkdir()
+            except FileExistsError:
+                pass
         for filename in resource_listdir(__name__, 'static'):
-            skip_templates = ['index.html', 'project.html', 'stats.html']
-            if filename in skip_templates:
-                continue
-            elif filename.endswith('.html'):
-                with (self.output_path / filename).open('wb') as f:
-                    source = resource_string(__name__, 'static/' + filename)
-                    page = PageTemplate(source)
-                    pagename = filename.replace('.html', '')
-                    f.write(page(template=self.template, page=pagename).encode('utf-8'))
-            else:
-                with (self.output_path / filename).open('wb') as f:
-                    source = resource_stream(__name__, 'static/' + filename)
-                    f.write(source.read())
-                    source.close()
+            with AtomicReplaceFile(str(self.output_path / filename)) as f:
+                source = resource_stream(__name__, 'static/' + filename)
+                shutil.copyfileobj(source, f)
+        skip_templates = {'index.pt', 'project.pt', 'stats.pt', 'layout.pt'}
+        for filename in resource_listdir(__name__, 'templates'):
+            if filename not in skip_templates:
+                with AtomicReplaceFile(
+                        str((self.output_path / filename).with_suffix('.html')),
+                        encoding='utf-8') as f:
+                    page = PageTemplate(
+                        resource_string(__name__, 'templates/' + filename))
+                    f.write(page(
+                        template=self.template,
+                        page=filename.replace('.html', '')))
 
     def handle_index(self, queue):
         """
@@ -152,8 +170,8 @@ class IndexScribe(PauseableTask):
             if package not in self.package_cache:
                 self.package_cache.add(package)
                 self.write_root_index()
-            self.write_package_index(package,
-                                     self.db.get_package_files(package))
+            self.write_package_index(
+                package, self.db.get_package_files(package))
             self.write_project_page(package)
         elif msg == 'HOME':
             status_info = args[0]
@@ -173,18 +191,12 @@ class IndexScribe(PauseableTask):
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
-                                         encoding='utf-8',
-                                         delete=False) as index:
-            try:
-                index.file.write(self.homepage_template(
-                    template=self.template, page='home', **statistics))
-            except BaseException:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o664)
-                os.replace(index.name, str(self.output_path / 'index.html'))
+        with AtomicReplaceFile(str(self.output_path / 'index.html'),
+                               encoding='utf-8') as index:
+            index.file.write(self.homepage_template(
+                template=self.template,
+                page='home',
+                **statistics))
 
     def write_search_index(self, search_index):
         """
@@ -195,18 +207,10 @@ class IndexScribe(PauseableTask):
             :class:`BigBrother`.
         """
         self.logger.info('writing search index')
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(self.output_path),
-                                         encoding='utf-8',
-                                         delete=False) as index:
-            try:
-                json.dump(search_index, index,
-                          check_circular=False, separators=(',', ':'))
-            except BaseException:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o664)
-                os.replace(index.name, str(self.output_path / 'packages.json'))
+        with AtomicReplaceFile(str(self.output_path / 'packages.json'),
+                               encoding='utf-8') as index:
+            json.dump(search_index, index,
+                      check_circular=False, separators=(',', ':'))
 
     def write_root_index(self):
         """
@@ -215,31 +219,21 @@ class IndexScribe(PauseableTask):
         in the task's cache.
         """
         self.logger.info('writing package index')
-        temp_dir = self.output_path / 'simple'
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(temp_dir),
-                                         encoding='utf-8',
-                                         delete=False) as index:
-            try:
-                index.file.write('<!DOCTYPE html>\n')
-                index.file.write(
-                    tag.html(
-                        tag.head(
-                            tag.title('piwheels Simple Index'),
-                            tag.meta(name='api-version', value=2),
-                        ),
-                        tag.body(
-                            (tag.a(package, href=package), tag.br())
-                            for package in self.package_cache
-                        )
+        with AtomicReplaceFile(str(self.output_path / 'simple' / 'index.html'),
+                               encoding='utf-8') as index:
+            index.file.write('<!DOCTYPE html>\n')
+            index.file.write(
+                tag.html(
+                    tag.head(
+                        tag.title('piwheels Simple Index'),
+                        tag.meta(name='api-version', value=2),
+                    ),
+                    tag.body(
+                        (tag.a(package, href=package), tag.br())
+                        for package in self.package_cache
                     )
                 )
-            except BaseException:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o644)
-                os.replace(index.name,
-                           str(self.output_path / 'simple' / 'index.html'))
+            )
 
     def write_package_index(self, package, files):
         """
@@ -256,57 +250,47 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
-                                         encoding='utf-8',
-                                         delete=False) as index:
-            try:
-                index.file.write('<!DOCTYPE html>\n')
-                index.file.write(
-                    tag.html(
-                        tag.head(
-                            tag.title('Links for {}'.format(package))
-                        ),
-                        tag.body(
-                            tag.h1('Links for {}'.format(package)),
-                            ((tag.a(
-                                f.filename,
-                                href='{f.filename}#sha256={f.filehash}'.format(f=f),
-                                rel='internal'), tag.br(), '\n')
-                             for f in files)
-                        )
+        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
+                               encoding='utf-8') as index:
+            index.file.write('<!DOCTYPE html>\n')
+            index.file.write(
+                tag.html(
+                    tag.head(
+                        tag.title('Links for ', package)
+                    ),
+                    tag.body(
+                        tag.h1('Links for ', package),
+                        ((tag.a(
+                            f.filename,
+                            href='{f.filename}#sha256={f.filehash}'.format(f=f),
+                            rel='internal'), tag.br(), '\n')
+                         for f in files)
                     )
                 )
-            except BaseException:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o644)
-                os.replace(index.name, str(pkg_dir / 'index.html'))
-                try:
-                    # Workaround for #20: after constructing the index for a
-                    # package attempt to symlink the "canonicalized" package
-                    # name to the actual package directory. The reasons for
-                    # doing things this way are rather complex...
-                    #
-                    # The older package name must exist for the benefit of
-                    # older versions of pip. If the symlink already exists *or
-                    # is a directory* we ignore it. Yes, it's possible to have
-                    # two packages which both have the same canonicalized name,
-                    # and for each to have different contents. I don't quite
-                    # know how PyPI handle this but their XML and JSON APIs
-                    # already include such situations (in a small number of
-                    # cases). This setup is designed to create canonicalized
-                    # links where possible but not to clobber "real" packages
-                    # if they exist.
-                    #
-                    # What about new packages that want to take the place of a
-                    # canonicalized symlink? We (and TransferState.commit)
-                    # handle that by removing the symlink and making a
-                    # directory in its place.
-                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
-                    canon_dir.symlink_to(pkg_dir.name)
-                except FileExistsError:
-                    pass
+            )
+        try:
+            # Workaround for #20: after constructing the index for a package
+            # attempt to symlink the "canonicalized" package name to the actual
+            # package directory. The reasons for doing things this way are
+            # rather complex...
+            #
+            # The older package name must exist for the benefit of older
+            # versions of pip. If the symlink already exists *or is a
+            # directory* we ignore it. Yes, it's possible to have two packages
+            # which both have the same canonicalized name, and for each to have
+            # different contents. I don't quite know how PyPI handle this but
+            # their XML and JSON APIs already include such situations (in a
+            # small number of cases). This setup is designed to create
+            # canonicalized links where possible but not to clobber "real"
+            # packages if they exist.
+            #
+            # What about new packages that want to take the place of a
+            # canonicalized symlink? We (and TransferState.commit) handle that
+            # by removing the symlink and making a directory in its place.
+            canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+            canon_dir.symlink_to(pkg_dir.name)
+        except FileExistsError:
+            pass
 
     def write_project_page(self, package):
         """
@@ -318,27 +302,19 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
-        with tempfile.NamedTemporaryFile(mode='w', dir=str(pkg_dir),
-                                         encoding='utf-8',
-                                         delete=False) as index:
-            try:
-                package_info = {
-                    'page': 'project',
-                    'package': package,
-                }
-                index.file.write(self.project_template(
-                    template=self.template, **package_info))
-            except BaseException:
-                index.delete = True
-                raise
-            else:
-                os.fchmod(index.file.fileno(), 0o644)
-                os.replace(index.name, str(pkg_dir / 'index.html'))
-                try:
-                    canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
-                    canon_dir.symlink_to(pkg_dir.name)
-                except FileExistsError:
-                    pass
+        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
+                               encoding='utf-8') as index:
+            index.file.write(self.project_template(
+                template=self.template,
+                package=package,
+                page='project'))
+        try:
+            # See write_package_index for explanation...
+            canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+            canon_dir.symlink_to(pkg_dir.name)
+        except FileExistsError:
+            pass
+
 
 # From pip/_vendor/packaging/utils.py
 # pylint: disable=invalid-name
