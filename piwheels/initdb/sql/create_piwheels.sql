@@ -16,7 +16,7 @@ CREATE TABLE configuration (
 );
 
 INSERT INTO configuration(id, version) VALUES (1, '0.14');
-GRANT SELECT,UPDATE ON configuration TO {username};
+GRANT SELECT ON configuration TO {username};
 
 -- packages
 -------------------------------------------------------------------------------
@@ -32,7 +32,7 @@ CREATE TABLE packages (
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
 
-GRANT SELECT,INSERT,UPDATE ON packages TO {username};
+GRANT SELECT ON packages TO {username};
 
 -- versions
 -------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ CREATE TABLE versions (
 
 CREATE INDEX versions_package ON versions(package);
 CREATE INDEX versions_skip ON versions((skip IS NULL), package);
-GRANT SELECT,INSERT,UPDATE ON versions TO {username};
+GRANT SELECT ON versions TO {username};
 
 -- build_abis
 -------------------------------------------------------------------------------
@@ -114,8 +114,7 @@ CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
-GRANT SELECT,INSERT,DELETE ON builds TO {username};
-GRANT USAGE ON builds_build_id_seq TO {username};
+GRANT SELECT ON builds TO {username};
 
 -- output
 -------------------------------------------------------------------------------
@@ -135,7 +134,7 @@ CREATE TABLE output (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT SELECT,INSERT ON output TO {username};
+GRANT SELECT ON output TO {username};
 
 -- files
 -------------------------------------------------------------------------------
@@ -169,7 +168,7 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
-GRANT SELECT,INSERT,DELETE ON files TO {username};
+GRANT SELECT ON files TO {username};
 
 -- dependencies
 -------------------------------------------------------------------------------
@@ -192,7 +191,7 @@ CREATE TABLE dependencies (
     CONSTRAINT dependencies_tool_ck CHECK (tool IN ('apt', 'pip', ''))
 );
 
-GRANT SELECT,INSERT ON dependencies TO {username};
+GRANT SELECT ON dependencies TO {username};
 
 -- downloads
 -------------------------------------------------------------------------------
@@ -215,7 +214,7 @@ CREATE TABLE downloads (
 
 CREATE INDEX downloads_files ON downloads(filename);
 CREATE INDEX downloads_accessed_at ON downloads(accessed_at DESC);
-GRANT SELECT,INSERT ON downloads TO {username};
+GRANT SELECT ON downloads TO {username};
 
 -- searches
 -------------------------------------------------------------------------------
@@ -240,7 +239,7 @@ CREATE TABLE searches (
 
 CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
-GRANT SELECT,INSERT ON searches TO {username};
+GRANT SELECT ON searches TO {username};
 
 -- versions_detail
 -------------------------------------------------------------------------------
@@ -461,5 +460,280 @@ WHERE
 GROUP BY p.package;
 
 GRANT SELECT ON downloads_recent TO {username};
+
+-- set_pypi_serial(new_serial)
+-------------------------------------------------------------------------------
+-- Called to update the last PyPI serial number seen in the "configuration"
+-- table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION set_pypi_serial(new_serial INTEGER)
+    RETURNS VOID
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    BEGIN
+        IF (SELECT pypi_serial FROM configuration) > new_serial THEN
+            RAISE EXCEPTION integrity_constraint_violation;
+        END IF;
+        UPDATE configuration SET pypi_serial = new_serial WHERE id = 1;
+    END;
+$sql$;
+
+REVOKE ALL ON FUNCTION set_pypi_serial(INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_pypi_serial(INTEGER) TO {username};
+
+-- add_new_package(package, skip=NULL)
+-------------------------------------------------------------------------------
+-- Called to insert a new row in the "packages" table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = NULL)
+    RETURNS BOOLEAN
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    INSERT INTO packages (package, skip)
+        VALUES (package, skip);
+    RETURN true;
+EXCEPTION
+    WHEN unique_violation THEN RETURN false;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT) TO {username};
+
+-- add_new_package_version(package, version, released=NULL, skip=NULL)
+-------------------------------------------------------------------------------
+-- Called to insert a new row in the "versions" table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION add_new_package_version(
+    package TEXT,
+    version TEXT,
+    released TIMESTAMP = NULL,
+    skip TEXT = NULL
+)
+    RETURNS BOOLEAN
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    INSERT INTO versions (package, version, released, skip)
+        VALUES (package, version, COALESCE(released, '1970-01-01 00:00:00'), skip);
+    RETURN true;
+EXCEPTION
+    WHEN unique_violation THEN RETURN false;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION add_new_package_version(
+    TEXT, TEXT, TIMESTAMP, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package_version(
+    TEXT, TEXT, TIMESTAMP, TEXT
+    ) TO {username};
+
+-- skip_package(package, reason)
+-------------------------------------------------------------------------------
+-- Sets the "skip" field on the specified row in "packages" to the given value.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION skip_package(package TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE packages SET skip = reason WHERE package = package;
+$sql$;
+
+REVOKE ALL ON FUNCTION skip_package(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package(TEXT, TEXT) TO {username};
+
+-- skip_package_version(package, version, reason)
+-------------------------------------------------------------------------------
+-- Sets the "skip" field on the specified row in "versions" to the given value.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION skip_package_version(package TEXT, version TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE versions SET skip = reason
+    WHERE package = package AND version = version;
+$sql$;
+
+REVOKE ALL ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) TO {username};
+
+-- log_download(filename, accessed_by, accessed_at, arch, distro_name,
+--              distro_version, os_name, os_version, py_name, py_version)
+-------------------------------------------------------------------------------
+-- Adds a new entry to the downloads table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION log_download(
+    filename TEXT,
+    accessed_by INET,
+    accessed_at TIMESTAMP,
+    arch TEXT = NULL,
+    distro_name TEXT = NULL,
+    distro_version TEXT = NULL,
+    os_name TEXT = NULL,
+    os_version TEXT = NULL,
+    py_name TEXT = NULL,
+    py_version TEXT = NULL
+)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    INSERT INTO downloads (
+        filename,
+        accessed_by,
+        accessed_at,
+        arch,
+        distro_name,
+        distro_version,
+        os_name,
+        os_version,
+        py_name,
+        py_version
+    )
+    VALUES (
+        filename,
+        accessed_by,
+        accessed_at,
+        arch,
+        distro_name,
+        distro_version,
+        os_name,
+        os_version,
+        py_name,
+        py_version
+    );
+$sql$;
+
+REVOKE ALL ON FUNCTION log_download(
+    TEXT, INET, TIMESTAMP,
+    TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_download(
+    TEXT, INET, TIMESTAMP,
+    TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+    ) TO {username};
+
+-- log_build
+-------------------------------------------------------------------------------
+-- Adds a new entry to the builds table, and any associated files
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION log_build(
+    package TEXT,
+    version TEXT,
+    built_by INTEGER,
+    duration INTERVAL,
+    status BOOLEAN,
+    abi_tag TEXT,
+    output TEXT,
+    build_files files ARRAY,
+    build_deps dependencies ARRAY
+)
+    RETURNS INTEGER
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+DECLARE
+    new_build_id INTEGER;
+BEGIN
+    INSERT INTO builds (
+            package,
+            version,
+            built_by,
+            duration,
+            status,
+            abi_tag
+        )
+        VALUES (
+            package,
+            version,
+            built_by,
+            duration,
+            status,
+            abi_tag
+        )
+        RETURNING build_id
+        INTO new_build_id;
+    INSERT INTO output
+        VALUES (new_build_id, output);
+    -- We delete the existing entries from files rather than using INSERT..ON
+    -- CONFLICT UPDATE because we need to delete dependencies associated with
+    -- those files too. This is considerably simpler than a multi-layered
+    -- upsert across tables.
+    DELETE FROM files f
+        USING UNNEST(build_files) AS b
+        WHERE f.filename = b.filename;
+    INSERT INTO files
+        SELECT
+            b.filename,
+            new_build_id,
+            b.filesize,
+            b.filehash,
+            b.package_tag,
+            b.package_version_tag,
+            b.py_version_tag,
+            b.abi_tag,
+            b.platform_tag
+        FROM
+            UNNEST(build_files) AS b;
+    RETURN new_build_id;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION log_build(
+    TEXT, TEXT, INTEGER, INTERVAL, BOOLEAN, TEXT, TEXT,
+    files ARRAY, dependencies ARRAY
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_build(
+    TEXT, TEXT, INTEGER, INTERVAL, BOOLEAN, TEXT, TEXT,
+    files ARRAY, dependencies ARRAY
+    ) TO {username};
+
+-- delete_build(package, version)
+-------------------------------------------------------------------------------
+-- Deletes build, output, and files information for the specified *version*
+-- of *package*.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION delete_build(package TEXT, version TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    -- Foreign keys take care of the rest
+    DELETE FROM builds WHERE package = package AND version = version;
+$sql$;
+
+REVOKE ALL ON FUNCTION delete_build(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_build(TEXT, TEXT) TO {username};
 
 COMMIT;

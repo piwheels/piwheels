@@ -155,7 +155,8 @@ def test_init(db, with_clean_db, db_super_url, caplog):
 def test_full_upgrade(db, with_clean_db, db_super_url, caplog):
     # The following is the creation script from the ancient 0.4 version; this
     # is deliberately picked so we run through all subsequent update scripts
-    # testing they all apply cleanly
+    # testing they all apply cleanly ... albeit with an empty database which
+    # won't test the harder bits
     create_04 = """
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,

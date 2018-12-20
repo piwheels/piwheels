@@ -191,36 +191,6 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
             build_state.output)
 
 
-def test_log_files(db_intf, db, with_build, build_state):
-    build_state.logged(with_build.build_id)
-    for file_state in build_state.files.values():
-        break
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
-    db_intf.log_file(build_state, file_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
-    assert db.execute(
-        "SELECT build_id, filename, filesize, filehash "
-        "FROM files").first() == (
-            build_state.build_id,
-            file_state.filename,
-            file_state.filesize,
-            file_state.filehash)
-    file_state._filesize = 123455
-    db_intf.log_file(build_state, file_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
-    assert db.execute(
-        "SELECT build_id, filename, filesize, filehash "
-        "FROM files "
-        "WHERE filename = %s", file_state.filename).first() == (
-            build_state.build_id,
-            file_state.filename,
-            file_state.filesize,
-            file_state.filehash)
-
-
 def test_get_build_abis(db_intf, with_build_abis):
     assert db_intf.get_build_abis() == with_build_abis
 
