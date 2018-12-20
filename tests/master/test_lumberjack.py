@@ -54,23 +54,11 @@ def log_queue(request, zmq_context, master_config):
 def test_lumberjack_log_valid(db_queue, log_queue, download_state, task):
     log_queue.send_pyobj(['LOG'] + list(download_state))
     db_queue.expect(['LOGDOWNLOAD', download_state])
-    db_queue.send(['OK', True])
+    db_queue.send(['OK', None])
     task.poll()
     assert task.logger.info.call_args == mock.call(
         'logging download of %s from %s',
         download_state.filename, download_state.host)
-
-
-def test_lumberjack_log_unknown(db_queue, log_queue, download_state, task):
-    log_queue.send_pyobj(['LOG'] + list(download_state))
-    db_queue.expect(['LOGDOWNLOAD', download_state])
-    db_queue.send(['OK', False])
-    task.poll()
-    assert task.logger.info.call_args == mock.call(
-        'logging download of %s from %s',
-        download_state.filename, download_state.host)
-    assert task.logger.warning.call_args == mock.call(
-        'unable to log download of %s', download_state.filename)
 
 
 def test_lumberjack_log_invalid(db_queue, log_queue, task):
