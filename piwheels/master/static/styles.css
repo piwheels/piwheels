@@ -26,18 +26,23 @@ header div.top-bar, header div.top-bar ul { background: #444; }
 header .menu-text a { padding: 0; }
 
 footer .row {
-  background: #99999b url('mythic_beasts_logo.png') no-repeat 98% 50%;
+  background: #99999b;
   margin-top: 2em;
   padding-top: 1em;
-  padding-right: 250px;
+  padding-right: 1em;
   border-top: 2px solid #77777a;
   min-height: 140px;
+}
+footer .row img {
+  float: right;
 }
 footer p {
   font-size: 11pt;
 }
-
-h2 { color: #77777a; }
+h2 {
+  color: #77777a;
+  word-wrap: break-all;
+}
 p { text-align: justify; }
 a { color: #222; text-decoration: underline; }
 

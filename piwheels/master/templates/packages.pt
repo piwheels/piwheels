@@ -1,0 +1,36 @@
+<div metal:use-macro="layout">
+  <div metal:fill-slot="title" tal:omit-tag="1">Package List</div>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/packages.js"></script>
+  </div>
+  <div metal:fill-slot="content">
+    <div class="row">
+      <div class="small-12 columns">
+        <h2>Searchable Package List</h2>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="small-12 medium-6 columns">
+        <form onsubmit="return false">
+          <input type="text" name="package" placeholder="package name" disabled />
+        </form>
+        <p id="status">Loading package list &hellip; please wait</p>
+        <ul id="packages">
+        </ul>
+      </div>
+      <div class="small-12 medium-6 columns">
+        <div class="callout primary">
+          <p>Enter part of the package name you are looking for in the box above
+          to display a filtered list of packages. At least 2 characters are
+          required to start matching. The match is performed as a <a
+             href="https://en.wikipedia.org/wiki/Regular_expression">regular
+             expression</a> without case sensitivity.</p>
+          <p>A maximum of 100 matches will be displayed at a time (for
+          performance reasons). Popular items, by download count, appear at
+          the top. Items with equal popularity are sorted alphabetically.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

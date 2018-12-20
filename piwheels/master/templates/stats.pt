@@ -1,0 +1,10 @@
+<div metal:use-macro="layout">
+  <div metal:fill-slot="title" tal:omit-tag="1">Stats</div>
+  <div metal:fill-slot="content">
+    <div class="row">
+      <div class="small-12 medium-8 columns">
+        <h2>Stats</h2>
+      </div>
+    </div>
+  </div>
+</div>

@@ -8,7 +8,7 @@
         const li = document.createElement('li');
         const a = document.createElement('a');
         li.appendChild(a);
-        a.href = "simple/" + pkg[0] + "/";
+        a.href = "project/" + pkg[0] + "/";
         a.appendChild(document.createTextNode(pkg[0]));
         return li;
     }
