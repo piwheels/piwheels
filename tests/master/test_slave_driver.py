@@ -416,7 +416,7 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
     db_queue.send(['OK', 1])
     task.poll()
     assert task.logger.info.call_count == 2
-    assert index_queue.recv_pyobj() == ['PKG', 'foo']
+    assert index_queue.recv_pyobj() == ['PKGPROJ', 'foo']
     assert slave_queue.recv_pyobj() == ['DONE']
     db_queue.check()
 
@@ -529,7 +529,7 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     fs_queue.expect(['VERIFY', 1, bs.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bs.package]
+    assert index_queue.recv_pyobj() == ['PKGBOTH', bs.package]
     assert slave_queue.recv_pyobj() == ['DONE']
     db_queue.check()
     fs_queue.check()
@@ -568,7 +568,6 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     fs_queue.expect(['EXPECT', 1, fs1])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bs.package]
     assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
     db_queue.check()
     fs_queue.check()

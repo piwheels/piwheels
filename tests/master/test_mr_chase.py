@@ -111,7 +111,7 @@ def test_normal_import(db_queue, fs_queue, index_queue, task, import_queue,
     fs_queue.expect(['VERIFY', 0, bsh.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bsh.package]
+    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
@@ -156,7 +156,6 @@ def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
     fs_queue.expect(['EXPECT', 0, bsh.files[bsh.next_file]])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bsh.package]
     msg, filename = import_queue.recv_pyobj()
     assert msg == 'SEND'
     assert filename in bsh.files
@@ -165,7 +164,7 @@ def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
     fs_queue.expect(['VERIFY', 0, bsh.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bsh.package]
+    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
@@ -394,7 +393,7 @@ def test_normal_remove(db_queue, fs_queue, index_queue, task, import_queue,
     db_queue.expect(['DELBUILD', bsh.package, bsh.version])
     db_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bsh.package]
+    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
@@ -418,7 +417,7 @@ def test_remove_with_skip(db_queue, fs_queue, index_queue, task, import_queue,
     db_queue.expect(['DELBUILD', bsh.package, bsh.version])
     db_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bsh.package]
+    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()

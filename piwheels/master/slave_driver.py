@@ -345,7 +345,7 @@ class SlaveDriver(Task):
             else:
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
-                self.index_queue.send_pyobj(['PKG', slave.build.package])
+                self.index_queue.send_pyobj(['PKGPROJ', slave.build.package])
                 return ['DONE']
 
     def do_sent(self, slave):
@@ -370,12 +370,12 @@ class SlaveDriver(Task):
                 slave.slave_id, slave.label, slave.reply[0])
             return ['BYE']
         elif self.fs.verify(slave.slave_id, slave.build.package):
-            self.index_queue.send_pyobj(['PKG', slave.build.package])
             slave.build.files[slave.build.next_file].verified()
             self.logger.info(
                 'slave %d (%s): verified transfer of %s',
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
+                self.index_queue.send_pyobj(['PKGBOTH', slave.build.package])
                 return ['DONE']
             else:
                 self.fs.expect(slave.slave_id,

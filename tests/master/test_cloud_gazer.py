@@ -149,7 +149,7 @@ def test_cloud_gazer_new_ver(pypi_proxy, db_queue, index_queue, task):
     db_queue.check()
     assert task.packages == {"foo", "bar"}
     assert task.serial == 6
-    assert index_queue.recv_pyobj() == ['PKG', 'bar']
+    assert index_queue.recv_pyobj() == ['PKGBOTH', 'bar']
 
 
 def test_cloud_gazer_enable_ver(pypi_proxy, db_queue, task):

@@ -26,9 +26,11 @@ sudo pip3 install ${package}</pre>
         <h3>Versions</h3>
         <table>
           <tr><th>Version</th><th>Builds</th><th>Skip</th></tr>
-          <tr><td>0.1</td><td>9/10</td><td>X</td></tr>
-          <tr><td>0.2</td><td>9/10</td><td>X</td></tr>
-          <tr><td>0.3</td><td>9/10</td><td>X</td></tr>
+          <tr tal:repeat="row versions">
+            <td>${row.version}</td>
+            <td>${row.builds_succeeded} / ${row.builds_failed}</td>
+            <td>${"✖" if row.skipped else ""}</td>
+          </tr>
         </table>
       </div>
     </div>

@@ -261,7 +261,7 @@ SELECT
 FROM
     packages p
     JOIN versions v ON p.package = v.package
-    JOIN builds b ON v.package = b.package AND v.version = b.version
+    LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
 GROUP BY
     v.package,
     v.version,

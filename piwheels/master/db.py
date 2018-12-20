@@ -40,7 +40,7 @@ import warnings
 from datetime import datetime, timedelta
 from itertools import chain
 
-from sqlalchemy import MetaData, Table, select, create_engine
+from sqlalchemy import MetaData, Table, select, create_engine, func
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__
@@ -371,6 +371,43 @@ class Database:
             return self._conn.execute(
                 select([self._files.c.filename, self._files.c.filehash]).
                 select_from(self._builds.join(self._files)).
+                where(self._builds.c.status).
+                where(self._builds.c.package == package)
+            )
+
+    def get_project_versions(self, package):
+        """
+        Returns all details required to build the versions table in the
+        project page of the specified *package*.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                select([
+                    self._versions.c.version,
+                    ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
+                    func.count().filter(self._builds.c.status).label('builds_succeeded'),
+                    func.count().filter(~self._builds.c.status).label('builds_failed'),
+                ]).
+                select_from(self._packages.join(self._versions.outerjoin(self._builds))).
+                where(self._versions.c.package == package).
+                group_by(self._versions.c.version, 'skipped')
+            )
+
+    def get_project_files(self, package):
+        """
+        Returns all details required to build the files table in the project
+        page of the specified *package*.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                select([
+                    self._builds.c.version,
+                    self._files.c.abi_tag,
+                    self._files.c.filename,
+                    self._files.c.filesize,
+                    self._files.c.filehash,
+                ]).
+                select_from(self._files.join(self._builds)).
                 where(self._builds.c.status).
                 where(self._builds.c.package == package)
             )

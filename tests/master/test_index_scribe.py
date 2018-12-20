@@ -43,7 +43,9 @@ from pkg_resources import resource_listdir
 from piwheels.master.index_scribe import IndexScribe, AtomicReplaceFile
 
 
-Row = namedtuple('Row', ('filename', 'filehash'))
+FilesRow = namedtuple('FilesRow', ('filename', 'filehash'))
+VersRow = namedtuple('VersRow', (
+    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
 
 
 @pytest.fixture()
@@ -200,11 +202,15 @@ def test_write_homepage_fails(db_queue, task, index_queue, master_config):
 def test_write_pkg_index(db_queue, task, index_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'foo'])
+    index_queue.send_pyobj(['PKGBOTH', 'foo'])
     db_queue.expect(['PKGFILES', 'foo'])
     db_queue.send(['OK', [
-        Row('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        Row('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
+        FilesRow('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
+        FilesRow('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
+    ]])
+    db_queue.expect(['PROJVERS', 'foo'])
+    db_queue.send(['OK', [
+        VersRow('0.1', False, 2, 0),
     ]])
     task.once()
     task.poll()
@@ -223,7 +229,7 @@ def test_write_pkg_index(db_queue, task, index_queue, master_config):
 def test_write_pkg_index_fails(db_queue, task, index_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'foo'])
+    index_queue.send_pyobj(['PKGBOTH', 'foo'])
     db_queue.expect(['PKGFILES', 'foo'])
     db_queue.send(['OK', [
         # Send ordinary tuples (method expects rows with attributes named
@@ -243,11 +249,15 @@ def test_write_pkg_index_fails(db_queue, task, index_queue, master_config):
 def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'bar'])
+    index_queue.send_pyobj(['PKGBOTH', 'bar'])
     db_queue.expect(['PKGFILES', 'bar'])
     db_queue.send(['OK', [
-        Row('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
-        Row('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
+        FilesRow('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
+        FilesRow('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
+    ]])
+    db_queue.expect(['PROJVERS', 'bar'])
+    db_queue.send(['OK', [
+        VersRow('1.0', False, 2, 1),
     ]])
     task.once()
     task.poll()

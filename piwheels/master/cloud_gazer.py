@@ -75,7 +75,7 @@ class CloudGazer(PauseableTask):
                 self.packages.add(package)
                 if self.db.add_new_package(package):
                     self.logger.info('added package %s', package)
-                    self.index_queue.send_pyobj(['PKG', package])
+                    self.index_queue.send_pyobj(['PKGBOTH', package])
             if version is not None:
                 if self.db.add_new_package_version(
                         package, version, timestamp,
@@ -86,11 +86,13 @@ class CloudGazer(PauseableTask):
                         self.logger.info(
                             'disabled package %s version %s (binary only)',
                             package, version)
+                    self.index_queue.send_pyobj(['PKGPROJ', package])
                 elif source and self.db.get_version_skip(
                         package, version) == 'binary only':
                     self.db.skip_package_version(package, version, None)
                     self.logger.info(
                         'enabled package %s version %s', package, version)
+                    self.index_queue.send_pyobj(['PKGPROJ', package])
             self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial

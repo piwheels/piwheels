@@ -106,6 +106,9 @@ class MrChase(PauseableTask):
                         files,
                     ) = args
                     state = BuildState(
+                        # XXX Slave ID is always 0 ... what happens if two
+                        # simultaneous imports are attempted, particularly re
+                        # the file-expect mechanism?
                         0, package, version, abi_tag, status, duration,
                         output, files={
                             filename: FileState(filename, *filestate)
@@ -187,7 +190,7 @@ class MrChase(PauseableTask):
             # XXX We'll never reach this branch at the moment, but in future we
             # might well support failed builds (as another method of skipping
             # builds)
-            self.index_queue.send_pyobj(['PKG', state.package])
+            self.index_queue.send_pyobj(['PKGPROJ', state.package])
             return ['DONE']
 
     def do_sent(self, state):
@@ -206,10 +209,10 @@ class MrChase(PauseableTask):
         filename is returned to the build slave.
         """
         if self.fs.verify(0, state.package):
-            self.index_queue.send_pyobj(['PKG', state.package])
             self.logger.info('verified transfer of %s', state.next_file)
             state.files[state.next_file].verified()
             if state.transfers_done:
+                self.index_queue.send_pyobj(['PKGBOTH', state.package])
                 return ['DONE']
             else:
                 self.fs.expect(0, state.files[state.next_file])
@@ -236,5 +239,5 @@ class MrChase(PauseableTask):
         for filename in self.db.get_version_files(package, version):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)
-        self.index_queue.send_pyobj(['PKG', package])
+        self.index_queue.send_pyobj(['PKGBOTH', package])
         return ['DONE']

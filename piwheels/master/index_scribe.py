@@ -64,9 +64,19 @@ class AtomicReplaceFile:
     permissions will be set, i.e. 0644 & umask).  If an exception occurs during
     the context manager's block, the temporary file will be deleted leaving the
     original target file unaffected and the exception will be re-raised.
+
+    :param pathlib.Path path:
+        The full path and filename of the target file. This is expected to be
+        an absolute path.
+
+    :param str encoding:
+        If ``None`` (the default), the temporary file will be opened in binary
+        mode. Otherwise, this specifies the encoding to use with text mode.
     """
-    def __init__(self, filename, encoding=None):
-        self._path = Path(filename)
+    def __init__(self, path, encoding=None):
+        if isinstance(path, str):
+            path = Path(path)
+        self._path = path
         self._tempfile = tempfile.NamedTemporaryFile(
             mode='wb' if encoding is None else 'w',
             dir=str(self._path.parent), encoding=encoding, delete=False)
@@ -152,7 +162,7 @@ class IndexScribe(PauseableTask):
                 pass
         for filename in pkg_resources.resource_listdir(__name__, 'static'):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
-            with AtomicReplaceFile(str(self.output_path / filename)) as f:
+            with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
         startup_templates = {'faq.pt', 'packages.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
@@ -162,16 +172,21 @@ class IndexScribe(PauseableTask):
                         page=filename.replace('.html', '')
                     )
                 with AtomicReplaceFile(
-                        str((self.output_path / filename).with_suffix('.html')),
+                        (self.output_path / filename).with_suffix('.html'),
                         encoding='utf-8') as f:
                     f.write(source)
 
     def handle_index(self, queue):
         """
         Handle incoming requests to (re)build index files. These will be in the
-        form of "HOME", a request to write the homepage with some associated
-        statistics, or "PKG", a request to write the index for the specified
-        package.
+        form of:
+
+        * "HOME", a request to write the homepage with some associated
+          statistics
+        * "PKGBOTH", a request to write the index and project page for
+          the specified package
+        * "PKGPROJ", a request to write just the project page for the specified
+          package
 
         .. note::
 
@@ -180,14 +195,19 @@ class IndexScribe(PauseableTask):
             the event of any exceptions.
         """
         msg, *args = queue.recv_pyobj()
-        if msg == 'PKG':
+        if msg == 'PKGBOTH':
             package = args[0]
             if package not in self.package_cache:
                 self.package_cache.add(package)
                 self.write_root_index()
             self.write_package_index(
                 package, self.db.get_package_files(package))
-            self.write_project_page(package)
+            self.write_project_page(
+                package, self.db.get_project_versions(package))
+        elif msg == 'PKGPROJ':
+            package = args[0]
+            self.write_project_page(
+                package, self.db.get_project_versions(package))
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
@@ -206,7 +226,7 @@ class IndexScribe(PauseableTask):
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
-        with AtomicReplaceFile(str(self.output_path / 'index.html'),
+        with AtomicReplaceFile(self.output_path / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['index'](
                 layout=self.templates['layout']['layout'],
@@ -222,7 +242,7 @@ class IndexScribe(PauseableTask):
             :class:`BigBrother`.
         """
         self.logger.info('writing search index')
-        with AtomicReplaceFile(str(self.output_path / 'packages.json'),
+        with AtomicReplaceFile(self.output_path / 'packages.json',
                                encoding='utf-8') as index:
             json.dump(search_index, index,
                       check_circular=False, separators=(',', ':'))
@@ -234,7 +254,7 @@ class IndexScribe(PauseableTask):
         in the task's cache.
         """
         self.logger.info('writing package index')
-        with AtomicReplaceFile(str(self.output_path / 'simple' / 'index.html'),
+        with AtomicReplaceFile(self.output_path / 'simple' / 'index.html',
                                encoding='utf-8') as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
@@ -265,8 +285,7 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
-                               encoding='utf-8') as index:
+        with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
                 tag.html(
@@ -307,7 +326,7 @@ class IndexScribe(PauseableTask):
         except FileExistsError:
             pass
 
-    def write_project_page(self, package):
+    def write_project_page(self, package, versions):
         """
         (Re)writes the project page of the specified package.
 
@@ -317,11 +336,11 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
-        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
-                               encoding='utf-8') as index:
+        with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
                 package=package,
+                versions=versions,
                 page='project'))
         try:
             # See write_package_index for explanation...
