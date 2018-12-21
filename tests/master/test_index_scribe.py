@@ -44,8 +44,11 @@ from piwheels.master.index_scribe import IndexScribe, AtomicReplaceFile
 
 
 FilesRow = namedtuple('FilesRow', ('filename', 'filehash'))
-VersRow = namedtuple('VersRow', (
+ProjVersRow = namedtuple('ProjVersRow', (
     'version', 'skipped', 'builds_succeeded', 'builds_failed'))
+ProjFilesRow = namedtuple('ProjFilesRow', (
+    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
+
 
 
 @pytest.fixture()
@@ -210,7 +213,14 @@ def test_write_pkg_index(db_queue, task, index_queue, master_config):
     ]])
     db_queue.expect(['PROJVERS', 'foo'])
     db_queue.send(['OK', [
-        VersRow('0.1', False, 2, 0),
+        ProjVersRow('0.1', False, 2, 0),
+    ]])
+    db_queue.expect(['PROJFILES', 'foo'])
+    db_queue.send(['OK', [
+        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                     123456, '123456123456'),
+        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                     123456, '123456123456'),
     ]])
     task.once()
     task.poll()
@@ -257,7 +267,14 @@ def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
     ]])
     db_queue.expect(['PROJVERS', 'bar'])
     db_queue.send(['OK', [
-        VersRow('1.0', False, 2, 1),
+        ProjVersRow('1.0', False, 2, 1),
+    ]])
+    db_queue.expect(['PROJFILES', 'bar'])
+    db_queue.send(['OK', [
+        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                     123456, '123456abcdef'),
+        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                     123456, '123456abcdef'),
     ]])
     task.once()
     task.poll()

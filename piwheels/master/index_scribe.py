@@ -203,11 +203,13 @@ class IndexScribe(PauseableTask):
             self.write_package_index(
                 package, self.db.get_package_files(package))
             self.write_project_page(
-                package, self.db.get_project_versions(package))
+                package, self.db.get_project_versions(package),
+                self.db.get_project_files(package))
         elif msg == 'PKGPROJ':
             package = args[0]
             self.write_project_page(
-                package, self.db.get_project_versions(package))
+                package, self.db.get_project_versions(package),
+                self.db.get_project_files(package))
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
@@ -285,7 +287,8 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
+        with AtomicReplaceFile(pkg_dir / 'index.html',
+                               encoding='utf-8') as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
                 tag.html(
@@ -326,7 +329,7 @@ class IndexScribe(PauseableTask):
         except FileExistsError:
             pass
 
-    def write_project_page(self, package, versions):
+    def write_project_page(self, package, versions, files):
         """
         (Re)writes the project page of the specified package.
 
@@ -341,6 +344,10 @@ class IndexScribe(PauseableTask):
                 layout=self.templates['layout']['layout'],
                 package=package,
                 versions=versions,
+                files=files,
+                url=lambda filename, filehash:
+                    '/simple/{package}/{filename}#sha256={filehash}'.format(
+                        package=package, filename=filename, filehash=filehash),
                 page='project'))
         try:
             # See write_package_index for explanation...

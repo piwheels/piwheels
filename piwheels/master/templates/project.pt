@@ -40,12 +40,11 @@ sudo pip3 install ${package}</pre>
         <h3>Files</h3>
         <table>
           <tr><th>Filename</th><th>ABI</th><th>Size</th></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp34-cp34m-linux_armv6l.whl">${package}-0.1-cp34-cp34m-linux_armv6l.whl</a></td><td>cp34m</td><td>1MB</td></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp34-cp34m-linux_armv7l.whl">${package}-0.1-cp34-cp34m-linux_armv7l.whl</a></td><td>cp34m</td><td>1MB</td></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp35-cp35m-linux_armv6l.whl">${package}-0.1-cp35-cp35m-linux_armv6l.whl</a></td><td>cp35m</td><td>1MB</td></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp35-cp35m-linux_armv7l.whl">${package}-0.1-cp35-cp35m-linux_armv7l.whl</a></td><td>cp35m</td><td>1MB</td></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp36-cp36m-linux_armv6l.whl">${package}-0.1-cp36-cp36m-linux_armv6l.whl</a></td><td>cp36m</td><td>1MB</td></tr>
-          <tr><td><a href="/simple/${package}/${package}-0.1-cp36-cp36m-linux_armv7l.whl">${package}-0.1-cp36-cp36m-linux_armv7l.whl</a></td><td>cp36m</td><td>1MB</td></tr>
+          <tr tal:repeat="row files">
+            <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
+            <td>${row.abi_tag}</td>
+            <td>${row.filesize}</td>
+          </tr>
         </table>
       </div>
     </div>
