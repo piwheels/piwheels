@@ -108,6 +108,7 @@ class TheOracle(Task):
                 'SETPYPI': self.do_setpypi,
                 'GETSTATS': self.do_getstats,
                 'GETDL': self.do_getdl,
+                'FILEDEPS': self.do_filedeps,
             }[msg]
             result = handler(*args)
         except Exception as exc:
@@ -263,6 +264,14 @@ class TheOracle(Task):
         """
         return self.db.get_downloads_recent()
 
+    def do_filedeps(self, filename):
+        """
+        Handler for "FILEDEPS" message, sent by :class:`DbClient` to request
+        dependencies for *filename*, returned as a dict mapping tool names
+        to dependency sets.
+        """
+        return self.db.get_file_dependencies(filename)
+
 
 class DbClient:
     """
@@ -408,6 +417,12 @@ class DbClient:
         See :meth:`.db.Database.get_version_skip`.
         """
         return self._execute(['GETSKIP', package, version])
+
+    def get_file_dependencies(self, filename):
+        """
+        See :meth:`.db.Database.get_file_dependencies`.
+        """
+        return self._execute(['FILEDEPS', filename])
 
     def delete_build(self, package, version):
         """

@@ -38,7 +38,8 @@ itself.
 
 import warnings
 from datetime import datetime, timedelta
-from itertools import chain
+from itertools import chain, groupby
+from operator import itemgetter
 
 from sqlalchemy import MetaData, Table, select, create_engine, func
 from sqlalchemy.exc import IntegrityError, SAWarning
@@ -438,6 +439,27 @@ class Database:
                 where(self._versions.c.package == package).
                 where(self._versions.c.version == version)
             )
+
+    def get_file_dependencies(self, filename):
+        """
+        Returns the dependencies for the specified *filename* as a map of
+        tool names to dependency sets.
+        """
+        with self._conn.begin():
+            return {
+                tool: set(row.dependency for row in rows)
+                for tool, rows in groupby(
+                    self._conn.execute(
+                        select([
+                            self._dependencies.c.tool,
+                            self._dependencies.c.dependency
+                        ]).
+                        where(self._dependencies.c.filename == filename).
+                        order_by(self._dependencies.c.tool)
+                    ),
+                    key=itemgetter(0)
+                )
+            }
 
     def delete_build(self, package, version):
         """

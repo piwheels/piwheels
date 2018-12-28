@@ -29,6 +29,7 @@
 
 from unittest import mock
 from datetime import datetime, timedelta
+from operator import itemgetter
 
 import pytest
 
@@ -279,6 +280,25 @@ def test_get_version_files(db_intf, with_files):
 
 def test_get_version_skip(db_intf, with_package_version):
     assert db_intf.get_version_skip('foo', '0.1') is None
+
+
+def test_get_project_versions(db_intf, with_files):
+    assert list(db_intf.get_project_versions('foo')) == [
+        ('0.1', False, 1, 0),
+    ]
+
+
+def test_get_project_files(db_intf, with_files, build_state_hacked):
+    assert sorted(db_intf.get_project_files('foo'), key=itemgetter(2)) == sorted([
+        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash)
+        for f in build_state_hacked.files.values()
+    ], key=itemgetter(2))
+
+
+def test_get_file_dependencies(db_intf, with_files):
+    assert db_intf.get_file_dependencies('foo-0.1-cp34-cp34m-linux_armv7l.whl') == {
+        'apt': {'libc6'},
+    }
 
 
 def test_delete_build(db_intf, db, with_files, build_state_hacked):
