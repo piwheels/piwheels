@@ -45,16 +45,16 @@ def import_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
+def web_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.hwm = 1
-    queue.bind(master_config.index_queue)
+    queue.bind(master_config.web_queue)
     yield queue
     queue.close()
 
 
 @pytest.fixture()
-def task(request, db_queue, fs_queue, index_queue, master_status_queue,
+def task(request, db_queue, fs_queue, web_queue, master_status_queue,
          master_config):
     task = MrChase(master_config)
     yield task
@@ -79,7 +79,7 @@ def test_import_bad_message2(task, import_queue):
     assert len(task.states) == 0
 
 
-def test_normal_import(db_queue, fs_queue, index_queue, task, import_queue,
+def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
                        build_state, build_state_hacked):
     bs, bsh = build_state, build_state_hacked  # for brevity!
     bs._slave_id = bsh._slave_id = 0
@@ -111,14 +111,14 @@ def test_normal_import(db_queue, fs_queue, index_queue, task, import_queue,
     fs_queue.expect(['VERIFY', 0, bsh.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
+    assert web_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
 
 
-def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
+def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
                            build_state_hacked):
     bsh = build_state_hacked
     bsh._slave_id = 0
@@ -164,7 +164,7 @@ def test_import_dual_files(db_queue, fs_queue, index_queue, task, import_queue,
     fs_queue.expect(['VERIFY', 0, bsh.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
+    assert web_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
@@ -378,7 +378,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     assert len(task.states) == 0
 
 
-def test_normal_remove(db_queue, fs_queue, index_queue, task, import_queue,
+def test_normal_remove(db_queue, fs_queue, web_queue, task, import_queue,
                        build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, None])
@@ -393,14 +393,14 @@ def test_normal_remove(db_queue, fs_queue, index_queue, task, import_queue,
     db_queue.expect(['DELBUILD', bsh.package, bsh.version])
     db_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
+    assert web_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
 
 
-def test_remove_with_skip(db_queue, fs_queue, index_queue, task, import_queue,
+def test_remove_with_skip(db_queue, fs_queue, web_queue, task, import_queue,
                           build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_pyobj(['REMOVE', bsh.package, bsh.version, 'broken version'])
@@ -417,7 +417,7 @@ def test_remove_with_skip(db_queue, fs_queue, index_queue, task, import_queue,
     db_queue.expect(['DELBUILD', bsh.package, bsh.version])
     db_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
+    assert web_queue.recv_pyobj() == ['PKGBOTH', bsh.package]
     assert import_queue.recv_pyobj() == ['DONE']
     assert len(task.states) == 0
     db_queue.check()

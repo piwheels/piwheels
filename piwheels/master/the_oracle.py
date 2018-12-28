@@ -54,7 +54,7 @@ class TheOracle(Task):
     requests such as registering a new package, version, or build, and
     answering queries about the hashes of files. The primary clients of this
     class are :class:`~.slave_driver.SlaveDriver`,
-    :class:`~.index_scribe.IndexScribe`, and :class:`~.cloud_gazer.CloudGazer`.
+    :class:`~.the_scribe.TheScribe`, and :class:`~.cloud_gazer.CloudGazer`.
 
     Note that because database requests are notoriously variable in length the
     client RPC class (:class:`DbClient`) doesn't *directly* talk to

@@ -659,7 +659,7 @@ DownloadState = namedtuple('DownloadState', (
 def mkdir_override_symlink(pkg_dir):
     """
     Make *pkg_dir*, replacing any existing symlink in its place. See the
-    notes in :meth:`IndexScribe.write_package_index` for more information.
+    notes in :meth:`TheScribe.write_package_index` for more information.
     """
     # There is a tiny possibility of a race here between two threads wanting
     # to replace a symlinked dir with a "real" dir, hence the loop below

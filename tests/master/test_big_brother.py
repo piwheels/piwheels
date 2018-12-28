@@ -106,10 +106,10 @@ def stats_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
+def web_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.hwm = 1
-    queue.bind(master_config.index_queue)
+    queue.bind(master_config.web_queue)
     yield queue
     queue.close()
 
@@ -121,7 +121,7 @@ def task(request, master_config):
     task.close()
 
 
-def test_gen_skip(master_status_queue, index_queue, task):
+def test_gen_skip(master_status_queue, web_queue, task):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
@@ -129,10 +129,10 @@ def test_gen_skip(master_status_queue, index_queue, task):
         with pytest.raises(zmq.ZMQError):
             master_status_queue.recv_pyobj(flags=zmq.NOBLOCK)
         with pytest.raises(zmq.ZMQError):
-            index_queue.recv_pyobj(flags=zmq.NOBLOCK)
+            web_queue.recv_pyobj(flags=zmq.NOBLOCK)
 
 
-def test_gen_stats(db_queue, master_status_queue, index_queue, task,
+def test_gen_stats(db_queue, master_status_queue, web_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
@@ -144,11 +144,11 @@ def test_gen_stats(db_queue, master_status_queue, index_queue, task,
         task.loop()  # crank the handle once
         db_queue.check()
         assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
-        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
-def test_gen_disk_stats(db_queue, master_status_queue, index_queue, task,
+def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
                         stats_queue, stats_result, stats_dict, stats_disk):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
@@ -164,12 +164,12 @@ def test_gen_disk_stats(db_queue, master_status_queue, index_queue, task,
         db_queue.send(['OK', {'foo': 10}])
         task.loop()
         db_queue.check()
-        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
         assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
-def test_gen_queue_stats(db_queue, master_status_queue, index_queue, task,
+def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
@@ -184,12 +184,12 @@ def test_gen_queue_stats(db_queue, master_status_queue, index_queue, task,
         db_queue.send(['OK', {'foo': 10}])
         task.loop()
         db_queue.check()
-        assert index_queue.recv_pyobj() == ['HOME', stats_dict]
+        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
         assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert index_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
 
 
-def test_bad_stats(db_queue, master_status_queue, index_queue, task,
+def test_bad_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     task.logger = mock.Mock()
     with mock.patch('piwheels.master.big_brother.datetime') as dt:

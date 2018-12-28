@@ -285,7 +285,7 @@ def master_config(request, tmpdir):
         db=PIWHEELS_TESTDB
     )
     config.output_path = str(tmpdir)
-    config.index_queue = 'inproc://tests-indexes'
+    config.web_queue = 'inproc://tests-indexes'
     config.status_queue = 'inproc://tests-status'
     config.control_queue = 'inproc://tests-control'
     config.builds_queue = 'inproc://tests-builds'

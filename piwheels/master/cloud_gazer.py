@@ -52,14 +52,14 @@ class CloudGazer(PauseableTask):
         super().__init__(config)
         self.db = DbClient(config)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.connect(config.index_queue)
+        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue.hwm = 10
+        self.web_queue.connect(config.web_queue)
         self.serial = -1
         self.packages = None
 
     def close(self):
-        self.index_queue.close()
+        self.web_queue.close()
         self.db.set_pypi_serial(self.serial)
         super().close()
 
@@ -75,7 +75,7 @@ class CloudGazer(PauseableTask):
                 self.packages.add(package)
                 if self.db.add_new_package(package):
                     self.logger.info('added package %s', package)
-                    self.index_queue.send_pyobj(['PKGBOTH', package])
+                    self.web_queue.send_pyobj(['PKGBOTH', package])
             if version is not None:
                 if self.db.add_new_package_version(
                         package, version, timestamp,
@@ -86,13 +86,13 @@ class CloudGazer(PauseableTask):
                         self.logger.info(
                             'disabled package %s version %s (binary only)',
                             package, version)
-                    self.index_queue.send_pyobj(['PKGPROJ', package])
+                    self.web_queue.send_pyobj(['PKGPROJ', package])
                 elif source and self.db.get_version_skip(
                         package, version) == 'binary only':
                     self.db.skip_package_version(package, version, None)
                     self.logger.info(
                         'enabled package %s version %s', package, version)
-                    self.index_queue.send_pyobj(['PKGPROJ', package])
+                    self.web_queue.send_pyobj(['PKGPROJ', package])
             self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial

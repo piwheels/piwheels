@@ -27,9 +27,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Defines the :class:`IndexScribe` task; see class for more details.
+Defines the :class:`TheScribe` task; see class for more details.
 
-.. autoclass:: IndexScribe
+.. autoclass:: TheScribe
     :members:
 """
 
@@ -44,6 +44,7 @@ import zmq
 import pkg_resources
 from chameleon import PageTemplateLoader
 
+from .. import const
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
@@ -96,7 +97,7 @@ class AtomicReplaceFile:
         return result
 
 
-class IndexScribe(PauseableTask):
+class TheScribe(PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It
     reads the names of packages off the internal "indexes" queue and rebuilds
@@ -111,15 +112,15 @@ class IndexScribe(PauseableTask):
         is re-built, hashes are *never* re-calculated from the disk files (they
         are always read from the database).
     """
-    name = 'master.index_scribe'
+    name = 'master.the_scribe'
 
     def __init__(self, config):
         super().__init__(config)
         self.output_path = Path(config.output_path)
-        index_queue = self.ctx.socket(zmq.PULL)
-        index_queue.hwm = 100
-        index_queue.bind(config.index_queue)
-        self.register(index_queue, self.handle_index)
+        scribe_queue = self.ctx.socket(zmq.PULL)
+        scribe_queue.hwm = 100
+        scribe_queue.connect(const.SCRIBE_QUEUE)
+        self.register(scribe_queue, self.handle_index)
         self.db = DbClient(config)
         self.package_cache = None
         self.statistics = {}
@@ -217,7 +218,7 @@ class IndexScribe(PauseableTask):
             search_index = args[0]
             self.write_search_index(search_index)
         else:
-            self.logger.error('invalid index_queue message: %s', msg)
+            self.logger.error('invalid scribe_queue message: %s', msg)
 
     def write_homepage(self, statistics):
         """
@@ -246,7 +247,7 @@ class IndexScribe(PauseableTask):
         self.logger.info('writing search index')
         with AtomicReplaceFile(self.output_path / 'packages.json',
                                encoding='utf-8') as index:
-            json.dump(search_index, index,
+            json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))
 
     def write_root_index(self):

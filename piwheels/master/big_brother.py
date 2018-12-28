@@ -79,14 +79,14 @@ class BigBrother(PauseableTask):
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.connect(config.index_queue)
+        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue.hwm = 10
+        self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
 
     def close(self):
         self.db.close()
-        self.index_queue.close()
+        self.web_queue.close()
         self.status_queue.close()
         super().close()
 
@@ -116,11 +116,11 @@ class BigBrother(PauseableTask):
             self.stats['builds_size'] = rec.builds_size
             self.stats['files_count'] = rec.files_count
             self.stats['downloads_last_month'] = rec.downloads_last_month
-            self.index_queue.send_pyobj(['HOME', self.stats])
+            self.web_queue.send_pyobj(['HOME', self.stats])
             self.status_queue.send_pyobj([-1, self.timestamp, 'STATUS', self.stats])
             rec = self.db.get_downloads_recent()
             search_index = [
                 (name, count)
                 for name, count in rec.items()
             ]
-            self.index_queue.send_pyobj(['SEARCH', search_index])
+            self.web_queue.send_pyobj(['SEARCH', search_index])
