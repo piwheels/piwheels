@@ -118,7 +118,7 @@ class TagFactory:
         '</form>'
 
     Note that content of a tag is only output when ``_open`` is True (or
-    omitted). The factory will automatically set ``_close`` to True for HTML
+    omitted). The factory will automatically set ``_close`` to False for HTML
     tags which are declared "empty" in the standard, e.g. ``<br>`` and
     ``<hr>``::
 
