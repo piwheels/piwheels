@@ -334,7 +334,14 @@ class TheScribe(PauseableTask):
             key=lambda row: pkg_resources.parse_version(row.version))
         files = sorted(
             self.db.get_project_files(package),
-            key=lambda row: pkg_resources.parse_version(row.version))
+            key=lambda row: (
+                pkg_resources.parse_version(row.version),
+                row.filename
+            ))
+        if files:
+            dependencies = self.db.get_file_dependencies(files[0].filename)
+        else:
+            dependencies = {}
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
@@ -344,6 +351,7 @@ class TheScribe(PauseableTask):
                 package=package,
                 versions=versions,
                 files=files,
+                dependencies=dependencies,
                 url=lambda filename, filehash:
                     '/simple/{package}/{filename}#sha256={filehash}'.format(
                         package=package, filename=filename, filehash=filehash),

@@ -16,8 +16,9 @@
     <div class="row">
       <div class="small-12 columns">
         <h3>Install</h3>
-        <pre>sudo apt install xxx
+        <pre tal:condition="dependencies.get('apt')">sudo apt install ${' '.join(dependencies['apt'])}
 sudo pip3 install ${package}</pre>
+        <pre tal:condition="not dependencies.get('apt')">sudo pip3 install ${package}</pre>
       </div>
     </div>
 
