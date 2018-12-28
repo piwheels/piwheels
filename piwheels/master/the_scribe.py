@@ -201,16 +201,11 @@ class TheScribe(PauseableTask):
             if package not in self.package_cache:
                 self.package_cache.add(package)
                 self.write_root_index()
-            self.write_package_index(
-                package, self.db.get_package_files(package))
-            self.write_project_page(
-                package, self.db.get_project_versions(package),
-                self.db.get_project_files(package))
+            self.write_package_index(package)
+            self.write_project_page(package)
         elif msg == 'PKGPROJ':
             package = args[0]
-            self.write_project_page(
-                package, self.db.get_project_versions(package),
-                self.db.get_project_files(package))
+            self.write_project_page(package)
         elif msg == 'HOME':
             status_info = args[0]
             self.write_homepage(status_info)
@@ -273,7 +268,7 @@ class TheScribe(PauseableTask):
                 )
             )
 
-    def write_package_index(self, package, files):
+    def write_package_index(self, package):
         """
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
@@ -281,9 +276,6 @@ class TheScribe(PauseableTask):
 
         :param str package:
             The name of the package to write the index for
-
-        :param list files:
-            A list of (filename, filehash) tuples.
         """
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
@@ -302,7 +294,7 @@ class TheScribe(PauseableTask):
                             f.filename,
                             href='{f.filename}#sha256={f.filehash}'.format(f=f),
                             rel='internal'), tag.br(), '\n')
-                         for f in files)
+                         for f in self.db.get_package_files(package))
                     )
                 )
             )
@@ -330,13 +322,19 @@ class TheScribe(PauseableTask):
         except FileExistsError:
             pass
 
-    def write_project_page(self, package, versions, files):
+    def write_project_page(self, package):
         """
         (Re)writes the project page of the specified package.
 
         :param str package:
             The name of the package to write the index for
         """
+        versions = sorted(
+            self.db.get_project_versions(package),
+            key=lambda row: pkg_resources.parse_version(row.version))
+        files = sorted(
+            self.db.get_project_files(package),
+            key=lambda row: pkg_resources.parse_version(row.version))
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
