@@ -195,7 +195,7 @@ class PiWheelsPackage:
                         with wheel.open(info) as testfile:
                             is_elf = testfile.read(4) == b'\x7FELF'
                         if is_elf:
-                            libs.add(wheel.extract(info, path=tempdir.name))
+                            libs.add(wheel.extract(info, path=tempdir))
             for lib in libs:
                 p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
                 try:
@@ -204,6 +204,7 @@ class PiWheelsPackage:
                     p.kill()
                     out, errs = p.communicate()
                 finally:
+                    out = out.decode('ascii', 'replace')
                     for line in out.splitlines():
                         match = find_re.search(line)
                         if match is not None:
