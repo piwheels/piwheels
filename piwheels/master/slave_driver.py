@@ -35,7 +35,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 
 import pickle
 from datetime import datetime, timezone
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import zmq
 
@@ -69,7 +69,7 @@ class SlaveDriver(Task):
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.master_control)
         self.paused = False
-        self.abi_queues = defaultdict(set)
+        self.abi_queues = defaultdict(deque)
         slave_queue = self.ctx.socket(
             zmq.ROUTER, protocol=protocols.slave_driver)
         slave_queue.ipv6 = True
@@ -77,7 +77,7 @@ class SlaveDriver(Task):
         self.register(slave_queue, self.handle_slave)
         builds_queue = self.ctx.socket(
             zmq.PULL, protocol=reversed(protocols.the_architect))
-        builds_queue.hwm = 10
+        builds_queue.hwm = 1000
         builds_queue.connect(config.builds_queue)
         self.register(builds_queue, self.handle_build)
         self.status_queue = self.ctx.socket(

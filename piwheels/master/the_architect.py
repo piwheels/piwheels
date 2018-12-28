@@ -33,6 +33,8 @@ Defines :class:`TheArchitect` task; see class for more details.
     :members:
 """
 
+from datetime import datetime, timedelta
+
 import zmq
 
 from .. import protocols
@@ -43,19 +45,18 @@ from .db import Database
 class TheArchitect(Task):
     """
     This task queries the backend database to determine which versions of
-    packages have yet to be built (and aren't marked to be skipped). It places
-    a tuple of (package, version) for each such build into the internal
-    "builds" queue for :class:`~.slave_driver.SlaveDriver` to read.
+    packages have yet to be built (and aren't marked to be skipped). It pushes
+    the results to :class:`~.slave_driver.SlaveDriver` to sort out.
     """
     name = 'master.the_architect'
 
     def __init__(self, config):
         super().__init__(config)
         self.db = Database(config.dsn)
-        self.query = self.db.get_build_queue()
+        self.last_run = datetime(1970, 1, 1)
         self.builds_queue = self.ctx.socket(
             zmq.PUSH, protocol=protocols.the_architect)
-        self.builds_queue.hwm = 10
+        self.builds_queue.hwm = 1000
         self.builds_queue.bind(config.builds_queue)
 
     def close(self):
@@ -65,16 +66,19 @@ class TheArchitect(Task):
 
     def loop(self):
         """
-        The architect simply runs the build queue query repeatedly. On each
-        loop iteration, an entry from the result set is added to the relevant
-        ABI queue. The queues are limited in length to prevent silly memory
-        usage on the initial run (which will involve millions of entries). This
-        does mean that a single loop over the query will potentially miss
-        entries, but that's fine as it'll just be repeated again.
+        The architect simply runs the build queue query repeatedly, with a
+        break of 30 seconds between each execution. The query is limited (in
+        :class:`~.db.Database`) to 1000 entries per build ABI.
+
+        All entries found within this limit are pushed to
+        :class:`~.slave_driver.SlaveDriver` which sorts them into per-ABI
+        queues and dispatches jobs to build slaves as they become available.
         """
-        try:
-            row = next(self.query)
-            self.builds_queue.send_msg(
-                'QUEUE', [row.abi_tag, row.package, row.version])
-        except StopIteration:
-            self.query = self.db.get_build_queue()
+        # Leave 30 seconds between each run of the (expensive) builds
+        # pending query
+        if datetime.utcnow() - self.last_run > timedelta(seconds=30):
+            for row in self.db.get_build_queue():
+                self.builds_queue.send_msg(
+                    'QUEUE', (row.abi_tag, row.package, row.version)
+                )
+            self.last_run = datetime.utcnow()

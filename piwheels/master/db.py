@@ -319,7 +319,10 @@ class Database:
         with self._conn.begin():
             for row in self._conn.\
                     execution_options(stream_results=True).\
-                    execute(self._builds_pending.select()):
+                    execute(
+                        self._builds_pending.select().
+                        where(self._builds.c.position <= 1000)
+                    ):
                 yield row
 
     def get_statistics(self):
