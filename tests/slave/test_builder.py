@@ -163,7 +163,7 @@ def test_package_dependencies(mock_package, tmpdir):
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
-        tmpdir_mock().__enter__().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
         popen_mock().communicate.return_value = (b"""\
         linux-vdso.so.1 =>  (0x00007ffd48669000)
         libblas.so.3 => /usr/lib/libblas.so.3 (0x00007f711a958000)
@@ -212,7 +212,7 @@ def test_package_dependencies_missing(mock_package, tmpdir):
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', side_effect=FileNotFoundError()), \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
-        tmpdir_mock().__enter__().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
         popen_mock().communicate.return_value = (
             b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
         popen_mock().returncode = 0
@@ -226,7 +226,7 @@ def test_package_dependencies_cached(mock_package, tmpdir):
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', side_effect=FileNotFoundError()), \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
-        tmpdir_mock().__enter__().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
         popen_mock().communicate.return_value = (
             b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
         popen_mock().returncode = 0
@@ -242,7 +242,7 @@ def test_package_dependencies_failed(mock_package, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
-        tmpdir_mock().__enter__().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
         popen_mock().communicate.side_effect = [
             TimeoutExpired('ldd', 10), (b"", b"")]
         path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
