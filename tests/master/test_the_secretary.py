@@ -71,9 +71,7 @@ def scribe_queue(request, zmq_context, task):
 @pytest.fixture()
 def stats_dict(request):
     return {
-        'packages_count': 1,
         'packages_built': 0,
-        'versions_count': 2,
         'builds_count':   0,
         'builds_last_hour': 0,
         'builds_success': 0,

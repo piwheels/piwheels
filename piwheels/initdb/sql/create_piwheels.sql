@@ -168,6 +168,7 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
+CREATE INDEX files_packages ON files(package_tag);
 GRANT SELECT ON files TO {username};
 
 -- dependencies
@@ -353,21 +354,7 @@ GRANT SELECT ON builds_pending TO {username};
 -------------------------------------------------------------------------------
 
 CREATE VIEW statistics AS
-    WITH package_stats AS (
-        SELECT COUNT(*) AS packages_count
-        FROM packages
-        WHERE skip IS NULL
-    ),
-    version_stats AS (
-        SELECT COUNT(*) AS versions_count
-        FROM packages p JOIN versions v ON p.package = v.package
-        WHERE p.skip IS NULL AND v.skip IS NULL
-    ),
-    build_vers AS (
-        SELECT COUNT(*) AS versions_tried
-        FROM (SELECT DISTINCT package, version FROM builds) AS t
-    ),
-    build_stats AS (
+    WITH build_stats AS (
         SELECT
             COUNT(*) AS builds_count,
             COUNT(*) FILTER (WHERE status) AS builds_count_success,
@@ -387,21 +374,16 @@ CREATE VIEW statistics AS
         FROM builds
         WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
     ),
-    build_pkgs AS (
-        SELECT COUNT(*) AS packages_built
-        FROM (
-            SELECT DISTINCT package
-            FROM builds b JOIN files f ON b.build_id = f.build_id
-            WHERE b.status
-        ) AS t
-    ),
     file_count AS (
-        SELECT COUNT(*) AS files_count
+        SELECT
+            COUNT(*) AS files_count,
+            COUNT(DISTINCT package_tag) AS packages_built
         FROM files
     ),
     file_stats AS (
-        -- Exclude armv6l packages as they're just hard-links to armv7l packages
-        -- and thus don't really count towards space used
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
         SELECT COALESCE(SUM(filesize), 0) AS builds_size
         FROM files
         WHERE platform_tag <> 'linux_armv6l'
@@ -412,10 +394,7 @@ CREATE VIEW statistics AS
         WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
     )
     SELECT
-        p.packages_count,
-        bp.packages_built,
-        v.versions_count,
-        bv.versions_tried,
+        fc.packages_built,
         bs.builds_count,
         bs.builds_count_success,
         bl.builds_count_last_hour,
@@ -424,10 +403,6 @@ CREATE VIEW statistics AS
         fs.builds_size,
         dl.downloads_last_month
     FROM
-        package_stats p,
-        version_stats v,
-        build_pkgs bp,
-        build_vers bv,
         build_stats bs,
         build_latest bl,
         file_count fc,

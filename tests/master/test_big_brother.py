@@ -45,10 +45,7 @@ UTC = timezone.utc
 @pytest.fixture()
 def stats_result(request):
     return {
-        'packages_count':         1,
         'packages_built':         0,
-        'versions_count':         2,
-        'versions_tried':         0,
         'builds_count':           0,
         'builds_count_success':   0,
         'builds_count_last_hour': 0,
@@ -62,9 +59,7 @@ def stats_result(request):
 @pytest.fixture()
 def stats_dict(request):
     return {
-        'packages_count': 1,
         'packages_built': 0,
-        'versions_count': 2,
         'builds_count':   0,
         'builds_last_hour': 0,
         'builds_success': 0,

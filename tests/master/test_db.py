@@ -223,10 +223,7 @@ def test_get_build_queue_partial(db_intf, with_build):
 
 def test_get_statistics(db_intf, with_files):
     expected = {
-        'packages_count': 1,
         'packages_built': 1,
-        'versions_count': 1,
-        'versions_tried': 1,
         'builds_count': 1,
         'builds_count_success': 1,
         'builds_count_last_hour': 0,

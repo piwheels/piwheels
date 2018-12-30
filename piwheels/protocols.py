@@ -80,9 +80,7 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
 
 
 _statistics = {      # statistics
-    'packages_count':        int,
     'packages_built':        int,
-    'versions_count':        int,
     'builds_count':          int,
     'builds_last_hour':      int,
     'builds_success':        int,
