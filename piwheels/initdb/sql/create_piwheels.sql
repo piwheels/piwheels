@@ -22,12 +22,12 @@ GRANT SELECT ON configuration TO {username};
 -------------------------------------------------------------------------------
 -- The "packages" table defines all available packages on PyPI, derived from
 -- the list_packages() API. The "skip" column defaults to NULL but can be set
--- to a non-NULL string indicating why a package should not be built.
+-- to a non-empty string indicating why a package should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,
-    skip    VARCHAR(100) DEFAULT NULL,
+    skip    VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
@@ -39,14 +39,14 @@ GRANT SELECT ON packages TO {username};
 -- The "versions" table defines all versions of packages *with files* on PyPI;
 -- note that versions without released files (a common occurrence) are
 -- excluded. Like the "packages" table, the "skip" column can be set to a
--- non-NULL string indicating why a version should not be built.
+-- non-empty string indicating why a version should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE versions (
     package  VARCHAR(200) NOT NULL,
     version  VARCHAR(200) NOT NULL,
     released TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
-    skip     VARCHAR(100) DEFAULT NULL,
+    skip     VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT versions_pk PRIMARY KEY (package, version),
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
@@ -54,7 +54,7 @@ CREATE TABLE versions (
 );
 
 CREATE INDEX versions_package ON versions(package);
-CREATE INDEX versions_skip ON versions((skip IS NULL), package);
+CREATE INDEX versions_skip ON versions((skip = ''), package);
 GRANT SELECT ON versions TO {username};
 
 -- build_abis
@@ -255,7 +255,7 @@ CREATE VIEW versions_detail AS
 SELECT
     v.package,
     v.version,
-    (p.skip IS NOT NULL) or (v.skip IS NOT NULL) AS skipped,
+    (p.skip <> '') OR (v.skip <> '') AS skipped,
     COUNT(*) FILTER (WHERE b.status) AS builds_succeeded,
     COUNT(*) FILTER (WHERE NOT b.status) AS builds_failed
 FROM
@@ -306,8 +306,8 @@ FROM (
         JOIN versions AS v ON v.package = p.package
         CROSS JOIN build_abis AS b
     WHERE
-        v.skip IS NULL
-        AND p.skip IS NULL
+        v.skip = ''
+        AND p.skip = ''
 
     EXCEPT ALL
 
@@ -465,7 +465,7 @@ GRANT EXECUTE ON FUNCTION set_pypi_serial(INTEGER) TO {username};
 -- Called to insert a new row in the "packages" table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION add_new_package(package TEXT, skip TEXT = NULL)
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
     RETURNS BOOLEAN
     LANGUAGE plpgsql
     CALLED ON NULL INPUT
@@ -473,8 +473,7 @@ CREATE FUNCTION add_new_package(package TEXT, skip TEXT = NULL)
     SET search_path = public, pg_temp
 AS $sql$
 BEGIN
-    INSERT INTO packages (package, skip)
-        VALUES (package, skip);
+    INSERT INTO packages (package, skip) VALUES (package, skip);
     RETURN true;
 EXCEPTION
     WHEN unique_violation THEN RETURN false;
@@ -493,7 +492,7 @@ CREATE FUNCTION add_new_package_version(
     package TEXT,
     version TEXT,
     released TIMESTAMP = NULL,
-    skip TEXT = NULL
+    skip TEXT = ''
 )
     RETURNS BOOLEAN
     LANGUAGE plpgsql

@@ -133,7 +133,7 @@ class Database:
             self._conn.close()
             self._conn = None
 
-    def add_new_package(self, package, skip=None):
+    def add_new_package(self, package, skip=''):
         """
         Insert a new package record into the database. Returns True if the row
         was inserted successfully, or False if a key violation occurred.
@@ -143,7 +143,7 @@ class Database:
                 "VALUES (add_new_package(%s, %s))", (package, skip)).scalar()
 
     def add_new_package_version(self, package, version,
-                                released=None, skip=None):
+                                released=None, skip=''):
         """
         Insert a new package version record into the database. Returns True if
         the row was inserted successfully, or False if a key violation
@@ -360,7 +360,7 @@ class Database:
                 for row in self._conn.execute(
                     select([
                         self._versions.c.version,
-                        ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
+                        ((self._packages.c.skip != '') | (self._versions.c.skip != '')).label('skipped'),
                         func.count().filter(self._builds.c.status).label('builds_succeeded'),
                         func.count().filter(~self._builds.c.status).label('builds_failed'),
                     ]).

@@ -65,7 +65,7 @@ system. This script must be run on the same node as the piw-master script.
         '-y', '--yes', action='store_true',
         help="Run non-interactively; never prompt during operation")
     parser.add_argument(
-        '-s', '--skip', action='store', default=None,
+        '-s', '--skip', action='store', default='',
         help="Mark the version with a reason to prevent future build attempts")
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,

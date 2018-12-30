@@ -81,7 +81,7 @@ class CloudGazer(PauseableTask):
             if version is not None:
                 if self.db.add_new_package_version(
                         package, version, timestamp,
-                        skip=None if source else 'binary only'):
+                        skip='' if source else 'binary only'):
                     self.logger.info(
                         'added package %s version %s', package, version)
                     if not source:
@@ -91,7 +91,7 @@ class CloudGazer(PauseableTask):
                     self.web_queue.send_msg('PKGPROJ', package)
                 elif source and self.db.get_version_skip(
                         package, version) == 'binary only':
-                    self.db.skip_package_version(package, version, None)
+                    self.db.skip_package_version(package, version, '')
                     self.logger.info(
                         'enabled package %s version %s', package, version)
                     self.web_queue.send_msg('PKGPROJ', package)

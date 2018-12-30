@@ -88,7 +88,7 @@ def test_add_new_package_version(db_intf, db, with_package):
 def test_skip_package(db_intf, db, with_package):
     assert db.execute(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == (None,)
+        "WHERE package = 'foo'").first() == ('',)
     db_intf.skip_package('foo', 'manual override')
     assert db.execute(
         "SELECT skip FROM packages "
@@ -99,11 +99,11 @@ def test_skip_package_version(db_intf, db, with_package_version):
     assert db.execute(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
-        "AND version = '0.1'").first() == (None,)
+        "AND version = '0.1'").first() == ('',)
     db_intf.skip_package_version('foo', '0.1', 'binary only')
     assert db.execute(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == (None,)
+        "WHERE package = 'foo'").first() == ('',)
     assert db.execute(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
@@ -254,7 +254,7 @@ def test_get_version_files(db_intf, with_files):
 
 
 def test_get_version_skip(db_intf, with_package_version):
-    assert db_intf.get_version_skip('foo', '0.1') is None
+    assert db_intf.get_version_skip('foo', '0.1') == ''
 
 
 def test_get_project_versions(db_intf, with_files):

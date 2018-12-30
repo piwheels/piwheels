@@ -311,13 +311,13 @@ class DbClient:
         else:
             raise IOError(result)
 
-    def add_new_package(self, package, skip=None):
+    def add_new_package(self, package, skip=''):
         """
         See :meth:`.db.Database.add_new_package`.
         """
         return self._execute('NEWPKG', [package, skip])
 
-    def add_new_package_version(self, package, version, released=None, skip=None):
+    def add_new_package_version(self, package, version, released=None, skip=''):
         """
         See :meth:`.db.Database.add_new_package_version`.
         """

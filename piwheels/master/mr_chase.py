@@ -214,7 +214,7 @@ class MrChase(PauseableTask):
             return 'ERROR', 'unknown package version %s-%s' % (
                 package, version)
         self.logger.info('removing %s %s', package, version)
-        if reason is not None:
+        if reason:
             self.db.skip_package_version(package, version, reason)
         for filename in self.db.get_version_files(package, version):
             self.fs.remove(package, filename)
