@@ -612,21 +612,92 @@ GRANT EXECUTE ON FUNCTION log_download(
     TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
     ) TO {username};
 
--- log_build
+-- log_build_success(package, version, build_by, ...)
+-- log_build_failure(package, version, build_by, ...)
 -------------------------------------------------------------------------------
 -- Adds a new entry to the builds table, and any associated files
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION log_build(
+CREATE FUNCTION log_build_success(
     package TEXT,
     version TEXT,
     built_by INTEGER,
     duration INTERVAL,
-    status BOOLEAN,
     abi_tag TEXT,
     output TEXT,
     build_files files ARRAY,
     build_deps dependencies ARRAY
+)
+    RETURNS INTEGER
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+DECLARE
+    new_build_id INTEGER;
+BEGIN
+    IF ARRAY_LENGTH(build_files, 1) = 0 THEN
+        RAISE EXCEPTION integrity_constraint_violation
+            USING MESSAGE = 'Successful build must include at least one file';
+    END IF;
+    INSERT INTO builds (
+            package,
+            version,
+            built_by,
+            duration,
+            status,
+            abi_tag
+        )
+        VALUES (
+            package,
+            version,
+            built_by,
+            duration,
+            TRUE,
+            abi_tag
+        )
+        RETURNING build_id
+        INTO new_build_id;
+    INSERT INTO output VALUES (new_build_id, output);
+    -- We delete the existing entries from files rather than using INSERT..ON
+    -- CONFLICT UPDATE because we need to delete dependencies associated with
+    -- those files too. This is considerably simpler than a multi-layered
+    -- upsert across tables.
+    DELETE FROM files f
+        USING UNNEST(build_files) AS b
+        WHERE f.filename = b.filename;
+    INSERT INTO files
+        SELECT
+            b.filename,
+            new_build_id,
+            b.filesize,
+            b.filehash,
+            b.package_tag,
+            b.package_version_tag,
+            b.py_version_tag,
+            b.abi_tag,
+            b.platform_tag
+        FROM
+            UNNEST(build_files) AS b;
+    INSERT INTO dependencies
+        SELECT
+            d.filename,
+            d.tool,
+            d.dependency
+        FROM
+            UNNEST(build_deps) AS d;
+    RETURN new_build_id;
+END;
+$sql$;
+
+CREATE FUNCTION log_build_failure(
+    package TEXT,
+    version TEXT,
+    built_by INTEGER,
+    duration INTERVAL,
+    abi_tag TEXT,
+    output TEXT
 )
     RETURNS INTEGER
     LANGUAGE plpgsql
@@ -650,44 +721,27 @@ BEGIN
             version,
             built_by,
             duration,
-            status,
+            FALSE,
             abi_tag
         )
         RETURNING build_id
         INTO new_build_id;
-    INSERT INTO output
-        VALUES (new_build_id, output);
-    -- We delete the existing entries from files rather than using INSERT..ON
-    -- CONFLICT UPDATE because we need to delete dependencies associated with
-    -- those files too. This is considerably simpler than a multi-layered
-    -- upsert across tables.
-    DELETE FROM files f
-        USING UNNEST(build_files) AS b
-        WHERE f.filename = b.filename;
-    INSERT INTO files
-        SELECT
-            b.filename,
-            new_build_id,
-            b.filesize,
-            b.filehash,
-            b.package_tag,
-            b.package_version_tag,
-            b.py_version_tag,
-            b.abi_tag,
-            b.platform_tag
-        FROM
-            UNNEST(build_files) AS b;
+    INSERT INTO output VALUES (new_build_id, output);
     RETURN new_build_id;
 END;
 $sql$;
 
-REVOKE ALL ON FUNCTION log_build(
-    TEXT, TEXT, INTEGER, INTERVAL, BOOLEAN, TEXT, TEXT,
-    files ARRAY, dependencies ARRAY
+REVOKE ALL ON FUNCTION log_build_success(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT, files ARRAY, dependencies ARRAY
     ) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION log_build(
-    TEXT, TEXT, INTEGER, INTERVAL, BOOLEAN, TEXT, TEXT,
-    files ARRAY, dependencies ARRAY
+GRANT EXECUTE ON FUNCTION log_build_success(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT, files ARRAY, dependencies ARRAY
+    ) TO {username};
+REVOKE ALL ON FUNCTION log_build_failure(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_build_failure(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT
     ) TO {username};
 
 -- delete_build(package, version)

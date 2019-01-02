@@ -216,38 +216,49 @@ class Database:
         info if successful.
         """
         with self._conn.begin():
-            build_id = self._conn.execute(
-                "VALUES (log_build(%s, %s, %s, %s, %s, %s, %s, "
-                "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
-                "))",
-                (
-                    build.package,
-                    build.version,
-                    build.slave_id,
-                    build.duration,
-                    build.status,
-                    build.abi_tag,
-                    build.output,
-                    [(
-                        file.filename,
-                        None,
-                        file.filesize,
-                        file.filehash,
-                        file.package_tag,
-                        file.package_version_tag,
-                        file.py_version_tag,
-                        file.abi_tag,
-                        file.platform_tag,
-                    )
-                    for file in build.files.values()],
-                    [(
-                        file.filename,
-                        tool,
-                        dependency,
-                    )
-                    for file in build.files.values()
-                    for tool, dependency in file.dependencies]
-                )).scalar()
+            if build.status:
+                build_id = self._conn.execute(
+                    "VALUES (log_build_success(%s, %s, %s, %s, %s, %s, "
+                    "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
+                    "))",
+                    (
+                        build.package,
+                        build.version,
+                        build.slave_id,
+                        build.duration,
+                        build.abi_tag,
+                        build.output,
+                        [(
+                            file.filename,
+                            None,
+                            file.filesize,
+                            file.filehash,
+                            file.package_tag,
+                            file.package_version_tag,
+                            file.py_version_tag,
+                            file.abi_tag,
+                            file.platform_tag,
+                        )
+                        for file in build.files.values()],
+                        [(
+                            file.filename,
+                            tool,
+                            dependency,
+                        )
+                        for file in build.files.values()
+                        for tool, dependency in file.dependencies]
+                    )).scalar()
+            else:
+                build_id = self._conn.execute(
+                    "VALUES (log_build_failure(%s, %s, %s, %s, %s, %s))",
+                    (
+                        build.package,
+                        build.version,
+                        build.slave_id,
+                        build.duration,
+                        build.abi_tag,
+                        build.output,
+                    )).scalar()
             build.logged(build_id)
 
     def get_build_abis(self):
