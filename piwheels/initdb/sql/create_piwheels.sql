@@ -54,7 +54,6 @@ CREATE TABLE versions (
 );
 
 CREATE INDEX versions_package ON versions(package);
-CREATE INDEX versions_skip ON versions((skip = ''), package);
 GRANT SELECT ON versions TO {username};
 
 -- build_abis
@@ -449,12 +448,13 @@ CREATE FUNCTION set_pypi_serial(new_serial INTEGER)
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    BEGIN
-        IF (SELECT pypi_serial FROM configuration) > new_serial THEN
-            RAISE EXCEPTION integrity_constraint_violation;
-        END IF;
-        UPDATE configuration SET pypi_serial = new_serial WHERE id = 1;
-    END;
+BEGIN
+    IF (SELECT pypi_serial FROM configuration) > new_serial THEN
+        RAISE EXCEPTION integrity_constraint_violation
+            USING MESSAGE = 'pypi_serial number cannot go backwards';
+    END IF;
+    UPDATE configuration SET pypi_serial = new_serial WHERE id = 1;
+END;
 $sql$;
 
 REVOKE ALL ON FUNCTION set_pypi_serial(INTEGER) FROM PUBLIC;
