@@ -26,17 +26,53 @@ GRANT SELECT ON build_abis TO {username};
 
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 
+DROP VIEW builds_pending;
+DROP VIEW statistics;
+
+CREATE TABLE files2 (
+    filename            VARCHAR(255) NOT NULL,
+    build_id            INTEGER NOT NULL,
+    filesize            INTEGER NOT NULL,
+    filehash            CHAR(64) NOT NULL,
+    package_tag         VARCHAR(200) NOT NULL,
+    package_version_tag VARCHAR(200) NOT NULL,
+    py_version_tag      VARCHAR(100) NOT NULL,
+    abi_tag             VARCHAR(100) NOT NULL,
+    platform_tag        VARCHAR(100) NOT NULL
+);
+INSERT INTO files2 (
+    filename,
+    build_id,
+    filesize,
+    filehash,
+    package_tag,
+    package_version_tag,
+    py_version_tag,
+    abi_tag,
+    platform_tag
+)
+SELECT
+    filename,
+    build_id,
+    filesize,
+    filehash,
+    regexp_replace(filename, '([^-]*)-.*$', E'\\1'),
+    package_version_tag,
+    py_version_tag,
+    abi_tag,
+    platform_tag
+FROM files;
+DROP TABLE files;
+ALTER TABLE files2 RENAME TO files;
 ALTER TABLE files
-    ADD COLUMN package_tag VARCHAR(200) NOT NULL DEFAULT '';
-UPDATE files
-    SET package_tag = regexp_replace(filename, '([^-]*)-.*$', E'\\1');
-ALTER TABLE files
-    ALTER COLUMN package_tag DROP DEFAULT;
-DROP INDEX files_size;
+    ADD CONSTRAINT files_pk PRIMARY KEY (filename),
+    ADD CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
+        REFERENCES builds (build_id) ON DELETE CASCADE;
+CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag) WHERE abi_tag <> 'none';
+GRANT SELECT ON files TO {username};
 
-DROP VIEW builds_pending;
 CREATE VIEW builds_pending AS
     SELECT
         v.package,
@@ -73,7 +109,6 @@ CREATE VIEW builds_pending AS
 
 GRANT SELECT ON builds_pending TO {username};
 
-DROP VIEW statistics;
 CREATE VIEW statistics AS
     WITH package_stats AS (
         SELECT COUNT(*) AS packages_count

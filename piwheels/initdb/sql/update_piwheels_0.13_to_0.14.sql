@@ -3,11 +3,15 @@ UPDATE configuration SET version = '0.14';
 REVOKE UPDATE ON configuration FROM {username};
 
 UPDATE packages SET skip = '' WHERE skip IS NULL;
-ALTER packages ALTER COLUMN skip NOT NULL, ALTER COLUMN skip SET DEFAULT '';
+ALTER TABLE packages
+    ALTER COLUMN skip SET NOT NULL,
+    ALTER COLUMN skip SET DEFAULT '';
 REVOKE INSERT,UPDATE ON packages FROM {username};
 
 UPDATE versions SET skip = '' WHERE skip IS NULL;
-ALTER versions ALTER COLUMN skip NOT NULL, ALTER COLUMN skip SET DEFAULT '';
+ALTER TABLE versions
+    ALTER COLUMN skip SET NOT NULL,
+    ALTER COLUMN skip SET DEFAULT '';
 DROP INDEX versions_skip;
 REVOKE INSERT,UPDATE ON versions FROM {username};
 
@@ -46,12 +50,121 @@ SELECT
 FROM
     packages p
     JOIN versions v ON p.package = v.package
-    JOIN builds b ON v.package = b.package AND v.version = b.version
+    LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
 GROUP BY
     v.package,
     v.version,
     skipped;
 GRANT SELECT ON versions_detail TO {username};
+
+DROP VIEW builds_pending;
+CREATE VIEW builds_pending AS
+SELECT
+    package,
+    version,
+    MIN(abi_tag) AS abi_tag
+FROM (
+    SELECT
+        v.package,
+        v.version,
+        b.abi_tag
+    FROM
+        packages AS p
+        JOIN versions AS v ON v.package = p.package
+        CROSS JOIN build_abis AS b
+    WHERE
+        v.skip = ''
+        AND p.skip = ''
+
+    EXCEPT ALL
+
+    (
+        SELECT
+            b.package,
+            b.version,
+            v.abi_tag
+        FROM
+            builds AS b
+            JOIN files AS f ON b.build_id = f.build_id
+            CROSS JOIN build_abis AS v
+        WHERE f.abi_tag = 'none'
+
+        UNION ALL
+
+        SELECT
+            b.package,
+            b.version,
+            COALESCE(f.abi_tag, b.abi_tag) AS abi_tag
+        FROM
+            builds AS b
+            LEFT JOIN files AS f ON b.build_id = f.build_id
+        WHERE
+            f.build_id IS NULL
+            OR f.abi_tag <> 'none'
+    )
+) AS t
+GROUP BY
+    package,
+    version;
+GRANT SELECT ON builds_pending TO {username};
+
+DROP VIEW statistics;
+CREATE VIEW statistics AS
+    WITH build_stats AS (
+        SELECT
+            COUNT(*) AS builds_count,
+            COUNT(*) FILTER (WHERE status) AS builds_count_success,
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
+        FROM
+            builds
+    ),
+    build_latest AS (
+        SELECT COUNT(*) AS builds_count_last_hour
+        FROM builds
+        WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+    ),
+    file_count AS (
+        SELECT
+            COUNT(*) AS files_count,
+            COUNT(DISTINCT package_tag) AS packages_built
+        FROM files
+    ),
+    file_stats AS (
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
+        SELECT COALESCE(SUM(filesize), 0) AS builds_size
+        FROM files
+        WHERE platform_tag <> 'linux_armv6l'
+    ),
+    download_stats AS (
+        SELECT COUNT(*) AS downloads_last_month
+        FROM downloads
+        WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
+    )
+    SELECT
+        fc.packages_built,
+        bs.builds_count,
+        bs.builds_count_success,
+        bl.builds_count_last_hour,
+        bs.builds_time,
+        fc.files_count,
+        fs.builds_size,
+        dl.downloads_last_month
+    FROM
+        build_stats bs,
+        build_latest bl,
+        file_count fc,
+        file_stats fs,
+        download_stats dl;
+GRANT SELECT ON statistics TO {username};
 
 CREATE FUNCTION set_pypi_serial(new_serial INTEGER)
     RETURNS VOID
