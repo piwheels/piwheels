@@ -406,15 +406,20 @@ class SlaveState:
         )
 
     def hello(self):
-        SlaveState.status_queue.send_pyobj(
-            [self._slave_id, self._first_seen, 'HELLO',
-             self._timeout, self._native_py_version, self._native_abi,
-             self._native_platform, self._label])
+        SlaveState.status_queue.send_msg(
+            'SLAVE', [
+                self._slave_id, self._first_seen, [
+                    'HELLO',
+                     self._timeout, self._native_py_version, self._native_abi,
+                     self._native_platform, self._label
+                ]
+            ]
+        )
         if self._reply is not None and self._reply[0] != 'HELLO':
             # Replay the last reply for the sake of monitors that have just
             # connected to the master
-            SlaveState.status_queue.send_pyobj(
-                [self._slave_id, self._last_seen] + self._reply)
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, self._reply])
 
     def kill(self):
         self._terminated = True

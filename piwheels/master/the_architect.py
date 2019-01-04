@@ -35,6 +35,7 @@ Defines :class:`TheArchitect` task; see class for more details.
 
 import zmq
 
+from .. import protocols
 from .tasks import Task
 from .db import Database
 
@@ -52,7 +53,8 @@ class TheArchitect(Task):
         super().__init__(config)
         self.db = Database(config.dsn)
         self.query = self.db.get_build_queue()
-        self.builds_queue = self.ctx.socket(zmq.PUSH)
+        self.builds_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.bind(config.builds_queue)
 
@@ -72,8 +74,7 @@ class TheArchitect(Task):
         """
         try:
             row = next(self.query)
-            self.builds_queue.send_pyobj(
-                (row.abi_tag, row.package, row.version)
-            )
+            self.builds_queue.send_msg(
+                'QUEUE', (row.abi_tag, row.package, row.version))
         except StopIteration:
             self.query = self.db.get_build_queue()

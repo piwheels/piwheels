@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 
 import zmq
 
-from .. import const
+from .. import const, protocols
 from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .file_juggler import FsClient
@@ -72,14 +72,17 @@ class BigBrother(PauseableTask):
             'downloads_last_month':  0,
         }
         self.timestamp = datetime.utcnow() - timedelta(seconds=40)
-        stats_queue = self.ctx.socket(zmq.PULL)
+        stats_queue = self.ctx.socket(
+            zmq.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
         stats_queue.bind(config.stats_queue)
         self.register(stats_queue, self.handle_stats)
-        self.status_queue = self.ctx.socket(zmq.PUSH)
+        self.status_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.the_scribe)
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
@@ -91,14 +94,17 @@ class BigBrother(PauseableTask):
         super().close()
 
     def handle_stats(self, queue):
-        msg, *args = queue.recv_pyobj()
-        if msg == 'STATFS':
-            self.stats['disk_free'] = args[0].f_frsize * args[0].f_bavail
-            self.stats['disk_size'] = args[0].f_frsize * args[0].f_blocks
-        elif msg == 'STATBQ':
-            self.stats['builds_pending'] = sum(args[0].values())
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.exception(e)
         else:
-            self.logger.error('invalid big_brother message: %s', msg)
+            if msg == 'STATFS':
+                f_frsize, f_bavail, f_blocks = data
+                self.stats['disk_free'] = f_frsize * f_bavail
+                self.stats['disk_size'] = f_frsize * f_blocks
+            elif msg == 'STATBQ':
+                self.stats['builds_pending'] = sum(data.values())
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
@@ -116,11 +122,7 @@ class BigBrother(PauseableTask):
             self.stats['builds_size'] = rec.builds_size
             self.stats['files_count'] = rec.files_count
             self.stats['downloads_last_month'] = rec.downloads_last_month
-            self.web_queue.send_pyobj(['HOME', self.stats])
-            self.status_queue.send_pyobj([-1, self.timestamp, 'STATUS', self.stats])
-            rec = self.db.get_downloads_recent()
-            search_index = [
-                (name, count)
-                for name, count in rec.items()
-            ]
-            self.web_queue.send_pyobj(['SEARCH', search_index])
+            self.web_queue.send_msg('HOME', self.stats)
+            self.status_queue.send_msg(
+                'STATUS', (-1, self.timestamp, self.stats))
+            self.web_queue.send_msg('SEARCH', self.db.get_downloads_recent())

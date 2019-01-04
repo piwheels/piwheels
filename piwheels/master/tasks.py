@@ -45,6 +45,8 @@ from threading import Thread
 
 import zmq
 
+from .. import transport, protocols
+
 
 class TaskQuit(Exception):
     """
@@ -63,16 +65,18 @@ class Task(Thread):
     """
     name = 'Task'
 
-    def __init__(self, config):
+    def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__()
-        self.ctx = zmq.Context.instance()
+        self.ctx = transport.Context.instance()
         self.handlers = {}
         self.poller = zmq.Poller()
         self.logger = logging.getLogger(self.name)
-        control_queue = self.ctx.socket(zmq.PULL)
+        self.control_protocol = control_protocol
+        control_queue = self.ctx.socket(zmq.PULL, protocol=control_protocol)
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
-        self.quit_queue = self.ctx.socket(zmq.PUSH)
+        self.quit_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.master_control)
         self.quit_queue.hwm = 1
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
@@ -106,11 +110,11 @@ class Task(Thread):
         self.poller.register(queue, flags)
         self.handlers[queue] = handler
 
-    def _ctrl(self, msg):
-        queue = self.ctx.socket(zmq.PUSH)
+    def _ctrl(self, msg, data=None):
+        queue = self.ctx.socket(zmq.PUSH, protocol=self.control_protocol)
         try:
             queue.connect('inproc://ctrl-%s' % self.name)
-            queue.send_pyobj(msg)
+            queue.send_msg(msg, data)
         finally:
             queue.close()
 
@@ -120,7 +124,7 @@ class Task(Thread):
         always safe to call repeatedly and even if the task isn't pauseable
         it'll simply be ignored.
         """
-        self._ctrl(['PAUSE'])
+        self._ctrl('PAUSE')
 
     def resume(self):
         """
@@ -128,14 +132,14 @@ class Task(Thread):
         it's safe to call repeatedly and even if the task isn't pauseable it'll
         simply be ignored.
         """
-        self._ctrl(['RESUME'])
+        self._ctrl('RESUME')
 
     def quit(self):
         """
         Requests that the task terminate at its earliest convenience. To wait
         until the task has actually closed, call :meth:`join` afterwards.
         """
-        self._ctrl(['QUIT'])
+        self._ctrl('QUIT')
 
     def handle_control(self, queue):
         """
@@ -144,11 +148,15 @@ class Task(Thread):
         (which the :meth:`run` method will catch and use as a signal to end).
         """
         # pylint: disable=no-self-use,unused-variable
-        msg, *args = queue.recv_pyobj()
-        if msg == 'QUIT':
-            raise TaskQuit
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.exception(e)
         else:
-            self.logger.error('invalid control message: %s', msg)
+            if msg == 'QUIT':
+                raise TaskQuit
+            else:
+                self.logger.error('invalid control message: %s', msg)
 
     def once(self):
         """
@@ -196,7 +204,7 @@ class Task(Thread):
         except TaskQuit:
             self.logger.info('stopping')
         except:
-            self.quit_queue.send_pyobj(['QUIT'])
+            self.quit_queue.send_msg('QUIT')
             self.logger.exception('unhandled exception')
         finally:
             self.close()
@@ -214,17 +222,21 @@ class PauseableTask(Task):
     """
     def handle_control(self, queue):
         # pylint: disable=unused-variable
-        msg, *args = queue.recv_pyobj()
-        if msg == 'QUIT':
-            raise TaskQuit
-        elif msg == 'PAUSE':
-            while True:
-                msg, *args = queue.recv_pyobj()
-                if msg == 'QUIT':
-                    raise TaskQuit
-                elif msg == 'RESUME':
-                    break
-                else:
-                    self.logger.error('invalid control message: %s', msg)
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.exception(e)
         else:
-            self.logger.error('invalid control message: %s', msg)
+            if msg == 'QUIT':
+                raise TaskQuit
+            elif msg == 'PAUSE':
+                while True:
+                    msg, data = queue.recv_msg()
+                    if msg == 'QUIT':
+                        raise TaskQuit
+                    elif msg == 'RESUME':
+                        break
+                    else:
+                        self.logger.error('invalid control message: %s', msg)
+            else:
+                self.logger.error('invalid control message: %s', msg)

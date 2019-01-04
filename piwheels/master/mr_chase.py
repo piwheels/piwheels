@@ -37,7 +37,7 @@ import pickle
 
 import zmq
 
-from .. import const
+from .. import const, protocols
 from .states import BuildState, FileState
 from .tasks import PauseableTask
 from .the_oracle import DbClient
@@ -60,13 +60,16 @@ class MrChase(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        import_queue = self.ctx.socket(zmq.ROUTER)
+        import_queue = self.ctx.socket(
+            zmq.ROUTER, protocol=protocols.mr_chase)
         import_queue.bind(config.import_queue)
         self.register(import_queue, self.handle_import)
-        self.status_queue = self.ctx.socket(zmq.PUSH)
+        self.status_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.the_scribe)
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
@@ -89,9 +92,10 @@ class MrChase(PauseableTask):
         """
         # pylint: disable=too-many-locals
         try:
-            address, empty, msg = queue.recv_multipart()
-            msg, *args = pickle.loads(msg)
-            self.logger.debug('RX: %s %r', msg, args)
+            address, msg, data = queue.recv_addr_msg()
+        except IOError as e:
+            self.logger.exception(e)
+        else:
             try:
                 state = self.states[address]
             except KeyError:
@@ -104,7 +108,7 @@ class MrChase(PauseableTask):
                         duration,
                         output,
                         files,
-                    ) = args
+                    ) = data
                     state = BuildState(
                         # XXX Slave ID is always 0 ... what happens if two
                         # simultaneous imports are attempted, particularly re
@@ -118,33 +122,27 @@ class MrChase(PauseableTask):
                     self.states[address] = state
                 elif msg == 'REMOVE':
                     # No need to store state for the remover
-                    package, version, skip = args
+                    package, version, skip = data
                     state = (package, version, skip)
-                else:
-                    raise ValueError('invalid first message')
-        except TypeError:
-            self.logger.error('invalid message structure from client')
-            reply = ['ERROR', 'invalid message structure']
-        except ValueError:
+                elif msg == 'SENT':
+                    self.logger.error('SENT before IMPORT')
+                    queue.send_addr_msg(address, 'ERROR', 'protocol violation')
+                    return
+        try:
+            handler = {
+                'IMPORT': self.do_import,
+                'REMOVE': self.do_remove,
+                'SENT': self.do_sent,
+            }[msg]
+        except KeyError:
             self.logger.error('invalid message from client: %s', msg)
-            reply = ['ERROR', 'invalid message']
+            msg, data = 'ERROR', 'invalid message'
         else:
-            try:
-                handler = {
-                    'IMPORT': self.do_import,
-                    'REMOVE': self.do_remove,
-                    'SENT': self.do_sent,
-                }[msg]
-            except KeyError:
-                self.logger.error('invalid message from client: %s', msg)
-                reply = ['ERROR', 'invalid message']
-            else:
-                reply = handler(state)
+            msg, data = handler(state)
 
-        if reply[0] in ('DONE', 'ERROR'):
+        if msg in ('DONE', 'ERROR'):
             self.states.pop(address, None)
-        queue.send_multipart([address, empty, pickle.dumps(reply)])
-        self.logger.debug('TX: %r', reply)
+        queue.send_addr_msg(address, msg, data)
 
     def do_import(self, state):
         """
@@ -156,10 +154,10 @@ class MrChase(PauseableTask):
         # pylint: disable=too-many-return-statements
         if not state.status:
             self.logger.error('attempting to add failed build')
-            return ['ERROR', 'importing a failed build is not supported']
+            return 'ERROR', 'importing a failed build is not supported'
         if not state.files:
             self.logger.error('attempting to add empty build')
-            return ['ERROR', 'no files listed for import']
+            return 'ERROR', 'no files listed for import'
         build_armv6l_hack(state)
         build_abis = self.db.get_build_abis()
         if state.abi_tag is None:
@@ -169,29 +167,29 @@ class MrChase(PauseableTask):
             state.abi_tag = min(build_abis)
         if state.abi_tag not in build_abis:
             self.logger.error('invalid ABI: %s', state.abi_tag)
-            return ['ERROR', 'invalid ABI: %s' % state.abi_tag]
+            return 'ERROR', 'invalid ABI: %s' % state.abi_tag
         if not self.db.test_package_version(state.package, state.version):
             self.logger.error('unknown package version %s-%s',
                               state.package, state.version)
-            return ['ERROR', 'unknown package version %s-%s' % (
-                state.package, state.version)]
+            return 'ERROR', 'unknown package version %s-%s' % (
+                state.package, state.version)
         try:
             self.db.log_build(state)
         except IOError as err:
             self.logger.error('failed to log build: %s', err)
-            return ['ERROR', str(err)]
+            return 'ERROR', str(err)
         self.logger.info('registered build for %s %s',
                          state.package, state.version)
         if state.status and not state.transfers_done:
             self.fs.expect(0, state.files[state.next_file])
             self.logger.info('send %s', state.next_file)
-            return ['SEND', state.next_file]
+            return 'SEND', state.next_file
         else:
             # XXX We'll never reach this branch at the moment, but in future we
             # might well support failed builds (as another method of skipping
             # builds)
-            self.web_queue.send_pyobj(['PKGPROJ', state.package])
-            return ['DONE']
+            self.web_queue.send_msg('PKGPROJ', state.package)
+            return 'DONE', None
 
     def do_sent(self, state):
         """
@@ -212,15 +210,15 @@ class MrChase(PauseableTask):
             self.logger.info('verified transfer of %s', state.next_file)
             state.files[state.next_file].verified()
             if state.transfers_done:
-                self.web_queue.send_pyobj(['PKGBOTH', state.package])
-                return ['DONE']
+                self.web_queue.send_msg('PKGBOTH', state.package)
+                return 'DONE', None
             else:
                 self.fs.expect(0, state.files[state.next_file])
                 self.logger.info('send %s', state.next_file)
-                return ['SEND', state.next_file]
+                return 'SEND', state.next_file
         else:
             self.logger.info('re-send %s', state.next_file)
-            return ['SEND', state.next_file]
+            return 'SEND', state.next_file
 
     def do_remove(self, state):
         """
@@ -231,13 +229,13 @@ class MrChase(PauseableTask):
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s-%s',
                               package, version)
-            return ['ERROR', 'unknown package version %s-%s' % (
-                package, version)]
+            return 'ERROR', 'unknown package version %s-%s' % (
+                package, version)
         self.logger.info('removing %s %s', package, version)
         if reason is not None:
             self.db.skip_package_version(package, version, reason)
         for filename in self.db.get_version_files(package, version):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)
-        self.web_queue.send_pyobj(['PKGBOTH', package])
-        return ['DONE']
+        self.web_queue.send_msg('PKGBOTH', package)
+        return 'DONE', None

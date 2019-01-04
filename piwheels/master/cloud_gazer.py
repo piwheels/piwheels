@@ -35,6 +35,7 @@ Defines the :class:`CloudGazer` task; see class for more details.
 
 import zmq
 
+from .. import protocols
 from .tasks import PauseableTask
 from .pypi import PyPIEvents
 from .the_oracle import DbClient
@@ -52,7 +53,8 @@ class CloudGazer(PauseableTask):
         super().__init__(config)
         self.db = DbClient(config)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
-        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.the_scribe)
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.serial = -1
@@ -75,7 +77,7 @@ class CloudGazer(PauseableTask):
                 self.packages.add(package)
                 if self.db.add_new_package(package):
                     self.logger.info('added package %s', package)
-                    self.web_queue.send_pyobj(['PKGBOTH', package])
+                    self.web_queue.send_msg('PKGBOTH', package)
             if version is not None:
                 if self.db.add_new_package_version(
                         package, version, timestamp,
@@ -86,13 +88,13 @@ class CloudGazer(PauseableTask):
                         self.logger.info(
                             'disabled package %s version %s (binary only)',
                             package, version)
-                    self.web_queue.send_pyobj(['PKGPROJ', package])
+                    self.web_queue.send_msg('PKGPROJ', package)
                 elif source and self.db.get_version_skip(
                         package, version) == 'binary only':
                     self.db.skip_package_version(package, version, None)
                     self.logger.info(
                         'enabled package %s version %s', package, version)
-                    self.web_queue.send_pyobj(['PKGPROJ', package])
+                    self.web_queue.send_msg('PKGPROJ', package)
             self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial

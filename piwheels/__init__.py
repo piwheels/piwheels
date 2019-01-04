@@ -74,7 +74,7 @@ __author_email__ = 'ben@raspberrypi.org'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
-__requires__ = ['configargparse', 'pyzmq']
+__requires__ = ['configargparse', 'pyzmq', 'voluptuous']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
