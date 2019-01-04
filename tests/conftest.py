@@ -462,6 +462,7 @@ class MockTask(Thread):
         assert self.control.recv_pyobj() == ['OK']
 
     def loop(self, ctx, address):
+        tested = False
         queue = []
         done = []
         socks = {}
@@ -487,7 +488,10 @@ class MockTask(Thread):
                 if control in socks:
                     msg, *args = control.recv_pyobj()
                     if msg == 'QUIT':
-                        control.send_pyobj(['OK'])
+                        if tested or not queue:
+                            control.send_pyobj(['OK'])
+                        else:
+                            control.send_pyobj(['NOTEST'])
                         break
                     elif msg == 'SEND':
                         queue.append(MockMessage('send', args[0]))
@@ -496,6 +500,7 @@ class MockTask(Thread):
                         queue.append(MockMessage('recv', args[0]))
                         control.send_pyobj(['OK'])
                     elif msg == 'TEST':
+                        tested = True
                         try:
                             timeout = timedelta(seconds=args[0])
                             start = datetime.utcnow()

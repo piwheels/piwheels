@@ -59,6 +59,7 @@ def test_lumberjack_log_valid(db_queue, log_queue, download_state, task):
     assert task.logger.info.call_args == mock.call(
         'logging download of %s from %s',
         download_state.filename, download_state.host)
+    db_queue.check()
 
 
 def test_lumberjack_log_invalid(db_queue, log_queue, task):

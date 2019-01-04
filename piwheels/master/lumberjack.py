@@ -74,3 +74,4 @@ class Lumberjack(PauseableTask):
             download = DownloadState(*args)
             self.logger.info('logging download of %s from %s',
                              download.filename, download.host)
+            self.db.log_download(download)
