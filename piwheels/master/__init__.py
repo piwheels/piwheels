@@ -45,7 +45,7 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const, systemd
+from .. import __version__, terminal, const, systemd, transport
 from ..systemd import get_systemd
 from .tasks import TaskQuit
 from .big_brother import BigBrother
@@ -164,14 +164,17 @@ write access to the output directory.
         if os.geteuid() == 0:
             self.logger.error('Master must not be run as root')
             return 1
-        ctx = zmq.Context.instance()
-        self.control_queue = ctx.socket(zmq.PULL)
+        ctx = transport.Context.instance()
+        self.control_queue = ctx.socket(
+            zmq.PULL, protocol=protocols.master_control)
         self.control_queue.hwm = 10
         self.control_queue.bind(config.control_queue)
-        self.int_status_queue = ctx.socket(zmq.PULL)
+        self.int_status_queue = ctx.socket(
+            zmq.PULL, protocol=reversed(protocols.monitor_stats))
         self.int_status_queue.hwm = 10
         self.int_status_queue.bind(const.INT_STATUS_QUEUE)
-        self.ext_status_queue = ctx.socket(zmq.PUB)
+        self.ext_status_queue = ctx.socket(
+            zmq.PUB, protocol=protocols.monitor_stats)
         self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
 

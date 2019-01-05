@@ -35,7 +35,7 @@ import zmq
 import pytest
 
 from conftest import MockTask
-from piwheels import const
+from piwheels import const, protocols
 from piwheels.master.big_brother import BigBrother
 
 
@@ -91,14 +91,12 @@ StatVFS = namedtuple('StatVFS', (
 
 @pytest.fixture()
 def stats_disk(request):
-    return StatVFS(
-        4096, 4096, 1000000, 50000, 40000, 1000000, 500000, 500000, 4096,
-        255)
+    return (4096, 40000, 1000000)
 
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PUSH)
+    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.big_brother))
     queue.hwm = 1
     queue.connect(master_config.stats_queue)
     yield queue
@@ -107,7 +105,7 @@ def stats_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -127,9 +125,9 @@ def test_gen_skip(master_status_queue, web_queue, task):
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         task.loop()  # crank the handle once
         with pytest.raises(zmq.ZMQError):
-            master_status_queue.recv_pyobj(flags=zmq.NOBLOCK)
+            master_status_queue.recv_msg(flags=zmq.NOBLOCK)
         with pytest.raises(zmq.ZMQError):
-            web_queue.recv_pyobj(flags=zmq.NOBLOCK)
+            web_queue.recv_msg(flags=zmq.NOBLOCK)
 
 
 def test_gen_stats(db_queue, master_status_queue, web_queue, task,
@@ -137,15 +135,15 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
-        db_queue.expect(['GETSTATS'])
-        db_queue.send(['OK', stats_result])
-        db_queue.expect(['GETDL'])
-        db_queue.send(['OK', {'foo': 10}])
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', stats_result)
+        db_queue.expect('GETDL')
+        db_queue.send('OK', {'foo': 10})
         task.loop()  # crank the handle once
         db_queue.check()
-        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
-        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
+        assert web_queue.recv_msg() == ('HOME', stats_dict)
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
 
 
 def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
@@ -153,20 +151,21 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
-        stats_queue.send_pyobj(['STATFS', stats_disk])
+        stats_queue.send_msg('STATFS', stats_disk)
         while task.stats['disk_free'] == 0:
             task.poll()
-        stats_dict['disk_free'] = stats_disk.f_frsize * stats_disk.f_bavail
-        stats_dict['disk_size'] = stats_disk.f_frsize * stats_disk.f_blocks
-        db_queue.expect(['GETSTATS'])
-        db_queue.send(['OK', stats_result])
-        db_queue.expect(['GETDL'])
-        db_queue.send(['OK', {'foo': 10}])
+        frsize, bavail, blocks = stats_disk
+        stats_dict['disk_free'] = frsize * bavail
+        stats_dict['disk_size'] = frsize * blocks
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', stats_result)
+        db_queue.expect('GETDL')
+        db_queue.send('OK', {'foo': 10})
         task.loop()
         db_queue.check()
-        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
-        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert web_queue.recv_msg() == ('HOME', stats_dict)
+        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
 
 
 def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
@@ -178,15 +177,15 @@ def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
         while task.stats['builds_pending'] == 0:
             task.poll()
         stats_dict['builds_pending'] = 1
-        db_queue.expect(['GETSTATS'])
-        db_queue.send(['OK', stats_result])
-        db_queue.expect(['GETDL'])
-        db_queue.send(['OK', {'foo': 10}])
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', stats_result)
+        db_queue.expect('GETDL')
+        db_queue.send('OK', {'foo': 10})
         task.loop()
         db_queue.check()
-        assert web_queue.recv_pyobj() == ['HOME', stats_dict]
-        assert master_status_queue.recv_pyobj() == [-1, dt.utcnow.return_value, 'STATUS', stats_dict]
-        assert web_queue.recv_pyobj() == ['SEARCH', [('foo', 10)]]
+        assert web_queue.recv_msg() == ('HOME', stats_dict)
+        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
 
 
 def test_bad_stats(db_queue, master_status_queue, web_queue, task,
@@ -195,8 +194,7 @@ def test_bad_stats(db_queue, master_status_queue, web_queue, task,
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
-        stats_queue.send_pyobj(['FOO'])
-        while task.logger.error.call_count == 0:
-            task.poll()
+        stats_queue.send(b'FOO')
+        task.poll()
         assert task.logger.error.call_args == mock.call(
-            'invalid big_brother message: %s', 'FOO')
+            'unable to deserialize data')

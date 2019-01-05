@@ -82,7 +82,7 @@ class BigBrother(PauseableTask):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.the_scribe)
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
@@ -97,7 +97,7 @@ class BigBrother(PauseableTask):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(str(e))
         else:
             if msg == 'STATFS':
                 f_frsize, f_bavail, f_blocks = data
@@ -123,6 +123,5 @@ class BigBrother(PauseableTask):
             self.stats['files_count'] = rec.files_count
             self.stats['downloads_last_month'] = rec.downloads_last_month
             self.web_queue.send_msg('HOME', self.stats)
-            self.status_queue.send_msg(
-                'STATUS', (-1, self.timestamp, self.stats))
+            self.status_queue.send_msg('STATS', self.stats)
             self.web_queue.send_msg('SEARCH', self.db.get_downloads_recent())

@@ -148,15 +148,14 @@ class Task(Thread):
         (which the :meth:`run` method will catch and use as a signal to end).
         """
         # pylint: disable=no-self-use,unused-variable
-        try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.exception(e)
+        # We deliberately don't catch the IOError that can result from recv_msg
+        # here as this queue is guaranteed to be in-process. If something sends
+        # us an invalid message it's a bug and we should shut down (see run)
+        msg, data = queue.recv_msg()
+        if msg == 'QUIT':
+            raise TaskQuit
         else:
-            if msg == 'QUIT':
-                raise TaskQuit
-            else:
-                self.logger.error('invalid control message: %s', msg)
+            raise IOError('invalid control message: %s' % msg)
 
     def once(self):
         """
@@ -222,21 +221,17 @@ class PauseableTask(Task):
     """
     def handle_control(self, queue):
         # pylint: disable=unused-variable
-        try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.exception(e)
+        msg, data = queue.recv_msg()
+        if msg == 'QUIT':
+            raise TaskQuit
+        elif msg == 'PAUSE':
+            while True:
+                msg, data = queue.recv_msg()
+                if msg == 'QUIT':
+                    raise TaskQuit
+                elif msg == 'RESUME':
+                    break
+                else:
+                    raise IOError('invalid control message: %s' % msg)
         else:
-            if msg == 'QUIT':
-                raise TaskQuit
-            elif msg == 'PAUSE':
-                while True:
-                    msg, data = queue.recv_msg()
-                    if msg == 'QUIT':
-                        raise TaskQuit
-                    elif msg == 'RESUME':
-                        break
-                    else:
-                        self.logger.error('invalid control message: %s', msg)
-            else:
-                self.logger.error('invalid control message: %s', msg)
+            raise IOError('invalid control message: %s' % msg)

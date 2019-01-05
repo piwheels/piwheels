@@ -27,56 +27,98 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import datetime as dt
+from collections import namedtuple
 
-from voluptuous import Schema, ExactSequence, Extra
+from voluptuous import Schema, ExactSequence, Extra, Maybe
 
 
-task_control = {
+# Sentinel representing missing data
+Missing = object()
+
+
+class Protocol(namedtuple('Protocol', ('recv', 'send'))):
+    # Protocols are generally specified from the point of view of the master;
+    # i.e. the recv dictionary contains the messages (and schemas) the master
+    # task expects to recv, and the send dictionary contains the messages it
+    # expects to send. The special __reversed__ method is overridden to allow
+    # client tasks to specify their protocol as reversed(some_protocol)
+    __slots__ = ()
+
+    def __new__(cls, recv=None, send=None):
+        return super().__new__(cls, {} if recv is None else recv,
+                               {} if send is None else send)
+
+    def __reversed__(self):
+        return Protocol(self.send, self.recv)
+
+
+_statistics_schema = Schema({      # statistics
+    'packages_count':        int,
+    'packages_built':        int,
+    'versions_count':        int,
+    'builds_count':          int,
+    'builds_last_hour':      int,
+    'builds_success':        int,
+    'builds_time':           dt.timedelta,
+    'builds_size':           int,
+    'builds_pending':        int,
+    'files_count':           int,
+    'disk_free':             int,
+    'disk_size':             int,
+    'downloads_last_month':  int,
+})
+
+
+task_control = Protocol(recv={
     'PAUSE':  None,
     'RESUME': None,
     'QUIT':   None,
-}
+})
 
-master_control = {
+
+master_control = Protocol(recv={
     'HELLO':  None,         # new monitor
     'PAUSE':  None,         # pause all operations on the master
     'RESUME': None,         # resume all operations on the master
     'KILL':   Schema(int),  # kill the specified slave
     'QUIT':   None,         # terminate the master
-}
+})
 
-big_brother = {
+
+big_brother = Protocol(recv={
     'STATFS': Schema(ExactSequence([
         int,  # statvfs.f_frsize
         int,  # statvfs.f_bavail
         int,  # statvfs.f_blocks
     ])),
     'STATBQ': Schema({str: int}),  # abi: queue-size
-}
+})
 
-the_scribe = {
+
+the_scribe = Protocol(recv={
     'PKGBOTH': Schema(str),  # package name
     'PKGPROJ': Schema(str),  # package name
-    'HOME':    Schema({str: int}),  # statistics XXX include actual keys
+    'HOME':    _statistics_schema,  # statistics
     'SEARCH':  Schema({str: int}),  # package: download-count
-}
+})
 
-the_architect = {
+
+the_architect = Protocol(send={
     'QUEUE': Schema(ExactSequence([
         str,  # abi
         str,  # package
         str,  # version
     ])),
-}
+})
 
-file_juggler_files = {
-    # This protocol isn't specified here as it's just multipart packets of
-    # bytes and the code doesn't use send_msg / recv_msg. See
-    # FileJuggler.handle_file and the associated documentation for more
-    # information on this protocol
-}
 
-file_juggler_fs = {
+# This protocol isn't specified here as it's just multipart packets of bytes
+# and the code doesn't use send_msg / recv_msg. See FileJuggler.handle_file and
+# the associated documentation for more information on this protocol
+file_juggler_files = Protocol()
+
+
+file_juggler_fs = Protocol(recv={
     'EXPECT': Schema(ExactSequence([
         int,    # slave id
         Extra,  # XXX file state
@@ -89,11 +131,13 @@ file_juggler_fs = {
         str,   # package name
         str,   # filename
     ])),
+}, send={
     'OK':     Schema(Extra),  # some result object XXX refine this?
     'ERR':    Schema(Exception),  # some exception object
-}
+})
 
-mr_chase = {
+
+mr_chase = Protocol(recv={
     'IMPORT': Schema(ExactSequence([
         str,    # abi_tag
         str,    # package
@@ -109,12 +153,14 @@ mr_chase = {
         str,    # skip reason
     ])),
     'SENT':   None,
-    'ERROR':  str,  # message
+}, send={
     'SEND':   str,  # filename
+    'ERROR':  str,  # message
     'DONE':   None,
-}
+})
 
-lumberjack = {
+
+lumberjack = Protocol(recv={
     'LOG': Schema(ExactSequence([
         str,          # filename
         str,          # host
@@ -127,9 +173,10 @@ lumberjack = {
         str,          # py_name
         str,          # py_version
     ])),
-}
+})
 
-slave_driver = {
+
+slave_driver = Protocol(recv={
     'HELLO': Schema(ExactSequence([
         float,   # timeout
         str,     # native_py_version
@@ -137,36 +184,40 @@ slave_driver = {
         str,     # native_platform
         str,     # label
     ])),
+    'BYE':   None,
+    'IDLE':  None,
+    'BUILT': Schema(ExactSequence([
+        # XXX ???
+    ])),
+    'SENT':  None,
+}, send={
     'ACK':   Schema(ExactSequence([
         int,     # slave id
         str,     # PyPI URL
     ])),
-    'BYE':   None,
-    'IDLE':  None,
+    'DIE':   None,
     'SLEEP': None,
     'BUILD': Schema(ExactSequence([
         str,     # package
         str,     # version
     ])),
-    'BUILT': Schema(ExactSequence([
-    ])),
     'SEND':  str,  # filename
-    'SENT':  None,
     'DONE':  None,
-}
+})
 
-the_oracle = {
+
+the_oracle = Protocol(recv={
     'ALLPKGS': None,
     'ALLVERS': None,
     'NEWPKG': Schema(ExactSequence([
         str,  # package
-        str,  # skip reason,
+        Maybe(str),  # skip reason  XXX remove Maybe
     ])),
     'NEWVER': Schema(ExactSequence([
         str,          # package
         str,          # version
         dt.datetime,  # released
-        str,          # skip reason
+        Maybe(str),   # skip reason  XXX remove Maybe
     ])),
     'SKIPPKG': Schema(ExactSequence([
         str,  # package
@@ -175,7 +226,7 @@ the_oracle = {
     'SKIPVER': Schema(ExactSequence([
         str,  # package
         str,  # version
-        str,  # skip reason
+        Maybe(str),  # skip reason  XXX remove Maybe
     ])),
     'LOGDOWNLOAD': Schema(Extra),  # XXX refine this
     'LOGBUILD': Schema(Extra),     # XXX refine this
@@ -213,16 +264,18 @@ the_oracle = {
     'GETDL': None,
     'FILEDEPS': Schema(ExactSequence([
         str,  # filename
-    ])),,
+    ])),
+}, send={
     'ERROR': str,    # message
-    'OK':    Extra,  # result
-}
+    'OK':    Schema(Extra),  # result XXX refine this? Would mean separate returns...
+})
 
-monitor_stats = {
-    'STATS': Schema({str: int}),   # statistics XXX include actual keys
+
+monitor_stats = Protocol(send={
+    'STATS': _statistics_schema,
     'SLAVE': Schema(ExactSequence([
         int,          # slave id
         dt.datetime,  # timestamp
         Extra,        # message  XXX extend schema here?
     ])),
-}
+})

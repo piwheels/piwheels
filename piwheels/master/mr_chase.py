@@ -94,51 +94,47 @@ class MrChase(PauseableTask):
         try:
             address, msg, data = queue.recv_addr_msg()
         except IOError as e:
-            self.logger.exception(e)
-        else:
-            try:
-                state = self.states[address]
-            except KeyError:
-                if msg == 'IMPORT':
-                    (
-                        abi_tag,
-                        package,
-                        version,
-                        status,
-                        duration,
-                        output,
-                        files,
-                    ) = data
-                    state = BuildState(
-                        # XXX Slave ID is always 0 ... what happens if two
-                        # simultaneous imports are attempted, particularly re
-                        # the file-expect mechanism?
-                        0, package, version, abi_tag, status, duration,
-                        output, files={
-                            filename: FileState(filename, *filestate)
-                            for filename, filestate in files.items()
-                        }
-                    )
-                    self.states[address] = state
-                elif msg == 'REMOVE':
-                    # No need to store state for the remover
-                    package, version, skip = data
-                    state = (package, version, skip)
-                elif msg == 'SENT':
-                    self.logger.error('SENT before IMPORT')
-                    queue.send_addr_msg(address, 'ERROR', 'protocol violation')
-                    return
+            self.logger.error(e)
+            return
+
         try:
-            handler = {
-                'IMPORT': self.do_import,
-                'REMOVE': self.do_remove,
-                'SENT': self.do_sent,
-            }[msg]
+            state = self.states[address]
         except KeyError:
-            self.logger.error('invalid message from client: %s', msg)
-            msg, data = 'ERROR', 'invalid message'
-        else:
-            msg, data = handler(state)
+            if msg == 'IMPORT':
+                (
+                    abi_tag,
+                    package,
+                    version,
+                    status,
+                    duration,
+                    output,
+                    files,
+                ) = data
+                state = BuildState(
+                    # XXX Slave ID is always 0 ... what happens if two
+                    # simultaneous imports are attempted, particularly re
+                    # the file-expect mechanism?
+                    0, package, version, abi_tag, status, duration,
+                    output, files={
+                        filename: FileState(filename, *filestate)
+                        for filename, filestate in files.items()
+                    }
+                )
+                self.states[address] = state
+            elif msg == 'REMOVE':
+                # No need to store state for the remover
+                state = data
+            elif msg == 'SENT':
+                self.logger.error('SENT before IMPORT')
+                queue.send_addr_msg(address, 'ERROR', 'protocol violation')
+                return
+
+        handler = {
+            'IMPORT': self.do_import,
+            'REMOVE': self.do_remove,
+            'SENT': self.do_sent,
+        }[msg]
+        msg, data = handler(state)
 
         if msg in ('DONE', 'ERROR'):
             self.states.pop(address, None)

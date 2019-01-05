@@ -336,7 +336,7 @@ class FsClient:
     def close(self):
         self.fs_queue.close()
 
-    def _execute(self, msg, data=None):
+    def _execute(self, msg, data=protocols.Missing):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.fs_queue.send_msg(msg, data, flags=zmq.NOBLOCK)

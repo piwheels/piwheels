@@ -152,28 +152,22 @@ class SlaveDriver(Task):
         to cause all "HELLO" messages from build slaves to be replayed (for
         the benefit of a newly attached monitor process).
         """
-        try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.exception(e)
-        else:
-            if msg == 'QUIT':
-                # TODO Kill all slaves...
-                raise TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                self.paused = False
-            elif msg == 'KILL':
-                for slave in self.slaves.values():
-                    if slave.slave_id == data:
-                        slave.kill()
-                        break
-            elif msg == 'HELLO':
-                for slave in self.slaves.values():
-                    slave.hello()
-            else:
-                self.logger.error('invalid control message: %s', msg)
+        msg, data = queue.recv_msg()
+        if msg == 'QUIT':
+            # TODO Kill all slaves...
+            raise TaskQuit
+        elif msg == 'PAUSE':
+            self.paused = True
+        elif msg == 'RESUME':
+            self.paused = False
+        elif msg == 'KILL':
+            for slave in self.slaves.values():
+                if slave.slave_id == data:
+                    slave.kill()
+                    break
+        elif msg == 'HELLO':
+            for slave in self.slaves.values():
+                slave.hello()
 
     def handle_build(self, queue):
         """
@@ -186,9 +180,8 @@ class SlaveDriver(Task):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(e)
         else:
-            assert msg == 'QUEUE'
             abi, package, version = data
             queue = self.abi_queues[abi]
             if len(queue) < 1000:
@@ -212,7 +205,7 @@ class SlaveDriver(Task):
         try:
             address, msg, data = queue.recv_addr_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(e)
             return
 
         try:
@@ -221,6 +214,7 @@ class SlaveDriver(Task):
             if msg == 'HELLO':
                 slave = SlaveState(address, *data)
             else:
+                # XXX Tell the slave to die?
                 self.logger.error('invalid first message from slave: %s', msg)
                 return
 

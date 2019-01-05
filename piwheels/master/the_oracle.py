@@ -284,14 +284,15 @@ class DbClient:
 
     def __init__(self, config):
         self.ctx = transport.Context.instance()
-        self.db_queue = self.ctx.socket(zmq.REQ, protocol=protocols.the_oracle)
+        self.db_queue = self.ctx.socket(
+            zmq.REQ, protocol=reversed(protocols.the_oracle))
         self.db_queue.hwm = 1
         self.db_queue.connect(config.db_queue)
 
     def close(self):
         self.db_queue.close()
 
-    def _execute(self, msg, data=None):
+    def _execute(self, msg, data=protocols.Missing):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.db_queue.send_msg(msg, data, flags=zmq.NOBLOCK)

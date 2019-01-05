@@ -249,7 +249,7 @@ class TheScribe(PauseableTask):
             # what the JS actually wants
             search_index = [
                 (package, count)
-                for package, count in search_index.items(
+                for package, count in search_index.items()
             ]
             json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))

@@ -54,7 +54,7 @@ class CloudGazer(PauseableTask):
         self.db = DbClient(config)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.the_scribe)
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.serial = -1
