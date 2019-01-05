@@ -35,7 +35,7 @@ import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__
+from piwheels import __version__, protocols
 from piwheels.master import main, const
 
 
@@ -54,7 +54,7 @@ def mock_signal(request):
 
 @pytest.fixture()
 def mock_context(request, zmq_context):
-    with mock.patch('zmq.Context.instance') as ctx_mock:
+    with mock.patch('piwheels.transport.Context.instance') as ctx_mock:
         # Pass thru calls to Context.socket, but ignore everything else (in
         # particular, destroy and term calls as we want the testing context to
         # stick around)
@@ -77,16 +77,18 @@ def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
     ],))
     yield main_thread
     if main_thread.is_alive():
-        with mock_context().socket(zmq.PUSH) as control:
+        with mock_context().socket(
+                zmq.PUSH, protocol=reversed(protocols.master_control)) as control:
             control.connect('ipc://' + str(tmpdir.join('control-queue')))
-            control.send_pyobj(['QUIT'])
+            control.send_msg('QUIT')
         main_thread.join(10)
         assert not main_thread.is_alive()
 
 
 @pytest.fixture()
 def master_control(request, tmpdir, mock_context):
-    control = mock_context().socket(zmq.PUSH)
+    control = mock_context().socket(
+        zmq.PUSH, protocol=reversed(protocols.master_control))
     control.connect('ipc://' + str(tmpdir.join('control-queue')))
     yield control
     control.close()
@@ -117,7 +119,7 @@ def test_no_root(caplog):
 def test_quit_control(mock_systemd, master_thread, master_control):
     master_thread.start()
     assert mock_systemd._ready.wait(10)
-    master_control.send_pyobj(['QUIT'])
+    master_control.send_msg('QUIT')
     master_thread.join(10)
     assert not master_thread.is_alive()
 
@@ -145,11 +147,11 @@ def test_system_ctrl_c(mock_systemd, master_thread, caplog):
 def test_bad_control(mock_systemd, master_thread, master_control, caplog):
     master_thread.start()
     assert mock_systemd._ready.wait(10)
-    master_control.send_pyobj(['FOO'])
-    master_control.send_pyobj(['QUIT'])
+    master_control.send(b'FOO')
+    master_control.send_msg('QUIT')
     master_thread.join(10)
     assert not master_thread.is_alive()
-    assert find_message(caplog.records, 'ignoring invalid FOO message')
+    assert find_message(caplog.records, 'unable to deserialize data')
 
 
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
@@ -177,8 +179,8 @@ def test_kill_control(mock_systemd, master_thread, master_control):
     with mock.patch('piwheels.master.SlaveDriver.kill_slave') as kill_slave:
         master_thread.start()
         assert mock_systemd._ready.wait(10)
-        master_control.send_pyobj(['KILL', 1])
-        master_control.send_pyobj(['QUIT'])
+        master_control.send_msg('KILL', 1)
+        master_control.send_msg('QUIT')
         master_thread.join(10)
         assert not master_thread.is_alive()
         assert kill_slave.call_args == mock.call(1)
@@ -187,9 +189,9 @@ def test_kill_control(mock_systemd, master_thread, master_control):
 def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
     master_thread.start()
     assert mock_systemd._ready.wait(10)
-    master_control.send_pyobj(['PAUSE'])
-    master_control.send_pyobj(['RESUME'])
-    master_control.send_pyobj(['QUIT'])
+    master_control.send_msg('PAUSE')
+    master_control.send_msg('RESUME')
+    master_control.send_msg('QUIT')
     master_thread.join(10)
     assert not master_thread.is_alive()
     assert find_message(caplog.records, 'pausing operations')
@@ -200,8 +202,8 @@ def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
     with mock.patch('piwheels.master.SlaveDriver.list_slaves') as list_slaves:
         master_thread.start()
         assert mock_systemd._ready.wait(10)
-        master_control.send_pyobj(['HELLO'])
-        master_control.send_pyobj(['QUIT'])
+        master_control.send_msg('HELLO')
+        master_control.send_msg('QUIT')
         master_thread.join(10)
         assert not master_thread.is_alive()
         assert find_message(caplog.records, 'sending status to new monitor')

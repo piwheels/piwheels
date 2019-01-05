@@ -64,7 +64,7 @@ class SlaveDriver(Task):
     name = 'master.slave_driver'
 
     def __init__(self, config):
-        super().__init__(config)
+        super().__init__(config, control_protocol=protocols.master_control)
         self.paused = False
         self.abi_queues = defaultdict(set)
         slave_queue = self.ctx.socket(
@@ -73,7 +73,7 @@ class SlaveDriver(Task):
         slave_queue.bind(config.slave_queue)
         self.register(slave_queue, self.handle_slave)
         builds_queue = self.ctx.socket(
-            zmq.PULL, protocol=protocols.the_architect)
+            zmq.PULL, protocol=reversed(protocols.the_architect))
         builds_queue.hwm = 10
         builds_queue.connect(config.builds_queue)
         self.register(builds_queue, self.handle_build)
@@ -83,11 +83,11 @@ class SlaveDriver(Task):
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.the_scribe)
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.big_brother)
+            zmq.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)
@@ -134,7 +134,7 @@ class SlaveDriver(Task):
                                 slave.slave_id, slave.label)
             # Send a fake BYE message to the status queue so that listening
             # monitors know to remove the entry
-            slave.reply = ['BYE']
+            slave.reply = ('BYE', None)
             del self.slaves[address]
 
     def handle_control(self, queue):
@@ -180,7 +180,7 @@ class SlaveDriver(Task):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.error(e)
+            self.logger.error(str(e))
         else:
             abi, package, version = data
             queue = self.abi_queues[abi]
@@ -205,7 +205,7 @@ class SlaveDriver(Task):
         try:
             address, msg, data = queue.recv_addr_msg()
         except IOError as e:
-            self.logger.error(e)
+            self.logger.error(str(e))
             return
 
         try:
@@ -218,7 +218,7 @@ class SlaveDriver(Task):
                 self.logger.error('invalid first message from slave: %s', msg)
                 return
 
-        slave.request = [msg] + list(data)
+        slave.request = msg, data
         try:
             handler = {
                 'HELLO': self.do_hello,
@@ -234,8 +234,8 @@ class SlaveDriver(Task):
             # XXX Reply? Remove the slave?
         else:
             msg, data = handler(slave)
-            if reply is not None:
-                slave.reply = reply
+            if msg is not None:
+                slave.reply = msg, data
                 queue.send_addr_msg(address, msg, data)
 
     def do_hello(self, slave):
@@ -268,11 +268,11 @@ class SlaveDriver(Task):
         """
         self.logger.warning('slave %d (%s): shutdown',
                             slave.slave_id, slave.label)
-        # Send a fake BYE message to the status queue so that listening
+        # Send a fake DIE message to the status queue so that listening
         # monitors know to remove the entry
-        slave.reply = ['BYE']
+        slave.reply = 'DIE', protocols.NoData
         del self.slaves[slave.address]
-        return None
+        return None, None
 
     def do_idle(self, slave):
         """
@@ -288,18 +288,18 @@ class SlaveDriver(Task):
         :param SlaveState slave:
             The object representing the current status of the build slave.
         """
-        if slave.reply[0] not in ('HELLO', 'SLEEP', 'DONE'):
+        if slave.reply[0] not in ('ACK', 'SLEEP', 'DONE'):
             self.logger.error(
                 'slave %d (%s): protocol error (IDLE after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
-            return 'BYE', None
+            return 'DIE', protocols.NoData
         elif slave.terminated:
-            return 'BYE', None
+            return 'DIE', protocols.NoData
         elif self.paused:
             self.logger.info(
                 'slave %d (%s): sleeping because master is paused',
                 slave.slave_id, slave.label)
-            return 'SLEEP', None
+            return 'SLEEP', protocols.NoData
         else:
             try:
                 package, version = self.abi_queues[slave.native_abi].pop()
@@ -314,7 +314,7 @@ class SlaveDriver(Task):
             self.logger.info(
                 'slave %d (%s): sleeping because no builds',
                 slave.slave_id, slave.label)
-            return 'SLEEP', None
+            return 'SLEEP', protocols.NoData
 
     def do_built(self, slave):
         """
@@ -334,7 +334,7 @@ class SlaveDriver(Task):
             self.logger.error(
                 'slave %d (%s): protocol error (BUILD after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
-            return 'BYE', None
+            return 'DIE', protocols.NoData
         else:
             build_armv6l_hack(slave.build)
             self.db.log_build(slave.build)
@@ -351,7 +351,7 @@ class SlaveDriver(Task):
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
                 self.web_queue.send_msg('PKGPROJ', slave.build.package)
-                return 'DONE', None
+                return 'DONE', protocols.NoData
 
     def do_sent(self, slave):
         """
@@ -373,7 +373,7 @@ class SlaveDriver(Task):
             self.logger.error(
                 'slave %d (%s): protocol error (SENT after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
-            return 'BYE', None
+            return 'DIE', protocols.NoData
         elif self.fs.verify(slave.slave_id, slave.build.package):
             slave.build.files[slave.build.next_file].verified()
             self.logger.info(
@@ -381,7 +381,7 @@ class SlaveDriver(Task):
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
                 self.web_queue.send_msg('PKGBOTH', slave.build.package)
-                return 'DONE', None
+                return 'DONE', protocols.NoData
             else:
                 self.fs.expect(slave.slave_id,
                                slave.build.files[slave.build.next_file])
@@ -403,7 +403,8 @@ class SlaveDriver(Task):
         for slave in self.slaves.values():
             if slave.reply is not None and slave.reply[0] == 'BUILD':
                 if slave.last_seen + slave.timeout > datetime.utcnow():
-                    yield (slave.reply[1], slave.reply[2])
+                    msg, (package, version) = slave.reply
+                    yield package, version
 
 
 def build_armv6l_hack(build):

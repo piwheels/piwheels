@@ -49,9 +49,9 @@ def builds_queue(request, zmq_context, master_config):
 
 def test_architect_queue(db, with_build, task, builds_queue):
     task.loop()
-    assert builds_queue.recv_pyobj() == ('cp35m', 'foo', '0.1')
+    assert builds_queue.recv_pyobj() == ('QUEUE', ['cp35m', 'foo', '0.1'])
     with db.begin():
         db.execute("DELETE FROM builds")
     task.loop()  # Empty loop on StopIteration
     task.loop()
-    assert builds_queue.recv_pyobj() == ('cp34m', 'foo', '0.1')
+    assert builds_queue.recv_pyobj() == ('QUEUE', ['cp34m', 'foo', '0.1'])

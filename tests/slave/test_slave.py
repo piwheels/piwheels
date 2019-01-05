@@ -38,13 +38,13 @@ import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__
+from piwheels import __version__, protocols
 from piwheels.slave import PiWheelsSlave, MasterTimeout
 
 
 @pytest.fixture()
 def mock_slave_driver(request, zmq_context, tmpdir):
-    queue = zmq_context.socket(zmq.ROUTER)
+    queue = zmq_context.socket(zmq.ROUTER, protocol=protocols.slave_driver)
     queue.hwm = 1
     queue.bind('ipc://' + str(tmpdir.join('slave-driver-queue')))
     yield queue
@@ -53,7 +53,7 @@ def mock_slave_driver(request, zmq_context, tmpdir):
 
 @pytest.fixture()
 def mock_file_juggler(request, zmq_context, tmpdir):
-    queue = zmq_context.socket(zmq.DEALER)
+    queue = zmq_context.socket(zmq.DEALER, protocol=protocols.file_juggler)
     queue.hwm = 1
     queue.bind('ipc://' + str(tmpdir.join('file-juggler-queue')))
     yield queue
@@ -97,8 +97,8 @@ def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
         main_loop.side_effect = SystemExit(1)
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
 
@@ -106,11 +106,11 @@ def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
 def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
     slave_thread.start()
     assert mock_systemd._ready.wait(10)
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data)[0] == 'HELLO'
-    mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data) == ['BYE']
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'HELLO'
+    mock_slave_driver.send_addr_msg(addr, 'DIE')
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
 
@@ -120,14 +120,14 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
         time_mock.side_effect = chain([1.0, 401.0, 402.0], cycle([403.0]))
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
         # Allow timeout (time_mock takes care of faking this)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
     assert find_message(caplog.records, 'Timed out waiting for master')
@@ -136,11 +136,11 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
 def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
     slave_thread.start()
     assert mock_systemd._ready.wait(10)
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data)[0] == 'HELLO'
-    mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['FOO'])])
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data) == ['BYE']
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'HELLO'
+    mock_slave_driver.send_multipart([addr, b'', b'FOO'])
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
 
@@ -148,15 +148,14 @@ def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
 def test_hello(mock_systemd, slave_thread, mock_slave_driver):
     slave_thread.start()
     assert mock_systemd._ready.wait(10)
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data)[0] == 'HELLO'
-    mock_slave_driver.send_multipart([
-        addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data) == ['IDLE']
-    mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-    addr, sep, data = mock_slave_driver.recv_multipart()
-    assert pickle.loads(data) == ['BYE']
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'HELLO'
+    mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'IDLE'
+    mock_slave_driver.send_addr_msg(addr, 'DIE')
+    addr, msg, data = mock_slave_driver.recv_addr_msg()
+    assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
 
@@ -165,18 +164,17 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
     with mock.patch('piwheels.slave.randint', return_value=0):
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([
-            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['SLEEP'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'SLEEP')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
 
@@ -186,15 +184,14 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         popen_mock().returncode = 1
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([
-            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BUILD', 'foo', '1.0'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'BUILT'
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUILT'
         assert popen_mock.call_args == mock.call([
             'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
             mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
@@ -202,9 +199,9 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
             'foo==1.0'],
             stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
         )
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
     assert find_message(caplog.records, 'Build failed')
@@ -216,22 +213,21 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         time_mock.side_effect = cycle([1.0])
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([
-            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BUILD', 'foo', '1.0'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'BUILT'
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUILT'
         time_mock.side_effect = chain([400.0], cycle([800.0]))
         # Allow timeout (time_mock takes care of faking this)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
     assert find_message(caplog.records, 'Build failed')
@@ -247,16 +243,14 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
         tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').ensure()
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'HELLO'
-        mock_slave_driver.send_multipart([
-            addr, sep, pickle.dumps(['HELLO', 1, 'https://pypi.org/pypi'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps([
-            'BUILD', 'foo', '1.0'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data)[0] == 'BUILT'
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUILT'
         assert popen_mock.call_args == mock.call([
             'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
             mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
@@ -264,16 +258,15 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
             'foo==1.0'],
             stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
         )
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps([
-            'SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['SENT']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['DONE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['IDLE']
-        mock_slave_driver.send_multipart([addr, sep, pickle.dumps(['BYE'])])
-        addr, sep, data = mock_slave_driver.recv_multipart()
-        assert pickle.loads(data) == ['BYE']
+        mock_slave_driver.send_addr_msg(addr, 'SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'SENT'
+        mock_slave_driver.send_addr_msg(addr, 'DONE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
     assert find_message(caplog.records, 'Build succeeded')

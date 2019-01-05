@@ -32,8 +32,19 @@ from collections import namedtuple
 from voluptuous import Schema, ExactSequence, Extra, Maybe
 
 
-# Sentinel representing missing data
-Missing = object()
+class _NoData:
+    # Singleton representing the lack of a schema for a message
+    def __new__(cls):
+        try:
+            return NoData
+        except NameError:
+            return super().__new__(cls)
+
+    def __repr__(self):
+        return 'NoData'
+
+
+NoData = _NoData()
 
 
 class Protocol(namedtuple('Protocol', ('recv', 'send'))):
@@ -45,14 +56,27 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
     __slots__ = ()
 
     def __new__(cls, recv=None, send=None):
-        return super().__new__(cls, {} if recv is None else recv,
-                               {} if send is None else send)
+        if recv is None:
+            recv = {}
+        else:
+            recv = {
+                msg: NoData if prototypes is NoData else Schema(prototypes)
+                for msg, prototypes in recv.items()
+            }
+        if send is None:
+            send = {}
+        else:
+            send = {
+                msg: NoData if prototypes is NoData else Schema(prototypes)
+                for msg, prototypes in send.items()
+            }
+        return super().__new__(cls, recv, send)
 
     def __reversed__(self):
         return Protocol(self.send, self.recv)
 
 
-_statistics_schema = Schema({      # statistics
+_statistics_schema = {      # statistics
     'packages_count':        int,
     'packages_built':        int,
     'versions_count':        int,
@@ -66,49 +90,41 @@ _statistics_schema = Schema({      # statistics
     'disk_free':             int,
     'disk_size':             int,
     'downloads_last_month':  int,
-})
+}
 
 
 task_control = Protocol(recv={
-    'PAUSE':  None,
-    'RESUME': None,
-    'QUIT':   None,
+    'PAUSE':  NoData,
+    'RESUME': NoData,
+    'QUIT':   NoData,
 })
 
 
 master_control = Protocol(recv={
-    'HELLO':  None,         # new monitor
-    'PAUSE':  None,         # pause all operations on the master
-    'RESUME': None,         # resume all operations on the master
-    'KILL':   Schema(int),  # kill the specified slave
-    'QUIT':   None,         # terminate the master
+    'HELLO':  NoData,  # new monitor
+    'PAUSE':  NoData,  # pause all operations on the master
+    'RESUME': NoData,  # resume all operations on the master
+    'KILL':   int,     # kill the specified slave
+    'QUIT':   NoData,  # terminate the master
 })
 
 
 big_brother = Protocol(recv={
-    'STATFS': Schema(ExactSequence([
-        int,  # statvfs.f_frsize
-        int,  # statvfs.f_bavail
-        int,  # statvfs.f_blocks
-    ])),
-    'STATBQ': Schema({str: int}),  # abi: queue-size
+    'STATFS': ExactSequence([int, int, int]),  # frsize, bavail, blocks
+    'STATBQ': {str: int},  # abi: queue-size
 })
 
 
 the_scribe = Protocol(recv={
-    'PKGBOTH': Schema(str),  # package name
-    'PKGPROJ': Schema(str),  # package name
+    'PKGBOTH': str,  # package name
+    'PKGPROJ': str,  # package name
     'HOME':    _statistics_schema,  # statistics
-    'SEARCH':  Schema({str: int}),  # package: download-count
+    'SEARCH':  {str: int},  # package: download-count
 })
 
 
 the_architect = Protocol(send={
-    'QUEUE': Schema(ExactSequence([
-        str,  # abi
-        str,  # package
-        str,  # version
-    ])),
+    'QUEUE': ExactSequence([str, str, str]),  # abi, package, version
 })
 
 
@@ -119,49 +135,36 @@ file_juggler_files = Protocol()
 
 
 file_juggler_fs = Protocol(recv={
-    'EXPECT': Schema(ExactSequence([
-        int,    # slave id
-        Extra,  # XXX file state
-    ])),
-    'VERIFY': Schema(ExactSequence([
-        int,   # slave id
-        str,   # package name
-    ])),
-    'REMOVE': Schema(ExactSequence([
-        str,   # package name
-        str,   # filename
-    ])),
+    'EXPECT': ExactSequence([int, Extra]),  # slave ID, file state XXX refine this
+    'VERIFY': ExactSequence([int, str]),    # slave ID, package
+    'REMOVE': ExactSequence([str, str]),    # package, filename
 }, send={
-    'OK':     Schema(Extra),  # some result object XXX refine this?
-    'ERR':    Schema(Exception),  # some exception object
+    'OK':     Extra,  # some result object XXX refine this?
+    'ERROR':  str,    # error message
 })
 
 
 mr_chase = Protocol(recv={
-    'IMPORT': Schema(ExactSequence([
-        str,    # abi_tag
-        str,    # package
-        str,    # version
-        bool,   # status
-        float,  # duration
-        str,    # output
-        {str: Extra},  # filename: filestate XXX refine this?
-    ])),
-    'REMOVE': Schema(ExactSequence([
-        str,    # package
-        str,    # version
-        str,    # skip reason
-    ])),
-    'SENT':   None,
+    'IMPORT': ExactSequence([
+        Maybe(str),  # abi_tag
+        str,         # package
+        str,         # version
+        bool,        # status
+        float,       # duration
+        str,         # output
+        {str: Extra},  # filename: filestate XXX refine files
+    ]),
+    'REMOVE': ExactSequence([str, str, Maybe(str)]),  # package, version, skip-reason XXX remove Maybe
+    'SENT':   NoData,
 }, send={
     'SEND':   str,  # filename
     'ERROR':  str,  # message
-    'DONE':   None,
+    'DONE':   NoData,
 })
 
 
 lumberjack = Protocol(recv={
-    'LOG': Schema(ExactSequence([
+    'LOG': ExactSequence([
         str,          # filename
         str,          # host
         dt.datetime,  # timestamp
@@ -172,110 +175,56 @@ lumberjack = Protocol(recv={
         str,          # os_version
         str,          # py_name
         str,          # py_version
-    ])),
+    ]),
 })
 
 
 slave_driver = Protocol(recv={
-    'HELLO': Schema(ExactSequence([
-        float,   # timeout
-        str,     # native_py_version
-        str,     # native_abi
-        str,     # native_platform
-        str,     # label
-    ])),
-    'BYE':   None,
-    'IDLE':  None,
-    'BUILT': Schema(ExactSequence([
-        # XXX ???
-    ])),
-    'SENT':  None,
+    'HELLO': ExactSequence([float, str, str, str, str]), # timeout, py-version, abi, platform, label
+    'BYE':   NoData,
+    'IDLE':  NoData,
+    'BUILT': ExactSequence([bool, float, str, {str: Extra}]), # XXX refine files
+    'SENT':  NoData,
 }, send={
-    'ACK':   Schema(ExactSequence([
-        int,     # slave id
-        str,     # PyPI URL
-    ])),
-    'DIE':   None,
-    'SLEEP': None,
-    'BUILD': Schema(ExactSequence([
-        str,     # package
-        str,     # version
-    ])),
-    'SEND':  str,  # filename
-    'DONE':  None,
+    'ACK':   ExactSequence([int, str]),  # slave ID, PyPI URL
+    'DIE':   NoData,
+    'SLEEP': NoData,
+    'BUILD': ExactSequence([str, str]),  # package, version
+    'SEND':  str,                        # filename
+    'DONE':  NoData,
 })
 
 
 the_oracle = Protocol(recv={
-    'ALLPKGS': None,
-    'ALLVERS': None,
-    'NEWPKG': Schema(ExactSequence([
-        str,  # package
-        Maybe(str),  # skip reason  XXX remove Maybe
-    ])),
-    'NEWVER': Schema(ExactSequence([
-        str,          # package
-        str,          # version
-        dt.datetime,  # released
-        Maybe(str),   # skip reason  XXX remove Maybe
-    ])),
-    'SKIPPKG': Schema(ExactSequence([
-        str,  # package
-        str,  # skip reason
-    ])),
-    'SKIPVER': Schema(ExactSequence([
-        str,  # package
-        str,  # version
-        Maybe(str),  # skip reason  XXX remove Maybe
-    ])),
-    'LOGDOWNLOAD': Schema(Extra),  # XXX refine this
-    'LOGBUILD': Schema(Extra),     # XXX refine this
-    'DELBUILD': Schema(ExactSequence([
-        str,  # package
-        str,  # version
-    ])),
-    'PKGFILES': Schema(ExactSequence([
-        str,  # package
-    ])),
-    'PROJVERS': Schema(ExactSequence([
-        str,  # package
-    ])),
-    'PROJFILES': Schema(ExactSequence([
-        str,  # package
-    ])),
-    'VERFILES': Schema(ExactSequence([
-        str,  # package
-        str,  # version
-    ])),
-    'GETSKIP': Schema(ExactSequence([
-        str,  # package
-        str,  # version
-    ])),
-    'PKGEXISTS': Schema(ExactSequence([
-        str,  # package
-        str,  # version
-    ])),
-    'GETABIS': None,
-    'GETPYPI': None,
-    'SETPYPI': Schema(ExactSequence([
-        int,  # PyPI serial number
-    ])),
-    'GETSTATS': None,
-    'GETDL': None,
-    'FILEDEPS': Schema(ExactSequence([
-        str,  # filename
-    ])),
+    'ALLPKGS':     NoData,
+    'ALLVERS':     NoData,
+    # XXX Remove Maybe from skip reasons below when stored-procs-ftw is merged
+    'NEWPKG':      ExactSequence([str, Maybe(str)]),  # package, skip reason
+    'NEWVER':      ExactSequence([str, str, dt.datetime, Maybe(str)]),  # package, version, released, skip reason
+    'SKIPPKG':     ExactSequence([str, Maybe(str)]),  # package, skip reason
+    'SKIPVER':     ExactSequence([str, str, Maybe(str)]),  # package, version, skip reason
+    'LOGDOWNLOAD': Extra,  # XXX refine this
+    'LOGBUILD':    Extra,  # XXX refine this
+    'DELBUILD':    ExactSequence([str, str]),  # package, version
+    'PKGFILES':    str,                        # package
+    'PROJVERS':    str,                        # package
+    'PROJFILES':   str,                        # package
+    'VERFILES':    ExactSequence([str, str]),  # package, version
+    'GETSKIP':     ExactSequence([str, str]),  # package, version
+    'PKGEXISTS':   ExactSequence([str, str]),  # package, version
+    'GETABIS':     NoData,
+    'GETPYPI':     NoData,
+    'SETPYPI':     int,                        # PyPI serial number
+    'GETSTATS':    NoData,
+    'GETDL':       NoData,
+    'FILEDEPS':    str,                        # filename
 }, send={
-    'ERROR': str,    # message
-    'OK':    Schema(Extra),  # result XXX refine this? Would mean separate returns...
+    'OK':          Extra,  # result XXX refine this? Would mean separate returns...
+    'ERROR':       str,    # message
 })
 
 
 monitor_stats = Protocol(send={
     'STATS': _statistics_schema,
-    'SLAVE': Schema(ExactSequence([
-        int,          # slave id
-        dt.datetime,  # timestamp
-        Extra,        # message  XXX extend schema here?
-    ])),
+    'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
 })

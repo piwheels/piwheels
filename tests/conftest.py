@@ -40,6 +40,7 @@ from sqlalchemy import create_engine
 from voluptuous import Schema, ExactSequence, Extra, Any
 
 from piwheels import const, transport, protocols
+from piwheels.protocols import NoData
 from piwheels.initdb import get_script, parse_statements
 from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.master.the_oracle import TheOracle
@@ -103,7 +104,7 @@ def file_state_universal(request, file_content):
 def build_state(request, file_state):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300, 'Built successfully',
+        file_state.abi_tag, True, 300.0, 'Built successfully',
         {file_state.filename: file_state})
 
 
@@ -111,7 +112,7 @@ def build_state(request, file_state):
 def build_state_hacked(request, file_state, file_state_hacked):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300, 'Built successfully', {
+        file_state.abi_tag, True, 300.0, 'Built successfully', {
             file_state.filename: file_state,
             file_state_hacked.filename: file_state_hacked,
         })
@@ -365,6 +366,8 @@ def master_status_queue(request, zmq_context):
 class MockMessage:
     def __init__(self, action, message, data):
         assert action in ('send', 'recv')
+        if data is NoData:
+            data = None
         self.action = action
         self.expect = (message, data)
         self.actual = None
@@ -388,13 +391,13 @@ class MockTask(Thread):
     """
     ident = 0
     protocol = protocols.Protocol(recv={
-        'QUIT': None,
-        'SEND': Schema(ExactSequence([str, Extra])),
-        'RECV': Schema(ExactSequence([str, Extra])),
-        'TEST': Schema(Any(int, float)),
-        'RESET': None,
+        'QUIT':  NoData,
+        'SEND':  ExactSequence([str, Extra]),
+        'RECV':  ExactSequence([str, Extra]),
+        'TEST':  Any(int, float),
+        'RESET': NoData,
     }, send={
-        'OK': None,
+        'OK': NoData,
         'ERROR': Schema(Exception),
     })
 
@@ -430,11 +433,11 @@ class MockTask(Thread):
         self.sock.close()
         self.sock = None
 
-    def expect(self, message, data=None):
+    def expect(self, message, data=NoData):
         self.control.send_msg('RECV', (message, data))
         assert self.control.recv_msg()[0] == 'OK'
 
-    def send(self, message, data=None):
+    def send(self, message, data=NoData):
         self.control.send_msg('SEND', (message, data))
         assert self.control.recv_msg()[0] == 'OK'
 
@@ -515,13 +518,15 @@ class MockTask(Thread):
 
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.db_queue, protocols.the_oracle)
+    task = MockTask(zmq_context, zmq.REP, master_config.db_queue,
+                    protocols.the_oracle)
     yield task
     task.close()
 
 
 @pytest.fixture(scope='function')
 def fs_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue, protocols.file_juggler_fs)
+    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue,
+                    protocols.file_juggler_fs)
     yield task
     task.close()

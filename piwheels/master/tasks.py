@@ -76,7 +76,7 @@ class Task(Thread):
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.master_control)
+            zmq.PUSH, protocol=reversed(protocols.master_control))
         self.quit_queue.hwm = 1
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
@@ -110,8 +110,9 @@ class Task(Thread):
         self.poller.register(queue, flags)
         self.handlers[queue] = handler
 
-    def _ctrl(self, msg, data=None):
-        queue = self.ctx.socket(zmq.PUSH, protocol=self.control_protocol)
+    def _ctrl(self, msg, data=protocols.NoData):
+        queue = self.ctx.socket(
+            zmq.PUSH, protocol=reversed(self.control_protocol))
         try:
             queue.connect('inproc://ctrl-%s' % self.name)
             queue.send_msg(msg, data)
@@ -155,7 +156,7 @@ class Task(Thread):
         if msg == 'QUIT':
             raise TaskQuit
         else:
-            raise IOError('invalid control message: %s' % msg)
+            self.logger.warning('cannot pause or resume %s', self.name)
 
     def once(self):
         """

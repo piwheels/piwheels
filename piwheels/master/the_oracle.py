@@ -85,44 +85,54 @@ class TheOracle(Task):
         Handle incoming requests from :class:`DbClient` instances.
         """
         try:
-            address, msg, data = queue.recv_multipart()
-        except IOError as e:
-            self.logger.exception(e)
+            addr, empty, buf = queue.recv_multipart()
+        except ValueError as exc:
+            self.logger.error(str(exc))
+            # REQ sockets *must* send a reply even when stuff goes wrong
+            # otherwise the send/recv cycle that REQ/REP depends upon breaks.
+            # Here we've got a badly formed request and we can't even get the
+            # reply address, so we just make one up (empty). This message
+            # won't go anywhere (bogus address) but that doesn't matter as we
+            # just want to get the socket back to receiving state
+            addr, msg, data = b'', 'ERROR', str(exc)
         else:
             try:
-                handler = {
-                    'ALLPKGS': self.do_allpkgs,
-                    'ALLVERS': self.do_allvers,
-                    'NEWPKG': self.do_newpkg,
-                    'NEWVER': self.do_newver,
-                    'SKIPPKG': self.do_skippkg,
-                    'SKIPVER': self.do_skipver,
-                    'LOGDOWNLOAD': self.do_logdownload,
-                    'LOGBUILD': self.do_logbuild,
-                    'DELBUILD': self.do_delbuild,
-                    'PKGFILES': self.do_pkgfiles,
-                    'PROJVERS': self.do_projvers,
-                    'PROJFILES': self.do_projfiles,
-                    'VERFILES': self.do_verfiles,
-                    'GETSKIP': self.do_getskip,
-                    'PKGEXISTS': self.do_pkgexists,
-                    'GETABIS': self.do_getabis,
-                    'GETPYPI': self.do_getpypi,
-                    'SETPYPI': self.do_setpypi,
-                    'GETSTATS': self.do_getstats,
-                    'GETDL': self.do_getdl,
-                    'FILEDEPS': self.do_filedeps,
-                }[msg]
-                result = handler(*data)
-            except Exception as exc:
-                self.logger.error('Error handling db request: %s', msg)
-                # REP *must* send a reply even when stuff goes wrong
-                # otherwise the send/recv cycle that REQ/REP depends
-                # upon breaks
+                msg, data = queue.load_msg(buf)
+            except IOError as exc:
+                self.logger.error(str(exc))
                 msg, data = 'ERROR', str(exc)
             else:
-                msg, data = 'OK', result
-            queue.send_addr_msg(address, msg, data)
+                try:
+                    handler = {
+                        'ALLPKGS':     lambda: self.do_allpkgs(),
+                        'ALLVERS':     lambda: self.do_allvers(),
+                        'NEWPKG':      lambda: self.do_newpkg(*data),
+                        'NEWVER':      lambda: self.do_newver(*data),
+                        'SKIPPKG':     lambda: self.do_skippkg(*data),
+                        'SKIPVER':     lambda: self.do_skipver(*data),
+                        'LOGDOWNLOAD': lambda: self.do_logdownload(data),
+                        'LOGBUILD':    lambda: self.do_logbuild(data),
+                        'DELBUILD':    lambda: self.do_delbuild(*data),
+                        'PKGFILES':    lambda: self.do_pkgfiles(data),
+                        'PROJVERS':    lambda: self.do_projvers(data),
+                        'PROJFILES':   lambda: self.do_projfiles(data),
+                        'VERFILES':    lambda: self.do_verfiles(*data),
+                        'GETSKIP':     lambda: self.do_getskip(*data),
+                        'PKGEXISTS':   lambda: self.do_pkgexists(*data),
+                        'GETABIS':     lambda: self.do_getabis(),
+                        'GETPYPI':     lambda: self.do_getpypi(),
+                        'SETPYPI':     lambda: self.do_setpypi(data),
+                        'GETSTATS':    lambda: self.do_getstats(),
+                        'GETDL':       lambda: self.do_getdl(),
+                        'FILEDEPS':    lambda: self.do_filedeps(data),
+                    }[msg]
+                    result = handler()
+                except Exception as exc:
+                    self.logger.error('Error handling db request: %s', msg)
+                    msg, data = 'ERROR', str(exc)
+                else:
+                    msg, data = 'OK', result
+        queue.send_addr_msg(addr, msg, data)  # see note above
 
     def do_allpkgs(self):
         """
@@ -292,7 +302,7 @@ class DbClient:
     def close(self):
         self.db_queue.close()
 
-    def _execute(self, msg, data=protocols.Missing):
+    def _execute(self, msg, data=protocols.NoData):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.db_queue.send_msg(msg, data, flags=zmq.NOBLOCK)
@@ -336,13 +346,13 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        self._execute('LOGDOWNLOAD', [download])
+        self._execute('LOGDOWNLOAD', download)
 
     def log_build(self, build):
         """
         See :meth:`.db.Database.log_build`.
         """
-        build_id = self._execute('LOGBUILD', [build])
+        build_id = self._execute('LOGBUILD', build)
         build.logged(build_id)
 
     def get_build_abis(self):
@@ -361,7 +371,7 @@ class DbClient:
         """
         See :meth:`.db.Database.set_pypi_serial`.
         """
-        self._execute('SETPYPI', [serial])
+        self._execute('SETPYPI', serial)
 
     def get_all_packages(self):
         """
@@ -395,19 +405,19 @@ class DbClient:
         """
         See :meth:`.db.Database.get_package_files`.
         """
-        return self._execute('PKGFILES', [package])
+        return self._execute('PKGFILES', package)
 
     def get_project_versions(self, package):
         """
         See :meth:`.db.Database.get_project_versions`.
         """
-        return self._execute('PROJVERS', [package])
+        return self._execute('PROJVERS', package)
 
     def get_project_files(self, package):
         """
         See :meth:`.db.Database.get_project_files`.
         """
-        return self._execute('PROJFILES', [package])
+        return self._execute('PROJFILES', package)
 
     def get_version_files(self, package, version):
         """
@@ -425,7 +435,7 @@ class DbClient:
         """
         See :meth:`.db.Database.get_file_dependencies`.
         """
-        return self._execute('FILEDEPS', [filename])
+        return self._execute('FILEDEPS', filename)
 
     def delete_build(self, package, version):
         """

@@ -199,7 +199,7 @@ class TheScribe(PauseableTask):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(str(e))
         else:
             if msg == 'PKGBOTH':
                 package = data

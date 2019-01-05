@@ -111,16 +111,4 @@ def test_broken_task_quits(master_config, master_control_queue):
     task.join(10)
     assert not task.is_alive()
     # Ensure the broken task tells the master to quit
-    assert master_control_queue.recv_pyobj() == ['QUIT']
-
-
-def test_task_bad_controls(master_config, master_control_queue):
-    task = Task(master_config)
-    task.logger = mock.Mock()
-    task.logger.error.call_count == 0
-    task.start()
-    task._ctrl(['FOO'])
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
-    task.logger.error.call_count == 1
+    assert master_control_queue.recv_msg() == ('QUIT', None)

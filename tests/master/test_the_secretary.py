@@ -30,12 +30,12 @@
 import os
 from unittest import mock
 from threading import Event
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import zmq
 import pytest
 
-from piwheels import const
+from piwheels import const, protocols
 from piwheels.master.the_secretary import TheSecretary
 
 
@@ -48,7 +48,8 @@ def task(request, zmq_context, master_config):
 
 @pytest.fixture()
 def web_queue(request, zmq_context, task, master_config):
-    queue = zmq_context.socket(zmq.PUSH)
+    queue = zmq_context.socket(
+        zmq.PUSH, protocol=reversed(protocols.the_scribe))
     queue.hwm = 10
     queue.connect(master_config.web_queue)
     yield queue
@@ -57,24 +58,43 @@ def web_queue(request, zmq_context, task, master_config):
 
 @pytest.fixture()
 def scribe_queue(request, zmq_context, task):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
     queue.hwm = 10
     queue.connect(const.SCRIBE_QUEUE)
     yield queue
     queue.close()
 
 
-def test_pass_through(task, web_queue, scribe_queue):
-    web_queue.send_pyobj(['HOME', {'some': 'stats'}])
+@pytest.fixture()
+def stats_dict(request):
+    return {
+        'packages_count': 1,
+        'packages_built': 0,
+        'versions_count': 2,
+        'builds_count':   0,
+        'builds_last_hour': 0,
+        'builds_success': 0,
+        'builds_time': timedelta(0),
+        'builds_size': 0,
+        'builds_pending': 0,
+        'files_count': 0,
+        'disk_free': 0,
+        'disk_size': 1,
+        'downloads_last_month': 10,
+    }
+
+
+def test_pass_through(task, web_queue, scribe_queue, stats_dict):
+    web_queue.send_msg('HOME', stats_dict)
     task.poll()
-    assert scribe_queue.recv_pyobj() == ['HOME', {'some': 'stats'}]
-    web_queue.send_pyobj(['SEARCH', {'some': 'data'}])
+    assert scribe_queue.recv_msg() == ('HOME', stats_dict)
+    web_queue.send_msg('SEARCH', {'foo': 1})
     task.poll()
-    assert scribe_queue.recv_pyobj() == ['SEARCH', {'some': 'data'}]
+    assert scribe_queue.recv_msg() == ('SEARCH', {'foo': 1})
 
 
 def test_bad_request(task, web_queue):
-    web_queue.send_pyobj(['FOO'])
+    web_queue.send(b'FOO')
     e = Event()
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
@@ -87,36 +107,36 @@ def test_buffer(task, web_queue, scribe_queue):
     with mock.patch('piwheels.master.the_secretary.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
         task.loop()
-        web_queue.send_pyobj(['PKGPROJ', 'foo'])
+        web_queue.send_msg('PKGPROJ', 'foo')
         task.poll()
         task.loop()
         with pytest.raises(zmq.error.Again):
             assert scribe_queue.recv_pyobj(flags=zmq.NOBLOCK)
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 35, 0)
         task.loop()
-        assert scribe_queue.recv_pyobj() == ['PKGPROJ', 'foo']
+        assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
 
 
 def test_upgrade(task, web_queue, scribe_queue):
     with mock.patch('piwheels.master.the_secretary.datetime') as dt:
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
         task.loop()
-        web_queue.send_pyobj(['PKGPROJ', 'foo'])
+        web_queue.send_msg('PKGPROJ', 'foo')
         task.poll()
         task.loop()
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 30)
-        web_queue.send_pyobj(['PKGBOTH', 'foo'])
+        web_queue.send_msg('PKGBOTH', 'foo')
         task.poll()
         task.loop()
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 31)
-        web_queue.send_pyobj(['PKGPROJ', 'bar'])
+        web_queue.send_msg('PKGPROJ', 'bar')
         task.poll()
         task.loop()
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 32)
-        web_queue.send_pyobj(['PKGPROJ', 'bar'])
+        web_queue.send_msg('PKGPROJ', 'bar')
         task.poll()
         task.loop()
         dt.utcnow.return_value = datetime(2018, 1, 1, 12, 35, 0)
         task.loop()
-        assert scribe_queue.recv_pyobj() == ['PKGBOTH', 'foo']
-        assert scribe_queue.recv_pyobj() == ['PKGPROJ', 'bar']
+        assert scribe_queue.recv_msg() == ('PKGBOTH', 'foo')
+        assert scribe_queue.recv_msg() == ('PKGPROJ', 'bar')

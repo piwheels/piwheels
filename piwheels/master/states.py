@@ -384,8 +384,7 @@ class SlaveState:
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
-        self._first_seen = datetime.utcnow()
-        self._last_seen = None
+        self._first_seen = self._last_seen = datetime.utcnow()
         self._request = None
         self._reply = None
         self._build = None
@@ -408,8 +407,7 @@ class SlaveState:
     def hello(self):
         SlaveState.status_queue.send_msg(
             'SLAVE', [
-                self._slave_id, self._first_seen, [
-                    'HELLO',
+                self._slave_id, self._first_seen, 'HELLO', [
                      self._timeout, self._native_py_version, self._native_abi,
                      self._native_platform, self._label
                 ]
@@ -418,8 +416,9 @@ class SlaveState:
         if self._reply is not None and self._reply[0] != 'HELLO':
             # Replay the last reply for the sake of monitors that have just
             # connected to the master
+            msg, data = self._reply
             SlaveState.status_queue.send_msg(
-                'SLAVE', [self._slave_id, self._last_seen, self._reply])
+                'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
     def kill(self):
         self._terminated = True
@@ -484,18 +483,24 @@ class SlaveState:
     def request(self, value):
         self._last_seen = datetime.utcnow()
         self._request = value
-        if value[0] == 'BUILT':
-            try:
-                status, duration, output, files = value[1:]
-                self._build = BuildState(
-                    self._slave_id, self._reply[1], self._reply[2],
-                    self.native_abi, status, duration, output, files={
-                        filename: FileState(filename, *filestate)
-                        for filename, filestate in files.items()
-                    }
-                )
-            except (ValueError, TypeError):
-                logging.error('Invalid BUILT message: %r', value)
+        msg, data = value
+        if msg == 'BUILT':
+            if self._reply[0] == 'BUILD':
+                try:
+                    status, duration, output, files = data
+                    msg, (package, version) = self._reply
+                    self._build = BuildState(
+                        self._slave_id, package, version,
+                        self.native_abi, status, duration, output, files={
+                            filename: FileState(filename, *filestate)
+                            for filename, filestate in files.items()
+                        }
+                    )
+                except (ValueError, TypeError):
+                    logging.error('Invalid BUILT data: %r', data)
+                    self._build = None
+            else:
+                logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
 
     @property
@@ -505,13 +510,14 @@ class SlaveState:
     @reply.setter
     def reply(self, value):
         self._reply = value
-        if value[0] == 'DONE':
+        msg, data = value
+        if msg == 'DONE':
             self._build = None
-        if value[0] == 'HELLO':
+        if msg == 'HELLO':
             self.hello()
         else:
-            SlaveState.status_queue.send_pyobj(
-                [self._slave_id, self._last_seen] + value)
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
 
 class TransferState:

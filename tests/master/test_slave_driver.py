@@ -33,7 +33,7 @@ from unittest import mock
 import zmq
 import pytest
 
-from piwheels import const
+from piwheels import const, protocols
 from piwheels.master.tasks import TaskQuit
 from piwheels.master.slave_driver import SlaveDriver
 from piwheels.master.states import SlaveState, BuildState
@@ -41,7 +41,7 @@ from piwheels.master.states import SlaveState, BuildState
 
 @pytest.fixture()
 def builds_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PUSH)
+    queue = zmq_context.socket(zmq.PUSH, protocol=protocols.the_architect)
     queue.hwm = 1
     queue.bind(master_config.builds_queue)
     yield queue
@@ -50,7 +50,8 @@ def builds_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(
+        zmq.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -59,7 +60,8 @@ def web_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(
+        zmq.PULL, protocol=protocols.big_brother)
     queue.hwm = 1
     queue.bind(master_config.stats_queue)
     yield queue
@@ -69,7 +71,8 @@ def stats_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def task(request, zmq_context, builds_queue, web_queue, stats_queue,
          master_status_queue, master_config):
-    SlaveState.status_queue = zmq_context.socket(zmq.PUSH)
+    SlaveState.status_queue = zmq_context.socket(
+        zmq.PUSH, protocol=reversed(protocols.slave_driver))
     SlaveState.status_queue.hwm = 1
     SlaveState.status_queue.connect(const.INT_STATUS_QUEUE)
     SlaveState.counter = 0
@@ -81,7 +84,8 @@ def task(request, zmq_context, builds_queue, web_queue, stats_queue,
 
 @pytest.fixture()
 def slave_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.REQ)
+    queue = zmq_context.socket(
+        zmq.REQ, protocol=reversed(protocols.slave_driver))
     queue.hwm = 1
     queue.connect(master_config.slave_queue)
     yield queue
@@ -90,7 +94,8 @@ def slave_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def slave2_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.REQ)
+    queue = zmq_context.socket(
+        zmq.REQ, protocol=reversed(protocols.slave_driver))
     queue.hwm = 1
     queue.connect(master_config.slave_queue)
     yield queue
@@ -113,29 +118,21 @@ def test_control_pause(task):
     assert not task.paused
 
 
-def test_control_bad_message(task):
-    task.logger = mock.Mock()
-    task.logger.error.call_count == 0
-    task._ctrl(['FOO'])
-    task.poll()
-    task.logger.error.call_count == 1
-
-
 def test_new_builds(task, builds_queue, stats_queue):
     assert not task.abi_queues
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
     assert task.abi_queues['cp34m'] == {('foo', '0.1')}
-    assert stats_queue.recv_pyobj() == ['STATBQ', {'cp34m': 1}]
-    builds_queue.send_pyobj(['cp35m', 'foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
+    builds_queue.send_msg('QUEUE', ['cp35m', 'foo', '0.1'])
     task.poll()
     assert task.abi_queues['cp35m'] == {('foo', '0.1')}
-    assert stats_queue.recv_pyobj() == ['STATBQ', {'cp34m': 1, 'cp35m': 1}]
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
 
 
 def test_slave_says_hello(task, slave_queue):
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     for state in task.slaves.values():
         assert state.slave_id == 1
@@ -153,15 +150,7 @@ def test_slave_says_hello(task, slave_queue):
 
 def test_slave_invalid_message(task, slave_queue):
     task.logger = mock.Mock()
-    slave_queue.send(b'HELLO')
-    task.poll()
-    assert not task.slaves
-    assert task.logger.error.call_count == 1
-
-
-def test_slave_invalid_first_message(task, slave_queue):
-    task.logger = mock.Mock()
-    slave_queue.send_pyobj(['FOO', 'BAR'])
+    slave_queue.send(b'FOO')
     task.poll()
     assert not task.slaves
     assert task.logger.error.call_count == 1
@@ -169,12 +158,12 @@ def test_slave_invalid_first_message(task, slave_queue):
 
 def test_slave_protocol_error(task, slave_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     assert task.logger.error.call_count == 0
-    slave_queue.send_pyobj(['FOO'])
+    slave_queue.send(b'FOO')
     task.poll()
     assert task.logger.error.call_count == 1
 
@@ -184,22 +173,23 @@ def test_slave_commits_suicide(task, slave_queue, master_status_queue,
     with mock.patch('piwheels.master.states.datetime') as dt:
         dt.utcnow.return_value = datetime.utcnow()
         task.logger = mock.Mock()
-        slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                                'linux_armv7l', 'piwheels1'])
+        slave_queue.send_msg('HELLO', [
+            300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
         task.poll()
         assert task.logger.warning.call_count == 1
-        assert slave_queue.recv_pyobj() == ['HELLO', 1,
-                                            master_config.pypi_simple]
-        assert master_status_queue.recv_pyobj() == [
-            1, dt.utcnow.return_value, 'HELLO', timedelta(seconds=300),
-            'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'
-        ]
+        assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.utcnow.return_value, 'ACK', [1, 'https://pypi.org/simple']
+            ]
+        )
         assert task.slaves
-        slave_queue.send_pyobj(['BYE'])
+        slave_queue.send_msg('BYE')
         task.poll()
         assert task.logger.warning.call_count == 2
-        assert master_status_queue.recv_pyobj() == [1, dt.utcnow.return_value,
-                                                    'BYE']
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [1, dt.utcnow.return_value, 'DIE', protocols.NoData]
+        )
         assert not task.slaves
 
 
@@ -207,52 +197,62 @@ def test_master_lists_nothing(task, master_status_queue):
     task.list_slaves()
     task.poll()
     with pytest.raises(zmq.ZMQError):
-        master_status_queue.recv_pyobj(flags=zmq.NOBLOCK)
+        master_status_queue.recv_msg(flags=zmq.NOBLOCK)
 
 
 def test_master_lists_slaves(task, slave_queue, master_config,
                              master_status_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
         dt.utcnow.return_value = datetime.utcnow()
-        slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                                'linux_armv7l', 'piwheels1'])
+        slave_queue.send_msg('HELLO', [
+            300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
         task.poll()
-        assert slave_queue.recv_pyobj() == ['HELLO', 1,
-                                            master_config.pypi_simple]
-        assert master_status_queue.recv_pyobj() == [
-            1, dt.utcnow.return_value, 'HELLO', timedelta(seconds=300),
-            'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'
-        ]
+        assert slave_queue.recv_msg() == ('ACK', [
+            1, master_config.pypi_simple])
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.utcnow.return_value, 'ACK', [
+                    1, 'https://pypi.org/simple'
+                ]
+            ]
+        )
         task.list_slaves()
         task.poll()
-        assert master_status_queue.recv_pyobj() == [
-            1, dt.utcnow.return_value, 'HELLO', timedelta(seconds=300),
-            'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'
-        ]
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.utcnow.return_value, 'HELLO', [
+                    timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l',
+                    'piwheels1'
+                ]
+            ]
+        )
 
 
 def test_slave_remove_expired(task, slave_queue, master_config,
                               master_status_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
         dt.utcnow.return_value = datetime.utcnow()
-        slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                                'linux_armv7l', 'piwheels1'])
+        slave_queue.send_msg('HELLO', [
+            300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
         task.poll()
         assert len(task.slaves) == 1
-        assert master_status_queue.recv_pyobj() == [
-            1, dt.utcnow.return_value, 'HELLO', timedelta(seconds=300),
-            'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'
-        ]
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.utcnow.return_value, 'ACK',
+                [1, 'https://pypi.org/simple']
+            ]
+        )
         old_now = dt.utcnow.return_value
         dt.utcnow.return_value = dt.utcnow.return_value + timedelta(hours=4)
         task.loop()
         assert len(task.slaves) == 0
-        assert master_status_queue.recv_pyobj() == [1, old_now, 'BYE']
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [1, old_now, 'BYE', None])
 
 
 def test_slave_says_hello(task, slave_queue):
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     for state in task.slaves.values():
         assert state.slave_id == 1
@@ -270,17 +270,17 @@ def test_slave_says_hello(task, slave_queue):
 
 def test_slave_says_idle_invalid(task, slave_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     for slave in task.slaves.values():
-        slave.reply = ['SEND', 'foo-0.1-py3-none-any.whl']
+        slave.reply = ('SEND', 'foo-0.1-py3-none-any.whl')
         break
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
     assert task.logger.error.call_count == 1
-    assert slave_queue.recv_pyobj() == ['BYE']
+    assert slave_queue.recv_msg() == ('DIE', None)
 
 
 def test_master_kills_nothing(task):
@@ -291,133 +291,133 @@ def test_master_kills_nothing(task):
 
 
 def test_master_says_idle_when_terminated(task, slave_queue, master_config):
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     task.kill_slave(1)
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BYE']
+    assert slave_queue.recv_msg() == ('DIE', None)
 
 
 def test_master_kills_correct_slave(task, slave_queue, master_config):
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     task.kill_slave(2)
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SLEEP']
+    assert slave_queue.recv_msg() == ('SLEEP', None)
 
 
 def test_slave_says_idle_no_builds(task, slave_queue, builds_queue,
                                    master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    slave_queue.send_pyobj(['IDLE'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SLEEP']
+    assert slave_queue.recv_msg() == ('SLEEP', None)
 
 
 def test_slave_says_idle_with_build(task, slave_queue, builds_queue,
                                     master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
-    builds_queue.send_pyobj(['cp35m', 'bar', '0.1'])
+    builds_queue.send_msg('QUEUE', ['cp35m', 'bar', '0.1'])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
 
 
 def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
                                            builds_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    slave2_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels2'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    slave2_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels2'])
     task.poll()
-    assert slave2_queue.recv_pyobj() == ['HELLO', 2, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave2_queue.recv_msg() == ('ACK', [2, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
-    slave2_queue.send_pyobj(['IDLE'])
+    slave2_queue.send_msg('IDLE')
     task.poll()
-    assert slave2_queue.recv_pyobj() == ['SLEEP']
+    assert slave2_queue.recv_msg() == ('SLEEP', None)
 
 
 def test_slave_says_idle_when_paused(task, slave_queue, builds_queue,
                                      master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
     task.pause()
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SLEEP']
+    assert slave_queue.recv_msg() == ('SLEEP', None)
     task.resume()
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
 
 
 def test_slave_says_built_invalid(task, slave_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    slave_queue.send_pyobj(['BUILT', False, 5, '', {}])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    slave_queue.send_msg('BUILT', [False, 5.0, '', {}])
     task.poll()
     assert task.logger.error.call_count == 1
-    assert slave_queue.recv_pyobj() == ['BYE']
+    assert slave_queue.recv_msg() == ('DIE', None)
 
 
 def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
                                  web_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
-    slave_queue.send_pyobj(['BUILT', False, 5, '', {}])
-    db_queue.expect(['LOGBUILD',
-                     BuildState(1, 'foo', '0.1', 'cp34m', False, 5, '', {})])
-    db_queue.send(['OK', 1])
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    slave_queue.send_msg('BUILT', [False, 5.0, '', {}])
+    db_queue.expect('LOGBUILD', BuildState(
+        1, 'foo', '0.1', 'cp34m', False, 5.0, '', {}))
+    db_queue.send('OK', 1)
     task.poll()
     assert task.logger.info.call_count == 2
-    assert web_queue.recv_pyobj() == ['PKGPROJ', 'foo']
-    assert slave_queue.recv_pyobj() == ['DONE']
+    assert web_queue.recv_msg() == ('PKGPROJ', 'foo')
+    assert slave_queue.recv_msg() == ('DONE', None)
     db_queue.check()
 
 
@@ -425,19 +425,19 @@ def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
                                     builds_queue, web_queue, master_config,
                                     file_state, file_state_hacked):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', 'foo', '0.1'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
-    slave_queue.send_pyobj([
-        'BUILT', True, 5, 'Woohoo!', {file_state.filename: file_state[1:9]}
-    ])
-    db_queue.expect([
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    slave_queue.send_msg(
+        'BUILT', [
+            True, 5.0, 'Woohoo!', {file_state.filename: file_state[1:9]}])
+    db_queue.expect(
         'LOGBUILD', BuildState(
             1, 'foo', '0.1', 'cp34m', True, 5, 'Woohoo!',
             {
@@ -445,27 +445,27 @@ def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
                 file_state_hacked.filename: file_state_hacked
             }
         )
-    ])
-    db_queue.send(['OK', 1])
-    fs_queue.expect(['EXPECT', 1, file_state])
-    fs_queue.send(['OK', None])
+    )
+    db_queue.send('OK', 1)
+    fs_queue.expect('EXPECT', [1, file_state])
+    fs_queue.send('OK')
     task.poll()
     assert task.logger.info.call_count == 3
-    assert slave_queue.recv_pyobj() == ['SEND', file_state.filename]
+    assert slave_queue.recv_msg() == ('SEND', file_state.filename)
     db_queue.check()
     fs_queue.check()
 
 
 def test_slave_says_sent_invalid(task, slave_queue, master_config):
     task.logger = mock.Mock()
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    slave_queue.send_pyobj(['SENT'])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    slave_queue.send_msg('SENT')
     task.poll()
     assert task.logger.error.call_count == 1
-    assert slave_queue.recv_pyobj() == ['BYE']
+    assert slave_queue.recv_msg() == ('DIE', None)
 
 
 def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
@@ -474,29 +474,28 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', bs.package, bs.version])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
-    slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
-    ])
-    db_queue.expect(['LOGBUILD', bs])
-    db_queue.send(['OK', 1])
-    fs_queue.expect(['EXPECT', 1, fs1])
-    fs_queue.send(['OK', None])
+    assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    slave_queue.send_msg(
+        'BUILT', [bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}])
+    db_queue.expect('LOGBUILD', bs)
+    db_queue.send('OK', 1)
+    fs_queue.expect('EXPECT', [1, fs1])
+    fs_queue.send('OK')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
-    slave_queue.send_pyobj(['SENT'])
-    fs_queue.expect(['VERIFY', 1, bs.package])
-    fs_queue.send(['ERR', IOError()])
+    assert slave_queue.recv_msg() == ('SEND', fs1.filename)
+    slave_queue.send_msg('SENT')
+    fs_queue.expect('VERIFY', [1, bs.package])
+    fs_queue.send('ERROR', '')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
+    assert slave_queue.recv_msg() == ('SEND', fs1.filename)
     db_queue.check()
     fs_queue.check()
 
@@ -507,30 +506,29 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', bs.package, bs.version])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
-    slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
-    ])
-    db_queue.expect(['LOGBUILD', bs])
-    db_queue.send(['OK', 1])
-    fs_queue.expect(['EXPECT', 1, fs1])
-    fs_queue.send(['OK', None])
+    assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    slave_queue.send_msg('BUILT', [
+        bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}])
+    db_queue.expect('LOGBUILD', bs)
+    db_queue.send('OK', 1)
+    fs_queue.expect('EXPECT', [1, fs1])
+    fs_queue.send('OK')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
-    slave_queue.send_pyobj(['SENT'])
-    fs_queue.expect(['VERIFY', 1, bs.package])
-    fs_queue.send(['OK', None])
+    assert slave_queue.recv_msg() == ('SEND', fs1.filename)
+    slave_queue.send_msg('SENT')
+    fs_queue.expect('VERIFY', [1, bs.package])
+    fs_queue.send('OK')
     task.poll()
-    assert web_queue.recv_pyobj() == ['PKGBOTH', bs.package]
-    assert slave_queue.recv_pyobj() == ['DONE']
+    assert web_queue.recv_msg() == ('PKGBOTH', bs.package)
+    assert slave_queue.recv_msg() == ('DONE', None)
     db_queue.check()
     fs_queue.check()
 
@@ -542,32 +540,34 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
     fs2._transferred = False
-    slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
-                            'linux_armv7l', 'piwheels1'])
+    slave_queue.send_msg('HELLO', [
+        300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
-    assert slave_queue.recv_pyobj() == ['HELLO', 1, master_config.pypi_simple]
-    builds_queue.send_pyobj(['cp34m', bs.package, bs.version])
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
     task.poll()
-    slave_queue.send_pyobj(['IDLE'])
+    slave_queue.send_msg('IDLE')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
-    slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {
-            f.filename: f[1:9] for f in bs.files.values()
-        }
-    ])
-    db_queue.expect(['LOGBUILD', bs])
-    db_queue.send(['OK', 1])
-    fs_queue.expect(['EXPECT', 1, fs2])
-    fs_queue.send(['OK', None])
+    assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    slave_queue.send_msg(
+        'BUILT', [
+            bs.status, bs.duration, bs.output, {
+                f.filename: f[1:9] for f in bs.files.values()
+            }
+        ]
+    )
+    db_queue.expect('LOGBUILD', bs)
+    db_queue.send('OK', 1)
+    fs_queue.expect('EXPECT', [1, fs2])
+    fs_queue.send('OK')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SEND', fs2.filename]
-    slave_queue.send_pyobj(['SENT'])
-    fs_queue.expect(['VERIFY', 1, bs.package])
-    fs_queue.send(['OK', None])
-    fs_queue.expect(['EXPECT', 1, fs1])
-    fs_queue.send(['OK', None])
+    assert slave_queue.recv_msg() == ('SEND', fs2.filename)
+    slave_queue.send_msg('SENT')
+    fs_queue.expect('VERIFY', [1, bs.package])
+    fs_queue.send('OK')
+    fs_queue.expect('EXPECT', [1, fs1])
+    fs_queue.send('OK')
     task.poll()
-    assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
+    assert slave_queue.recv_msg() == ('SEND', fs1.filename)
     db_queue.check()
     fs_queue.check()

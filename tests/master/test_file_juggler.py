@@ -33,13 +33,14 @@ from unittest import mock
 import zmq
 import pytest
 
+from piwheels import protocols
 from piwheels.master.file_juggler import FileJuggler
 from piwheels.master.states import TransferState
 
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(zmq.PULL, protocol=protocols.big_brother)
     queue.hwm = 1
     queue.bind(master_config.stats_queue)
     yield queue
@@ -48,7 +49,8 @@ def stats_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def file_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.DEALER)
+    queue = zmq_context.socket(
+        zmq.DEALER, protocol=reversed(protocols.file_juggler_files))
     queue.hwm = 10
     queue.connect(master_config.file_queue)
     yield queue
@@ -57,7 +59,8 @@ def file_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def fs_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.REQ)
+    queue = zmq_context.socket(
+        zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
     queue.hwm = 1
     queue.connect(master_config.fs_queue)
     yield queue
@@ -81,28 +84,28 @@ def statvfs(request):
             (4096, 4096, 100000, 10000, 10000, 10000, 1000, 100, 4096, 255)
         )
         statvfs.side_effect = lambda path: expected
-        yield expected
+        yield (expected.f_frsize, expected.f_bavail, expected.f_blocks)
 
 
 def test_init(task, stats_queue, statvfs):
     task.once()
-    assert stats_queue.recv_pyobj() == ['STATFS', statvfs]
+    assert stats_queue.recv_msg() == ('STATFS', statvfs)
 
 
 def test_bad_request(task, fs_queue):
     task.logger = mock.Mock()
-    fs_queue.send_pyobj(['FOO'])
+    fs_queue.send(b'FOO')
     task.poll()
     assert task.logger.error.call_count == 1
-    assert fs_queue.recv_pyobj()[:1] == ['ERR']
+    assert fs_queue.recv_msg()[0] == 'ERROR'
 
 
 def test_expect_file(task, master_config, fs_queue, file_state):
     root = Path(master_config.output_path)
     task.logger = mock.Mock()
-    fs_queue.send_pyobj(['EXPECT', 1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     assert task.logger.info.call_count == 1
     assert (root / 'simple').is_dir()
     assert 1 in task.pending
@@ -124,9 +127,9 @@ def test_transfer_success(task, master_config, stats_queue, fs_queue,
                           file_queue, file_state, file_content, statvfs):
     task.logger = mock.Mock()
     root = Path(master_config.output_path)
-    fs_queue.send_pyobj(['EXPECT', 1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     assert 1 in task.pending
     assert not task.active
     assert not task.complete
@@ -148,10 +151,10 @@ def test_transfer_success(task, master_config, stats_queue, fs_queue,
     assert not task.active
     assert 1 in task.complete
     assert task.logger.info.call_count == 2
-    fs_queue.send_pyobj(['VERIFY', 1, file_state.package_tag])
+    fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
-    assert stats_queue.recv_pyobj() == ['STATFS', statvfs]
+    assert fs_queue.recv_msg() == ('OK', None)
+    assert stats_queue.recv_msg() == ('STATFS', statvfs)
     assert task.logger.info.call_count == 3
     assert not task.pending
     assert not task.active
@@ -163,9 +166,9 @@ def test_verify_failure(task, master_config, fs_queue, file_queue, file_state,
                         file_content):
     task.logger = mock.Mock()
     root = Path(master_config.output_path)
-    fs_queue.send_pyobj(['EXPECT', 1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     assert (root / 'simple').is_dir()
     file_queue.send_multipart([b'HELLO', b'1'])
     task.poll()
@@ -176,9 +179,9 @@ def test_verify_failure(task, master_config, fs_queue, file_queue, file_state,
     file_queue.send_multipart([b'CHUNK', b'65536', file_content[65536:123456]])
     task.poll()
     assert file_queue.recv_multipart() == [b'DONE']
-    fs_queue.send_pyobj(['VERIFY', 1, file_state.package_tag])
+    fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj()[:1] == ['ERR']
+    assert fs_queue.recv_msg()[0] == 'ERROR'
     assert task.logger.warning.call_count == 1
     assert not (root / 'simple' / 'foo' / file_state.filename).exists()
 
@@ -186,9 +189,9 @@ def test_verify_failure(task, master_config, fs_queue, file_queue, file_state,
 def test_transfer_restart(task, fs_queue, file_queue, file_state,
                           file_content):
     task.logger = mock.Mock()
-    fs_queue.send_pyobj(['EXPECT', 1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     file_queue.send_multipart([b'HELLO', b'1'])
     task.poll()
     assert file_queue.recv_multipart() == [b'FETCH', b'0', b'65536']
@@ -204,17 +207,17 @@ def test_transfer_restart(task, fs_queue, file_queue, file_state,
     file_queue.send_multipart([b'CHUNK', b'65536', file_content[65536:123456]])
     task.poll()
     assert file_queue.recv_multipart() == [b'DONE']
-    fs_queue.send_pyobj(['VERIFY', 1, file_state.package_tag])
+    fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_pyobj() == ('OK', None)
 
 
 def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
                                  file_content):
     task.logger = mock.Mock()
-    fs_queue.send_pyobj(['EXPECT', 1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     # Emulate a left over CHUNK packet from a prior transfer; should be
     # ignored except under debug conditions
     file_queue.send_multipart([b'CHUNK', b'65536', file_content[65536:123456]])
@@ -239,9 +242,9 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     file_queue.send_multipart([b'CHUNK', b'65536', file_content[65536:123456]])
     task.poll()
     assert file_queue.recv_multipart() == [b'DONE']
-    fs_queue.send_pyobj(['VERIFY', 1, file_state.package_tag])
+    fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_pyobj() == ('OK', None)
 
 
 def test_remove_success(task, master_config, stats_queue, fs_queue, statvfs):
@@ -250,10 +253,10 @@ def test_remove_success(task, master_config, stats_queue, fs_queue, statvfs):
     wheel = out / 'simple' / 'foo' / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
     wheel.parent.mkdir(parents=True)
     wheel.touch()
-    fs_queue.send_pyobj(['REMOVE', 'foo', wheel.name])
+    fs_queue.send_msg('REMOVE', ['foo', wheel.name])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
-    assert stats_queue.recv_pyobj() == ['STATFS', statvfs]
+    assert fs_queue.recv_msg() == ('OK', None)
+    assert stats_queue.recv_msg() == ('STATFS', statvfs)
     assert task.logger.info.call_count == 1
     assert not wheel.exists()
 
@@ -261,7 +264,7 @@ def test_remove_success(task, master_config, stats_queue, fs_queue, statvfs):
 def test_remove_failed(task, master_config, stats_queue, fs_queue, statvfs):
     task.logger = mock.Mock()
     out = Path(master_config.output_path)
-    fs_queue.send_pyobj(['REMOVE', 'foo', 'foo.whl'])
+    fs_queue.send_msg('REMOVE', ['foo', 'foo.whl'])
     task.poll()
-    assert fs_queue.recv_pyobj() == ['OK', None]
+    assert fs_queue.recv_msg() == ('OK', None)
     assert task.logger.warning.call_count == 1

@@ -92,11 +92,9 @@ def test_oracle_init(mock_seraph, task):
 
 def test_oracle_bad_request(mock_seraph, task):
     assert mock_seraph.recv() == b'READY'
-    mock_seraph.send_multipart([b'foo', b'', pickle.dumps(['FOO'])])
+    mock_seraph.send_multipart([b'foo', b'', pickle.dumps('FOO')])
     address, empty, resp = mock_seraph.recv_multipart()
-    assert address == b'foo'
-    assert empty == b''
-    assert pickle.loads(resp) == ['ERR', repr('FOO')]
+    assert pickle.loads(resp) == ('ERROR', 'unknown message: FOO')
 
 
 def test_get_all_packages(db, with_package, db_client):
@@ -254,4 +252,4 @@ def test_get_downloads_recent(db_client, db, with_downloads):
 
 def test_bogus_request(db_client, db):
     with pytest.raises(IOError):
-        db_client._execute(['FOO'])
+        db_client._execute('FOO')

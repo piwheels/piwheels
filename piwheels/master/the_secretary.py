@@ -64,11 +64,13 @@ class TheSecretary(PauseableTask):
         super().__init__(config)
         self.buffer = deque()
         self.commands = {}
-        web_queue = self.ctx.socket(zmq.PULL, protocol=protocols.the_scribe)
+        web_queue = self.ctx.socket(
+            zmq.PULL, protocol=protocols.the_scribe)
         web_queue.hwm = 100
         web_queue.bind(config.web_queue)
         self.register(web_queue, self.handle_input)
-        self.output = self.ctx.socket(zmq.PUSH, protocol=protocols.the_scribe)
+        self.output = self.ctx.socket(
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.bind(const.SCRIBE_QUEUE)
 
@@ -91,7 +93,7 @@ class TheSecretary(PauseableTask):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(str(e))
         else:
             if msg in ['HOME', 'SEARCH']:
                 # HOME and SEARCH messages pass-thru immediately without

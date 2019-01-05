@@ -31,7 +31,7 @@ import pickle
 import zmq
 from voluptuous import Invalid
 
-from .protocols import Protocol, Missing
+from .protocols import Protocol, NoData
 
 
 class Socket(zmq.Socket):
@@ -45,34 +45,37 @@ class Socket(zmq.Socket):
         super().__init__(*a, **kw)
         self._protocol = protocol
 
-    def dump_msg(self, msg, data=Missing):
+    def dump_msg(self, msg, data=NoData):
         try:
             schema = self._protocol.send[msg]
         except KeyError:
             raise IOError('unknown message: %s' % msg)
-        if data is Missing:
-            if schema is not None:
+        if data is NoData:
+            if schema is not NoData:
                 raise Invalid('data must be specified for %s' % msg)
             return pickle.dumps(msg)
         else:
+            if schema is NoData:
+                raise Invalid('no data expected for %s' % msg)
             try:
                 data = schema(data)
             except Invalid as e:
-                raise IOError('invalid for %s: %s' % (msg, e))
+                raise IOError('invalid data for %s: %s' % (msg, e))
             return pickle.dumps((msg, data))
 
     def load_msg(self, buf):
         try:
             msg = pickle.loads(buf)
         except Exception as e:
-            # XXX Change except to CBORDecoderError when moving to CBOR
+            # XXX Change except to CBORDecoderError when moving to CBOR; pretty
+            # much any error can occur during unpickling
             raise IOError('unable to deserialize data')
         if isinstance(msg, str):
             try:
                 schema = self._protocol.recv[msg]
             except KeyError:
                 raise IOError('unknown message: %s' % msg)
-            if schema is None:
+            if schema is NoData:
                 return msg, None
             raise IOError('missing data for: %s' % msg)
         else:
@@ -84,24 +87,26 @@ class Socket(zmq.Socket):
                 schema = self._protocol.recv[msg]
             except KeyError:
                 raise IOError('unknown message: %s' % msg)
+            if schema is NoData:
+                raise IOError('data not expected for: %s' % msg)
             try:
                 return msg, schema(data)
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
 
-    def send_msg(self, msg, data=Missing, flags=0):
+    def send_msg(self, msg, data=NoData, flags=0):
         self.send(self.dump_msg(msg, data), flags=flags)
 
     def recv_msg(self, flags=0):
         buf = self.recv(flags=flags)
         return self.load_msg(buf)
 
-    def send_addr_msg(self, addr, msg, data=Missing, flags=0):
-        self.send_multipart([address, b'', self.dump_msg(msg, data)], flags=flags)
+    def send_addr_msg(self, addr, msg, data=NoData, flags=0):
+        self.send_multipart([addr, b'', self.dump_msg(msg, data)], flags=flags)
 
     def recv_addr_msg(self, flags=0):
         try:
-            addr, _, buf = self.recv_multipart()
+            addr, empty, buf = self.recv_multipart()
         except ValueError:
             raise IOError('invalid message structure received')
         msg, data = self.load_msg(buf)
@@ -109,6 +114,4 @@ class Socket(zmq.Socket):
 
 
 class Context(zmq.Context):
-    # Customized zmq.Context which provides CBORSocket instances from its
-    # socket() method
     _socket_class = Socket

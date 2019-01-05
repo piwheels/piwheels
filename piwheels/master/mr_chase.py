@@ -69,7 +69,7 @@ class MrChase(PauseableTask):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.the_scribe)
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
@@ -94,7 +94,8 @@ class MrChase(PauseableTask):
         try:
             address, msg, data = queue.recv_addr_msg()
         except IOError as e:
-            self.logger.error(e)
+            # XXX How do we ditch states of errored / unresponsive clients?
+            self.logger.error(str(e))
             return
 
         try:
@@ -185,7 +186,7 @@ class MrChase(PauseableTask):
             # might well support failed builds (as another method of skipping
             # builds)
             self.web_queue.send_msg('PKGPROJ', state.package)
-            return 'DONE', None
+            return 'DONE', protocols.NoData
 
     def do_sent(self, state):
         """
@@ -207,7 +208,7 @@ class MrChase(PauseableTask):
             state.files[state.next_file].verified()
             if state.transfers_done:
                 self.web_queue.send_msg('PKGBOTH', state.package)
-                return 'DONE', None
+                return 'DONE', protocols.NoData
             else:
                 self.fs.expect(0, state.files[state.next_file])
                 self.logger.info('send %s', state.next_file)
@@ -234,4 +235,4 @@ class MrChase(PauseableTask):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)
         self.web_queue.send_msg('PKGBOTH', package)
-        return 'DONE', None
+        return 'DONE', protocols.NoData

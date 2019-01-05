@@ -45,7 +45,7 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const, systemd, transport
+from .. import __version__, terminal, const, systemd, transport, protocols
 from ..systemd import get_systemd
 from .tasks import TaskQuit
 from .big_brother import BigBrother
@@ -247,18 +247,18 @@ write access to the output directory.
                 self.ext_status_queue.send(self.int_status_queue.recv())
             if self.control_queue in socks:
                 try:
-                    msg, *args = self.control_queue.recv_pyobj()
+                    msg, data = self.control_queue.recv_msg()
+                except IOError as exc:
+                    self.logger.error(str(exc))
+                else:
                     handler = {
                         'QUIT': self.do_quit,
-                        'KILL': self.do_kill,
+                        'KILL': lambda: self.do_kill(data),
                         'HELLO': self.do_hello,
                         'PAUSE': self.do_pause,
                         'RESUME': self.do_resume,
                     }[msg]
-                except (TypeError, KeyError):
-                    self.logger.error('ignoring invalid %s message', msg)
-                else:
-                    handler(*args)
+                    handler()
 
     def do_quit(self):
         """

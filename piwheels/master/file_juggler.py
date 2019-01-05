@@ -49,7 +49,7 @@ from pathlib import Path
 import zmq
 import zmq.error
 
-from .. import protocols
+from .. import transport, protocols
 from .tasks import Task
 from .states import TransferState
 
@@ -107,7 +107,7 @@ class FileJuggler(Task):
         fs_queue.hwm = 1
         fs_queue.bind(config.fs_queue)
         self.stats_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.big_brother)
+            zmq.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.register(file_queue, self.handle_file)
@@ -132,7 +132,8 @@ class FileJuggler(Task):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(str(e))
+            queue.send_msg('ERROR', str(e))
         else:
             try:
                 handler = {
@@ -143,7 +144,7 @@ class FileJuggler(Task):
                 result = handler(*data)
             except Exception as exc:
                 self.logger.error('error handling fs request: %s', msg)
-                queue.send_msg('ERR', exc)
+                queue.send_msg('ERROR', str(exc))
             else:
                 queue.send_msg('OK', result)
 
@@ -327,16 +328,16 @@ class FsClient:
     RPC client class for talking to :class:`FileJuggler`.
     """
     def __init__(self, config):
-        self.ctx = zmq.Context.instance()
+        self.ctx = transport.Context.instance()
         self.fs_queue = self.ctx.socket(
-            zmq.REQ, protocol=protocols.file_juggler_fs)
+            zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config.fs_queue)
 
     def close(self):
         self.fs_queue.close()
 
-    def _execute(self, msg, data=protocols.Missing):
+    def _execute(self, msg, data=protocols.NoData):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
         self.fs_queue.send_msg(msg, data, flags=zmq.NOBLOCK)
@@ -344,20 +345,20 @@ class FsClient:
         if status == 'OK':
             return result
         else:
-            raise result
+            raise IOError(result)
 
     def expect(self, slave_id, file_state):
         """
         See :meth:`FileJuggler.do_expect`.
         """
-        self._execute('EXPECT', (slave_id, file_state))
+        self._execute('EXPECT', [slave_id, file_state])
 
     def verify(self, slave_id, package):
         """
         See :meth:`FileJuggler.do_verify`.
         """
         try:
-            self._execute('VERIFY', (slave_id, package))
+            self._execute('VERIFY', [slave_id, package])
         except IOError:
             return False
         else:
@@ -367,4 +368,4 @@ class FsClient:
         """
         See :meth:`FileJuggler.do_remove`.
         """
-        self._execute('REMOVE', (package, filename))
+        self._execute('REMOVE', [package, filename])

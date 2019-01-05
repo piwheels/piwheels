@@ -71,7 +71,7 @@ class Lumberjack(PauseableTask):
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
-            self.logger.exception(e)
+            self.logger.error(str(e))
         else:
             assert msg == 'LOG'
             download = DownloadState(*data)

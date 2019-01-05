@@ -32,6 +32,7 @@ from unittest import mock
 import zmq
 import pytest
 
+from piwheels import protocols
 from piwheels.master.lumberjack import Lumberjack
 
 
@@ -45,16 +46,17 @@ def task(request, zmq_context, master_config):
 
 @pytest.fixture(scope='function')
 def log_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PUSH)
+    queue = zmq_context.socket(
+        zmq.PUSH, protocol=reversed(protocols.lumberjack))
     queue.connect(master_config.log_queue)
     yield queue
     queue.close()
 
 
-def test_lumberjack_log_valid(db_queue, log_queue, download_state, task):
-    log_queue.send_pyobj(['LOG'] + list(download_state))
-    db_queue.expect(['LOGDOWNLOAD', download_state])
-    db_queue.send(['OK', None])
+def test_log_valid(db_queue, log_queue, download_state, task):
+    log_queue.send_msg('LOG', list(download_state))
+    db_queue.expect('LOGDOWNLOAD', download_state)
+    db_queue.send('OK', None)
     task.poll()
     assert task.logger.info.call_args == mock.call(
         'logging download of %s from %s',
@@ -62,7 +64,7 @@ def test_lumberjack_log_valid(db_queue, log_queue, download_state, task):
     db_queue.check()
 
 
-def test_lumberjack_log_invalid(db_queue, log_queue, task):
-    log_queue.send_pyobj(['FOO'])
+def test_log_invalid(db_queue, log_queue, task):
+    log_queue.send(b'FOO')
     task.poll()
-    assert task.logger.warning.call_count == 1
+    assert task.logger.error.call_count == 1

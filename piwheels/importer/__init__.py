@@ -49,7 +49,7 @@ from pathlib import Path
 
 import zmq
 
-from .. import __version__, terminal, const
+from .. import __version__, terminal, const, transport, protocols
 from ..slave import duration
 from ..slave.builder import PiWheelsPackage, PiWheelsBuilder
 
@@ -189,20 +189,20 @@ def do_import(config, builder):
     :param PiWheelsBuilder builder:
         The object representing the state of the build.
     """
-    ctx = zmq.Context.instance()
-    queue = ctx.socket(zmq.REQ)
+    ctx = transport.Context.instance()
+    queue = ctx.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
-        queue.send_pyobj(['IMPORT', abi(config, builder)] + builder.as_message)
-        msg, *args = queue.recv_pyobj()
+        queue.send_msg('IMPORT', [abi(config, builder)] + builder.as_message)
+        msg, data = queue.recv_msg()
         if msg == 'ERROR':
-            raise RuntimeError(*args)
+            raise RuntimeError(data)
         logging.info('Registered build successfully')
         while msg == 'SEND':
-            do_send(builder, args[0])
-            queue.send_pyobj(['SENT'])
-            msg, *args = queue.recv_pyobj()
+            do_send(builder, data)
+            queue.send_msg('SENT')
+            msg, data = queue.recv_msg()
         if msg != 'DONE':
             raise RuntimeError('Unexpected response from master')
     finally:
@@ -231,8 +231,9 @@ def do_send(builder, filename):
     """
     logging.info('Sending %s to master on localhost', filename)
     pkg = [f for f in builder.files if f.filename == filename][0]
-    ctx = zmq.Context.instance()
-    queue = ctx.socket(zmq.DEALER)
+    ctx = transport.Context.instance()
+    queue = ctx.socket(
+        zmq.DEALER, protocol=reversed(protocols.file_juggler_files))
     queue.ipv6 = True
     queue.hwm = 10
     # NOTE: The following assumes that we're running on the master; this

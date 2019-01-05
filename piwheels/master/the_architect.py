@@ -75,6 +75,6 @@ class TheArchitect(Task):
         try:
             row = next(self.query)
             self.builds_queue.send_msg(
-                'QUEUE', (row.abi_tag, row.package, row.version))
+                'QUEUE', [row.abi_tag, row.package, row.version])
         except StopIteration:
             self.query = self.db.get_build_queue()
