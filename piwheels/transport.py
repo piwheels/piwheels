@@ -26,12 +26,40 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import pickle
+import ipaddress as ip
+import datetime as dt
 
 import zmq
 from voluptuous import Invalid
 
+from . import cbor2
 from .protocols import Protocol, NoData
+
+
+def default_encoder(encoder, value):
+    if isinstance(value, (ip.IPv4Address, ip.IPv6Address)):
+        encoder.encode(cbor2.CBORTag(260, value.packed))
+    elif isinstance(value, dt.timedelta):
+        encoder.encode(
+            cbor2.CBORTag(2001, (
+                value.days, value.seconds, value.microseconds)))
+    elif value is NoData:
+        encoder.encode(cbor2.CBORTag(2002, None))
+
+
+def default_decoder(decoder, tag, shareable_index=None):
+    if tag.tag == 260:
+        if len(tag.value) == 4:
+            return ip.IPv4Address(tag.value)
+        elif len(tag.value) == 16:
+            return ip.IPv6Address(tag.value)
+    elif tag.tag == 2001:
+        days, seconds, microseconds = tag.value
+        return dt.timedelta(
+            days=days, seconds=seconds, microseconds=microseconds)
+    elif tag.tag == 2002:
+        return NoData
+    return tag
 
 
 class Socket(zmq.Socket):
@@ -39,11 +67,15 @@ class Socket(zmq.Socket):
     # recv methods; _protocol needs to be defined at the class level otherwise
     # pyzmq's __setattr__ denies assignment
     _protocol = None
+    _encoder = None
+    _decoder = None
 
     def __init__(self, *a, **kw):
         protocol = kw.pop('protocol', Protocol())
         super().__init__(*a, **kw)
         self._protocol = protocol
+        self._encoder = cbor2.CBOREncoder(None, default=default_encoder)
+        self._decoder = cbor2.CBORDecoder(None, tag_hook=default_decoder)
 
     def dump_msg(self, msg, data=NoData):
         try:
@@ -53,7 +85,7 @@ class Socket(zmq.Socket):
         if data is NoData:
             if schema is not NoData:
                 raise Invalid('data must be specified for %s' % msg)
-            return pickle.dumps(msg)
+            return self._encoder.encode_to_bytes(msg)
         else:
             if schema is NoData:
                 raise Invalid('no data expected for %s' % msg)
@@ -61,11 +93,11 @@ class Socket(zmq.Socket):
                 data = schema(data)
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
-            return pickle.dumps((msg, data))
+            return self._encoder.encode_to_bytes((msg, data))
 
     def load_msg(self, buf):
         try:
-            msg = pickle.loads(buf)
+            msg = self._decoder.decode_from_bytes(buf)
         except Exception as e:
             # XXX Change except to CBORDecoderError when moving to CBOR; pretty
             # much any error can occur during unpickling

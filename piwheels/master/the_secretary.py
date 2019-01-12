@@ -33,7 +33,7 @@ Defines the :class:`TheSecretary` task; see class for more details.
     :members:
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import deque, namedtuple
 
 import zmq
@@ -42,6 +42,7 @@ from .. import const, protocols
 from .tasks import PauseableTask
 
 
+UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
@@ -79,7 +80,7 @@ class TheSecretary(PauseableTask):
         super().close()
 
     def loop(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         while self.buffer:
             first = self.buffer[0]
             if now - first.timestamp > timedelta(minutes=1):
@@ -107,5 +108,5 @@ class TheSecretary(PauseableTask):
                         # timestamp alone
                         self.commands[package] = msg
                 else:
-                    self.buffer.append(IndexTask(package, datetime.utcnow()))
+                    self.buffer.append(IndexTask(package, datetime.now(tz=UTC)))
                     self.commands[package] = msg

@@ -26,14 +26,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import ipaddress as ip
 import datetime as dt
 from collections import namedtuple
 
-from voluptuous import Schema, ExactSequence, Extra, Maybe
+from voluptuous import Schema, ExactSequence, Extra, Maybe, Any
 
 
 class _NoData:
     # Singleton representing the lack of a schema for a message
+    __slots__ = ()
+
     def __new__(cls):
         try:
             return NoData
@@ -91,6 +94,49 @@ _statistics_schema = {      # statistics
     'disk_size':             int,
     'downloads_last_month':  int,
 }
+
+
+_dependency_schema = ExactSequence([str, str])  # tool, package
+
+
+_file_state_schema = ExactSequence([
+    str,                   # filename
+    int,                   # filesize
+    str,                   # filehash
+    str,                   # package_tag
+    str,                   # package_version_tag
+    str,                   # abi_tag
+    str,                   # platform_tag
+    {_dependency_schema},  # dependencies
+    bool,                  # transferred
+])
+
+
+_build_state_schema = ExactSequence([
+    int,                   # slave id
+    str,                   # package
+    str,                   # version
+    str,                   # abi_tag
+    bool,                  # status
+    dt.timedelta,          # duration
+    str,                   # output
+    [_file_state_schema],  # files
+    int,                   # build_id
+])
+
+
+_download_schema = ExactSequence([
+    str,          # filename
+    Any(ip.IPv4Address, ip.IPv6Address),  # host
+    dt.datetime,  # timestamp
+    str,          # arch
+    str,          # distro_name
+    str,          # distro_version
+    str,          # os_name
+    str,          # os_version
+    str,          # py_name
+    str,          # py_version
+])
 
 
 task_control = Protocol(recv={
@@ -204,7 +250,7 @@ the_oracle = Protocol(recv={
     'SKIPPKG':     ExactSequence([str, Maybe(str)]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, Maybe(str)]),  # package, version, skip reason
     'LOGDOWNLOAD': Extra,  # XXX refine this
-    'LOGBUILD':    Extra,  # XXX refine this
+    'LOGBUILD':    _build_state_schema,
     'DELBUILD':    ExactSequence([str, str]),  # package, version
     'PKGFILES':    str,                        # package
     'PROJVERS':    str,                        # package

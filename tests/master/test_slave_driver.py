@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 import zmq
@@ -37,6 +37,9 @@ from piwheels import const, protocols
 from piwheels.master.tasks import TaskQuit
 from piwheels.master.slave_driver import SlaveDriver
 from piwheels.master.states import SlaveState, BuildState
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -171,7 +174,7 @@ def test_slave_protocol_error(task, slave_queue, master_config):
 def test_slave_commits_suicide(task, slave_queue, master_status_queue,
                                master_config):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        dt.utcnow.return_value = datetime.utcnow()
+        dt.now.return_value = datetime.now(tz=UTC)
         task.logger = mock.Mock()
         slave_queue.send_msg('HELLO', [
             300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
@@ -180,7 +183,7 @@ def test_slave_commits_suicide(task, slave_queue, master_status_queue,
         assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.utcnow.return_value, 'ACK', [1, 'https://pypi.org/simple']
+                1, dt.now.return_value, 'ACK', [1, 'https://pypi.org/simple']
             ]
         )
         assert task.slaves
@@ -188,7 +191,7 @@ def test_slave_commits_suicide(task, slave_queue, master_status_queue,
         task.poll()
         assert task.logger.warning.call_count == 2
         assert master_status_queue.recv_msg() == (
-            'SLAVE', [1, dt.utcnow.return_value, 'DIE', protocols.NoData]
+            'SLAVE', [1, dt.now.return_value, 'DIE', protocols.NoData]
         )
         assert not task.slaves
 
@@ -203,7 +206,7 @@ def test_master_lists_nothing(task, master_status_queue):
 def test_master_lists_slaves(task, slave_queue, master_config,
                              master_status_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        dt.utcnow.return_value = datetime.utcnow()
+        dt.now.return_value = datetime.now(tz=UTC)
         slave_queue.send_msg('HELLO', [
             300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
         task.poll()
@@ -211,7 +214,7 @@ def test_master_lists_slaves(task, slave_queue, master_config,
             1, master_config.pypi_simple])
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.utcnow.return_value, 'ACK', [
+                1, dt.now.return_value, 'ACK', [
                     1, 'https://pypi.org/simple'
                 ]
             ]
@@ -220,7 +223,7 @@ def test_master_lists_slaves(task, slave_queue, master_config,
         task.poll()
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.utcnow.return_value, 'HELLO', [
+                1, dt.now.return_value, 'HELLO', [
                     timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l',
                     'piwheels1'
                 ]
@@ -231,19 +234,19 @@ def test_master_lists_slaves(task, slave_queue, master_config,
 def test_slave_remove_expired(task, slave_queue, master_config,
                               master_status_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        dt.utcnow.return_value = datetime.utcnow()
+        dt.now.return_value = datetime.now(tz=UTC)
         slave_queue.send_msg('HELLO', [
             300.0, 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
         task.poll()
         assert len(task.slaves) == 1
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.utcnow.return_value, 'ACK',
+                1, dt.now.return_value, 'ACK',
                 [1, 'https://pypi.org/simple']
             ]
         )
-        old_now = dt.utcnow.return_value
-        dt.utcnow.return_value = dt.utcnow.return_value + timedelta(hours=4)
+        old_now = dt.now.return_value
+        dt.now.return_value = dt.now.return_value + timedelta(hours=4)
         task.loop()
         assert len(task.slaves) == 0
         assert master_status_queue.recv_msg() == (

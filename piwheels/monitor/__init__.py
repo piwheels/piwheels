@@ -45,8 +45,8 @@ from time import sleep
 import zmq
 
 from .. import terminal, const, protocols, transport
-from . import widgets
 from ..format import format_size
+from . import widgets
 
 
 class PiWheelsMonitor:
@@ -100,7 +100,7 @@ class PiWheelsMonitor:
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         sleep(1)
         self.ctrl_queue = ctx.socket(
-            zmq.PUSH, protocol=protocols.master_control)
+            zmq.PUSH, protocol=reversed(protocols.master_control))
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_msg('HELLO')
         try:
@@ -441,7 +441,7 @@ class SlaveListWalker(widgets.ListWalker):
         let the user see the terminated state).
         """
         # Remove terminated slaves
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         for slave_id, state in list(self.slaves.items()):
             if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
                 # Be careful not to change the sort-order here...
@@ -554,9 +554,9 @@ class SlaveState:
         initial "*" on the entry.
         """
         if self.first_seen is not None:
-            if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
+            if datetime.now(tz=UTC) - self.last_seen > timedelta(minutes=15):
                 return 'silent'
-            elif datetime.utcnow() - self.last_seen > self.timeout:
+            elif datetime.now(tz=UTC) - self.last_seen > self.timeout:
                 return 'dead'
         if self.terminated:
             return 'dead'
@@ -613,7 +613,7 @@ def since(timestamp):
     if timestamp is None:
         return '-'
     else:
-        return str(datetime.utcnow().replace(microsecond=0) -
+        return str(datetime.now(tz=UTC).replace(microsecond=0) -
                    timestamp.replace(microsecond=0))
 
 

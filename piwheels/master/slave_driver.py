@@ -34,7 +34,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 """
 
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 import zmq
@@ -44,6 +44,9 @@ from .states import SlaveState, FileState
 from .tasks import Task, TaskQuit
 from .the_oracle import DbClient
 from .file_juggler import FsClient
+
+
+UTC = timezone.utc
 
 
 class SlaveDriver(Task):
@@ -402,7 +405,7 @@ class SlaveDriver(Task):
         """
         for slave in self.slaves.values():
             if slave.reply is not None and slave.reply[0] == 'BUILD':
-                if slave.last_seen + slave.timeout > datetime.utcnow():
+                if slave.last_seen + slave.timeout > datetime.now(tz=UTC):
                     msg, (package, version) = slave.reply
                     yield package, version
 

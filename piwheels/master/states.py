@@ -49,10 +49,13 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import namedtuple
 
 from .ranges import exclude, intersect
+
+
+UTC = timezone.utc
 
 # pylint complains about all these classes having too many attributes (and thus
 # their constructors having too many arguments) and about the lack of (entirely
@@ -123,6 +126,21 @@ class FileState:
         self._platform_tag = platform_tag
         self._dependencies = dependencies
         self._transferred = transferred
+
+    def as_message(self):
+        """
+        Convert the :class:`FileState` object into a simpler list for
+        serialization and transport.
+        """
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        """
+        Convert the output from :meth:`as_message` back into a
+        :class:`BuildState`.
+        """
+        return cls(*value)
 
     def __len__(self):
         return 10
@@ -250,6 +268,27 @@ class BuildState:
         self._output = output
         self._files = files
         self._build_id = build_id
+
+    def as_message(self):
+        """
+        Convert the :class:`BuildState`, and its nested :class:`FileState`
+        objects into simpler lists for serialization and transport.
+        """
+        return [
+            v if i != 7 else [f.as_message() for f in v.values()]
+            for i, v in enumerate(self)
+        ]
+
+    @classmethod
+    def from_message(cls, value):
+        """
+        Convert the output from :meth:`as_message` back into a
+        :class:`BuildState`.
+        """
+        value = list(value)
+        value[7] = [FileState.from_message(f) for f in value[7]]
+        value[7] = {f.filename: f for f in value[7]}
+        return cls(*value)
 
     def __len__(self):
         return 9
@@ -384,7 +423,7 @@ class SlaveState:
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
-        self._first_seen = self._last_seen = datetime.utcnow()
+        self._first_seen = self._last_seen = datetime.now(tz=UTC)
         self._request = None
         self._reply = None
         self._build = None
@@ -396,7 +435,7 @@ class SlaveState:
             "last_seen={last_seen}, last_reply={reply}, {alive}>".format(
                 slave_id=self.slave_id,
                 label=self.label,
-                last_seen=datetime.utcnow() - self.last_seen,
+                last_seen=datetime.now(tz=UTC) - self.last_seen,
                 reply='none' if self.reply is None else self.reply[0],
                 alive='killed'
                 if self.terminated else 'expired'
@@ -469,7 +508,7 @@ class SlaveState:
         # time before we expire and forget them
         if self._last_seen is None:
             return False
-        return (datetime.utcnow() - self._last_seen) > (self._timeout * 1.1)
+        return (datetime.now(tz=UTC) - self._last_seen) > (self._timeout * 1.1)
 
     @property
     def build(self):
@@ -481,7 +520,7 @@ class SlaveState:
 
     @request.setter
     def request(self, value):
-        self._last_seen = datetime.utcnow()
+        self._last_seen = datetime.now(tz=UTC)
         self._request = value
         msg, data = value
         if msg == 'BUILT':

@@ -33,7 +33,7 @@ Defines the :class:`BigBrother` task; see class for more details.
     :members:
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import zmq
 
@@ -41,6 +41,9 @@ from .. import const, protocols
 from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .file_juggler import FsClient
+
+
+UTC = timezone.utc
 
 
 class BigBrother(PauseableTask):
@@ -71,7 +74,7 @@ class BigBrother(PauseableTask):
             'disk_size':             1,
             'downloads_last_month':  0,
         }
-        self.timestamp = datetime.utcnow() - timedelta(seconds=40)
+        self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
         stats_queue = self.ctx.socket(
             zmq.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
@@ -109,8 +112,8 @@ class BigBrother(PauseableTask):
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats
         # every 30 seconds (at most)
-        if datetime.utcnow() - self.timestamp > timedelta(seconds=30):
-            self.timestamp = datetime.utcnow()
+        if datetime.now(tz=UTC) - self.timestamp > timedelta(seconds=30):
+            self.timestamp = datetime.now(tz=UTC)
             rec = self.db.get_statistics()
             self.stats['packages_count'] = rec.packages_count
             self.stats['packages_built'] = rec.packages_built

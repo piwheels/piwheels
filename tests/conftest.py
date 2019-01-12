@@ -29,7 +29,7 @@
 
 import os
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from threading import Thread, Event
 from time import sleep
@@ -45,6 +45,9 @@ from piwheels.initdb import get_script, parse_statements
 from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.master.the_oracle import TheOracle
 from piwheels.master.seraph import Seraph
+
+
+UTC = timezone.utc
 
 
 # The database tests all assume that a database (default: piwheels_test)
@@ -494,8 +497,8 @@ class MockTask(Thread):
                         tested = True
                         try:
                             timeout = timedelta(seconds=data)
-                            start = datetime.utcnow()
-                            while queue and datetime.utcnow() - start < timeout:
+                            start = datetime.now(tz=UTC)
+                            while queue and datetime.now(tz=UTC) - start < timeout:
                                 socks = dict(poller.poll(10))
                                 handle_queue()
                             if queue:

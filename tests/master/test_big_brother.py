@@ -29,7 +29,7 @@
 
 from unittest import mock
 from collections import namedtuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import zmq
 import pytest
@@ -37,6 +37,9 @@ import pytest
 from conftest import MockTask
 from piwheels import const, protocols
 from piwheels.master.big_brother import BigBrother
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -121,7 +124,7 @@ def task(request, master_config):
 
 def test_gen_skip(master_status_queue, web_queue, task):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tz=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         task.loop()  # crank the handle once
         with pytest.raises(zmq.ZMQError):
@@ -133,7 +136,7 @@ def test_gen_skip(master_status_queue, web_queue, task):
 def test_gen_stats(db_queue, master_status_queue, web_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
@@ -149,7 +152,7 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
 def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
                         stats_queue, stats_result, stats_dict, stats_disk):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         stats_queue.send_msg('STATFS', stats_disk)
         while task.stats['disk_free'] == 0:
@@ -171,7 +174,7 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
 def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         stats_queue.send_pyobj(['STATBQ', {'cp34m': 1, 'cp35m': 0}])
         while task.stats['builds_pending'] == 0:
@@ -192,7 +195,7 @@ def test_bad_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     task.logger = mock.Mock()
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 40)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
         stats_queue.send(b'FOO')
         task.poll()

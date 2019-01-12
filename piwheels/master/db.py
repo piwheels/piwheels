@@ -37,7 +37,7 @@ itself.
 """
 
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby
 from operator import itemgetter
 
@@ -47,6 +47,7 @@ from sqlalchemy.exc import IntegrityError, SAWarning
 from .. import __version__
 
 
+UTC = timezone.utc
 CONTROL_CHARS = {
     c: '?'
     for c in chain(
@@ -152,7 +153,7 @@ class Database:
         with self._conn.begin():
             try:
                 if released is None:
-                    released = datetime.utcnow()
+                    released = datetime.now(tz=UTC)
                 self._conn.execute(
                     self._versions.insert(),
                     package=package,

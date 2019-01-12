@@ -41,7 +41,7 @@ Implements the screen rendering classes for the Sense HAT monitor.
 """
 
 import signal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from itertools import cycle, chain
 from threading import main_thread
@@ -52,6 +52,9 @@ from colorzero import Color, Lightness, Saturation, Blue, ease_out
 
 from .states import SlaveList
 from ..format import format_size
+
+
+UTC = timezone.utc
 
 
 def bounce(it):
@@ -107,7 +110,7 @@ class MainRenderer(Renderer):
         self.blue_grad = list(Color('blue').gradient(Color('white'), 32))
 
     def message(self, slave_id, timestamp, msg, *args):
-        self.last_message = datetime.utcnow()
+        self.last_message = datetime.now(tz=UTC)
         if msg == 'STATUS':
             self.status = args[0]
         else:
@@ -153,7 +156,7 @@ class MainRenderer(Renderer):
         # Render the ping bar at the top
         ping = 8 * max(
             timedelta(0),
-            datetime.utcnow() - self.last_message).total_seconds() / 30
+            datetime.now(tz=UTC) - self.last_message).total_seconds() / 30
         if ping > 8:
             buf[0, :] = Color(pulse / 15, 0, 0)
         else:
@@ -257,7 +260,7 @@ class StatusRenderer(Renderer):
         x, y = self.position
         if x == 0:
             ping = 64 * max(timedelta(0), min(timedelta(seconds=30),
-                datetime.utcnow() - self.main.last_message)).total_seconds() / 30
+                datetime.now(tz=UTC) - self.main.last_message)).total_seconds() / 30
             self.back = array([
                 c if i <= ping else Color('black')
                 for i in range(64)
@@ -303,7 +306,7 @@ class StatusRenderer(Renderer):
         x, y = self.position
         time = self.main.status.get('builds_time', timedelta(0))
         time -= timedelta(microseconds=time.microseconds)
-        ping = datetime.utcnow() - self.main.last_message
+        ping = datetime.now(tz=UTC) - self.main.last_message
         ping -= timedelta(microseconds=ping.microseconds)
         text = {
             0: 'Last Ping: {}s'.format(int(ping.total_seconds())),
@@ -331,10 +334,10 @@ class StatusRenderer(Renderer):
         )))
 
     def __iter__(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         while True:
-            if datetime.utcnow() - now > timedelta(seconds=1):
-                now = datetime.utcnow()
+            if datetime.now(tz=UTC) - now > timedelta(seconds=1):
+                now = datetime.now(tz=UTC)
                 self.update_back()
                 self.update_text()
             offset = next(self.offset)
@@ -439,7 +442,7 @@ class SlaveRenderer(Renderer):
         )))
 
     def __iter__(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         while True:
             offset = next(self.offset)
             yield self.text[:, offset:offset + 8]

@@ -29,7 +29,7 @@
 
 import warnings
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 
@@ -45,6 +45,9 @@ from piwheels.master.states import (
     TransferState,
     DownloadState,
 )
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -118,9 +121,9 @@ def test_build_state_logged(build_state, file_state):
 
 
 def test_slave_state_init():
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     with mock.patch('piwheels.master.states.datetime') as dt:
-        dt.utcnow.return_value = now
+        dt.now.return_value = now
         slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                                  'linux_armv7l', 'piwheels2')
         assert slave_state.slave_id == 1
@@ -149,16 +152,16 @@ def test_slave_state_kill():
 def test_slave_state_expired():
     slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                              'linux_armv7l', 'piwheels2')
-    slave_state._first_seen = datetime.utcnow() - timedelta(hours=5)
+    slave_state._first_seen = datetime.now(tz=UTC) - timedelta(hours=5)
     assert not slave_state.expired
-    slave_state._last_seen = datetime.utcnow() - timedelta(hours=4)
+    slave_state._last_seen = datetime.now(tz=UTC) - timedelta(hours=4)
     assert slave_state.expired
 
 
 def test_slave_state_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                                  'linux_armv7l', 'piwheels2')
         slave_state.reply = ('HELLO', [slave_state.slave_id, const.PYPI_XMLRPC])
@@ -175,14 +178,14 @@ def test_slave_recv_request(build_state, file_state):
     slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                              'linux_armv7l', 'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state.request = ('IDLE', None)
         assert slave_state.request == ('IDLE', None)
         assert slave_state.last_seen == now
         assert slave_state.build is None
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
         slave_state.request = (
             'BUILT', [
@@ -205,8 +208,8 @@ def test_slave_recv_reply(build_state, file_state, slave_queue):
     slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                              'linux_armv7l', 'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
         slave_state.request = (
             'BUILT', [
@@ -230,8 +233,8 @@ def test_slave_recv_bad_built(build_state, file_state, slave_queue):
     slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                              'linux_armv7l', 'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
         slave_state.request = ('BUILT', None)
         assert slave_state.build is None
@@ -241,8 +244,8 @@ def test_slave_recv_bad_built(build_state, file_state, slave_queue):
 
 def test_slave_state_recv_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
         slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
                                  'linux_armv7l', 'piwheels2')
         slave_state._reply = ('IDLE', None)

@@ -74,7 +74,7 @@ class Lumberjack(PauseableTask):
             self.logger.error(str(e))
         else:
             assert msg == 'LOG'
-            download = DownloadState(*data)
+            download = DownloadState.from_message(data)
             self.logger.info('logging download of %s from %s',
                              download.filename, download.host)
             self.db.log_download(download)

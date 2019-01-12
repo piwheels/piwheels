@@ -30,13 +30,16 @@
 import os
 from unittest import mock
 from threading import Event
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import zmq
 import pytest
 
 from piwheels import const, protocols
 from piwheels.master.the_secretary import TheSecretary
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -105,38 +108,38 @@ def test_bad_request(task, web_queue):
 
 def test_buffer(task, web_queue, scribe_queue):
     with mock.patch('piwheels.master.the_secretary.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tz=UTC)
         task.loop()
         web_queue.send_msg('PKGPROJ', 'foo')
         task.poll()
         task.loop()
         with pytest.raises(zmq.error.Again):
             assert scribe_queue.recv_pyobj(flags=zmq.NOBLOCK)
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 35, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tz=UTC)
         task.loop()
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
 
 
 def test_upgrade(task, web_queue, scribe_queue):
     with mock.patch('piwheels.master.the_secretary.datetime') as dt:
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tz=UTC)
         task.loop()
         web_queue.send_msg('PKGPROJ', 'foo')
         task.poll()
         task.loop()
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 30)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 30, tz=UTC)
         web_queue.send_msg('PKGBOTH', 'foo')
         task.poll()
         task.loop()
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 31)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 31, tz=UTC)
         web_queue.send_msg('PKGPROJ', 'bar')
         task.poll()
         task.loop()
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 30, 32)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 32, tz=UTC)
         web_queue.send_msg('PKGPROJ', 'bar')
         task.poll()
         task.loop()
-        dt.utcnow.return_value = datetime(2018, 1, 1, 12, 35, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tz=UTC)
         task.loop()
         assert scribe_queue.recv_msg() == ('PKGBOTH', 'foo')
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'bar')
