@@ -77,22 +77,24 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
 
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     bsh.logged(1234)
@@ -122,23 +124,25 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
 
     import_queue.send_msg(
         'IMPORT', [
-            bsh.abi_tag, bsh.package, bsh.version, bsh.status,
-            bsh.duration, bsh.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bsh.package, bsh.version, bsh.abi_tag, bsh.status, bsh.duration,
+            bsh.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bsh.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
     # XXX Sometimes we'll have a different order to the re-constructed file list on the server side
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     bsh.logged(1234)
@@ -150,7 +154,7 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
     fs_queue.expect('VERIFY', [0, bsh.package])
     fs_queue.send('OK')
     bsh.files[filename].verified()
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     msg, filename = import_queue.recv_msg()
@@ -175,22 +179,24 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
 
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     bsh.logged(1234)
@@ -219,13 +225,15 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
 
     import_queue.send_msg(
         'IMPORT', [
-            None, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, None, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
@@ -233,9 +241,9 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
     bsh._abi_tag = 'cp34m'
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)
@@ -253,13 +261,15 @@ def test_import_bad_abi(db_queue, task, import_queue, build_state):
 
     import_queue.send_msg(
         'IMPORT', [
-            'cp36m', bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, 'cp36m', bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
@@ -275,13 +285,15 @@ def test_import_failed_build(task, import_queue, build_state):
     bs = build_state
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, False, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, False, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     task.poll()
@@ -296,8 +308,8 @@ def test_import_empty_build(task, import_queue, build_state):
     bs = build_state
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {}
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, []
         ]
     )
     task.poll()
@@ -313,13 +325,15 @@ def test_import_unknown_pkg(db_queue, task, import_queue, build_state):
 
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
@@ -341,20 +355,22 @@ def test_import_failed_log(db_queue, task, import_queue, build_state,
 
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag, fs.abi_tag,
+                    fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('ERROR', 'foo')
     task.poll()
     assert import_queue.recv_msg() == ('ERROR', 'foo')
@@ -370,22 +386,24 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
 
     import_queue.send_msg(
         'IMPORT', [
-            bs.abi_tag, bs.package, bs.version, bs.status, bs.duration,
-            bs.output, {
-                fs.filename: (fs.filesize, fs.filehash, fs.package_tag,
-                              fs.package_version_tag, fs.py_version_tag,
-                              fs.abi_tag, fs.platform_tag, fs.dependencies)
+            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
+            bs.output, [
+                [
+                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
+                    fs.package_version_tag, fs.py_version_tag,
+                    fs.abi_tag, fs.platform_tag, fs.dependencies
+                ]
                 for fs in bs.files.values()
-            }
+            ]
         ]
     )
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('LOGBUILD', bsh)
+    db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
-    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file]])
+    fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
     fs_queue.send('OK')
     task.poll()
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)

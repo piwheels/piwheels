@@ -40,6 +40,7 @@ import warnings
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby
 from operator import itemgetter
+from collections import namedtuple
 
 from sqlalchemy import MetaData, Table, select, create_engine, func
 from sqlalchemy.exc import IntegrityError, SAWarning
@@ -56,6 +57,12 @@ CONTROL_CHARS = {
         [0x0b, 0x7f]
     )
 }
+
+
+ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
+    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
+ProjectFilesRow = namedtuple('ProjectFilesRow', (
+    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
 
 
 def sanitize(s):
@@ -158,7 +165,7 @@ class Database:
                     self._versions.insert(),
                     package=package,
                     version=version,
-                    released=released,
+                    released=released.astimezone(UTC).replace(tzinfo=None),
                     skip=skip
                 )
             except IntegrityError:
@@ -213,7 +220,7 @@ class Database:
                 self._downloads.insert(),
                 filename=download.filename,
                 accessed_by=download.host,
-                accessed_at=download.timestamp,
+                accessed_at=download.timestamp.astimezone(UTC).replace(tzinfo=None),
                 arch=download.arch,
                 distro_name=download.distro_name,
                 distro_version=download.distro_version,
@@ -235,7 +242,9 @@ class Database:
                 version=build.version,
                 abi_tag=build.abi_tag,
                 built_by=build.slave_id,
-                duration=timedelta(seconds=build.duration),
+                # XXX Should we be accepting this or defaulting it?
+                #built_at=build.built_at.astimezone(UTC).replace(tzinfo=None),
+                duration=build.duration,
                 status=build.status
             ))
             self._conn.execute(
@@ -351,7 +360,9 @@ class Database:
         for more information.
         """
         with self._conn.begin():
-            return self._conn.execute(self._statistics.select()).first()
+            return dict(
+                self._conn.execute(self._statistics.select()).first().items()
+            )
 
     def get_downloads_recent(self):
         """
@@ -366,16 +377,19 @@ class Database:
 
     def get_package_files(self, package):
         """
-        Returns all details required to build the index.html for the specified
-        package.
+        Returns a mapping of filenames to file hashes; this is all the data
+        required to build the simple index.html for the specified package.
         """
         with self._conn.begin():
-            return self._conn.execute(
-                select([self._files.c.filename, self._files.c.filehash]).
-                select_from(self._builds.join(self._files)).
-                where(self._builds.c.status).
-                where(self._builds.c.package == package)
-            )
+            return {
+                row.filename: row.filehash
+                for row in self._conn.execute(
+                    select([self._files.c.filename, self._files.c.filehash]).
+                    select_from(self._builds.join(self._files)).
+                    where(self._builds.c.status).
+                    where(self._builds.c.package == package)
+                )
+            }
 
     def get_project_versions(self, package):
         """
@@ -383,17 +397,20 @@ class Database:
         project page of the specified *package*.
         """
         with self._conn.begin():
-            return self._conn.execute(
-                select([
-                    self._versions.c.version,
-                    ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
-                    func.count().filter(self._builds.c.status).label('builds_succeeded'),
-                    func.count().filter(~self._builds.c.status).label('builds_failed'),
-                ]).
-                select_from(self._packages.join(self._versions.outerjoin(self._builds))).
-                where(self._versions.c.package == package).
-                group_by(self._versions.c.version, 'skipped')
-            )
+            return [
+                ProjectVersionsRow(*row)
+                for row in self._conn.execute(
+                    select([
+                        self._versions.c.version,
+                        ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
+                        func.count().filter(self._builds.c.status).label('builds_succeeded'),
+                        func.count().filter(~self._builds.c.status).label('builds_failed'),
+                    ]).
+                    select_from(self._packages.join(self._versions.outerjoin(self._builds))).
+                    where(self._versions.c.package == package).
+                    group_by(self._versions.c.version, 'skipped')
+                )
+            ]
 
     def get_project_files(self, package):
         """
@@ -401,18 +418,21 @@ class Database:
         page of the specified *package*.
         """
         with self._conn.begin():
-            return self._conn.execute(
-                select([
-                    self._builds.c.version,
-                    self._files.c.abi_tag,
-                    self._files.c.filename,
-                    self._files.c.filesize,
-                    self._files.c.filehash,
-                ]).
-                select_from(self._files.join(self._builds)).
-                where(self._builds.c.status).
-                where(self._builds.c.package == package)
-            )
+            return [
+                ProjectFilesRow(*row)
+                for row in self._conn.execute(
+                    select([
+                        self._builds.c.version,
+                        self._files.c.abi_tag,
+                        self._files.c.filename,
+                        self._files.c.filesize,
+                        self._files.c.filehash,
+                    ]).
+                    select_from(self._files.join(self._builds)).
+                    where(self._builds.c.status).
+                    where(self._builds.c.package == package)
+                )
+            ]
 
     def get_version_files(self, package, version):
         """

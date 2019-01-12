@@ -293,7 +293,7 @@ def duration(s):
     return (
         dateutil.parser.parse(s, default=datetime(1, 1, 1)) -
         datetime(1, 1, 1)
-    ).total_seconds()
+    )
 
 
 main = PiWheelsSlave()  # pylint: disable=invalid-name

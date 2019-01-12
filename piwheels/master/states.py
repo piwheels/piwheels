@@ -132,7 +132,7 @@ class FileState:
         Convert the :class:`FileState` object into a simpler list for
         serialization and transport.
         """
-        return list(self)
+        return list(self[:-1])  # never include transferred
 
     @classmethod
     def from_message(cls, value):
@@ -242,7 +242,7 @@ class BuildState:
     :param bool status:
         ``True`` if the build succeeded, ``False`` if it failed.
 
-    :param float duration:
+    :param timedelta duration:
         The amount of time (in seconds) it took to complete the build.
 
     :param str output:
@@ -276,7 +276,7 @@ class BuildState:
         """
         return [
             v if i != 7 else [f.as_message() for f in v.values()]
-            for i, v in enumerate(self)
+            for i, v in enumerate(self[:-1])  # never include build_id
         ]
 
     @classmethod
@@ -419,7 +419,7 @@ class SlaveState:
         self._address = address
         self._slave_id = SlaveState.counter
         self._label = label
-        self._timeout = timedelta(seconds=timeout)
+        self._timeout = timeout
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
@@ -527,12 +527,12 @@ class SlaveState:
             if self._reply[0] == 'BUILD':
                 try:
                     status, duration, output, files = data
+                    files = [FileState.from_message(f) for f in files]
                     msg, (package, version) = self._reply
                     self._build = BuildState(
                         self._slave_id, package, version,
                         self.native_abi, status, duration, output, files={
-                            filename: FileState(filename, *filestate)
-                            for filename, filestate in files.items()
+                            f.filename: f for f in files
                         }
                     )
                 except (ValueError, TypeError):
@@ -692,7 +692,7 @@ class TransferState:
         Path(self._file.name).unlink()
 
 
-DownloadState = namedtuple('DownloadState', (
+class DownloadState(namedtuple('DownloadState', (
     'filename',
     'host',
     'timestamp',
@@ -703,7 +703,15 @@ DownloadState = namedtuple('DownloadState', (
     'os_version',
     'py_name',
     'py_version',
-))
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
 
 
 def mkdir_override_symlink(pkg_dir):

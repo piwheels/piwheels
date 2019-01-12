@@ -38,14 +38,14 @@ to it.
 """
 
 import pickle
-from collections import namedtuple
 
 import zmq
 import zmq.error
 
 from .. import const, protocols, transport
+from .states import BuildState, DownloadState
 from .tasks import Task
-from .db import Database
+from .db import Database, ProjectVersionsRow, ProjectFilesRow
 
 
 class TheOracle(Task):
@@ -181,13 +181,14 @@ class TheOracle(Task):
         Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
         register a new download.
         """
-        self.db.log_download(download)
+        self.db.log_download(DownloadState.from_message(download))
 
     def do_logbuild(self, build):
         """
         Handler for "LOGBUILD" message, sent by :class:`DbClient` to register a
         new build result.
         """
+        build = BuildState.from_message(build)
         self.db.log_build(build)
         return build.build_id
 
@@ -203,14 +204,14 @@ class TheOracle(Task):
         Handler for "PKGFILES" message, sent by :class:`DbClient` to request
         details of all wheels assocated with *package*.
         """
-        return list(self.db.get_package_files(package))
+        return self.db.get_package_files(package)
 
     def do_projvers(self, package):
         """
         Handler for "PROJVERS" message, sent by :class:`DbClient` to request
         build and skip details of all versions of *package*.
         """
-        return list(self.db.get_project_versions(package))
+        return self.db.get_project_versions(package)
 
     def do_projfiles(self, package):
         """
@@ -267,7 +268,7 @@ class TheOracle(Task):
         the latest database statistics, returned as a list of (field, value)
         tuples.
         """
-        return self.db.get_statistics().items()
+        return self.db.get_statistics()
 
     def do_getdl(self):
         """
@@ -290,8 +291,6 @@ class DbClient:
     """
     RPC client class for talking to :class:`TheOracle`.
     """
-    stats_type = None
-
     def __init__(self, config):
         self.ctx = transport.Context.instance()
         self.db_queue = self.ctx.socket(
@@ -346,13 +345,13 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        self._execute('LOGDOWNLOAD', download)
+        self._execute('LOGDOWNLOAD', download.as_message())
 
     def log_build(self, build):
         """
         See :meth:`.db.Database.log_build`.
         """
-        build_id = self._execute('LOGBUILD', build)
+        build_id = self._execute('LOGBUILD', build.as_message())
         build.logged(build_id)
 
     def get_build_abis(self):
@@ -389,11 +388,7 @@ class DbClient:
         """
         See :meth:`.db.Database.get_statistics`.
         """
-        rec = self._execute('GETSTATS')
-        if DbClient.stats_type is None:
-            DbClient.stats_type = namedtuple('Statistics',
-                                             tuple(k for k, v in rec))
-        return DbClient.stats_type(**{k: v for k, v in rec})
+        return self._execute('GETSTATS')
 
     def get_downloads_recent(self):
         """
@@ -411,13 +406,19 @@ class DbClient:
         """
         See :meth:`.db.Database.get_project_versions`.
         """
-        return self._execute('PROJVERS', package)
+        return [
+            ProjectVersionsRow(*row)
+            for row in self._execute('PROJVERS', package)
+        ]
 
     def get_project_files(self, package):
         """
         See :meth:`.db.Database.get_project_files`.
         """
-        return self._execute('PROJFILES', package)
+        return [
+            ProjectFilesRow(*row)
+            for row in self._execute('PROJFILES', package)
+        ]
 
     def get_version_files(self, package, version):
         """

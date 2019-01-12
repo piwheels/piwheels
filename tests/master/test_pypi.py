@@ -28,15 +28,18 @@
 
 
 from unittest import mock
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
 from piwheels.master.pypi import PyPIEvents
 
 
+UTC = timezone.utc
+
+
 def dt(s):
-    return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+    return datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
 
 
 def test_pypi_read_normal():

@@ -157,10 +157,8 @@ def print_builder(config, builder):
     logging.warning('Version:  %s', builder.version)
     logging.warning('ABI:      %s', abi(config, builder, 'default'))
     logging.warning('Status:   successful')
-    logging.warning('Duration: %s',
-                    timedelta(seconds=builder.duration))
-    logging.warning('Output:   %d line(s)',
-                    len(builder.output.splitlines()))
+    logging.warning('Duration: %s', builder.duration)
+    logging.warning('Output:   %d line(s)', len(builder.output.splitlines()))
     logging.warning('Files:    %d', len(builder.files))
     for package in builder.files:
         logging.warning('')

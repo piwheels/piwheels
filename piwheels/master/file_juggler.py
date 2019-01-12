@@ -51,7 +51,7 @@ import zmq.error
 
 from .. import transport, protocols
 from .tasks import Task
-from .states import TransferState
+from .states import TransferState, FileState
 
 
 class TransferError(Exception):
@@ -158,10 +158,11 @@ class FileJuggler(Task):
         :param int slave_id:
             The identity of the build slave about to begin the transfer.
 
-        :param FileState file_state:
+        :param list file_state:
             The details of the file to be transferred including the expected
             hash.
         """
+        file_state = FileState.from_message(file_state)
         self.pending[slave_id] = TransferState(slave_id, file_state)
         self.logger.info('expecting transfer: %s', file_state.filename)
 
@@ -197,6 +198,13 @@ class FileJuggler(Task):
         """
         Message sent by :class:`FsClient` to request that *filename* in
         *package* should be removed.
+
+        :param str package:
+            The name of the package from which the specified file is to be
+            removed.
+
+        :param str filename:
+            The name of the file to remove from *package*.
         """
         path = self.output_path / 'simple' / package / filename
         try:
@@ -351,7 +359,7 @@ class FsClient:
         """
         See :meth:`FileJuggler.do_expect`.
         """
-        self._execute('EXPECT', [slave_id, file_state])
+        self._execute('EXPECT', [slave_id, file_state.as_message()])
 
     def verify(self, slave_id, package):
         """

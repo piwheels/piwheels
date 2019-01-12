@@ -102,25 +102,10 @@ class MrChase(PauseableTask):
             state = self.states[address]
         except KeyError:
             if msg == 'IMPORT':
-                (
-                    abi_tag,
-                    package,
-                    version,
-                    status,
-                    duration,
-                    output,
-                    files,
-                ) = data
-                state = BuildState(
-                    # XXX Slave ID is always 0 ... what happens if two
-                    # simultaneous imports are attempted, particularly re
-                    # the file-expect mechanism?
-                    0, package, version, abi_tag, status, duration,
-                    output, files={
-                        filename: FileState(filename, *filestate)
-                        for filename, filestate in files.items()
-                    }
-                )
+                # XXX Slave ID is always 0 ... what happens if two simultaneous
+                # imports are attempted, particularly re the file-expect
+                # mechanism?
+                state = BuildState.from_message([0] + data)
                 self.states[address] = state
             elif msg == 'REMOVE':
                 # No need to store state for the remover

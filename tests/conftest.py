@@ -107,7 +107,7 @@ def file_state_universal(request, file_content):
 def build_state(request, file_state):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300.0, 'Built successfully',
+        file_state.abi_tag, True, timedelta(seconds=300), 'Built successfully',
         {file_state.filename: file_state})
 
 
@@ -115,7 +115,7 @@ def build_state(request, file_state):
 def build_state_hacked(request, file_state, file_state_hacked):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300.0, 'Built successfully', {
+        file_state.abi_tag, True, timedelta(seconds=300), 'Built successfully', {
             file_state.filename: file_state,
             file_state_hacked.filename: file_state_hacked,
         })
@@ -124,8 +124,9 @@ def build_state_hacked(request, file_state, file_state_hacked):
 @pytest.fixture()
 def download_state(request, file_state):
     return DownloadState(
-        file_state.filename, '123.4.5.6', datetime(2018, 1, 1, 0, 0, 0),
-        'armv7l', 'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
+        file_state.filename, '123.4.5.6',
+        datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
+        'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
 
 
 @pytest.fixture(scope='session')
@@ -219,7 +220,7 @@ def with_build(request, db, with_package_version, build_state):
             build_state.package,
             build_state.version,
             build_state.slave_id,
-            timedelta(seconds=build_state.duration),
+            build_state.duration,
             build_state.abi_tag).first()[0]
         db.execute(
             "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)

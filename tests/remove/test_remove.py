@@ -119,7 +119,7 @@ def test_remove_and_skip(mock_context, import_queue_name, import_queue):
 
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ('REMOVE', ['foo', '0.1', None])
+        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
         import_queue.send_msg('ERROR', 'Package foo does not exist')
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
@@ -128,7 +128,7 @@ def test_failure(mock_context, import_queue_name, import_queue):
 
 def test_unexpected(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ('REMOVE', ['foo', '0.1', None])
+        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
         import_queue.send(b'FOO')
         thread.join(10)
         assert isinstance(thread.exception, IOError)

@@ -115,16 +115,11 @@ class BigBrother(PauseableTask):
         if datetime.now(tz=UTC) - self.timestamp > timedelta(seconds=30):
             self.timestamp = datetime.now(tz=UTC)
             rec = self.db.get_statistics()
-            self.stats['packages_count'] = rec.packages_count
-            self.stats['packages_built'] = rec.packages_built
-            self.stats['versions_count'] = rec.versions_count
-            self.stats['builds_count'] = rec.builds_count
-            self.stats['builds_last_hour'] = rec.builds_count_last_hour
-            self.stats['builds_success'] = rec.builds_count_success
-            self.stats['builds_time'] = rec.builds_time
-            self.stats['builds_size'] = rec.builds_size
-            self.stats['files_count'] = rec.files_count
-            self.stats['downloads_last_month'] = rec.downloads_last_month
+            # Rename a couple of columns
+            rec['builds_last_hour'] = rec.pop('builds_count_last_hour')
+            rec['builds_success'] = rec.pop('builds_count_success')
+            rec.pop('versions_tried', None)
+            self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)
             self.web_queue.send_msg('SEARCH', self.db.get_downloads_recent())

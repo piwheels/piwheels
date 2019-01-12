@@ -44,8 +44,8 @@ import resource
 import tempfile
 import warnings
 import email.parser
-from time import time
 from pathlib import Path
+from datetime import datetime, timedelta
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
 
 try:
@@ -293,8 +293,9 @@ class PiWheelsBuilder:
         """
         return [
             self.package, self.version, self.status, self.duration,
-            self.output, {
-                pkg.filename: (
+            self.output, [
+                (
+                    pkg.filename,
                     pkg.filesize,
                     pkg.filehash,
                     pkg.package_tag,
@@ -305,10 +306,11 @@ class PiWheelsBuilder:
                     pkg.dependencies,
                 )
                 for pkg in self.files
-            }
+            ]
         ]
 
-    def build(self, timeout=300, pypi_index='https://pypi.python.org/simple'):
+    def build(self, timeout=timedelta(minutes=5),
+              pypi_index='https://pypi.python.org/simple'):
         """
         Attempt to build the package within the specified *timeout*.
 
@@ -346,7 +348,7 @@ class PiWheelsBuilder:
             # obeying it individually), but it should reduce the incidence of
             # huge C++ compiles killing the build slaves
             resource.setrlimit(resource.RLIMIT_DATA, (1024**3, 1024**3))
-            start = time()
+            start = datetime.utcnow()
             try:
                 proc = Popen(
                     args,
@@ -366,7 +368,7 @@ class PiWheelsBuilder:
                     try:
                         proc.wait(60)
                     except TimeoutExpired:
-                        if time() - start > timeout:
+                        if datetime.utcnow() - start > timeout:
                             proc.terminate()
                             try:
                                 proc.wait(10)
@@ -379,7 +381,7 @@ class PiWheelsBuilder:
                 error = exc
             else:
                 error = None
-            self.duration = time() - start
+            self.duration = datetime.utcnow() - start
             self.status = proc.returncode == 0
             if error is not None:
                 log_file.seek(0, os.SEEK_END)

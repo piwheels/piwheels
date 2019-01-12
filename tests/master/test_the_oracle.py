@@ -27,21 +27,23 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from operator import itemgetter
 
 import zmq
 import pytest
 
-from piwheels import const
+from piwheels import const, cbor2
 from piwheels.master.db import Database
 from piwheels.master.seraph import Seraph
 from piwheels.master.the_oracle import TheOracle, DbClient
 
 
+UTC = timezone.utc
+
+
 @pytest.fixture(scope='function')
-def task(request, zmq_context, master_config):
+def task(request, zmq_context, master_config, db, with_schema):
     task = TheOracle(master_config)
     task.start()
     def fin():
@@ -92,9 +94,9 @@ def test_oracle_init(mock_seraph, task):
 
 def test_oracle_bad_request(mock_seraph, task):
     assert mock_seraph.recv() == b'READY'
-    mock_seraph.send_multipart([b'foo', b'', pickle.dumps('FOO')])
+    mock_seraph.send_multipart([b'foo', b'', cbor2.dumps('FOO')])
     address, empty, resp = mock_seraph.recv_multipart()
-    assert pickle.loads(resp) == ('ERROR', 'unknown message: FOO')
+    assert cbor2.loads(resp) == ['ERROR', 'unknown message: FOO']
 
 
 def test_get_all_packages(db, with_package, db_client):
@@ -118,14 +120,14 @@ def test_add_new_package(db, with_schema, db_client):
 def test_add_new_package_version(db, with_package, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 0
-    db_client.add_new_package_version('foo', '0.1',
-                                      datetime(2018, 7, 11, 16, 43, 8))
+    db_client.add_new_package_version(
+        'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8, tzinfo=UTC))
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 1
         assert db.execute(
             "SELECT package, version, released, skip "
-            "FROM versions").first() == ('foo', '0.1',
-                                         datetime(2018, 7, 11, 16, 43, 8), None)
+            "FROM versions").first() == (
+                'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8), None)
 
 
 def test_skip_package(db, with_package, db_client):
@@ -207,11 +209,8 @@ def test_delete_build(db, with_build, db_client):
 
 
 def test_get_package_files(db, with_files, build_state_hacked, db_client):
-    assert {
-        (r.filename, r.filehash)
-        for r in db_client.get_package_files('foo')
-    } == {
-        (r.filename, r.filehash)
+    assert db_client.get_package_files('foo') == {
+        r.filename: r.filehash
         for r in build_state_hacked.files.values()
     }
 
@@ -235,14 +234,22 @@ def test_set_pypi_serial(db, with_schema, db_client):
 
 
 def test_get_statistics(db_client, db, with_files):
-    assert db_client.get_statistics() == (
-        1, 1, 1, 1, 1, 1, 0, timedelta(minutes=5), 2, 123456, 0
-    )
-    assert db_client.stats_type is not None
+    expected = {
+        'packages_count': 1,
+        'packages_built': 1,
+        'versions_count': 1,
+        'versions_tried': 1,
+        'builds_count': 1,
+        'builds_count_success': 1,
+        'builds_count_last_hour': 0,
+        'builds_time': timedelta(minutes=5),
+        'files_count': 2,
+        'builds_size': 123456,
+        'downloads_last_month': 0,
+    }
+    assert db_client.get_statistics() == expected
     # Run twice to cover caching of Statstics type
-    assert db_client.get_statistics() == (
-        1, 1, 1, 1, 1, 1, 0, timedelta(minutes=5), 2, 123456, 0
-    )
+    assert db_client.get_statistics() == expected
 
 
 @pytest.mark.xfail(reason="downloads_recent view needs fixing")

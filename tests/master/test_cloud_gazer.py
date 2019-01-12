@@ -31,14 +31,17 @@ from unittest import mock
 
 import zmq
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from piwheels import const, protocols
 from piwheels.master.cloud_gazer import CloudGazer
 
 
+UTC = timezone.utc
+
+
 def dt(s):
-    return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+    return datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
 
 
 @pytest.fixture()

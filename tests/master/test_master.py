@@ -157,22 +157,26 @@ def test_bad_control(mock_systemd, master_thread, master_control, caplog):
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
     master_thread.start()
     assert mock_systemd._ready.wait(10)
-    with mock_context().socket(zmq.PUSH) as int_status, \
-            mock_context().socket(zmq.SUB) as ext_status:
+    with mock_context().socket(zmq.PUSH, protocol=protocols.monitor_stats) as int_status, \
+            mock_context().socket(zmq.SUB, protocol=reversed(protocols.monitor_stats)) as ext_status:
         ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
         ext_status.setsockopt_string(zmq.SUBSCRIBE, '')
         # Wait for the first statistics message (from BigBrother) to get the
         # SUB queue working
-        ext_status.recv_pyobj()
+        msg, data = ext_status.recv_msg()
+        assert msg == 'STATS'
+        data['builds_count'] = 12345
         int_status.connect(const.INT_STATUS_QUEUE)
-        int_status.send_pyobj(['FOO'])
+        int_status.send_msg('STATS', data)
         # Try several times to read the passed-thru message; other messages
         # (like stats from BigBrother) will be sent to ext-status too
         for i in range(3):
-            if ext_status.recv_pyobj() == ['FOO']:
+            msg, copy = ext_status.recv_msg()
+            if msg == 'STATS':
+                assert copy == data
                 break
         else:
-            assert False, "Didn't see FOO passed-thru the status pipe"
+            assert False, "Didn't see modified STATS passed-thru"
 
 
 def test_kill_control(mock_systemd, master_thread, master_control):

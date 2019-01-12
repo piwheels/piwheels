@@ -89,7 +89,7 @@ def statvfs(request):
 
 def test_init(task, stats_queue, statvfs):
     task.once()
-    assert stats_queue.recv_msg() == ('STATFS', statvfs)
+    assert stats_queue.recv_msg() == ('STATFS', list(statvfs))
 
 
 def test_bad_request(task, fs_queue):
@@ -103,7 +103,7 @@ def test_bad_request(task, fs_queue):
 def test_expect_file(task, master_config, fs_queue, file_state):
     root = Path(master_config.output_path)
     task.logger = mock.Mock()
-    fs_queue.send_msg('EXPECT', [1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state.as_message()])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
     assert task.logger.info.call_count == 1
@@ -127,7 +127,7 @@ def test_transfer_success(task, master_config, stats_queue, fs_queue,
                           file_queue, file_state, file_content, statvfs):
     task.logger = mock.Mock()
     root = Path(master_config.output_path)
-    fs_queue.send_msg('EXPECT', [1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state.as_message()])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
     assert 1 in task.pending
@@ -154,7 +154,7 @@ def test_transfer_success(task, master_config, stats_queue, fs_queue,
     fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
-    assert stats_queue.recv_msg() == ('STATFS', statvfs)
+    assert stats_queue.recv_msg() == ('STATFS', list(statvfs))
     assert task.logger.info.call_count == 3
     assert not task.pending
     assert not task.active
@@ -166,7 +166,7 @@ def test_verify_failure(task, master_config, fs_queue, file_queue, file_state,
                         file_content):
     task.logger = mock.Mock()
     root = Path(master_config.output_path)
-    fs_queue.send_msg('EXPECT', [1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state.as_message()])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
     assert (root / 'simple').is_dir()
@@ -189,7 +189,7 @@ def test_verify_failure(task, master_config, fs_queue, file_queue, file_state,
 def test_transfer_restart(task, fs_queue, file_queue, file_state,
                           file_content):
     task.logger = mock.Mock()
-    fs_queue.send_msg('EXPECT', [1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state.as_message()])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
     file_queue.send_multipart([b'HELLO', b'1'])
@@ -209,13 +209,13 @@ def test_transfer_restart(task, fs_queue, file_queue, file_state,
     assert file_queue.recv_multipart() == [b'DONE']
     fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj() == ('OK', None)
+    assert fs_queue.recv_msg() == ('OK', None)
 
 
 def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
                                  file_content):
     task.logger = mock.Mock()
-    fs_queue.send_msg('EXPECT', [1, file_state])
+    fs_queue.send_msg('EXPECT', [1, file_state.as_message()])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
     # Emulate a left over CHUNK packet from a prior transfer; should be
@@ -244,7 +244,7 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     assert file_queue.recv_multipart() == [b'DONE']
     fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll()
-    assert fs_queue.recv_pyobj() == ('OK', None)
+    assert fs_queue.recv_msg() == ('OK', None)
 
 
 def test_remove_success(task, master_config, stats_queue, fs_queue, statvfs):
@@ -256,7 +256,7 @@ def test_remove_success(task, master_config, stats_queue, fs_queue, statvfs):
     fs_queue.send_msg('REMOVE', ['foo', wheel.name])
     task.poll()
     assert fs_queue.recv_msg() == ('OK', None)
-    assert stats_queue.recv_msg() == ('STATFS', statvfs)
+    assert stats_queue.recv_msg() == ('STATFS', list(statvfs))
     assert task.logger.info.call_count == 1
     assert not wheel.exists()
 

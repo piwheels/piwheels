@@ -79,7 +79,7 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
         return Protocol(self.send, self.recv)
 
 
-_statistics_schema = {      # statistics
+_statistics = {      # statistics
     'packages_count':        int,
     'packages_built':        int,
     'versions_count':        int,
@@ -96,38 +96,41 @@ _statistics_schema = {      # statistics
 }
 
 
-_dependency_schema = ExactSequence([str, str])  # tool, package
+_dependency = ExactSequence([str, str])  # tool, package
 
 
-_file_state_schema = ExactSequence([
-    str,                   # filename
-    int,                   # filesize
-    str,                   # filehash
-    str,                   # package_tag
-    str,                   # package_version_tag
-    str,                   # abi_tag
-    str,                   # platform_tag
-    {_dependency_schema},  # dependencies
-    bool,                  # transferred
+_file_state = ExactSequence([
+    str,            # filename
+    int,            # filesize
+    str,            # filehash
+    str,            # package_tag
+    str,            # package_version_tag
+    str,            # py_version_tag
+    str,            # abi_tag
+    str,            # platform_tag
+    {_dependency},  # dependencies
+    # NOTE: the optional transferred field is never included. It is effectively
+    # internal to whatever is tracking the file state
 ])
 
 
-_build_state_schema = ExactSequence([
-    int,                   # slave id
-    str,                   # package
-    str,                   # version
-    str,                   # abi_tag
-    bool,                  # status
-    dt.timedelta,          # duration
-    str,                   # output
-    [_file_state_schema],  # files
-    int,                   # build_id
+_build_state = ExactSequence([
+    int,            # slave id
+    str,            # package
+    str,            # version
+    str,            # abi_tag
+    bool,           # status
+    dt.timedelta,   # duration
+    str,            # output
+    [_file_state],  # files
+    # NOTE: the optional build-id field is never included. This is another
+    # internal field that must be maintained by the caller
 ])
 
 
-_download_schema = ExactSequence([
+_download_state = ExactSequence([
     str,          # filename
-    Any(ip.IPv4Address, ip.IPv6Address),  # host
+    str,          # host
     dt.datetime,  # timestamp
     str,          # arch
     str,          # distro_name
@@ -164,7 +167,7 @@ big_brother = Protocol(recv={
 the_scribe = Protocol(recv={
     'PKGBOTH': str,  # package name
     'PKGPROJ': str,  # package name
-    'HOME':    _statistics_schema,  # statistics
+    'HOME':    _statistics,  # statistics
     'SEARCH':  {str: int},  # package: download-count
 })
 
@@ -181,9 +184,9 @@ file_juggler_files = Protocol()
 
 
 file_juggler_fs = Protocol(recv={
-    'EXPECT': ExactSequence([int, Extra]),  # slave ID, file state XXX refine this
-    'VERIFY': ExactSequence([int, str]),    # slave ID, package
-    'REMOVE': ExactSequence([str, str]),    # package, filename
+    'EXPECT': ExactSequence([int, _file_state]),  # slave ID, file state
+    'VERIFY': ExactSequence([int, str]),                 # slave ID, package
+    'REMOVE': ExactSequence([str, str]),                 # package, filename
 }, send={
     'OK':     Extra,  # some result object XXX refine this?
     'ERROR':  str,    # error message
@@ -192,13 +195,13 @@ file_juggler_fs = Protocol(recv={
 
 mr_chase = Protocol(recv={
     'IMPORT': ExactSequence([
-        Maybe(str),  # abi_tag
-        str,         # package
-        str,         # version
-        bool,        # status
-        float,       # duration
-        str,         # output
-        {str: Extra},  # filename: filestate XXX refine files
+        str,            # package
+        str,            # version
+        Maybe(str),     # abi_tag
+        bool,           # status
+        dt.timedelta,   # duration
+        str,            # output
+        [_file_state],  # filename: filestate
     ]),
     'REMOVE': ExactSequence([str, str, Maybe(str)]),  # package, version, skip-reason XXX remove Maybe
     'SENT':   NoData,
@@ -210,26 +213,15 @@ mr_chase = Protocol(recv={
 
 
 lumberjack = Protocol(recv={
-    'LOG': ExactSequence([
-        str,          # filename
-        str,          # host
-        dt.datetime,  # timestamp
-        str,          # arch
-        str,          # distro_name
-        str,          # distro_version
-        str,          # os_name
-        str,          # os_version
-        str,          # py_name
-        str,          # py_version
-    ]),
+    'LOG': _download_state,
 })
 
 
 slave_driver = Protocol(recv={
-    'HELLO': ExactSequence([float, str, str, str, str]), # timeout, py-version, abi, platform, label
+    'HELLO': ExactSequence([dt.timedelta, str, str, str, str]), # timeout, py-version, abi, platform, label
     'BYE':   NoData,
     'IDLE':  NoData,
-    'BUILT': ExactSequence([bool, float, str, {str: Extra}]), # XXX refine files
+    'BUILT': ExactSequence([bool, dt.timedelta, str, [_file_state]]),
     'SENT':  NoData,
 }, send={
     'ACK':   ExactSequence([int, str]),  # slave ID, PyPI URL
@@ -249,8 +241,8 @@ the_oracle = Protocol(recv={
     'NEWVER':      ExactSequence([str, str, dt.datetime, Maybe(str)]),  # package, version, released, skip reason
     'SKIPPKG':     ExactSequence([str, Maybe(str)]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, Maybe(str)]),  # package, version, skip reason
-    'LOGDOWNLOAD': Extra,  # XXX refine this
-    'LOGBUILD':    _build_state_schema,
+    'LOGDOWNLOAD': _download_state,
+    'LOGBUILD':    _build_state,
     'DELBUILD':    ExactSequence([str, str]),  # package, version
     'PKGFILES':    str,                        # package
     'PROJVERS':    str,                        # package
@@ -271,6 +263,6 @@ the_oracle = Protocol(recv={
 
 
 monitor_stats = Protocol(send={
-    'STATS': _statistics_schema,
+    'STATS': _statistics,
     'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
 })

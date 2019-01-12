@@ -300,10 +300,12 @@ class TheScribe(PauseableTask):
                     tag.body(
                         tag.h1('Links for ', package),
                         ((tag.a(
-                            f.filename,
-                            href='{f.filename}#sha256={f.filehash}'.format(f=f),
+                            filename,
+                            href='{filename}#sha256={filehash}'.format(
+                                filename=filename, filehash=filehash),
                             rel='internal'), tag.br(), '\n')
-                         for f in self.db.get_package_files(package))
+                         for filename, filehash
+                         in self.db.get_package_files(package).items())
                     )
                 )
             )

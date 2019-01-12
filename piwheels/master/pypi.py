@@ -119,7 +119,7 @@ class PyPIEvents:
             events = self._get_events()
             if events:
                 for (package, version, timestamp, action, serial) in events:
-                    timestamp = datetime.utcfromtimestamp(timestamp)
+                    timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
                     match = self.add_file_re.search(action)
                     if match is not None:
                         source = match.group(1) == 'source'

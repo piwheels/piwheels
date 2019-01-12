@@ -89,7 +89,7 @@ def test_build_state_init(build_state, file_state):
     assert build_state[2] == build_state.version == '0.1'
     assert build_state[3] == build_state.abi_tag == 'cp34m'
     assert build_state[4] == build_state.status == True
-    assert build_state[5] == build_state.duration == 300
+    assert build_state[5] == build_state.duration == timedelta(seconds=300)
     assert build_state[6] == build_state.output == 'Built successfully'
     assert build_state[7] == build_state.files == {
         'foo-0.1-cp34-cp34m-linux_armv7l.whl': file_state
@@ -124,8 +124,9 @@ def test_slave_state_init():
     now = datetime.now(tz=UTC)
     with mock.patch('piwheels.master.states.datetime') as dt:
         dt.now.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
         assert slave_state.slave_id == 1
         assert slave_state.address == '10.0.0.2'
         assert slave_state.label == 'piwheels2'
@@ -142,16 +143,18 @@ def test_slave_state_init():
 
 
 def test_slave_state_kill():
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     assert not slave_state.terminated
     slave_state.kill()
     assert slave_state.terminated
 
 
 def test_slave_state_expired():
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     slave_state._first_seen = datetime.now(tz=UTC) - timedelta(hours=5)
     assert not slave_state.expired
     slave_state._last_seen = datetime.now(tz=UTC) - timedelta(hours=4)
@@ -162,21 +165,21 @@ def test_slave_state_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
         slave_state.reply = ('HELLO', [slave_state.slave_id, const.PYPI_XMLRPC])
-        assert master_status_queue.recv_pyobj() == (
-            'SLAVE', [
-                slave_state.slave_id, now, 'HELLO', [
-                    timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
-                ]
+        assert master_status_queue.recv_msg() == ('SLAVE', [
+            slave_state.slave_id, now, 'HELLO', [
+                timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
             ]
-        )
+        ])
 
 
 def test_slave_recv_request(build_state, file_state):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
@@ -187,42 +190,27 @@ def test_slave_recv_request(build_state, file_state):
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
-        slave_state.request = (
-            'BUILT', [
-                build_state.status, build_state.duration, build_state.output, {
-                    file_state.filename: (
-                        file_state.filesize, file_state.filehash,
-                        file_state.package_tag, file_state.package_version_tag,
-                        file_state.py_version_tag, file_state.abi_tag,
-                        file_state.platform_tag, file_state.dependencies
-                    )
-                }
-            ]
-        )
+        slave_state.request = ('BUILT', [
+            build_state.status, build_state.duration, build_state.output,
+            [file_state.as_message()]
+        ])
         assert slave_state.last_seen == now
         build_state._slave_id = slave_state.slave_id
         assert slave_state.build == build_state
 
 
 def test_slave_recv_reply(build_state, file_state, slave_queue):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
-        slave_state.request = (
-            'BUILT', [
-                build_state.status, build_state.duration, build_state.output, {
-                    file_state.filename: (
-                        file_state.filesize, file_state.filehash,
-                        file_state.package_tag, file_state.package_version_tag,
-                        file_state.py_version_tag, file_state.abi_tag,
-                        file_state.platform_tag, file_state.dependencies
-                    )
-                }
-            ]
-        )
+        slave_state.request = ('BUILT', [
+            build_state.status, build_state.duration, build_state.output,
+            [file_state.as_message()]
+        ])
         build_state._slave_id = slave_state.slave_id
         assert slave_state.build == build_state
         slave_state.reply = ('DONE', None)
@@ -230,8 +218,9 @@ def test_slave_recv_reply(build_state, file_state, slave_queue):
 
 
 def test_slave_recv_bad_built(build_state, file_state, slave_queue):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
@@ -246,19 +235,18 @@ def test_slave_state_recv_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
         slave_state._reply = ('IDLE', None)
         slave_state.hello()
-        assert master_status_queue.recv_pyobj() == (
-            'SLAVE', [
-                slave_state.slave_id, now, 'HELLO', [
-                    timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
-                    'piwheels2'
-                ]
+        assert master_status_queue.recv_msg() == ('SLAVE', [
+            slave_state.slave_id, now, 'HELLO', [
+                timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+                'piwheels2'
             ]
-        )
-        assert master_status_queue.recv_pyobj() == (
+        ])
+        assert master_status_queue.recv_msg() == (
             'SLAVE', [slave_state.slave_id, now, 'IDLE', None]
         )
 
@@ -279,8 +267,8 @@ def test_transfer_state_fetch1(tmpdir, file_state, file_content):
     assert trans_state.fetch() == range(TransferState.chunk_size)
     trans_state.chunk(0, file_content[:TransferState.chunk_size])
     assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
-    trans_state.chunk(TransferState.chunk_size,
-                      file_content[TransferState.chunk_size:])
+    trans_state.chunk(
+        TransferState.chunk_size, file_content[TransferState.chunk_size:])
     assert trans_state.fetch() is None
     assert trans_state.done
     trans_state.reset_credit()

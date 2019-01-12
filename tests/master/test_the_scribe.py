@@ -41,14 +41,8 @@ import pytest
 from pkg_resources import resource_listdir
 
 from piwheels import const, protocols
+from piwheels.master.the_oracle import ProjectFilesRow, ProjectVersionsRow
 from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
-
-
-FilesRow = namedtuple('FilesRow', ('filename', 'filehash'))
-ProjVersRow = namedtuple('ProjVersRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
-ProjFilesRow = namedtuple('ProjFilesRow', (
-    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
 
 
 @pytest.fixture()
@@ -198,20 +192,20 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', {'foo'})
     scribe_queue.send_msg('PKGBOTH', 'foo')
     db_queue.expect('PKGFILES', 'foo')
-    db_queue.send('OK', [
-        FilesRow('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        FilesRow('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
-    ])
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': '123456123456',
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': '123456123456',
+    })
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
-        ProjVersRow('0.1', False, 2, 0),
+        ProjectVersionsRow('0.1', False, 2, 0),
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [
-        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                     123456, '123456123456'),
-        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                     123456, '123456123456'),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456'),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456'),
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
@@ -229,45 +223,25 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     )
 
 
-def test_write_pkg_index_fails(db_queue, task, scribe_queue, master_config):
-    db_queue.expect('ALLPKGS')
-    db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGBOTH', 'foo')
-    db_queue.expect('PKGFILES', 'foo')
-    db_queue.send('OK', [
-        # Send ordinary tuples (method expects rows with attributes named
-        # after columns)
-        ('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        ('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
-    ])
-    task.once()
-    with pytest.raises(AttributeError):
-        task.poll()
-    db_queue.check()
-    root = Path(master_config.output_path)
-    index = root / 'simple' / 'foo' / 'index.html'
-    assert not index.exists()
-
-
 def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     scribe_queue.send_msg('PKGBOTH', 'bar')
     db_queue.expect('PKGFILES', 'bar')
-    db_queue.send('OK', [
-        FilesRow('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
-        FilesRow('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
-    ])
+    db_queue.send('OK', {
+        'bar-1.0-cp34-cp34m-linux_armv7l.whl': '123456abcdef',
+        'bar-1.0-cp34-cp34m-linux_armv6l.whl': '123456abcdef',
+    })
     db_queue.expect('PROJVERS', 'bar')
     db_queue.send('OK', [
-        ProjVersRow('1.0', False, 2, 1),
+        ProjectVersionsRow('1.0', False, 2, 1),
     ])
     db_queue.expect('PROJFILES', 'bar')
     db_queue.send('OK', [
-        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                     123456, '123456abcdef'),
-        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                     123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef'),
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})

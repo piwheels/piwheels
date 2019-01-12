@@ -29,6 +29,7 @@
 import zmq
 import pytest
 
+from piwheels import protocols
 from piwheels.master.the_architect import TheArchitect
 
 
@@ -41,7 +42,8 @@ def task(request, master_config):
 
 @pytest.fixture(scope='function')
 def builds_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(
+        zmq.PULL, protocol=reversed(protocols.the_architect))
     queue.connect(master_config.builds_queue)
     yield queue
     queue.close()
@@ -49,9 +51,9 @@ def builds_queue(request, zmq_context, master_config):
 
 def test_architect_queue(db, with_build, task, builds_queue):
     task.loop()
-    assert builds_queue.recv_pyobj() == ('QUEUE', ['cp35m', 'foo', '0.1'])
+    assert builds_queue.recv_msg() == ('QUEUE', ['cp35m', 'foo', '0.1'])
     with db.begin():
         db.execute("DELETE FROM builds")
     task.loop()  # Empty loop on StopIteration
     task.loop()
-    assert builds_queue.recv_pyobj() == ('QUEUE', ['cp34m', 'foo', '0.1'])
+    assert builds_queue.recv_msg() == ('QUEUE', ['cp34m', 'foo', '0.1'])

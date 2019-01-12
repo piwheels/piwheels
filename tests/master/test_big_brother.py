@@ -44,19 +44,19 @@ UTC = timezone.utc
 
 @pytest.fixture()
 def stats_result(request):
-    return [
-        ('packages_count',         1),
-        ('packages_built',         0),
-        ('versions_count',         2),
-        ('versions_tried',         0),
-        ('builds_count',           0),
-        ('builds_count_success',   0),
-        ('builds_count_last_hour', 0),
-        ('builds_time',            timedelta(0)),
-        ('files_count',            0),
-        ('builds_size',            0),
-        ('downloads_last_month',   10),
-    ]
+    return {
+        'packages_count':         1,
+        'packages_built':         0,
+        'versions_count':         2,
+        'versions_tried':         0,
+        'builds_count':           0,
+        'builds_count_success':   0,
+        'builds_count_last_hour': 0,
+        'builds_time':            timedelta(0),
+        'files_count':            0,
+        'builds_size':            0,
+        'downloads_last_month':   10,
+    }
 
 
 @pytest.fixture()
@@ -124,8 +124,8 @@ def task(request, master_config):
 
 def test_gen_skip(master_status_queue, web_queue, task):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tz=UTC)
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         task.loop()  # crank the handle once
         with pytest.raises(zmq.ZMQError):
             master_status_queue.recv_msg(flags=zmq.NOBLOCK)
@@ -136,8 +136,8 @@ def test_gen_skip(master_status_queue, web_queue, task):
 def test_gen_stats(db_queue, master_status_queue, web_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
         db_queue.expect('GETDL')
@@ -152,8 +152,8 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
 def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
                         stats_queue, stats_result, stats_dict, stats_disk):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         stats_queue.send_msg('STATFS', stats_disk)
         while task.stats['disk_free'] == 0:
             task.poll()
@@ -174,9 +174,9 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
 def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
-        stats_queue.send_pyobj(['STATBQ', {'cp34m': 1, 'cp35m': 0}])
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        stats_queue.send_msg('STATBQ', {'cp34m': 1, 'cp35m': 0})
         while task.stats['builds_pending'] == 0:
             task.poll()
         stats_dict['builds_pending'] = 1
@@ -195,8 +195,8 @@ def test_bad_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     task.logger = mock.Mock()
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tz=UTC)
-        task.timestamp = datetime(2018, 1, 1, 12, 30, 0)
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         stats_queue.send(b'FOO')
         task.poll()
         assert task.logger.error.call_args == mock.call(
