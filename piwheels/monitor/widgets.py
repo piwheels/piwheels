@@ -31,6 +31,7 @@
 import os
 import errno
 import heapq
+import signal
 from time import time
 from itertools import count
 from collections import namedtuple
@@ -61,6 +62,35 @@ from urwid import (
     MainLoop,
     ExitMainLoop,
 )
+
+try:
+    from urwid import EventLoop
+except ImportError:
+    # Use a compatbile EventLoop base class with urwid <2.x
+    class EventLoop:
+        def alarm(self, seconds, callback):
+            raise NotImplementedError()
+
+        def enter_idle(self, callback):
+            raise NotImplementedError()
+
+        def remove_alarm(self, handler):
+            raise NotImplementedError()
+
+        def remove_enter_idle(self, handle):
+            raise NotImplementedError()
+
+        def remove_watch_file(self, handle):
+            raise NotImplementedError()
+
+        def run(self):
+            raise NotImplementedError()
+
+        def watch_file(self, fd, callback):
+            raise NotImplementedError()
+
+        def set_signal_handler(self, signum, handler):
+            return signal.signal(signum, handler)
 
 
 # Stop the relentless march against nicely aligned code
@@ -94,7 +124,7 @@ PALETTE = [
 AlarmTask = namedtuple('AlarmTask', ('due', 'tie_break', 'callback'))
 
 
-class ZMQEventLoop:
+class ZMQEventLoop(EventLoop):
     """
     This class is an urwid event loop for zmq applications. It supports the
     usual alarm events and file watching capabilities, but also incorporates
