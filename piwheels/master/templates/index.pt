@@ -33,7 +33,7 @@
         lines in <code>/etc/pip.conf</code>:</p>
 
         <pre>[global]
-    extra-index-url=https://www.piwheels.org/simple</pre>
+extra-index-url=https://www.piwheels.org/simple</pre>
 
         <p>That's it! With this simple configuration change, <code>pip</code>
         should now search piwheels for built distributions of packages and use
