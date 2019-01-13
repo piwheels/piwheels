@@ -222,24 +222,17 @@ class SlaveDriver(Task):
                 return
 
         slave.request = msg, data
-        try:
-            handler = {
-                'HELLO': self.do_hello,
-                'BYE': self.do_bye,
-                'IDLE': self.do_idle,
-                'BUILT': self.do_built,
-                'SENT': self.do_sent,
-            }[msg]
-        except KeyError:
-            self.logger.error(
-                'slave %d (%s): protocol error (%s)',
-                slave.slave_id, slave.label, msg)
-            # XXX Reply? Remove the slave?
-        else:
-            msg, data = handler(slave)
-            if msg is not None:
-                slave.reply = msg, data
-                queue.send_addr_msg(address, msg, data)
+        handler = {
+            'HELLO': self.do_hello,
+            'BYE': self.do_bye,
+            'IDLE': self.do_idle,
+            'BUILT': self.do_built,
+            'SENT': self.do_sent,
+        }[msg]
+        msg, data = handler(slave)
+        if msg is not None:
+            slave.reply = msg, data
+            queue.send_addr_msg(address, msg, data)
 
     def do_hello(self, slave):
         """

@@ -166,45 +166,49 @@ def test_manual_package_version(mock_wheel, caplog):
 
 def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
-    with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread:
-        assert import_queue.recv_msg() == (
-            'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0),
-                'Imported manually via piw-import', [
-                    [
-                        'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
-                    ],
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with ImportThread(['--import-queue', import_queue_name, mock_wheel]) as thread:
+            assert import_queue.recv_msg() == (
+                'IMPORT', [
+                    'cp34m', 'foo', '0.1', True, timedelta(0),
+                    'Imported manually via piw-import', [
+                        [
+                            'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                            filesize, filehash, 'foo', '0.1',
+                            'cp34', 'cp34m', 'linux_armv7l', set(),
+                        ],
+                    ]
                 ]
-            ]
-        )
-        import_queue.send_msg('ERROR', 'Unknown package "foo"')
-        thread.join(10)
-        assert isinstance(thread.exception, RuntimeError)
+            )
+            import_queue.send_msg('ERROR', 'Unknown package "foo"')
+            thread.join(10)
+            assert isinstance(thread.exception, RuntimeError)
 
 
 def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
-    with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
-        assert import_queue.recv_msg() == (
-            'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0),
-                'Imported manually via piw-import', [
-                    [
-                        'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
-                    ],
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with ImportThread(['--import-queue', import_queue_name, mock_wheel]) as thread, \
+                mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            assert import_queue.recv_msg() == (
+                'IMPORT', [
+                    'cp34m', 'foo', '0.1', True, timedelta(0),
+                    'Imported manually via piw-import', [
+                        [
+                            'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                            filesize, filehash, 'foo', '0.1',
+                            'cp34', 'cp34m', 'linux_armv7l', set(),
+                        ],
+                    ]
                 ]
-            ]
-        )
-        import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
-        assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send(b'FOO')
-        thread.join(10)
-        assert isinstance(thread.exception, IOError)
+            )
+            import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+            assert import_queue.recv_msg() == ('SENT', None)
+            import_queue.send(b'FOO')
+            thread.join(10)
+            assert isinstance(thread.exception, IOError)
 
 
 def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
@@ -225,9 +229,9 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send(b'FOO')
+        import_queue.send_msg('ERROR', 'The master broke')
         thread.join(10)
-        assert isinstance(thread.exception, IOError)
+        assert isinstance(thread.exception, RuntimeError)
         assert os.path.exists(mock_wheel)
 
 

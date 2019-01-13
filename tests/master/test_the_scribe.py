@@ -221,6 +221,28 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     assert contains_elem(
         index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
     )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+
+
+def test_write_pkg_project(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGPROJ', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 0, 1),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [])
+    task.once()
+    task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
 
 
 def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
@@ -260,6 +282,8 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     assert contains_elem(
         pkg_index, 'a', [('href', 'bar-1.0-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
     )
+    project = root / 'project' / 'bar' / 'index.html'
+    assert project.exists() and project.is_file()
 
 
 def test_write_search_index(db_queue, task, scribe_queue, master_config):

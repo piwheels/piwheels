@@ -70,6 +70,14 @@ def test_import_bad_message(task, import_queue):
     assert len(task.states) == 0
 
 
+def test_import_protocol_error(task, import_queue):
+    task.logger = mock.Mock()
+    import_queue.send_msg('SENT')
+    task.poll()
+    assert task.logger.error.call_count == 1
+    assert len(task.states) == 0
+
+
 def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
                        build_state, build_state_hacked):
     bs, bsh = build_state, build_state_hacked  # for brevity!

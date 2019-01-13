@@ -45,6 +45,9 @@ def default_encoder(encoder, value):
                 value.days, value.seconds, value.microseconds)))
     elif value is NoData:
         encoder.encode(cbor2.CBORTag(2002, None))
+    else:
+        raise cbor2.CBOREncodeError(
+            'cannot serialize type %s' % value.__class__.__name__)
 
 
 def default_decoder(decoder, tag, shareable_index=None):
@@ -77,6 +80,31 @@ class Socket(zmq.Socket):
         self._encoder = cbor2.CBOREncoder(None, default=default_encoder)
         self._decoder = cbor2.CBORDecoder(None, tag_hook=default_decoder)
 
+    def send_cbor(self, obj, flags=0):
+        self.send(self._encoder.encode_to_bytes(obj), flags=flags)
+
+    def recv_cbor(self, flags=0):
+        buf = self.recv(flags=flags)
+        return self._decoder.decode_from_bytes(buf)
+
+    def send_msg(self, msg, data=NoData, flags=0):
+        self.send(self.dump_msg(msg, data), flags=flags)
+
+    def recv_msg(self, flags=0):
+        buf = self.recv(flags=flags)
+        return self.load_msg(buf)
+
+    def send_addr_msg(self, addr, msg, data=NoData, flags=0):
+        self.send_multipart([addr, b'', self.dump_msg(msg, data)], flags=flags)
+
+    def recv_addr_msg(self, flags=0):
+        try:
+            addr, empty, buf = self.recv_multipart()
+        except ValueError:
+            raise IOError('invalid message structure received')
+        msg, data = self.load_msg(buf)
+        return addr, msg, data
+
     def dump_msg(self, msg, data=NoData):
         try:
             schema = self._protocol.send[msg]
@@ -84,23 +112,24 @@ class Socket(zmq.Socket):
             raise IOError('unknown message: %s' % msg)
         if data is NoData:
             if schema is not NoData:
-                raise Invalid('data must be specified for %s' % msg)
+                raise IOError('data must be specified for %s' % msg)
             return self._encoder.encode_to_bytes(msg)
         else:
             if schema is NoData:
-                raise Invalid('no data expected for %s' % msg)
+                raise IOError('no data expected for %s' % msg)
             try:
                 data = schema(data)
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
-            return self._encoder.encode_to_bytes((msg, data))
+            try:
+                return self._encoder.encode_to_bytes((msg, data))
+            except cbor2.CBOREncodeError as e:
+                raise IOError('unable to serialize data')
 
     def load_msg(self, buf):
         try:
             msg = self._decoder.decode_from_bytes(buf)
-        except Exception as e:
-            # XXX Change except to CBORDecoderError when moving to CBOR; pretty
-            # much any error can occur during unpickling
+        except cbor2.CBORDecodeError as e:
             raise IOError('unable to deserialize data')
         if isinstance(msg, str):
             try:
@@ -125,24 +154,6 @@ class Socket(zmq.Socket):
                 return msg, schema(data)
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
-
-    def send_msg(self, msg, data=NoData, flags=0):
-        self.send(self.dump_msg(msg, data), flags=flags)
-
-    def recv_msg(self, flags=0):
-        buf = self.recv(flags=flags)
-        return self.load_msg(buf)
-
-    def send_addr_msg(self, addr, msg, data=NoData, flags=0):
-        self.send_multipart([addr, b'', self.dump_msg(msg, data)], flags=flags)
-
-    def recv_addr_msg(self, flags=0):
-        try:
-            addr, empty, buf = self.recv_multipart()
-        except ValueError:
-            raise IOError('invalid message structure received')
-        msg, data = self.load_msg(buf)
-        return addr, msg, data
 
 
 class Context(zmq.Context):

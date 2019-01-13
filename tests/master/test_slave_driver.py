@@ -159,6 +159,22 @@ def test_slave_invalid_message(task, slave_queue):
     assert task.logger.error.call_count == 1
 
 
+def test_slave_invalid_first_message(task, slave_queue):
+    task.logger = mock.Mock()
+    slave_queue.send_msg('IDLE')
+    task.poll()
+    assert not task.slaves
+    assert task.logger.error.call_count == 1
+
+
+def test_builds_invalid_message(task, builds_queue):
+    task.logger = mock.Mock()
+    builds_queue.send(b'FOO')
+    task.poll()
+    assert not task.abi_queues
+    assert task.logger.error.call_count == 1
+
+
 def test_slave_protocol_error(task, slave_queue, master_config):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [

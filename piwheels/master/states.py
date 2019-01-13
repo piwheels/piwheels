@@ -506,8 +506,6 @@ class SlaveState:
     def expired(self):
         # There's a fudge factor of 10% here to allow slaves a little extra
         # time before we expire and forget them
-        if self._last_seen is None:
-            return False
         return (datetime.now(tz=UTC) - self._last_seen) > (self._timeout * 1.1)
 
     @property

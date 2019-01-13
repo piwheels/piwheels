@@ -33,6 +33,7 @@ from operator import itemgetter
 import zmq
 import pytest
 
+from conftest import PIWHEELS_USER
 from piwheels import const, cbor2
 from piwheels.master.db import Database
 from piwheels.master.seraph import Seraph
@@ -97,6 +98,20 @@ def test_oracle_bad_request(mock_seraph, task):
     mock_seraph.send_multipart([b'foo', b'', cbor2.dumps('FOO')])
     address, empty, resp = mock_seraph.recv_multipart()
     assert cbor2.loads(resp) == ['ERROR', 'unknown message: FOO']
+
+
+def test_oracle_badly_formed_request(mock_seraph, task):
+    assert mock_seraph.recv() == b'READY'
+    mock_seraph.send_multipart([b'foo', b'', b'', b'', b''])
+    address, empty, resp = mock_seraph.recv_multipart()
+    assert cbor2.loads(resp) == ['ERROR', 'too many values to unpack (expected 3)']
+
+
+def test_database_error(db, with_schema, db_client):
+    with db.begin():
+        db.execute("REVOKE INSERT ON packages FROM %s" % PIWHEELS_USER)
+    with pytest.raises(IOError):
+        db_client.add_new_package('foo', None)
 
 
 def test_get_all_packages(db, with_package, db_client):

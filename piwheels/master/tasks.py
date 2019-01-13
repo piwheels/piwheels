@@ -234,5 +234,7 @@ class PauseableTask(Task):
                     break
                 else:
                     raise IOError('invalid control message: %s' % msg)
+        elif msg == 'RESUME':
+            self.logger.warning('Task is not paused')
         else:
             raise IOError('invalid control message: %s' % msg)

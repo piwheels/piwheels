@@ -129,7 +129,7 @@ def test_failure(mock_context, import_queue_name, import_queue):
 def test_unexpected(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
         assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
-        import_queue.send(b'FOO')
+        import_queue.send_msg('SEND', 'foo.whl')
         thread.join(10)
-        assert isinstance(thread.exception, IOError)
-        assert 'unable to deserialize data' in str(thread.exception)
+        assert isinstance(thread.exception, RuntimeError)
+        assert 'Unexpected response from master' in str(thread.exception)
