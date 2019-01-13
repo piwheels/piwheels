@@ -327,7 +327,7 @@ class TheScribe(PauseableTask):
         (Re)writes the project page of the specified package.
 
         :param str package:
-            The name of the package to write the index for
+            The name of the package to write the project page for
         """
         versions = sorted(
             self.db.get_project_versions(package),
