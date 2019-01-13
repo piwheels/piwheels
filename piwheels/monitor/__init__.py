@@ -39,7 +39,6 @@ or terminate the master itself.
 """
 
 import sys
-from math import log
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -47,16 +46,7 @@ import zmq
 
 from .. import terminal, const
 from . import widgets
-
-
-def format_size(size):
-    suffixes = ['Bytes', 'KBytes', 'MBytes', 'GBytes', 'TBytes', 'PBytes']
-    try:
-        index = min(len(suffixes) - 1, int(log(size, 2) // 10))
-    except ValueError:
-        return '0 Bytes'
-    else:
-        return '%d %s' % (size / 2 ** (index * 10), suffixes[index])
+from ..format import format_size
 
 
 class PiWheelsMonitor:

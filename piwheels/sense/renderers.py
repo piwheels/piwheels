@@ -41,7 +41,6 @@ Implements the screen rendering classes for the Sense HAT monitor.
 """
 
 import signal
-from math import log
 from datetime import datetime, timedelta
 from functools import partial
 from itertools import cycle, chain
@@ -52,21 +51,12 @@ from pisense import array, draw_text
 from colorzero import Color, Lightness, Saturation, Blue, ease_out
 
 from .states import SlaveList
+from ..format import format_size
 
 
 def bounce(it):
     # bounce('ABC') -> A B C C B A A B C ...
     return cycle(chain(it, reversed(it)))
-
-
-def format_size(size):
-    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-    try:
-        index = min(len(suffixes) - 1, int(log(size, 2) // 10))
-    except ValueError:
-        return '0B'
-    else:
-        return '%d%s' % (size / 2 ** (index * 10), suffixes[index])
 
 
 class Renderer:
