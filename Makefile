@@ -17,6 +17,11 @@ else
 SETUPTOOLS:=$(shell wget https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -O - | $(PYTHON))
 endif
 
+# Find the location of python-apt (only packaged for apt, not pip)
+PYTHON_APT:=$(wildcard /usr/lib/python3/dist-packages/apt) \
+	$(wildcard /usr/lib/python3/dist-packages/apt_pkg*.so) \
+	$(wildcard /usr/lib/python3/dist-packages/apt_inst*.so)
+
 # Calculate the base names of the distribution, the location of all source,
 # documentation, packaging, icon, and executable script files
 NAME:=$(shell $(PYTHON) $(PYFLAGS) setup.py --name)
@@ -112,6 +117,16 @@ develop: tags
 	$(PIP) install -U setuptools
 	$(PIP) install -U pip
 	$(PIP) install -e .[doc,test,master,slave,monitor,log]
+	@# If we're in a venv, link the system's RTIMULib into it
+ifeq ($(VIRTUAL_ENV),)
+	@echo "Virtualenv not detected! You may need to link python3-apt manually"
+else
+ifeq ($(PYTHON_APT),)
+	@echo "WARNING: python3-apt not found. This is fine on non-Debian platforms"
+else
+	for lib in $(PYTHON_APT); do ln -sf $$lib $(VIRTUAL_ENV)/lib/python*/site-packages/; done
+endif
+endif
 
 test:
 	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) -v tests
