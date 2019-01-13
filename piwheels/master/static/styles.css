@@ -76,7 +76,8 @@ table.stats {
   padding: 0.5em;
 }
 table.stats tbody, table.stats tbody tr { background: transparent; }
-table.stats th, table.stats td { text-align: left; padding: 0.25em; }
+table th, table td { text-align: left; padding: 0.25em; }
+table.empty th { text-align: center; }
 
 pre {
   background: #ffdead;
