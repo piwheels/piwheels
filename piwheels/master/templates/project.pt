@@ -24,28 +24,35 @@ sudo pip3 install ${package}</pre>
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Versions</h3>
-        <table>
-          <tr><th>Version</th><th>Builds</th><th>Skip</th></tr>
+        <h3>Versions (${len(versions)})</h3>
+        <table tal:condition="versions">
+          <tr><th>Version</th><th>Successful builds</th><th>Failed builds</th><th>Skip</th></tr>
           <tr tal:repeat="row versions">
             <td>${row.version}</td>
-            <td>${row.builds_succeeded} / ${row.builds_failed}</td>
+            <td>${row.builds_succeeded}</td>
+            <td>${row.builds_failed}</td>
             <td>${"✖" if row.skipped else ""}</td>
           </tr>
+        </table>
+        <table tal:condition="not:versions" class="empty">
+          <tr><th>No versions</th></tr>
         </table>
       </div>
     </div>
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Files</h3>
-        <table>
+        <h3>Files (${len(files)})</h3>
+        <table tal:condition="files">
           <tr><th>Filename</th><th>ABI</th><th>Size</th></tr>
           <tr tal:repeat="row files">
             <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
             <td>${row.abi_tag}</td>
-            <td>${row.filesize}</td>
+            <td>${format_size(row.filesize)}</td>
           </tr>
+        </table>
+        <table tal:condition="not:files" class="empty">
+          <tr><th>No files</th></tr>
         </table>
       </div>
     </div>

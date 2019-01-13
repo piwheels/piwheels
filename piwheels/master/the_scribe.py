@@ -45,6 +45,7 @@ import pkg_resources
 from chameleon import PageTemplateLoader
 
 from .. import const
+from ..format import format_size
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
@@ -331,13 +332,14 @@ class TheScribe(PauseableTask):
         """
         versions = sorted(
             self.db.get_project_versions(package),
-            key=lambda row: pkg_resources.parse_version(row.version))
+            key=lambda row: pkg_resources.parse_version(row.version),
+            reverse=True)
         files = sorted(
             self.db.get_project_files(package),
             key=lambda row: (
                 pkg_resources.parse_version(row.version),
                 row.filename
-            ))
+            ), reverse=True)
         if files:
             dependencies = self.db.get_file_dependencies(files[0].filename)
         else:
@@ -352,6 +354,7 @@ class TheScribe(PauseableTask):
                 versions=versions,
                 files=files,
                 dependencies=dependencies,
+                format_size=format_size,
                 url=lambda filename, filehash:
                     '/simple/{package}/{filename}#sha256={filehash}'.format(
                         package=package, filename=filename, filehash=filehash),
