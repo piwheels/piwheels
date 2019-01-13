@@ -214,11 +214,11 @@ def test_get_all_package_versions(db_intf, with_package_version):
 
 
 def test_get_build_queue_full(db_intf, with_package_version):
-    assert list(db_intf.get_build_queue()) == [('cp34m', 1, 'foo', '0.1')]
+    assert db_intf.get_build_queue() == {'cp34m': [('foo', '0.1')]}
 
 
 def test_get_build_queue_partial(db_intf, with_build):
-    assert list(db_intf.get_build_queue()) == [('cp35m', 1, 'foo', '0.1')]
+    assert db_intf.get_build_queue() == {'cp35m': [('foo', '0.1')]}
 
 
 def test_get_statistics(db_intf, with_files):

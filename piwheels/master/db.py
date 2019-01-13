@@ -39,7 +39,7 @@ itself.
 import warnings
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby
-from operator import itemgetter
+from operator import itemgetter, attrgetter
 from collections import namedtuple
 
 from sqlalchemy import MetaData, Table, select, create_engine, func
@@ -310,20 +310,27 @@ class Database:
 
     def get_build_queue(self):
         """
-        Returns a generator covering the entire builds_pending view; streaming
-        results are activated for this query as it's more important to get the
-        first result quickly than it is to retrieve the entire set.
+        Returns a mapping of ABI tags to an ordered list of up to 1000 package
+        version tuples which currently need building for that ABI.
         """
         # NOTE: This method is not exposed on TheOracle as it is only used by
         # TheArchitect task
         with self._conn.begin():
-            for row in self._conn.\
-                    execution_options(stream_results=True).\
+            return {
+                abi_tag: [
+                    (row.package, row.version)
+                    for row in rows
+                ]
+                for abi_tag, rows in groupby(
+                    self._conn.execution_options(stream_results=True).\
                     execute(
                         self._builds_pending.select().
-                        where(self._builds.c.position <= 1000)
-                    ):
-                yield row
+                        where(self._builds_pending.c.position <= 1000).
+                        order_by(self._builds_pending.c.abi_tag,
+                                 self._builds_pending.c.position)
+                    ), key=attrgetter('abi_tag')
+                )
+            }
 
     def get_statistics(self):
         """

@@ -56,7 +56,7 @@ class TheArchitect(Task):
         self.last_run = datetime(1970, 1, 1)
         self.builds_queue = self.ctx.socket(
             zmq.PUSH, protocol=protocols.the_architect)
-        self.builds_queue.hwm = 1000
+        self.builds_queue.hwm = 1
         self.builds_queue.bind(config.builds_queue)
 
     def close(self):
@@ -67,18 +67,19 @@ class TheArchitect(Task):
     def loop(self):
         """
         The architect simply runs the build queue query repeatedly, with a
-        break of 30 seconds between each execution. The query is limited (in
+        break of 60 seconds between each execution. The query is limited (in
         :class:`~.db.Database`) to 1000 entries per build ABI.
 
-        All entries found within this limit are pushed to
-        :class:`~.slave_driver.SlaveDriver` which sorts them into per-ABI
-        queues and dispatches jobs to build slaves as they become available.
+        All entries found within this limit are sorted into per-ABI queues and
+        pushed to :class:`~.slave_driver.SlaveDriver` which queues and
+        dispatches jobs to build ABI-matched slaves as they become available.
         """
-        # Leave 30 seconds between each run of the (expensive) builds
+        # XXX Possibility to take a feed of build-queue statistics from
+        # BigBrother and only re-run the query is at least 1 ABI queue (within
+        # the set defined by db.get_build_abis()) has <threshold builds left in
+        # it
+        # Leave 60 seconds between each run of the (expensive) builds
         # pending query
-        if datetime.utcnow() - self.last_run > timedelta(seconds=30):
-            for row in self.db.get_build_queue():
-                self.builds_queue.send_msg(
-                    'QUEUE', (row.abi_tag, row.package, row.version)
-                )
+        if datetime.utcnow() - self.last_run > timedelta(seconds=60):
+            self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
             self.last_run = datetime.utcnow()

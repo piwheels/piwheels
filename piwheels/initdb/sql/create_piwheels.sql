@@ -322,8 +322,8 @@ FROM
                     JOIN versions AS v ON v.package = p.package
                     CROSS JOIN build_abis AS b
                 WHERE
-                    v.skip IS NULL
-                    AND p.skip IS NULL
+                    v.skip = ''
+                    AND p.skip = ''
 
                 EXCEPT ALL
 
