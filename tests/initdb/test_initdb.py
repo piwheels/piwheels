@@ -248,8 +248,10 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         obj_description(cls.oid, 'pg_class') AS relcomment
                     FROM
                         pg_catalog.pg_class cls
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
                     WHERE
-                        cls.relnamespace = to_regnamespace('public')
+                        nsp.nspname = 'public'
                     ORDER BY
                         relname;
                     """)),
@@ -267,10 +269,12 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         pg_catalog.pg_attribute att
                         JOIN pg_catalog.pg_class cls
                             ON att.attrelid = cls.oid
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
                         LEFT JOIN pg_catalog.pg_attrdef ad
                             ON att.attrelid = ad.adrelid AND att.attnum = ad.adnum
                     WHERE
-                        cls.relnamespace = to_regnamespace('public')
+                        nsp.nspname = 'public'
                         AND att.attnum > 0
                         AND NOT att.attisdropped
                     ORDER BY
@@ -283,8 +287,10 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         obj_description(con.oid, 'pg_constraint') AS concomment
                     FROM
                         pg_catalog.pg_constraint con
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON con.connamespace = nsp.oid
                     WHERE
-                        con.connamespace = to_regnamespace('public')
+                        nsp.nspname = 'public'
                     ORDER BY
                         conname;
                     """)),
@@ -296,8 +302,10 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         obj_description(pro.oid, 'pg_proc') AS procomment
                     FROM
                         pg_catalog.pg_proc pro
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON pro.pronamespace = nsp.oid
                     WHERE
-                        pro.pronamespace = to_regnamespace('public')
+                        nsp.nspname = 'public'
                     ORDER BY
                         proname, proargs;
                     """)),
@@ -312,8 +320,10 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         pg_catalog.pg_trigger tg
                         JOIN pg_catalog.pg_class cls
                             ON tg.tgrelid = cls.oid
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
                     WHERE
-                        cls.relnamespace = to_regnamespace('public')
+                        nsp.nspname = 'public'
                         AND NOT tg.tgisinternal
                     ORDER BY
                         tgrelname, tgname;
