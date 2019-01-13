@@ -194,12 +194,13 @@ class Task(Thread):
                 self.loop()
                 self.poll()
         except TaskQuit:
-            self.logger.info('closing')
+            self.logger.info('stopping')
         except:
             self.quit_queue.send_pyobj(['QUIT'])
-            raise
+            self.logger.exception('unhandled exception')
         finally:
             self.close()
+            self.logger.info('stopped')
 
 
 class PauseableTask(Task):

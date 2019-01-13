@@ -54,7 +54,8 @@ from .the_oracle import TheOracle
 from .seraph import Seraph
 from .slave_driver import SlaveDriver
 from .file_juggler import FileJuggler
-from .index_scribe import IndexScribe
+from .the_secretary import TheSecretary
+from .the_scribe import TheScribe
 from .cloud_gazer import CloudGazer
 from .mr_chase import MrChase
 from .lumberjack import Lumberjack
@@ -104,8 +105,9 @@ write access to the output directory.
             help="The path under which the website should be written; must be "
             "writable by the current user")
         parser.add_argument(
-            '--index-queue', metavar='ADDR', default=const.INDEX_QUEUE,
-            help="The address of the IndexScribe queue (default: %(default)s)")
+            '--web-queue', metavar='ADDR', default=const.WEB_QUEUE,
+            help="The address of the queue used to request web page updates "
+            "(default: %(default)s)")
         parser.add_argument(
             '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
             help="The address of the queue used to report status to monitors "
@@ -185,7 +187,8 @@ write access to the output directory.
                 TheOracle,
                 TheArchitect,
                 Lumberjack,
-                IndexScribe,
+                TheSecretary,
+                TheScribe,
                 BigBrother,
                 FileJuggler,
                 CloudGazer,

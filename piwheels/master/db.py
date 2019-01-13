@@ -38,9 +38,10 @@ itself.
 
 import warnings
 from datetime import datetime, timedelta
-from itertools import chain
+from itertools import chain, groupby
+from operator import itemgetter
 
-from sqlalchemy import MetaData, Table, select, create_engine
+from sqlalchemy import MetaData, Table, select, create_engine, func
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__
@@ -103,6 +104,8 @@ class Database:
                 self._builds = Table('builds', self._meta, autoload=True)
                 self._output = Table('output', self._meta, autoload=True)
                 self._files = Table('files', self._meta, autoload=True)
+                self._dependencies = Table(
+                    'dependencies', self._meta, autoload=True)
                 self._downloads = Table('downloads', self._meta, autoload=True)
                 self._build_abis = Table(
                     'build_abis', self._meta, autoload=True)
@@ -205,24 +208,19 @@ class Database:
         pip's user-agent.
         """
         with self._conn.begin():
-            try:
-                self._conn.execute(
-                    self._downloads.insert(),
-                    filename=download.filename,
-                    accessed_by=download.host,
-                    accessed_at=download.timestamp,
-                    arch=download.arch,
-                    distro_name=download.distro_name,
-                    distro_version=download.distro_version,
-                    os_name=download.os_name,
-                    os_version=download.os_version,
-                    py_name=download.py_name,
-                    py_version=download.py_version,
-                )
-            except IntegrityError:
-                return False
-            else:
-                return True
+            self._conn.execute(
+                self._downloads.insert(),
+                filename=download.filename,
+                accessed_by=download.host,
+                accessed_at=download.timestamp,
+                arch=download.arch,
+                distro_name=download.distro_name,
+                distro_version=download.distro_version,
+                os_name=download.os_name,
+                os_version=download.os_version,
+                py_name=download.py_name,
+                py_version=download.py_version,
+            )
 
     def log_build(self, build):
         """
@@ -253,35 +251,31 @@ class Database:
         Log a pending file transfer in the database, including file-size, hash,
         and various tags
         """
+        # NOTE: This method is not exposed on TheOracle as it is only required
+        # by log_build above
         with self._conn.begin():
-            try:
-                with self._conn.begin_nested():
-                    self._conn.execute(
-                        self._files.insert(),
-
-                        filename=file.filename,
-                        build_id=build.build_id,
-                        filesize=file.filesize,
-                        filehash=file.filehash,
-                        package_tag=file.package_tag,
-                        package_version_tag=file.package_version_tag,
-                        py_version_tag=file.py_version_tag,
-                        abi_tag=file.abi_tag,
-                        platform_tag=file.platform_tag
-                    )
-            except IntegrityError:
+            self._conn.execute(
+                self._files.delete().
+                where(self._files.c.filename == file.filename)
+            )
+            self._conn.execute(
+                self._files.insert(),
+                filename=file.filename,
+                build_id=build.build_id,
+                filesize=file.filesize,
+                filehash=file.filehash,
+                package_tag=file.package_tag,
+                package_version_tag=file.package_version_tag,
+                py_version_tag=file.py_version_tag,
+                abi_tag=file.abi_tag,
+                platform_tag=file.platform_tag
+            )
+            for tool, dependency in file.dependencies:
                 self._conn.execute(
-                    self._files.update().
-                    where(self._files.c.filename == file.filename),
-
-                    build_id=build.build_id,
-                    filesize=file.filesize,
-                    filehash=file.filehash,
-                    package_tag=file.package_tag,
-                    package_version_tag=file.package_version_tag,
-                    py_version_tag=file.py_version_tag,
-                    abi_tag=file.abi_tag,
-                    platform_tag=file.platform_tag
+                    self._dependencies.insert(),
+                    filename=file.filename,
+                    tool=tool,
+                    dependency=dependency
                 )
 
     def get_build_abis(self):
@@ -341,6 +335,8 @@ class Database:
         results are activated for this query as it's more important to get the
         first result quickly than it is to retrieve the entire set.
         """
+        # NOTE: This method is not exposed on TheOracle as it is only used by
+        # TheArchitect task
         with self._conn.begin():
             for row in self._conn.\
                     execution_options(stream_results=True).\
@@ -367,36 +363,6 @@ class Database:
                 for rec in self._conn.execute(self._downloads_recent.select())
             }
 
-    def get_build(self, build_id):
-        """
-        Return all details about a given build.
-        """
-        with self._conn.begin():
-            return self._conn.execute(
-                select([
-                    self._builds.c.build_id,
-                    self._builds.c.built_by,
-                    self._builds.c.package,
-                    self._builds.c.version,
-                    self._builds.c.abi_tag,
-                    self._builds.c.status,
-                    self._builds.c.duration,
-                    self._output.c.output,
-                ]).
-                select_from(self._builds.join(self._output)).
-                where(self._builds.c.build_id == build_id)
-            )
-
-    def get_files(self, build_id):
-        """
-        Return all details about the files generated by a given build.
-        """
-        with self._conn.begin():
-            return self._conn.execute(
-                self._files.select().
-                where(self._files.c.build_id == build_id)
-            )
-
     def get_package_files(self, package):
         """
         Returns all details required to build the index.html for the specified
@@ -406,6 +372,43 @@ class Database:
             return self._conn.execute(
                 select([self._files.c.filename, self._files.c.filehash]).
                 select_from(self._builds.join(self._files)).
+                where(self._builds.c.status).
+                where(self._builds.c.package == package)
+            )
+
+    def get_project_versions(self, package):
+        """
+        Returns all details required to build the versions table in the
+        project page of the specified *package*.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                select([
+                    self._versions.c.version,
+                    ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
+                    func.count().filter(self._builds.c.status).label('builds_succeeded'),
+                    func.count().filter(~self._builds.c.status).label('builds_failed'),
+                ]).
+                select_from(self._packages.join(self._versions.outerjoin(self._builds))).
+                where(self._versions.c.package == package).
+                group_by(self._versions.c.version, 'skipped')
+            )
+
+    def get_project_files(self, package):
+        """
+        Returns all details required to build the files table in the project
+        page of the specified *package*.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                select([
+                    self._builds.c.version,
+                    self._files.c.abi_tag,
+                    self._files.c.filename,
+                    self._files.c.filesize,
+                    self._files.c.filehash,
+                ]).
+                select_from(self._files.join(self._builds)).
                 where(self._builds.c.status).
                 where(self._builds.c.package == package)
             )
@@ -436,6 +439,27 @@ class Database:
                 where(self._versions.c.package == package).
                 where(self._versions.c.version == version)
             )
+
+    def get_file_dependencies(self, filename):
+        """
+        Returns the dependencies for the specified *filename* as a map of
+        tool names to dependency sets.
+        """
+        with self._conn.begin():
+            return {
+                tool: set(row.dependency for row in rows)
+                for tool, rows in groupby(
+                    self._conn.execute(
+                        select([
+                            self._dependencies.c.tool,
+                            self._dependencies.c.dependency
+                        ]).
+                        where(self._dependencies.c.filename == filename).
+                        order_by(self._dependencies.c.tool)
+                    ),
+                    key=itemgetter(0)
+                )
+            }
 
     def delete_build(self, package, version):
         """

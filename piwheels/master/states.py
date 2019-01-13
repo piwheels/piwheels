@@ -102,13 +102,17 @@ class FileState:
         The platform tag extracted from the filename (last "-" separated
         component).
 
+    :param set dependencies:
+        The set of dependencies that are required to use this particular
+        wheel.
+
     :param bool transferred:
         ``True`` if the file has been transferred from the build slave that
         generated it to the file server.
     """
     def __init__(self, filename, filesize, filehash, package_tag,
                  package_version_tag, py_version_tag, abi_tag, platform_tag,
-                 transferred=False):
+                 dependencies, transferred=False):
         self._filename = filename
         self._filesize = filesize
         self._filehash = filehash
@@ -117,10 +121,11 @@ class FileState:
         self._py_version_tag = py_version_tag
         self._abi_tag = abi_tag
         self._platform_tag = platform_tag
+        self._dependencies = dependencies
         self._transferred = transferred
 
     def __len__(self):
-        return 9
+        return 10
 
     def __getitem__(self, index):
         return (
@@ -132,6 +137,7 @@ class FileState:
             self._py_version_tag,
             self._abi_tag,
             self._platform_tag,
+            self._dependencies,
             self._transferred,
         )[index]
 
@@ -179,6 +185,10 @@ class FileState:
     @property
     def platform_tag(self):
         return self._platform_tag
+
+    @property
+    def dependencies(self):
+        return self._dependencies
 
     @property
     def transferred(self):
@@ -281,45 +291,6 @@ class BuildState:
                 )
             )
         )
-
-    @classmethod
-    def from_db(cls, db, build_id):
-        """
-        Construct an instance by querying the database for the specified
-        *build_id*.
-
-        :param Database db:
-            A :class:`~.db.Database` instance to query.
-
-        :param int build_id:
-            The integer identifier of an attempted build.
-        """
-        for brec in db.get_build(build_id):
-            return BuildState(
-                brec.built_by,
-                brec.package,
-                brec.version,
-                brec.abi_tag,
-                brec.status,
-                brec.duration.total_seconds(),
-                brec.output,
-                {
-                    frec.filename: FileState(
-                        frec.filename,
-                        frec.filesize,
-                        frec.filehash,
-                        frec.package_tag,
-                        frec.package_version_tag,
-                        frec.py_version_tag,
-                        frec.abi_tag,
-                        frec.platform_tag,
-                        transferred=True
-                    )
-                    for frec in db.get_files(build_id)
-                },
-                build_id
-            )
-        raise ValueError('Unknown build id %d' % build_id)
 
     @property
     def slave_id(self):
@@ -688,7 +659,7 @@ DownloadState = namedtuple('DownloadState', (
 def mkdir_override_symlink(pkg_dir):
     """
     Make *pkg_dir*, replacing any existing symlink in its place. See the
-    notes in :meth:`IndexScribe.write_package_index` for more information.
+    notes in :meth:`TheScribe.write_package_index` for more information.
     """
     # There is a tiny possibility of a race here between two threads wanting
     # to replace a symlinked dir with a "real" dir, hence the loop below

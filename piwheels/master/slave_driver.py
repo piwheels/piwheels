@@ -79,9 +79,9 @@ class SlaveDriver(Task):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.connect(config.index_queue)
+        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue.hwm = 10
+        self.web_queue.connect(config.web_queue)
         self.stats_queue = self.ctx.socket(zmq.PUSH)
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
@@ -94,7 +94,7 @@ class SlaveDriver(Task):
         self.fs.close()
         self.db.close()
         self.stats_queue.close()
-        self.index_queue.close()
+        self.web_queue.close()
         self.status_queue.close()
         SlaveState.status_queue = None
         super().close()
@@ -345,7 +345,7 @@ class SlaveDriver(Task):
             else:
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
-                self.index_queue.send_pyobj(['PKG', slave.build.package])
+                self.web_queue.send_pyobj(['PKGPROJ', slave.build.package])
                 return ['DONE']
 
     def do_sent(self, slave):
@@ -354,7 +354,7 @@ class SlaveDriver(Task):
         finished sending the requested file to :class:`FileJuggler`. The
         :class:`FsClient` RPC mechanism is used to ask :class:`FileJuggler` to
         verify the transfer against the stored hash and, if this is successful,
-        a message is sent to :class:`IndexScribe` to regenerate the package's
+        a message is sent to :class:`TheScribe` to regenerate the package's
         index.
 
         If further files remain to be transferred, another "SEND" message is
@@ -370,12 +370,12 @@ class SlaveDriver(Task):
                 slave.slave_id, slave.label, slave.reply[0])
             return ['BYE']
         elif self.fs.verify(slave.slave_id, slave.build.package):
-            self.index_queue.send_pyobj(['PKG', slave.build.package])
             slave.build.files[slave.build.next_file].verified()
             self.logger.info(
                 'slave %d (%s): verified transfer of %s',
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
+                self.web_queue.send_pyobj(['PKGBOTH', slave.build.package])
                 return ['DONE']
             else:
                 self.fs.expect(slave.slave_id,
@@ -415,4 +415,4 @@ def build_armv6l_hack(build):
                 build.files[arm6_name] = FileState(
                     arm6_name, file.filesize, file.filehash, file.package_tag,
                     file.package_version_tag, file.py_version_tag,
-                    file.abi_tag, 'linux_armv6l', True)
+                    file.abi_tag, 'linux_armv6l', file.dependencies, True)

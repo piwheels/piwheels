@@ -27,9 +27,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Defines the :class:`IndexScribe` task; see class for more details.
+Defines the :class:`TheScribe` task; see class for more details.
 
-.. autoclass:: IndexScribe
+.. autoclass:: TheScribe
     :members:
 """
 
@@ -44,6 +44,7 @@ import zmq
 import pkg_resources
 from chameleon import PageTemplateLoader
 
+from .. import const
 from .html import tag
 from .tasks import PauseableTask
 from .the_oracle import DbClient
@@ -64,9 +65,19 @@ class AtomicReplaceFile:
     permissions will be set, i.e. 0644 & umask).  If an exception occurs during
     the context manager's block, the temporary file will be deleted leaving the
     original target file unaffected and the exception will be re-raised.
+
+    :param pathlib.Path path:
+        The full path and filename of the target file. This is expected to be
+        an absolute path.
+
+    :param str encoding:
+        If ``None`` (the default), the temporary file will be opened in binary
+        mode. Otherwise, this specifies the encoding to use with text mode.
     """
-    def __init__(self, filename, encoding=None):
-        self._path = Path(filename)
+    def __init__(self, path, encoding=None):
+        if isinstance(path, str):
+            path = Path(path)
+        self._path = path
         self._tempfile = tempfile.NamedTemporaryFile(
             mode='wb' if encoding is None else 'w',
             dir=str(self._path.parent), encoding=encoding, delete=False)
@@ -86,7 +97,7 @@ class AtomicReplaceFile:
         return result
 
 
-class IndexScribe(PauseableTask):
+class TheScribe(PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It
     reads the names of packages off the internal "indexes" queue and rebuilds
@@ -101,15 +112,15 @@ class IndexScribe(PauseableTask):
         is re-built, hashes are *never* re-calculated from the disk files (they
         are always read from the database).
     """
-    name = 'master.index_scribe'
+    name = 'master.the_scribe'
 
     def __init__(self, config):
         super().__init__(config)
         self.output_path = Path(config.output_path)
-        index_queue = self.ctx.socket(zmq.PULL)
-        index_queue.hwm = 100
-        index_queue.bind(config.index_queue)
-        self.register(index_queue, self.handle_index)
+        scribe_queue = self.ctx.socket(zmq.PULL)
+        scribe_queue.hwm = 100
+        scribe_queue.connect(const.SCRIBE_QUEUE)
+        self.register(scribe_queue, self.handle_index)
         self.db = DbClient(config)
         self.package_cache = None
         self.statistics = {}
@@ -152,7 +163,7 @@ class IndexScribe(PauseableTask):
                 pass
         for filename in pkg_resources.resource_listdir(__name__, 'static'):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
-            with AtomicReplaceFile(str(self.output_path / filename)) as f:
+            with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
         startup_templates = {'faq.pt', 'packages.pt', 'stats.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
@@ -162,16 +173,21 @@ class IndexScribe(PauseableTask):
                         page=filename.replace('.html', '')
                     )
                 with AtomicReplaceFile(
-                        str((self.output_path / filename).with_suffix('.html')),
+                        (self.output_path / filename).with_suffix('.html'),
                         encoding='utf-8') as f:
                     f.write(source)
 
     def handle_index(self, queue):
         """
         Handle incoming requests to (re)build index files. These will be in the
-        form of "HOME", a request to write the homepage with some associated
-        statistics, or "PKG", a request to write the index for the specified
-        package.
+        form of:
+
+        * "HOME", a request to write the homepage with some associated
+          statistics
+        * "PKGBOTH", a request to write the index and project page for
+          the specified package
+        * "PKGPROJ", a request to write just the project page for the specified
+          package
 
         .. note::
 
@@ -180,13 +196,15 @@ class IndexScribe(PauseableTask):
             the event of any exceptions.
         """
         msg, *args = queue.recv_pyobj()
-        if msg == 'PKG':
+        if msg == 'PKGBOTH':
             package = args[0]
             if package not in self.package_cache:
                 self.package_cache.add(package)
                 self.write_root_index()
-            self.write_package_index(
-                package, self.db.get_package_files(package))
+            self.write_package_index(package)
+            self.write_project_page(package)
+        elif msg == 'PKGPROJ':
+            package = args[0]
             self.write_project_page(package)
         elif msg == 'HOME':
             status_info = args[0]
@@ -195,7 +213,7 @@ class IndexScribe(PauseableTask):
             search_index = args[0]
             self.write_search_index(search_index)
         else:
-            self.logger.error('invalid index_queue message: %s', msg)
+            self.logger.error('invalid scribe_queue message: %s', msg)
 
     def write_homepage(self, statistics):
         """
@@ -206,7 +224,7 @@ class IndexScribe(PauseableTask):
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
-        with AtomicReplaceFile(str(self.output_path / 'index.html'),
+        with AtomicReplaceFile(self.output_path / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['index'](
                 layout=self.templates['layout']['layout'],
@@ -222,9 +240,9 @@ class IndexScribe(PauseableTask):
             :class:`BigBrother`.
         """
         self.logger.info('writing search index')
-        with AtomicReplaceFile(str(self.output_path / 'packages.json'),
+        with AtomicReplaceFile(self.output_path / 'packages.json',
                                encoding='utf-8') as index:
-            json.dump(search_index, index,
+            json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))
 
     def write_root_index(self):
@@ -234,7 +252,7 @@ class IndexScribe(PauseableTask):
         in the task's cache.
         """
         self.logger.info('writing package index')
-        with AtomicReplaceFile(str(self.output_path / 'simple' / 'index.html'),
+        with AtomicReplaceFile(self.output_path / 'simple' / 'index.html',
                                encoding='utf-8') as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
@@ -250,7 +268,7 @@ class IndexScribe(PauseableTask):
                 )
             )
 
-    def write_package_index(self, package, files):
+    def write_package_index(self, package):
         """
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
@@ -258,14 +276,11 @@ class IndexScribe(PauseableTask):
 
         :param str package:
             The name of the package to write the index for
-
-        :param list files:
-            A list of (filename, filehash) tuples.
         """
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
+        with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
             index.file.write('<!DOCTYPE html>\n')
             index.file.write(
@@ -279,7 +294,7 @@ class IndexScribe(PauseableTask):
                             f.filename,
                             href='{f.filename}#sha256={f.filehash}'.format(f=f),
                             rel='internal'), tag.br(), '\n')
-                         for f in files)
+                         for f in self.db.get_package_files(package))
                     )
                 )
             )
@@ -314,14 +329,32 @@ class IndexScribe(PauseableTask):
         :param str package:
             The name of the package to write the index for
         """
+        versions = sorted(
+            self.db.get_project_versions(package),
+            key=lambda row: pkg_resources.parse_version(row.version))
+        files = sorted(
+            self.db.get_project_files(package),
+            key=lambda row: (
+                pkg_resources.parse_version(row.version),
+                row.filename
+            ))
+        if files:
+            dependencies = self.db.get_file_dependencies(files[0].filename)
+        else:
+            dependencies = {}
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
-        with AtomicReplaceFile(str(pkg_dir / 'index.html'),
-                               encoding='utf-8') as index:
+        with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
                 package=package,
+                versions=versions,
+                files=files,
+                dependencies=dependencies,
+                url=lambda filename, filehash:
+                    '/simple/{package}/{filename}#sha256={filehash}'.format(
+                        package=package, filename=filename, filehash=filehash),
                 page='project'))
         try:
             # See write_package_index for explanation...

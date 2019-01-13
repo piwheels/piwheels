@@ -59,7 +59,7 @@ def slave_queue(request, zmq_context, master_status_queue):
 
 
 def test_file_state_init(file_state):
-    assert len(file_state) == 9
+    assert len(file_state) == 10
     assert file_state[0] == file_state.filename == 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
     assert file_state[1] == file_state.filesize == 123456
     assert file_state[2] == file_state.filehash == 'c3bef91a6ceda582a97839ab65fc7efb4e79bc4eba53e41272574828ca59325a'
@@ -68,7 +68,8 @@ def test_file_state_init(file_state):
     assert file_state[5] == file_state.py_version_tag == 'cp34'
     assert file_state[6] == file_state.abi_tag == 'cp34m'
     assert file_state[7] == file_state.platform_tag == 'linux_armv7l'
-    assert file_state[8] == file_state.transferred == False
+    assert file_state[8] == file_state.dependencies == {('apt', 'libc6')}
+    assert file_state[9] == file_state.transferred == False
 
 
 def test_file_state_transferred(file_state):
@@ -90,22 +91,6 @@ def test_build_state_init(build_state, file_state):
         'foo-0.1-cp34-cp34m-linux_armv7l.whl': file_state
     }
     assert build_state[8] == build_state.build_id == None
-
-
-def test_build_state_from_db(master_config, with_build, with_files,
-                             build_state_hacked):
-    db = Database(master_config.dsn)
-    build_state_hacked.logged(with_build.build_id)
-    for file_state in build_state_hacked.files.values():
-        file_state.verified()
-    assert BuildState.from_db(db, with_build.build_id) == build_state_hacked
-
-
-def test_build_state_from_db_unknown_build(master_config, with_build):
-    db = Database(master_config.dsn)
-    assert with_build.build_id != 1000
-    with pytest.raises(ValueError):
-        BuildState.from_db(db, 1000)
 
 
 def test_build_state_override_abi(build_state, file_state):
@@ -203,7 +188,7 @@ def test_slave_recv_request(build_state, file_state):
                     file_state.filesize, file_state.filehash,
                     file_state.package_tag, file_state.package_version_tag,
                     file_state.py_version_tag, file_state.abi_tag,
-                    file_state.platform_tag
+                    file_state.platform_tag, file_state.dependencies
                 )
             }
         ]
@@ -226,7 +211,7 @@ def test_slave_recv_reply(build_state, file_state, slave_queue):
                     file_state.filesize, file_state.filehash,
                     file_state.package_tag, file_state.package_version_tag,
                     file_state.py_version_tag, file_state.abi_tag,
-                    file_state.platform_tag
+                    file_state.platform_tag, file_state.dependencies
                 )
             }
         ]

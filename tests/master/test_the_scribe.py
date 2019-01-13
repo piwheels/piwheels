@@ -40,24 +40,29 @@ import zmq
 import pytest
 from pkg_resources import resource_listdir
 
-from piwheels.master.index_scribe import IndexScribe, AtomicReplaceFile
+from piwheels import const
+from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
 
 
-Row = namedtuple('Row', ('filename', 'filehash'))
+FilesRow = namedtuple('FilesRow', ('filename', 'filehash'))
+ProjVersRow = namedtuple('ProjVersRow', (
+    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
+ProjFilesRow = namedtuple('ProjFilesRow', (
+    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
+def scribe_queue(request, zmq_context):
     queue = zmq_context.socket(zmq.PUSH)
     queue.hwm = 10
-    queue.connect(master_config.index_queue)
+    queue.bind(const.SCRIBE_QUEUE)
     yield queue
     queue.close()
 
 
 @pytest.fixture()
-def task(request, zmq_context, master_config, db_queue):
-    task = IndexScribe(master_config)
+def task(request, zmq_context, master_config, db_queue, scribe_queue):
+    task = TheScribe(master_config)
     yield task
     task.close()
 
@@ -123,7 +128,7 @@ def test_scribe_first_start(db_queue, task, master_config):
     assert (root / 'simple' / 'index.html').exists()
     assert contains_elem(root / 'simple' / 'index.html', 'a', [('href', 'foo')])
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
-    for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
+    for filename in resource_listdir('piwheels.master.the_scribe', 'static'):
         if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
@@ -141,7 +146,7 @@ def test_scribe_second_start(db_queue, task, master_config):
     task.once()
     db_queue.check()
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
-    for filename in resource_listdir('piwheels.master.index_scribe', 'static'):
+    for filename in resource_listdir('piwheels.master.the_scribe', 'static'):
         if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
@@ -156,10 +161,10 @@ def test_write_root_index_fails(db_queue, task, master_config):
     assert not (root / 'simple' / 'index.html').exists()
 
 
-def test_bad_request(db_queue, task, index_queue, master_config):
+def test_bad_request(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['FOO'])
+    scribe_queue.send_pyobj(['FOO'])
     e = Event()
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
@@ -167,13 +172,13 @@ def test_bad_request(db_queue, task, index_queue, master_config):
     task.poll()
     db_queue.check()
     assert e.wait(1)
-    assert task.logger.error.call_args('invalid index_queue message: %s', 'FOO')
+    assert task.logger.error.call_args('invalid scribe_queue message: %s', 'FOO')
 
 
-def test_write_homepage(db_queue, task, index_queue, master_config):
+def test_write_homepage(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['HOME', {
+    scribe_queue.send_pyobj(['HOME', {
         'packages_built': 123,
         'files_count': 234,
         'downloads_last_month': 345
@@ -185,10 +190,10 @@ def test_write_homepage(db_queue, task, index_queue, master_config):
     assert (root / 'index.html').exists() and (root / 'index.html').is_file()
 
 
-def test_write_homepage_fails(db_queue, task, index_queue, master_config):
+def test_write_homepage_fails(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['HOME', {}])
+    scribe_queue.send_pyobj(['HOME', {}])
     task.once()
     with pytest.raises(NameError):
         task.poll()
@@ -197,15 +202,28 @@ def test_write_homepage_fails(db_queue, task, index_queue, master_config):
     assert not (root / 'index.html').exists()
 
 
-def test_write_pkg_index(db_queue, task, index_queue, master_config):
+def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'foo'])
+    scribe_queue.send_pyobj(['PKGBOTH', 'foo'])
     db_queue.expect(['PKGFILES', 'foo'])
     db_queue.send(['OK', [
-        Row('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        Row('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
+        FilesRow('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
+        FilesRow('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
     ]])
+    db_queue.expect(['PROJVERS', 'foo'])
+    db_queue.send(['OK', [
+        ProjVersRow('0.1', False, 2, 0),
+    ]])
+    db_queue.expect(['PROJFILES', 'foo'])
+    db_queue.send(['OK', [
+        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                     123456, '123456123456'),
+        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                     123456, '123456123456'),
+    ]])
+    db_queue.expect(['FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl'])
+    db_queue.send(['OK', {'apt': {'libc6'}}])
     task.once()
     task.poll()
     db_queue.check()
@@ -220,10 +238,10 @@ def test_write_pkg_index(db_queue, task, index_queue, master_config):
     )
 
 
-def test_write_pkg_index_fails(db_queue, task, index_queue, master_config):
+def test_write_pkg_index_fails(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'foo'])
+    scribe_queue.send_pyobj(['PKGBOTH', 'foo'])
     db_queue.expect(['PKGFILES', 'foo'])
     db_queue.send(['OK', [
         # Send ordinary tuples (method expects rows with attributes named
@@ -240,15 +258,28 @@ def test_write_pkg_index_fails(db_queue, task, index_queue, master_config):
     assert not index.exists()
 
 
-def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
+def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo'}])
-    index_queue.send_pyobj(['PKG', 'bar'])
+    scribe_queue.send_pyobj(['PKGBOTH', 'bar'])
     db_queue.expect(['PKGFILES', 'bar'])
     db_queue.send(['OK', [
-        Row('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
-        Row('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
+        FilesRow('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
+        FilesRow('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
     ]])
+    db_queue.expect(['PROJVERS', 'bar'])
+    db_queue.send(['OK', [
+        ProjVersRow('1.0', False, 2, 1),
+    ]])
+    db_queue.expect(['PROJFILES', 'bar'])
+    db_queue.send(['OK', [
+        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                     123456, '123456abcdef'),
+        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                     123456, '123456abcdef'),
+    ]])
+    db_queue.expect(['FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl'])
+    db_queue.send(['OK', {'apt': {'libc6'}}])
     task.once()
     task.poll()
     db_queue.check()
@@ -266,14 +297,14 @@ def test_write_new_pkg_index(db_queue, task, index_queue, master_config):
     )
 
 
-def test_write_search_index(db_queue, task, index_queue, master_config):
+def test_write_search_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo', 'bar'}])
     search_index = [
         ('foo', 10),
         ('bar', 1),
     ]
-    index_queue.send_pyobj(['SEARCH', search_index])
+    scribe_queue.send_pyobj(['SEARCH', search_index])
     task.once()
     task.poll()
     db_queue.check()
@@ -283,14 +314,15 @@ def test_write_search_index(db_queue, task, index_queue, master_config):
     assert json.load(packages_json.open('r')) == [list(i) for i in search_index]
 
 
-def test_write_search_index_fails(db_queue, task, index_queue, master_config):
+def test_write_search_index_fails(db_queue, task, scribe_queue,
+                                  master_config):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {'foo', 'bar'}])
     search_index = [
         ('foo', 10),
         ('bar', 1 + 2j),  # complex download counts :)
     ]
-    index_queue.send_pyobj(['SEARCH', search_index])
+    scribe_queue.send_pyobj(['SEARCH', search_index])
     task.once()
     with pytest.raises(TypeError):
         task.poll()

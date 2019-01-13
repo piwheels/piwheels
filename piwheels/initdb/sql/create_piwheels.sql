@@ -15,7 +15,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.13');
+INSERT INTO configuration(id, version) VALUES (1, '0.14');
 GRANT SELECT,UPDATE ON configuration TO {username};
 
 -- packages
@@ -169,7 +169,30 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
-GRANT SELECT,INSERT,UPDATE ON files TO {username};
+GRANT SELECT,INSERT,DELETE ON files TO {username};
+
+-- dependencies
+-------------------------------------------------------------------------------
+-- The "dependencies" table tracks the libraries that need to be installed for
+-- a given wheel to operate correctly. The primary key is a combination of the
+-- "filename" that the dependency applies to, and the name of the "dependency"
+-- that needs installing. One additional column records the "tool" that the
+-- dependency needs installing with (at the moment this will always be apt but
+-- it's possible in future that pip will be included here).
+-------------------------------------------------------------------------------
+
+CREATE TABLE dependencies (
+    filename            VARCHAR(255) NOT NULL,
+    tool                VARCHAR(10) DEFAULT 'apt' NOT NULL,
+    dependency          VARCHAR(255) NOT NULL,
+
+    CONSTRAINT dependencies_pk PRIMARY KEY (filename, tool, dependency),
+    CONSTRAINT dependencies_files_fk FOREIGN KEY (filename)
+        REFERENCES files(filename) ON DELETE CASCADE,
+    CONSTRAINT dependencies_tool_ck CHECK (tool IN ('apt', 'pip', ''))
+);
+
+GRANT SELECT,INSERT ON dependencies TO {username};
 
 -- downloads
 -------------------------------------------------------------------------------
@@ -187,10 +210,7 @@ CREATE TABLE downloads (
     os_name             VARCHAR(100) DEFAULT NULL,
     os_version          VARCHAR(100) DEFAULT NULL,
     py_name             VARCHAR(100) DEFAULT NULL,
-    py_version          VARCHAR(100) DEFAULT NULL,
-
-    CONSTRAINT downloads_filename_fk FOREIGN KEY (filename)
-        REFERENCES files (filename) ON DELETE CASCADE
+    py_version          VARCHAR(100) DEFAULT NULL
 );
 
 CREATE INDEX downloads_files ON downloads(filename);
@@ -222,6 +242,33 @@ CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
 GRANT SELECT,INSERT ON searches TO {username};
 
+-- versions_detail
+-------------------------------------------------------------------------------
+-- The "versions_detail" view augments the columns from "versions" with
+-- additional details required for building the top page on packages' project
+-- pages. This includes the number of successful and failed builds for each
+-- version and whether or not versions are marked for skipping, whether at the
+-- package or version level.
+-------------------------------------------------------------------------------
+
+CREATE VIEW versions_detail AS
+SELECT
+    v.package,
+    v.version,
+    (p.skip IS NOT NULL) or (v.skip IS NOT NULL) AS skipped,
+    COUNT(*) FILTER (WHERE b.status) AS builds_succeeded,
+    COUNT(*) FILTER (WHERE NOT b.status) AS builds_failed
+FROM
+    packages p
+    JOIN versions v ON p.package = v.package
+    LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
+GROUP BY
+    v.package,
+    v.version,
+    skipped;
+
+GRANT SELECT ON versions_detail TO {username};
+
 -- builds_pending
 -------------------------------------------------------------------------------
 -- The "builds_pending" view is the basis of the build queue in the master. The
@@ -229,7 +276,7 @@ GRANT SELECT,INSERT ON searches TO {username};
 -- to be built. The "builds" and "files" tables define what's been attempted,
 -- what's succeeded, and for which ABIs. This view combines all this
 -- information and returns "package", "version", "abi" tuples defining what
--- requires building next.
+-- requires building next and on which ABI.
 --
 -- There are some things to note about the behaviour of the queue. When no
 -- builds of a package have been attempted, only the "lowest" ABI is attempted.
@@ -238,8 +285,10 @@ GRANT SELECT,INSERT ON searches TO {username};
 -- dependencies in later Python versions are incompatible with earlier
 -- versions. Once a package has a file with the "none" ABI, no further builds
 -- are attempted (naturally). Only if the initial build generated something
--- with a specific ABI (something other than "none") are builds for the other
--- ABIs listed in "build_abis" attempted.
+-- with a specific ABI (something other than "none"), or if the initial build
+-- fails are builds for the other ABIs listed in "build_abis" attempted. Each
+-- ABI is attempted in order until a build succeeds in producing an ABI "none"
+-- package, or we run out of active ABIs.
 -------------------------------------------------------------------------------
 
 CREATE VIEW builds_pending AS

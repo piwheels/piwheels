@@ -52,16 +52,16 @@ def pypi_proxy(request, sock_push_pull):
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
+def web_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.hwm = 1
-    queue.bind(master_config.index_queue)
+    queue.bind(master_config.web_queue)
     yield queue
     queue.close()
 
 
 @pytest.fixture(scope='function')
-def task(request, db_queue, index_queue, master_config):
+def task(request, db_queue, web_queue, master_config):
     task = CloudGazer(master_config)
     yield task
     db_queue.expect(['SETPYPI', task.serial])
@@ -125,7 +125,7 @@ def test_cloud_gazer_existing_ver(pypi_proxy, db_queue, task):
     assert task.serial == 1
 
 
-def test_cloud_gazer_new_ver(pypi_proxy, db_queue, index_queue, task):
+def test_cloud_gazer_new_ver(pypi_proxy, db_queue, web_queue, task):
     db_queue.expect(['ALLPKGS'])
     db_queue.send(['OK', {"foo"}])
     db_queue.expect(['GETPYPI'])
@@ -149,7 +149,7 @@ def test_cloud_gazer_new_ver(pypi_proxy, db_queue, index_queue, task):
     db_queue.check()
     assert task.packages == {"foo", "bar"}
     assert task.serial == 6
-    assert index_queue.recv_pyobj() == ['PKG', 'bar']
+    assert web_queue.recv_pyobj() == ['PKGBOTH', 'bar']
 
 
 def test_cloud_gazer_enable_ver(pypi_proxy, db_queue, task):

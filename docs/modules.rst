@@ -85,10 +85,16 @@ piwheels.master.big_brother
 .. automodule:: piwheels.master.big_brother
 
 
-piwheels.master.index_scribe
+piwheels.master.the_secretary
 ============================
 
-.. automodule:: piwheels.master.index_scribe
+.. automodule:: piwheels.master.the_secretary
+
+
+piwheels.master.the_scribe
+============================
+
+.. automodule:: piwheels.master.the_scribe
 
 
 piwheels.slave

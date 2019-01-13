@@ -66,9 +66,9 @@ class MrChase(PauseableTask):
         self.status_queue = self.ctx.socket(zmq.PUSH)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.index_queue = self.ctx.socket(zmq.PUSH)
-        self.index_queue.hwm = 10
-        self.index_queue.connect(config.index_queue)
+        self.web_queue = self.ctx.socket(zmq.PUSH)
+        self.web_queue.hwm = 10
+        self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.states = {}
@@ -76,7 +76,7 @@ class MrChase(PauseableTask):
     def close(self):
         self.fs.close()
         self.db.close()
-        self.index_queue.close()
+        self.web_queue.close()
         self.status_queue.close()
         super().close()
 
@@ -106,6 +106,9 @@ class MrChase(PauseableTask):
                         files,
                     ) = args
                     state = BuildState(
+                        # XXX Slave ID is always 0 ... what happens if two
+                        # simultaneous imports are attempted, particularly re
+                        # the file-expect mechanism?
                         0, package, version, abi_tag, status, duration,
                         output, files={
                             filename: FileState(filename, *filestate)
@@ -187,7 +190,7 @@ class MrChase(PauseableTask):
             # XXX We'll never reach this branch at the moment, but in future we
             # might well support failed builds (as another method of skipping
             # builds)
-            self.index_queue.send_pyobj(['PKG', state.package])
+            self.web_queue.send_pyobj(['PKGPROJ', state.package])
             return ['DONE']
 
     def do_sent(self, state):
@@ -195,7 +198,7 @@ class MrChase(PauseableTask):
         Handler for the importer's "SENT" message indicating that it's finished
         sending the requested file to :class:`FileJuggler`. The file is
         verified (as in :class:`SlaveDriver`) and, if this is successful, a
-        mesasge is sent to :class:`IndexScribe` to regenerate the package's
+        mesasge is sent to :class:`TheScribe` to regenerate the package's
         index.
 
         If further files remain to be transferred, another "SEND" message is
@@ -206,10 +209,10 @@ class MrChase(PauseableTask):
         filename is returned to the build slave.
         """
         if self.fs.verify(0, state.package):
-            self.index_queue.send_pyobj(['PKG', state.package])
             self.logger.info('verified transfer of %s', state.next_file)
             state.files[state.next_file].verified()
             if state.transfers_done:
+                self.web_queue.send_pyobj(['PKGBOTH', state.package])
                 return ['DONE']
             else:
                 self.fs.expect(0, state.files[state.next_file])
@@ -236,5 +239,5 @@ class MrChase(PauseableTask):
         for filename in self.db.get_version_files(package, version):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)
-        self.index_queue.send_pyobj(['PKG', package])
+        self.web_queue.send_pyobj(['PKGBOTH', package])
         return ['DONE']

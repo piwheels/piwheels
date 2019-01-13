@@ -49,10 +49,10 @@ def builds_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def index_queue(request, zmq_context, master_config):
+def web_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PULL)
     queue.hwm = 1
-    queue.bind(master_config.index_queue)
+    queue.bind(master_config.web_queue)
     yield queue
     queue.close()
 
@@ -67,7 +67,7 @@ def stats_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def task(request, zmq_context, builds_queue, index_queue, stats_queue,
+def task(request, zmq_context, builds_queue, web_queue, stats_queue,
          master_status_queue, master_config):
     SlaveState.status_queue = zmq_context.socket(zmq.PUSH)
     SlaveState.status_queue.hwm = 1
@@ -399,7 +399,7 @@ def test_slave_says_built_invalid(task, slave_queue, master_config):
 
 
 def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
-                                 index_queue, master_config):
+                                 web_queue, master_config):
     task.logger = mock.Mock()
     slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
                             'linux_armv7l', 'piwheels1'])
@@ -416,13 +416,13 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
     db_queue.send(['OK', 1])
     task.poll()
     assert task.logger.info.call_count == 2
-    assert index_queue.recv_pyobj() == ['PKG', 'foo']
+    assert web_queue.recv_pyobj() == ['PKGPROJ', 'foo']
     assert slave_queue.recv_pyobj() == ['DONE']
     db_queue.check()
 
 
 def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
-                                    builds_queue, index_queue, master_config,
+                                    builds_queue, web_queue, master_config,
                                     file_state, file_state_hacked):
     task.logger = mock.Mock()
     slave_queue.send_pyobj(['HELLO', 300, 'cp34', 'cp34m',
@@ -435,7 +435,7 @@ def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', 'foo', '0.1']
     slave_queue.send_pyobj([
-        'BUILT', True, 5, 'Woohoo!', {file_state.filename: file_state[1:8]}
+        'BUILT', True, 5, 'Woohoo!', {file_state.filename: file_state[1:9]}
     ])
     db_queue.expect([
         'LOGBUILD', BuildState(
@@ -484,7 +484,7 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:8]}
+        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
     ])
     db_queue.expect(['LOGBUILD', bs])
     db_queue.send(['OK', 1])
@@ -502,7 +502,7 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
 
 
 def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
-                                   builds_queue, index_queue, master_config,
+                                   builds_queue, web_queue, master_config,
                                    build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
@@ -517,7 +517,7 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     task.poll()
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
-        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:8]}
+        'BUILT', bs.status, bs.duration, bs.output, {fs1.filename: fs1[1:9]}
     ])
     db_queue.expect(['LOGBUILD', bs])
     db_queue.send(['OK', 1])
@@ -529,15 +529,15 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     fs_queue.expect(['VERIFY', 1, bs.package])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bs.package]
+    assert web_queue.recv_pyobj() == ['PKGBOTH', bs.package]
     assert slave_queue.recv_pyobj() == ['DONE']
     db_queue.check()
     fs_queue.check()
 
 
 def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
-                                        builds_queue, index_queue,
-                                        master_config, build_state_hacked):
+                                        builds_queue, web_queue, master_config,
+                                        build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
@@ -553,7 +553,7 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     assert slave_queue.recv_pyobj() == ['BUILD', bs.package, bs.version]
     slave_queue.send_pyobj([
         'BUILT', bs.status, bs.duration, bs.output, {
-            f.filename: f[1:8] for f in bs.files.values()
+            f.filename: f[1:9] for f in bs.files.values()
         }
     ])
     db_queue.expect(['LOGBUILD', bs])
@@ -568,7 +568,6 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     fs_queue.expect(['EXPECT', 1, fs1])
     fs_queue.send(['OK', None])
     task.poll()
-    assert index_queue.recv_pyobj() == ['PKG', bs.package]
     assert slave_queue.recv_pyobj() == ['SEND', fs1.filename]
     db_queue.check()
     fs_queue.check()

@@ -54,7 +54,7 @@ class TheOracle(Task):
     requests such as registering a new package, version, or build, and
     answering queries about the hashes of files. The primary clients of this
     class are :class:`~.slave_driver.SlaveDriver`,
-    :class:`~.index_scribe.IndexScribe`, and :class:`~.cloud_gazer.CloudGazer`.
+    :class:`~.the_scribe.TheScribe`, and :class:`~.cloud_gazer.CloudGazer`.
 
     Note that because database requests are notoriously variable in length the
     client RPC class (:class:`DbClient`) doesn't *directly* talk to
@@ -98,6 +98,8 @@ class TheOracle(Task):
                 'LOGBUILD': self.do_logbuild,
                 'DELBUILD': self.do_delbuild,
                 'PKGFILES': self.do_pkgfiles,
+                'PROJVERS': self.do_projvers,
+                'PROJFILES': self.do_projfiles,
                 'VERFILES': self.do_verfiles,
                 'GETSKIP': self.do_getskip,
                 'PKGEXISTS': self.do_pkgexists,
@@ -106,6 +108,7 @@ class TheOracle(Task):
                 'SETPYPI': self.do_setpypi,
                 'GETSTATS': self.do_getstats,
                 'GETDL': self.do_getdl,
+                'FILEDEPS': self.do_filedeps,
             }[msg]
             result = handler(*args)
         except Exception as exc:
@@ -165,7 +168,7 @@ class TheOracle(Task):
         Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
         register a new download.
         """
-        return self.db.log_download(download)
+        self.db.log_download(download)
 
     def do_logbuild(self, build):
         """
@@ -187,16 +190,28 @@ class TheOracle(Task):
         Handler for "PKGFILES" message, sent by :class:`DbClient` to request
         details of all wheels assocated with *package*.
         """
-        files = self.db.get_package_files(package)
-        return list(files)
+        return list(self.db.get_package_files(package))
+
+    def do_projvers(self, package):
+        """
+        Handler for "PROJVERS" message, sent by :class:`DbClient` to request
+        build and skip details of all versions of *package*.
+        """
+        return list(self.db.get_project_versions(package))
+
+    def do_projfiles(self, package):
+        """
+        Handler for "PROJFILES" message, sent by :class:`DbClient` to request
+        file details of all versions of *package*.
+        """
+        return list(self.db.get_project_files(package))
 
     def do_verfiles(self, package, version):
         """
         Handler for "VERFILES" message, sent by :class:`DbClient` to request
         the filenames of all wheels associated with *version* of *package*.
         """
-        files = self.db.get_version_files(package, version)
-        return set(files)
+        return set(self.db.get_version_files(package, version))
 
     def do_getskip(self, package, version):
         """
@@ -249,6 +264,14 @@ class TheOracle(Task):
         """
         return self.db.get_downloads_recent()
 
+    def do_filedeps(self, filename):
+        """
+        Handler for "FILEDEPS" message, sent by :class:`DbClient` to request
+        dependencies for *filename*, returned as a dict mapping tool names
+        to dependency sets.
+        """
+        return self.db.get_file_dependencies(filename)
+
 
 class DbClient:
     """
@@ -274,19 +297,6 @@ class DbClient:
             return result
         else:
             raise IOError(result)
-
-    def get_all_packages(self):
-        """
-        See :meth:`.db.Database.get_all_packages`.
-        """
-        return self._execute(['ALLPKGS'])
-
-    def get_all_package_versions(self):
-        """
-        See :meth:`.db.Database.get_all_package_versions`.
-        """
-        # Repackage [p, v] as (p, v)
-        return self._execute(['ALLVERS'])
 
     def add_new_package(self, package, skip=None):
         """
@@ -322,7 +332,7 @@ class DbClient:
         """
         See :meth:`.db.Database.log_download`.
         """
-        return self._execute(['LOGDOWNLOAD', download])
+        self._execute(['LOGDOWNLOAD', download])
 
     def log_build(self, build):
         """
@@ -330,30 +340,6 @@ class DbClient:
         """
         build_id = self._execute(['LOGBUILD', build])
         build.logged(build_id)
-
-    def delete_build(self, package, version):
-        """
-        See :meth:`.db.Database.delete_build`.
-        """
-        self._execute(['DELBUILD', package, version])
-
-    def get_package_files(self, package):
-        """
-        See :meth:`.db.Database.get_package_files`.
-        """
-        return self._execute(['PKGFILES', package])
-
-    def get_version_files(self, package, version):
-        """
-        See :meth:`.db.Database.get_version_files`.
-        """
-        return self._execute(['VERFILES', package, version])
-
-    def get_version_skip(self, package, version):
-        """
-        See :meth:`.db.Database.get_version_skip`.
-        """
-        return self._execute(['GETSKIP', package, version])
 
     def get_build_abis(self):
         """
@@ -373,6 +359,19 @@ class DbClient:
         """
         self._execute(['SETPYPI', serial])
 
+    def get_all_packages(self):
+        """
+        See :meth:`.db.Database.get_all_packages`.
+        """
+        return self._execute(['ALLPKGS'])
+
+    def get_all_package_versions(self):
+        """
+        See :meth:`.db.Database.get_all_package_versions`.
+        """
+        # Repackage [p, v] as (p, v)
+        return self._execute(['ALLVERS'])
+
     def get_statistics(self):
         """
         See :meth:`.db.Database.get_statistics`.
@@ -388,3 +387,45 @@ class DbClient:
         See :meth:`.db.Database.get_downloads_recent`.
         """
         return self._execute(['GETDL'])
+
+    def get_package_files(self, package):
+        """
+        See :meth:`.db.Database.get_package_files`.
+        """
+        return self._execute(['PKGFILES', package])
+
+    def get_project_versions(self, package):
+        """
+        See :meth:`.db.Database.get_project_versions`.
+        """
+        return self._execute(['PROJVERS', package])
+
+    def get_project_files(self, package):
+        """
+        See :meth:`.db.Database.get_project_files`.
+        """
+        return self._execute(['PROJFILES', package])
+
+    def get_version_files(self, package, version):
+        """
+        See :meth:`.db.Database.get_version_files`.
+        """
+        return self._execute(['VERFILES', package, version])
+
+    def get_version_skip(self, package, version):
+        """
+        See :meth:`.db.Database.get_version_skip`.
+        """
+        return self._execute(['GETSKIP', package, version])
+
+    def get_file_dependencies(self, filename):
+        """
+        See :meth:`.db.Database.get_file_dependencies`.
+        """
+        return self._execute(['FILEDEPS', filename])
+
+    def delete_build(self, package, version):
+        """
+        See :meth:`.db.Database.delete_build`.
+        """
+        self._execute(['DELBUILD', package, version])

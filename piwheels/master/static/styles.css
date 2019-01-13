@@ -1,8 +1,17 @@
-body {
+html {
+  height: 100%;
+  box-sizing: border-box;
   font-family: "Roboto", Arial, sans-serif;
 }
 
-header { margin-bottom: 2em; }
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+header {
+  margin-bottom: 2em;
+  background: #444;
+}
 header .logo {
   background: url('piwheels-logo.opt.svg') no-repeat;
   width: 75px;
@@ -25,13 +34,26 @@ header h1 {
 header div.top-bar, header div.top-bar ul { background: #444; }
 header .menu-text a { padding: 0; }
 
-footer .row {
+body {
+  position: relative;
+  margin: 0;
+  min-height: 100%;
+  padding-bottom: 160px;
+}
+
+footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 140px;
   background: #99999b;
-  margin-top: 2em;
+  border-top: 2px solid #77777a;
+}
+
+footer .row {
   padding-top: 1em;
   padding-right: 1em;
-  border-top: 2px solid #77777a;
-  min-height: 140px;
 }
 footer .row img {
   float: right;

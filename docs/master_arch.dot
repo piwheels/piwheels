@@ -1,106 +1,108 @@
 digraph piwheels {
     graph [nodesep=0.5, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc"];
-    node [shape=record, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
+    node [shape=rect, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
     edge [fontname=Sans, fontsize=8];
 
     PyPI [label="PyPI", shape=egg];
     Users [label="Users", shape=egg];
 
     subgraph cluster_db_server {
-        graph [label="db-server"];
+        graph [label="piw-master (db)"];
 
-        TheOracle1 [label="{<Seraph>REQ|<t>TheOracle}"];
-        TheOracle2 [label="{<Seraph>REQ|<t>TheOracle}"];
-        TheOracle3 [label="{<Seraph>REQ|<t>TheOracle}"];
-        TheArchitect [label="{<builds>PUSH|<t>TheArchitect}"];
-        Seraph [label="{<db>ROUTER|<t>Seraph|<oracle>ROUTER}"];
+        TheOracle1 [label="TheOracle"];
+        TheOracle2 [label="TheOracle"];
+        TheOracle3 [label="TheOracle"];
+        TheArchitect;
+        Seraph;
         db [label="piwheels\ndatabase", shape=folder];
 
-        Seraph:oracle->TheOracle1:Seraph [dir=both];
-        Seraph:oracle->TheOracle2:Seraph [dir=both];
-        Seraph:oracle->TheOracle3:Seraph [dir=both];
-        TheOracle1:t->db [dir=both];
-        TheOracle2:t->db [dir=both];
-        TheOracle3:t->db [dir=both];
-        TheArchitect:t->db [dir=back];
+        Seraph->TheOracle1 [dir=both];
+        Seraph->TheOracle2 [dir=both];
+        Seraph->TheOracle3 [dir=both];
+        TheOracle1->db [dir=both];
+        TheOracle2->db [dir=both];
+        TheOracle3->db [dir=both];
+        TheArchitect->db [dir=back];
     }
 
     subgraph cluster_file_server {
-        graph [label="file-server"];
+        graph [label="piw-master (fs)"];
 
-        IndexScribe [label="{<indexes>PULL|<t>IndexScribe|<db>REQ}"];
-        FileJuggler [label="{{<slaves>ROUTER|<fs>REP|<stats>PUSH}|<t>FileJuggler}"];
-        Lumberjack [label="{<logs>PULL|<t>Lumberjack|<db>REQ}"];
+        TheSecretary;
+        TheScribe;
+        FileJuggler;
+        Lumberjack;
         fs [label="www\nfilesystem", shape=folder];
         httpd;
 
-        IndexScribe:t->fs;
-        FileJuggler:t->fs [dir=both];
+        TheSecretary->TheScribe;
+        TheScribe->fs;
+        FileJuggler->fs [dir=both];
         fs->httpd;
-        httpd->Lumberjack:logs;
+        httpd->Lumberjack;
     }
 
     subgraph cluster_master {
-        graph [label="master"];
+        graph [label="piw-master (core)"];
 
-        CloudGazer [label="{<t>CloudGazer|{<indexes>PUSH|<db>REQ}}"];
-        main [label="{{<int_status>PULL}|main|{<control>PULL|<ext_status>PUB}}"];
-        MrChase [label="{<imports>ROUTER|<t>MrChase|{<fs>REQ|<indexes>PUSH|<int_status>PUSH|<db>REQ}}"];
-        SlaveDriver [label="{{<slaves>ROUTER}|<t>SlaveDriver|{<fs>REQ|<indexes>PUSH|<int_status>PUSH|<stats>PUSH|<db>REQ|<builds>PULL}}"];
-        BigBrother [label="{<stats>PULL|<t>BigBrother|{<indexes>PUSH|<int_status>PUSH|<db>REQ}}"];
+        CloudGazer;
+        main;
+        MrChase;
+        SlaveDriver;
+        BigBrother;
 
-        BigBrother:int_status->main:int_status;
-        SlaveDriver:int_status->main:int_status;
-        MrChase:int_status->main:int_status;
+        BigBrother->main;
+        SlaveDriver->main;
+        MrChase->main;
+        MrChase->TheSecretary;
     }
 
     subgraph cluster_monitor {
-        graph [label="monitor"];
-        monitor [label="{{<control>PUSH|<status>SUB}|<t>main}"];
+        graph [label="piw-monitor"];
+        monitor [label="main"];
     }
 
     subgraph cluster_slave1 {
-        graph [label="slave1"];
-        Slave1 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
+        graph [label="piw-slave"];
+        Slave1 [label="main"];
     }
 
     subgraph cluster_slave2 {
-        graph [label="slave2"];
-        Slave2 [label="{<t>main|{<files>DEALER|<builds>REQ}}"];
+        graph [label="piw-slave"];
+        Slave2 [label="main"];
     }
 
     subgraph cluster_import {
-        graph [label="import"];
-        Import [label="{<t>main|{<files>DEALER|<imports>REQ}}"];
+        graph [label="piw-import"];
+        Importer [label="main"];
     }
 
 
-    PyPI->CloudGazer:t;
-    PyPI->Slave1:t;
-    PyPI->Slave2:t;
-    Slave1:builds->SlaveDriver:slaves [dir=both];
-    Slave2:builds->SlaveDriver:slaves [dir=both];
-    Slave1:files->FileJuggler:slaves [dir=both];
-    Slave2:files->FileJuggler:slaves [dir=both];
-    Import:imports->MrChase:imports [dir=both];
-    Import:files->FileJuggler:slaves [dir=both];
-    main:ext_status->monitor:status;
-    monitor:control->main:control;
+    PyPI->CloudGazer;
+    PyPI->Slave1;
+    PyPI->Slave2;
+    Slave1->SlaveDriver [dir=both];
+    Slave2->SlaveDriver [dir=both];
+    Slave1->FileJuggler [dir=both];
+    Slave2->FileJuggler [dir=both];
+    Importer->MrChase [dir=both];
+    Importer->FileJuggler [dir=both];
+    main->monitor;
+    monitor->main;
 
-    CloudGazer:db->Seraph:db [dir=both];
-    CloudGazer:indexes->IndexScribe:indexes;
-    BigBrother:indexes->IndexScribe:indexes;
-    SlaveDriver:indexes->IndexScribe:indexes;
-    SlaveDriver:stats->BigBrother:stats;
-    FileJuggler:stats->BigBrother:stats;
-    MrChase:indexes->IndexScribe:indexes;
-    IndexScribe:db->Seraph:db [dir=both];
-    BigBrother:db->Seraph:db [dir=both];
-    SlaveDriver:fs->FileJuggler:fs [dir=both];
-    SlaveDriver:db->Seraph:db [dir=both];
-    TheArchitect:builds->SlaveDriver:builds;
-    MrChase:fs->FileJuggler:fs [dir=both];
-    MrChase:db->Seraph:db [dir=both];
-    Lumberjack:db->Seraph:db [dir=both];
+    CloudGazer->Seraph [dir=both];
+    CloudGazer->TheSecretary;
+    BigBrother->TheSecretary;
+    SlaveDriver->TheSecretary;
+    SlaveDriver->BigBrother;
+    FileJuggler->BigBrother;
+    TheScribe->Seraph [dir=both];
+    BigBrother->Seraph [dir=both];
+    SlaveDriver->FileJuggler [dir=both];
+    SlaveDriver->Seraph [dir=both];
+    TheArchitect->SlaveDriver;
+    MrChase->FileJuggler [dir=both];
+    MrChase->Seraph [dir=both];
+    Lumberjack->Seraph [dir=both];
     httpd->Users;
 }

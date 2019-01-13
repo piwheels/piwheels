@@ -29,6 +29,7 @@
 
 from unittest import mock
 from datetime import datetime, timedelta
+from operator import itemgetter
 
 import pytest
 
@@ -118,13 +119,11 @@ def test_test_package_version(db_intf, db, with_package):
 def test_log_download(db_intf, db, with_files, download_state):
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (0,)
-    assert db_intf.log_download(download_state)
+    db_intf.log_download(download_state)
     assert db.execute(
         "SELECT COUNT(*) FROM downloads").first() == (1,)
     assert db.execute(
         "SELECT filename FROM downloads").first() == (download_state.filename,)
-    assert not db_intf.log_download(download_state._replace(
-        filename=download_state.filename.replace('foo', 'bar')))
 
 
 def test_log_build(db_intf, db, with_package_version, build_state):
@@ -281,6 +280,25 @@ def test_get_version_files(db_intf, with_files):
 
 def test_get_version_skip(db_intf, with_package_version):
     assert db_intf.get_version_skip('foo', '0.1') is None
+
+
+def test_get_project_versions(db_intf, with_files):
+    assert list(db_intf.get_project_versions('foo')) == [
+        ('0.1', False, 1, 0),
+    ]
+
+
+def test_get_project_files(db_intf, with_files, build_state_hacked):
+    assert sorted(db_intf.get_project_files('foo'), key=itemgetter(2)) == sorted([
+        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash)
+        for f in build_state_hacked.files.values()
+    ], key=itemgetter(2))
+
+
+def test_get_file_dependencies(db_intf, with_files):
+    assert db_intf.get_file_dependencies('foo-0.1-cp34-cp34m-linux_armv7l.whl') == {
+        'apt': {'libc6'},
+    }
 
 
 def test_delete_build(db_intf, db, with_files, build_state_hacked):
