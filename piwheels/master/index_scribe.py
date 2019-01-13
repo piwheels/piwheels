@@ -154,7 +154,7 @@ class IndexScribe(PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(str(self.output_path / filename)) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt'}
+        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](
