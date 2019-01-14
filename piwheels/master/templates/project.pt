@@ -1,6 +1,17 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">${package}</div>
   <div metal:fill-slot="content">
+    <script>
+    function showHiddenRows(className) {
+      var rows = document.getElementsByClassName(className);
+      while (rows.length > 0) {
+        var row = rows[0];
+        row.classList.remove(className);
+      }
+      var showMore = document.getElementById('show-' + className + 's');
+      showMore.classList.add('hidden-version');
+    }
+    </script>
     <div class="row">
       <div class="small-12 medium-6 columns">
         <h2>${package}</h2>
@@ -8,7 +19,26 @@
 
       <div class="small-12 medium-6 columns">
         <table class="stats">
-          <tr><th>PyPI</th><td><a href="https://pypi.org/project/${package}">pypi.org/project/${package}</a></td></tr>
+          <tr>
+            <th>PyPI page</th>
+            <td><a href="https://pypi.org/project/${package}">pypi.org/project/${package}</a></td>
+          </tr>
+          <tr>
+            <th>Versions</th>
+            <td>${len(versions)}</td>
+          </tr>
+          <tr>
+            <th>Files</th>
+            <td>${len(files)}</td>
+          </tr>
+          <tr>
+            <th>Downloads (all time)</th>
+            <td>XXX,XXX</td>
+          </tr>
+          <tr>
+            <th>Downloads (last 30 days)</th>
+            <td>XXX,XXX</td>
+          </tr>
         </table>
       </div>
     </div>
@@ -24,15 +54,18 @@ sudo pip3 install ${package}</pre>
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Versions (${len(versions)})</h3>
-        <table tal:condition="versions">
+        <h3>Versions</h3>
+        <table id="versions" tal:condition="versions">
           <tr><th>Version</th><th>Successful builds</th><th>Failed builds</th><th>Skip</th></tr>
-          <tr tal:repeat="row versions">
-            <td>${row.version}</td>
-            <td>${row.builds_succeeded}</td>
-            <td>${row.builds_failed}</td>
-            <td>${"✖" if row.skipped else ""}</td>
-          </tr>
+          <span tal:repeat="row versions" tal:omit-tag="True">
+            <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
+              <td>${row.version}</td>
+              <td>${row.builds_succeeded}</td>
+              <td>${row.builds_failed}</td>
+              <td>${row.skipped}</td>
+            </tr>
+          </span>
+          <tr tal:condition="len(versions) > 5" id="show-hidden-versions" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-version')">Show more versions</a></td></tr>
         </table>
         <table tal:condition="not:versions" class="empty">
           <tr><th>No versions</th></tr>
@@ -42,14 +75,17 @@ sudo pip3 install ${package}</pre>
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Files (${len(files)})</h3>
+        <h3>Files</h3>
         <table tal:condition="files">
           <tr><th>Filename</th><th>ABI</th><th>Size</th></tr>
-          <tr tal:repeat="row files">
-            <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
-            <td>${row.abi_tag}</td>
-            <td>${format_size(row.filesize)}</td>
-          </tr>
+          <span tal:repeat="row files" tal:omit-tag="True">
+            <tr class="${'hidden-file' if repeat.row.number > 5 else ''}">
+              <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
+              <td>${row.abi_tag}</td>
+              <td>${format_size(row.filesize)}</td>
+            </tr>
+          </span>
+          <tr tal:condition="len(files) > 5" id="show-hidden-files" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-file')">Show more files</a></td></tr>
         </table>
         <table tal:condition="not:files" class="empty">
           <tr><th>No files</th></tr>
