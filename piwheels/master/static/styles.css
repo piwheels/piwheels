@@ -75,9 +75,14 @@ table.stats {
   border: 2px solid #15bcac;
   padding: 0.5em;
 }
+
 table.stats tbody, table.stats tbody tr { background: transparent; }
+table.stats tbody th, table.stats tbody td { padding: 0; }
 table th, table td { text-align: left; padding: 0.25em; }
 table.empty th { text-align: center; }
+table tr.hidden-version, table tr.hidden-file { display: none; }
+table tbody tr#show-hidden-versions,
+table tbody tr#show-hidden-files { background-color: transparent; }
 
 pre {
   background: #ffdead;

@@ -17,6 +17,7 @@
         <table class="stats">
           <tr><th>Packages</th><td>${packages_built}</td></tr>
           <tr><th>Wheels</th><td>${files_count}</td></tr>
+          <tr><th>Downloads (all time)</th><td>XXX,XXX</td></tr>
           <tr><th>Downloads (last 30 days)</th><td>${downloads_last_month}</td></tr>
         </table>
       </div>
@@ -39,7 +40,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         should now search piwheels for built distributions of packages and use
         them in preference to building from source. You can test this out by
         creating a virtual environment and attempting to install <a
-        href="https://www.scipy.org/">scipy</a> which usually involves a fairly
+        href="/project/scipy/">scipy</a> which usually involves a fairly
         lengthy compilation:</p>
 
         <pre>$ sudo apt install virtualenv python3-virtualenv -y
