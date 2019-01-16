@@ -207,7 +207,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
         ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         123456, '123456123456'),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
     task.once()
     task.poll()
@@ -265,7 +265,7 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
         ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         123456, '123456abcdef'),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
     task.once()
     task.poll()
