@@ -109,9 +109,9 @@ def test_oracle_badly_formed_request(mock_seraph, task):
 
 def test_database_error(db, with_schema, db_client):
     with db.begin():
-        db.execute("REVOKE INSERT ON packages FROM %s" % PIWHEELS_USER)
+        db.execute("REVOKE SELECT ON statistics FROM %s" % PIWHEELS_USER)
     with pytest.raises(IOError):
-        db_client.add_new_package('foo', '')
+        db_client.get_statistics()
 
 
 def test_get_all_packages(db, with_package, db_client):
