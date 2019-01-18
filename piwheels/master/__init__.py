@@ -95,6 +95,10 @@ write access to the output directory.
             "piw-initdb and the user should *not* be a PostgreSQL superuser "
             "(default: %(default)s)")
         parser.add_argument(
+            '--dev-mode', action='store_true',
+            help="Run the master in development mode, which reduces some "
+            "timeouts and tweaks some defaults")
+        parser.add_argument(
             '--pypi-xmlrpc', metavar='URL', default=const.PYPI_XMLRPC,
             help="The URL of the PyPI XML-RPC service (default: %(default)s)")
         parser.add_argument(

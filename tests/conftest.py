@@ -283,6 +283,7 @@ def with_downloads(request, db, with_files, download_state):
 @pytest.fixture(scope='function')
 def master_config(request, tmpdir):
     config = mock.Mock()
+    config.dev_mode = False
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.pypi_simple = 'https://pypi.org/simple'
     config.dsn = 'postgres://{username}:{password}@/{db}'.format(

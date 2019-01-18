@@ -65,6 +65,10 @@ class TheSecretary(PauseableTask):
         super().__init__(config)
         self.buffer = deque()
         self.commands = {}
+        if config.dev_mode:
+            self.timeout = timedelta(seconds=3)
+        else:
+            self.timeout = timedelta(minutes=1)
         web_queue = self.ctx.socket(
             zmq.PULL, protocol=protocols.the_scribe)
         web_queue.hwm = 100
@@ -83,7 +87,7 @@ class TheSecretary(PauseableTask):
         now = datetime.now(tz=UTC)
         while self.buffer:
             first = self.buffer[0]
-            if now - first.timestamp > timedelta(minutes=1):
+            if now - first.timestamp > self.timeout:
                 self.buffer.popleft()
                 message = self.commands.pop(first.package)
                 self.output.send_msg(message, first.package)

@@ -59,6 +59,10 @@ class CloudGazer(PauseableTask):
         self.web_queue.connect(config.web_queue)
         self.serial = -1
         self.packages = None
+        if config.dev_mode:
+            self.skip_default = 'development mode'
+        else:
+            self.skip_default = ''
 
     def close(self):
         self.web_queue.close()
@@ -75,7 +79,7 @@ class CloudGazer(PauseableTask):
         for package, version, timestamp, source in self.pypi:
             if package not in self.packages:
                 self.packages.add(package)
-                if self.db.add_new_package(package):
+                if self.db.add_new_package(package, skip=self.skip_default):
                     self.logger.info('added package %s', package)
                     self.web_queue.send_msg('PKGBOTH', package)
             if version is not None:
