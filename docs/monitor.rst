@@ -14,10 +14,10 @@ build) or terminate the master itself.
 Synopsis
 ========
 
-::
+.. code-block:: text
 
-    usage: piw-monitor [-h] [--version] [-c FILE] [--status-queue ADDR]
-                       [--control-queue ADDR]
+    piw-monitor [-h] [--version] [-c FILE] [--status-queue ADDR]
+                [--control-queue ADDR]
 
 
 Description
@@ -27,11 +27,11 @@ Description
 
 .. option:: -h, --help
 
-    show this help message and exit
+    Show this help message and exit
 
 .. option:: --version
 
-    show program's version number and exit
+    Show program's version number and exit
 
 .. option:: -c FILE, --configuration FILE
 
@@ -52,9 +52,9 @@ Usage
 =====
 
 The monitor application should be started on the same machine as the master
-after the :program:`piw-master` script has been started. After initialization
-it will request the current status of all build slaves from the master,
-displaying this in a list in the middle of the screen.
+after the :doc:`master` script has been started. After initialization it will
+request the current status of all build slaves from the master, displaying this
+in a list in the middle of the screen.
 
 The :kbd:`Tab` key can be used to navigate between the list of build slaves and
 the controls at the bottom of the screen. Mouse control is also supported,

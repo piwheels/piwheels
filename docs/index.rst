@@ -21,7 +21,7 @@ Table of Contents
 =================
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
     :numbered:
 
     overview
@@ -32,6 +32,8 @@ Table of Contents
     initdb
     importer
     remove
+    logger
+    development
     modules
     license
 

@@ -22,11 +22,11 @@ this point depends on several factors:
 Synopsis
 ========
 
-::
+.. code-block:: text
 
-    usage: piw-remove [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-y] [-s]
-                      [--import-queue ADDR]
-                      package version
+    piw-remove [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-y]
+               [-s REASON] [--import-queue ADDR]
+               package version
 
 
 Description
@@ -36,92 +36,48 @@ Description
 
 .. option:: package
 
-    the name of the package to remove
+    The name of the package to remove
 
 .. option:: version
 
-    the version of the package to remove
+    The version of the package to remove
 
 .. option:: -h, --help
 
-    show this help message and exit
+    Show this help message and exit
 
 .. option:: --version
 
-    show program's version number and exit
+    Show program's version number and exit
 
 .. option:: -c FILE, --configuration FILE
 
-    specify a configuration file to load
+    Specify a configuration file to load
 
 .. option:: -q, --quiet
 
-    produce less console output
+    Produce less console output
 
 .. option:: -v, --verbose
 
-    produce more console output
+    Produce more console output
 
 .. option:: -l FILE, --log-file FILE
 
-    log messages to the specified file
+    Log messages to the specified file
 
 .. option:: -y, --yes
 
-    run non-interactively; never prompt during operation
+    Run non-interactively; never prompt during operation
 
-.. option:: -s, --skip
+.. option:: -s REASON, --skip REASON
 
-    mark the version to prevent future build attempts
+    Mark the version with a reason to prevent future build attempts
 
 .. option:: --import-queue ADDR
 
-    the address of the queue used by piw-remove (default:
+    The address of the queue used by piw-remove (default:
     (ipc:///tmp/piw-import); this should always be an ipc address
-
-
-Protocols
-=========
-
-The following section documents the protocol used between the importer and
-the tasks that it talks to in the :doc:`master`. Each protocol operates over
-a separate queue. All protocols in the piwheels system follow a similar
-structure:
-
-1. Each message is a list of Python objects.
-
-2. The first element in the list is a string indicating the type of message.
-
-3. Additional elements depend on the type of the message.
-
-4. A given message type always contains the same number of elements (there are
-   no variable length messages).
-
-
-Mr Chase
---------
-
-The queue that talks to :ref:`mr-chase` is a ZeroMQ REQ socket, hence the
-protocol follows a strict request-reply sequence which is illustrated below
-(see :doc:`importer` for documentation of the ``IMPORT`` path):
-
-.. image:: import_protocol.*
-    :align: center
-
-
-1. The utility sends ``["REMOVE", package, version, skip]``:
-
-   * *package* is the name of the package to remove.
-
-   * *version* is the version of the package to remove.
-
-   * *skip* is ``True`` if the version should never be built again, and
-     ``False`` otherwise.
-
-2. If the removal fails (e.g. if the package or version does not exist), the
-   master will send ``["ERROR", args, ...]``.
-
-3. If the removal is successful, the master replies with ``["DONE"]``.
 
 
 Usage

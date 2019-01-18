@@ -14,10 +14,10 @@ itself.
 Synopsis
 ========
 
-::
+.. code-block:: text
 
-    usage: piw-sense [-h] [--version] [-c FILE] [--status-queue ADDR]
-                       [--control-queue ADDR] [-r DEGREES]
+    piw-sense [-h] [--version] [-c FILE] [--status-queue ADDR]
+                   [--control-queue ADDR] [-r DEGREES]
 
 
 Description
@@ -27,11 +27,11 @@ Description
 
 .. option:: -h, --help
 
-    show this help message and exit
+    Show this help message and exit
 
 .. option:: --version
 
-    show program's version number and exit
+    Show program's version number and exit
 
 .. option:: -c FILE, --configuration FILE
 
@@ -57,8 +57,9 @@ Usage
 =====
 
 The Sense monitor can be started on the same machine as the master after the
-:program:`piw-master` script has been started.  After initialization it will
-request the current status of all build slaves from the master.
+:doc:`master` script has been started.  After initialization it will request
+the current status of all build slaves from the master.
+
 
 Layout
 ------
@@ -82,7 +83,7 @@ statistics:
 
 The remaining rows represent all build slaves. Each pixel represents a single
 build slave, working vertically then horizontally. Build slaves are sorted
-first by ABI, then by label (as in :program:`piw-monitor`).
+first by ABI, then by label (as in :doc:`monitor`).
 
 * A gray pixel indicates an idle build slave.
 
@@ -97,6 +98,7 @@ first by ABI, then by label (as in :program:`piw-monitor`).
 
 * A red pixel indicates a build slave that's either timed out or been
   terminated; it should disappear from the display within a few seconds.
+
 
 Navigation
 ----------
@@ -115,7 +117,7 @@ Scroll the cursor off the top of the display to go to detailed statistics
 information. Scroll left and right to navigate through the available statistics
 (ping time, disk free, queue size, build rate, total build time, and total
 build size). Most statistics are displayed as scrolling text, and a background
-fill representing the information graphically. Scrolling down to return to the
+fill representing the information graphically. Scroll down to return to the
 main screen.
 
 Scroll the cursor off the bottom of the display to go to the quit and terminate

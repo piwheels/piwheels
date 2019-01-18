@@ -95,6 +95,10 @@ write access to the output directory.
             "piw-initdb and the user should *not* be a PostgreSQL superuser "
             "(default: %(default)s)")
         parser.add_argument(
+            '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
+            help="The path under which the website should be written; must be "
+            "writable by the current user")
+        parser.add_argument(
             '--dev-mode', action='store_true',
             help="Run the master in development mode, which reduces some "
             "timeouts and tweaks some defaults")
@@ -105,37 +109,21 @@ write access to the output directory.
             '--pypi-simple', metavar='URL', default=const.PYPI_SIMPLE,
             help="The URL of the PyPI simple API (default: %(default)s)")
         parser.add_argument(
-            '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
-            help="The path under which the website should be written; must be "
-            "writable by the current user")
-        parser.add_argument(
-            '--web-queue', metavar='ADDR', default=const.WEB_QUEUE,
-            help="The address of the queue used to request web page updates "
-            "(default: %(default)s)")
-        parser.add_argument(
             '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
             help="The address of the queue used to report status to monitors "
-            "(default: %(default)s)")
+            "(default: %(default)s); this is usually an ipc address")
         parser.add_argument(
             '--control-queue', metavar='ADDR', default=const.CONTROL_QUEUE,
             help="The address of the queue a monitor can use to control the "
-            "master (default: %(default)s)")
+            "master (default: %(default)s); this is usually an ipc address")
         parser.add_argument(
-            '--builds-queue', metavar='ADDR', default=const.BUILDS_QUEUE,
-            help="The address of the queue used to store pending builds "
-            "(default: %(default)s)")
+            '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
+            help="The address of the queue used by piw-import (default: "
+            "(%(default)s); this should always be an ipc address")
         parser.add_argument(
-            '--stats-queue', metavar='ADDR', default=const.STATS_QUEUE,
-            help="The address of the queue used to send statistics to the "
-            "collator task (default: %(default)s)")
-        parser.add_argument(
-            '--db-queue', metavar='ADDR', default=const.DB_QUEUE,
-            help="The address of the queue used to talk to the database "
-            "server (default: %(default)s)")
-        parser.add_argument(
-            '--fs-queue', metavar='ADDR', default=const.FS_QUEUE,
-            help="The address of the queue used to talk to the file-system "
-            "server (default: %(default)s)")
+            '--log-queue', metavar='ADDR', default=const.LOG_QUEUE,
+            help="The address of the queue used by piw-logger (default: "
+            "(%(default)s); this should always be an ipc address")
         parser.add_argument(
             '--slave-queue', metavar='ADDR', default=const.SLAVE_QUEUE,
             help="The address of the queue used to talk to the build slaves "
@@ -145,13 +133,25 @@ write access to the output directory.
             help="The address of the queue used to transfer files from slaves "
             "(default: %(default)s); this is usually a tcp address")
         parser.add_argument(
-            '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
-            help="The address of the queue used by piw-import (default: "
-            "(%(default)s); this should always be an ipc address")
+            '--web-queue', metavar='ADDR', default=const.WEB_QUEUE,
+            help="The address of the queue used to request web page updates "
+            "(default: %(default)s)")
         parser.add_argument(
-            '--log-queue', metavar='ADDR', default=const.LOG_QUEUE,
-            help="The address of the queue used by piw-log (default: "
-            "(%(default)s)")
+            '--builds-queue', metavar='ADDR', default=const.BUILDS_QUEUE,
+            help="The address of the queue used to store pending builds "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--db-queue', metavar='ADDR', default=const.DB_QUEUE,
+            help="The address of the queue used to talk to the database "
+            "server (default: %(default)s)")
+        parser.add_argument(
+            '--fs-queue', metavar='ADDR', default=const.FS_QUEUE,
+            help="The address of the queue used to talk to the file-system "
+            "server (default: %(default)s)")
+        parser.add_argument(
+            '--stats-queue', metavar='ADDR', default=const.STATS_QUEUE,
+            help="The address of the queue used to send statistics to the "
+            "collator task (default: %(default)s)")
         return parser
 
     def __call__(self, args=None):

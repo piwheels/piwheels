@@ -35,6 +35,9 @@ following components:
 | :doc:`remove`   | A tool for manually removing builds from the      |
 |                 | database and file-system.                         |
 +-----------------+---------------------------------------------------+
+| :doc:`logger`   | A tool for transferring download statistics into  |
+|                 | the piwheels database.                            |
++-----------------+---------------------------------------------------+
 | database server | Currently only `PostgreSQL`_ is supported (and    |
 |                 | frankly that's all we're ever likely to support). |
 |                 | This provides the master's data store.            |
@@ -51,86 +54,5 @@ following components:
     exclusively with the file-system served by the web server, and one that
     talks to the piwheels slave and monitor processes.
 
-
-Deployment
-==========
-
-A typical deployment of the master service on a Raspbian server goes something
-like this (all chunks assume you start as root):
-
-1. Install the pre-requisite software:
-
-   .. code-block:: console
-
-       # apt install postgresql-9.6 apache2 python3-psycopg2 python3-geoip
-       # apt install python3-sqlalchemy python3-urwid python3-zmq
-       # pip install piwheels[monitor,master,log]
-
-2. Set up the (unprivileged) piwheels user and the output directory:
-
-   .. code-block:: console
-
-       # groupadd piwheels
-       # useradd -g piwheels -m piwheels
-       # mkdir /var/www/piwheels
-       # chown piwheels:piwheels /var/www/piwheels
-
-3. Set up the database:
-
-   .. code-block:: console
-
-       # su - postgres
-       $ createuser piwheels
-       $ createdb -O postgres piwheels
-       $ piw-initdb
-
-4. Set up the web server:
-
-   * Point the document root to the output path (:file:`/var/www/piwheels`
-     above, but it can be anywhere your piwheels user has write access to;
-     naturally you want to make sure your web-server's user only has *read*
-     access to the location).
-   * Set up SSL for the web server (e.g. with `Let's Encrypt`_; the
-     `dehydrated`_ utility is handy for getting and maintaining the SSL
-     certificates).
-
-5. Start the master running (it'll take quite a while to populate the list of
-   packages and versions from PyPI on the initial run so get this going before
-   you start bringing up build slaves):
-
-   .. code-block:: console
-
-       # su - piwheels
-       $ piw-master -v
-
-6. Deploy some build slaves *on separate machines*:
-
-   .. code-block:: console
-
-       # wget https://raw.githubusercontent.com/bennuttall/piwheels/master/deploy_slave.sh
-       # chmod +x deploy_slave.sh
-       # ./deploy_slave.sh
-
-7. Start the build slave running (assuming your master's IP address is
-   10.0.0.1):
-
-   .. code-block:: console
-
-       # su - piwheels
-       $ piw-slave -v -m 10.0.0.1
-
-
-Upgrades
-========
-
-The master will check that build slaves have the same version number and will
-reject them if they do not. Furthermore, it will check the version number in
-the database's *configuration* table matches its own and fail if it does not.
-Re-run the :program:`piw-initdb` script as the postgres super-user to upgrade
-the database between versions (downgrades are not supported, so take a backup
-first!).
-
 .. _PostgreSQL: https://postgresql.org/
 .. _Apache: https://httpd.apache.org/
-.. _Let's Encrypt: https://letsencrypt.org/
-.. _dehydrated: https://github.com/lukas2511/dehydrated

@@ -94,13 +94,13 @@ def configure_parser(description, log_params=True):
         parser.set_defaults(log_level=logging.WARNING)
         parser.add_argument(
             '-q', '--quiet', dest='log_level', action='store_const',
-            const=logging.ERROR, help='produce less console output')
+            const=logging.ERROR, help='Produce less console output')
         parser.add_argument(
             '-v', '--verbose', dest='log_level', action='store_const',
-            const=logging.INFO, help='produce more console output')
+            const=logging.INFO, help='Produce more console output')
         arg = parser.add_argument(
             '-l', '--log-file', metavar='FILE',
-            help='log messages to the specified file')
+            help='Log messages to the specified file')
         if argcomplete is not None:
             arg.completer = argcomplete.FilesCompleter(['*.log', '*.txt'])
     return parser

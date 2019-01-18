@@ -97,7 +97,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         parser.add_argument(
             '-t', '--timeout', env_var='PIW_TIMEOUT', metavar='DURATION',
             default='3h', type=duration,
-            help="The time to wait before assuming a build has failed; "
+            help="The time to wait before assuming a build has failed "
             "(default: %(default)s)")
         self.config = parser.parse_args(args)
         terminal.configure_logging(self.config.log_level,

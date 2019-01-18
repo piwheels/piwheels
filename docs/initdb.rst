@@ -3,7 +3,7 @@ piw-initdb
 ==========
 
 The piw-initdb script is used to initialize or upgrade the piwheels master
-database. The target PostgreSQL database must already exist, and the DSN
+database. The target `PostgreSQL`_ database must already exist, and the DSN
 should connect as a cluster superuser (e.g. the postgres user), in contrast to
 the piw-master script which should *not* use the cluster superuser. The script
 will prompt before making any permanent alterations, and all actions will be
@@ -16,8 +16,8 @@ Synopsis
 
 ::
 
-    usage: piw-initdb [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-d DSN]
-                      [-u NAME] [-y]
+    piw-initdb [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-d DSN]
+               [-u NAME] [-y]
 
 
 Description
@@ -56,7 +56,8 @@ Description
 
 .. option:: -u NAME, --user NAME
 
-    The name of the ordinary piwheels database user (default: piwheels)
+    The name of the ordinary piwheels database user (default: piwheels); this
+    must *not* be a cluster superuser
 
 .. option:: -y, --yes
 
@@ -78,3 +79,5 @@ upgrades are performed in a single transaction so that, theoretically, if
 anything goes wrong the database should be rolled back to its original state.
 However, it is still strongly recommended that you back up your master database
 before proceeding with any upgrade.
+
+.. _PostgreSQL: https://postgresql.org/

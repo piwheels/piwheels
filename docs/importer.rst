@@ -9,13 +9,13 @@ the piw-master script.
 Synopsis
 ========
 
-::
+.. code-block:: text
 
-    usage: piw-import [-h] [--version] [-c FILE] [-q] [-v] [-l FILE]
-                      [--package PACKAGE] [--package-version VERSION] [--abi ABI]
-                      [--duration DURATION] [--output FILE] [-y] [-d]
-                      [--import-queue ADDR]
-                      files [files ...]
+    piw-import [-h] [--version] [-c FILE] [-q] [-v] [-l FILE]
+               [--package PACKAGE] [--package-version VERSION] [--abi ABI]
+               [--duration DURATION] [--output FILE] [-y] [-d]
+               [--import-queue ADDR]
+               files [files ...]
 
 
 Description
@@ -25,152 +25,65 @@ Description
 
 .. option:: -h, --help
 
-    show this help message and exit
+    Show this help message and exit
 
 .. option:: --version
 
-    show program's version number and exit
+    Show program's version number and exit
 
 .. option:: -c FILE, --configuration FILE
 
-    specify a configuration file to load
+    Specify a configuration file to load
 
 .. option:: -q, --quiet
 
-    produce less console output
+    Produce less console output
 
 .. option:: -v, --verbose
 
-    produce more console output
+    Produce more console output
 
 .. option:: -l FILE, --log-file FILE
 
-    log messages to the specified file
+    Log messages to the specified file
 
 .. option:: --package PACKAGE
 
-    the name of the package to import; if omitted this will be derived from the
+    The name of the package to import; if omitted this will be derived from the
     file(s) specified
 
 .. option:: --package-version VERSION
 
-    the version of the package to import; if omitted this will be derived from
+    The version of the package to import; if omitted this will be derived from
     the file(s) specified
 
 .. option:: --abi ABI
 
-    the ABI of the package to import; if omitted this will be derived from the
+    The ABI of the package to import; if omitted this will be derived from the
     file(s) specified
 
 .. option:: --duration DURATION
 
-    the time taken to build the package (default: 0s)
+    The time taken to build the package (default: 0s)
 
 .. option:: --output FILE
 
-    the filename containing the build output to insert into the database; if
+    The filename containing the build output to insert into the database; if
     this is omitted an appropriate message will be inserted instead
 
 .. option:: -y, --yes
 
-    run non-interactively; never prompt during operation
+    Run non-interactively; never prompt during operation
 
 .. option:: -d, --delete
 
-    remove the specified file(s) after a successful import; if the import
+    Remove the specified file(s) after a successful import; if the import
     fails, no files will be removed
 
 .. option:: --import-queue ADDR
 
-    the address of the queue used by :program:`piw-import` (default:
+    The address of the queue used by :program:`piw-import` (default:
     (ipc:///tmp/piw-import); this should always be an ipc address
-
-
-Protocols
-=========
-
-The following section documents the protocol used between the importer and
-the tasks that it talks to in the :doc:`master`. Each protocol operates over
-a separate queue. All protocols in the piwheels system follow a similar
-structure:
-
-1. Each message is a list of Python objects.
-
-2. The first element in the list is a string indicating the type of message.
-
-3. Additional elements depend on the type of the message.
-
-4. A given message type always contains the same number of elements (there are
-   no variable length messages).
-
-
-Mr Chase
---------
-
-The queue that talks to :ref:`mr-chase` is a ZeroMQ REQ socket, hence the
-protocol follows a strict request-reply sequence which is illustrated below
-(see :doc:`remove` for documentation of the ``REMOVE`` path):
-
-.. image:: import_protocol.*
-    :align: center
-
-
-1. The importer sends ``["IMPORT", abi_tag, package, version, status, duration,
-   output, files]``:
-
-   * *abi_tag* is either ``None``, indicating that the master should use the
-     "default" (minimum) build ABI registered in the system, or is a string
-     indicating the ABI that the build was attempted for.
-
-   * *package* is the name of the package that the build is for.
-
-   * *version* is the version of the package that the build is for.
-
-   * *status* is ``True`` if the build succeeded and ``False`` otherwise.
-
-   * *duration* is a :class:`float` value indicating the length of time it took
-     to build in seconds.
-
-   * *output* is a string containing the complete build log.
-
-   * *files* is a list of file state tuples containing the following fields
-     in the specified order:
-
-     - *filename* is the filename of the wheel.
-
-     - *filesize* is the size in bytes of the wheel.
-
-     - *filehash* is the SHA256 hash of the wheel contents.
-
-     - *package_tag* is the package tag extracted from the filename.
-
-     - *package_version_tag* is the version tag extracted from the filename.
-
-     - *py_version_tag* is the python version tag extracted from the
-       filename.
-
-     - *abi_tag* is the ABI tag extracted from the filename (sanitized).
-
-     - *platform_tag* is the platform tag extracted from the filename.
-
-2. If the import information is insufficient or incorrect, the master will
-   send ``["ERROR", args, ...]`` where args and any further fields are the
-   arguments of the exception that was raised.
-
-3. If the import information is okay, the master will send ``["SEND",
-   filename]`` for each file mentioned in the build.
-
-4. At this point the importer should use the :ref:`file-juggler-protocol`
-   protocol to transmit the contents of the specified file to the master. When
-   the file transfer is complete, the importer sends ``["SENT"]`` to the
-   master.
-
-5. If the file transfer fails to verify, or if there are more files to send the
-   master will repeat the "SEND" message. Otherwise, if all transfers have
-   completed and have been verified, the master replies with ``["DONE"]``.
-
-6. The importer is now free to remove all files associated with the build, if
-   requested to.
 
 
 Usage

@@ -80,7 +80,7 @@ __extra_requires__ = {
     'monitor': ['urwid'],
     'master':  ['sqlalchemy', 'psycopg2-binary', 'chameleon'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
-    'log':     ['lars'],
+    'logger':  ['lars'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
     'sense':   ['pisense'],

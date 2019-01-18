@@ -44,7 +44,7 @@ from .states import DownloadState
 class Lumberjack(PauseableTask):
     """
     This task handles incoming log entries from the httpd server, and updates
-    the database with them. The external :program:`piw-log` script handles
+    the database with them. The external :program:`piw-logger` script handles
     parsing the raw log entries into the format expected by this task, so this
     is an extremely basic class.
     """
@@ -65,7 +65,7 @@ class Lumberjack(PauseableTask):
         """
         Handle requests from :program:`piw-logger` instances.
 
-        See the :doc:`logger` chapter for an overview of the protocol for
+        See the :doc:`development` chapter for an overview of the protocol for
         messages between the logger and the :class:`Lumberjack`.
         """
         try:

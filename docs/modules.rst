@@ -13,6 +13,18 @@ piwheels.master
 .. automodule:: piwheels.master
 
 
+piwheels.transport
+==================
+
+.. automodule:: piwheels.transport
+
+
+piwheels.protocols
+==================
+
+.. automodule:: piwheels.protocols
+
+
 piwheels.master.tasks
 =====================
 
@@ -86,13 +98,13 @@ piwheels.master.big_brother
 
 
 piwheels.master.the_secretary
-============================
+=============================
 
 .. automodule:: piwheels.master.the_secretary
 
 
 piwheels.master.the_scribe
-============================
+==========================
 
 .. automodule:: piwheels.master.the_scribe
 

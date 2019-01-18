@@ -116,7 +116,7 @@ develop: tags
 	@# These have to be done separately to avoid a cockup...
 	$(PIP) install -U setuptools
 	$(PIP) install -U pip
-	$(PIP) install -e .[doc,test,master,slave,monitor,log]
+	$(PIP) install -e .[doc,test,master,slave,monitor,logger]
 	@# If we're in a venv, link the system's RTIMULib into it
 ifeq ($(VIRTUAL_ENV),)
 	@echo "Virtualenv not detected! You may need to link python3-apt manually"

@@ -19,17 +19,17 @@ digraph slave {
     /* Edges */
     edge [fontname=Sans, fontsize=10];
     HELLO->ACK [label="[timeout,\npyver,\nabi,\n..."];
-    ACK->IDLE [label="[id]"];
+    ACK->IDLE [label="[id,url]"];
     IDLE->BUILD [label="[package,\nversion]"];
     IDLE->SLEEP;
     IDLE->DIE;
     SLEEP->IDLE;
     BUILD->BUILT [label="[status,\nduration,\noutput,\n..."];
-    BUILT->DONE [label="failure"];
-    BUILT->SEND [label="success"];
+    BUILT->DONE;
+    BUILT->SEND [label="filename"];
     SEND->SENT;
-    SENT->DONE [label="success"];
-    SENT->SEND [label="failure/more"];
+    SENT->DONE;
+    SENT->SEND [label="filename"];
     DONE->IDLE;
     DIE->BYE;
 }

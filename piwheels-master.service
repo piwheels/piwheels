@@ -4,13 +4,11 @@ After=local-fs.target network.target
 
 [Service]
 Type=notify
-WatchdogSec=2min
-StartLimitInterval=10min
-StartLimitBurst=4
-StartLimitAction=reboot-force
 Restart=on-failure
 User=piwheels
 NoNewPrivileges=true
+TimeoutStartSec=3m
+TimeoutStopSec=5m
 ExecStart=/usr/local/bin/piw-master -v
 
 [Install]

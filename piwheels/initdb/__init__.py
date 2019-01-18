@@ -85,7 +85,7 @@ take a backup of your database before using this script for upgrades.
     parser.add_argument(
         '-u', '--user', metavar='NAME', default=const.USER,
         help="The name of the ordinary piwheels database user (default: "
-        "%(default)s)")
+        "%(default)s); this must *not* be a cluster superuser")
     parser.add_argument(
         '-y', '--yes', action='store_true',
         help="Proceed without prompting before init/upgrades")

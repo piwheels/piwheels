@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Contains the functions that implement the :program:`piw-log` script.
+Contains the functions that implement the :program:`piw-logger` script.
 
 .. autofunction:: main
 """

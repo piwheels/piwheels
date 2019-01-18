@@ -114,7 +114,7 @@ autodoc_member_order = 'groupwise'
 # -- Intersphinx configuration --------------------------------------------
 
 intersphinx_mapping = {
-    'python': ('http://docs.python.org/3.4', None),
+    'python': ('http://docs.python.org/3.5', None),
 }
 intersphinx_cache_limit = 7
 
@@ -199,7 +199,11 @@ man_pages = [
     ('master',   'piw-master',   'PiWheels Master',              [_setup.__author__], 1),
     ('slaves',   'piw-slave',    'PiWheels Build Slave',         [_setup.__author__], 1),
     ('monitor',  'piw-monitor',  'PiWheels Monitor',             [_setup.__author__], 1),
+    ('sense',    'piw-sense',    'PiWheels Sense HAT Monitor',   [_setup.__author__], 1),
     ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [_setup.__author__], 1),
+    ('importer', 'piw-import',   'PiWheels Package Importer',    [_setup.__author__], 1),
+    ('remove',   'piw-remove',   'PiWheels Package Remover',     [_setup.__author__], 1),
+    ('logger',   'piw-logger',   'PiWheels Logger',              [_setup.__author__], 1),
 ]
 
 man_show_urls = True
