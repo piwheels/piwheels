@@ -38,8 +38,8 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim ssh-import-id tree byobu htop pkg-config gfortran cmake \
-    ipython ipython3 git qt4-qmake qt5-qmake python-dev python3-dev \
+apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
+    gfortran ipython ipython3 git qt4-qmake qt5-qmake python-dev python3-dev \
     $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
     $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
     libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
