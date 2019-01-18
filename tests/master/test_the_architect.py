@@ -62,8 +62,8 @@ def test_architect_queue(db, with_build, task, builds_queue):
             now + timedelta(seconds=300),
         ]
         task.loop()
-        assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [('foo', '0.1')]})
+        assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
         with db.begin():
             db.execute("DELETE FROM builds")
         task.loop()
-        assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [('foo', '0.1')]})
+        assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})

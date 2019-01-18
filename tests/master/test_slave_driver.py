@@ -125,11 +125,11 @@ def test_new_builds(task, builds_queue, stats_queue):
     assert not task.abi_queues
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
-    assert task.abi_queues['cp34m'] == {('foo', '0.1')}
+    assert task.abi_queues['cp34m'] == [('foo', '0.1')]
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     builds_queue.send_msg('QUEUE', {'cp35m': [('foo', '0.1')]})
     task.poll()
-    assert task.abi_queues['cp35m'] == {('foo', '0.1')}
+    assert task.abi_queues['cp35m'] == [('foo', '0.1')]
     assert stats_queue.recv_msg() == ('STATBQ', {'cp35m': 1})
 
 
