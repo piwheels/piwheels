@@ -63,8 +63,8 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
     libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev \
     libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
-    libudev-dev libopus-dev libvpx-dev libc-bin libavformat-dev libavcodec-dev \
-    libavdevice-dev libavfilter-dev libavutil-dev
+    libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
+    libavfilter-dev libavutil-dev
 
 pip3 install setuptools --upgrade
 pip3 install pip --upgrade
