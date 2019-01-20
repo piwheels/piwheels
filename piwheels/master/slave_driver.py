@@ -102,8 +102,8 @@ class SlaveDriver(Task):
         self.db.close()
         self.stats_queue.close()
         self.web_queue.close()
-        self.status_queue.close()
         SlaveState.status_queue = None
+        self.status_queue.close()
         super().close()
 
     def list_slaves(self):

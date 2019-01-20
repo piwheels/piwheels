@@ -104,7 +104,7 @@ class FileJuggler(Task):
         file_queue.bind(config.file_queue)
         fs_queue = self.ctx.socket(
             zmq.REP, protocol=protocols.file_juggler_fs)
-        fs_queue.hwm = 1
+        fs_queue.hwm = 10
         fs_queue.bind(config.fs_queue)
         self.stats_queue = self.ctx.socket(
             zmq.PUSH, protocol=reversed(protocols.big_brother))
@@ -339,7 +339,7 @@ class FsClient:
         self.ctx = transport.Context.instance()
         self.fs_queue = self.ctx.socket(
             zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
-        self.fs_queue.hwm = 1
+        self.fs_queue.hwm = 10
         self.fs_queue.connect(config.fs_queue)
 
     def close(self):
