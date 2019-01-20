@@ -56,7 +56,7 @@ class TheArchitect(Task):
         self.last_run = datetime(1970, 1, 1)
         self.builds_queue = self.ctx.socket(
             zmq.PUSH, protocol=protocols.the_architect)
-        self.builds_queue.hwm = 1
+        self.builds_queue.hwm = 10
         self.builds_queue.bind(config.builds_queue)
 
     def close(self):
@@ -74,12 +74,14 @@ class TheArchitect(Task):
         pushed to :class:`~.slave_driver.SlaveDriver` which queues and
         dispatches jobs to build ABI-matched slaves as they become available.
         """
-        # XXX Possibility to take a feed of build-queue statistics from
-        # BigBrother and only re-run the query is at least 1 ABI queue (within
-        # the set defined by db.get_build_abis()) has <threshold builds left in
-        # it
         # Leave 60 seconds between each run of the (expensive) builds
         # pending query
         if datetime.utcnow() - self.last_run > timedelta(seconds=60):
-            self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
+            try:
+                self.builds_queue.send_msg('QUEUE', self.db.get_build_queue(),
+                                           flags=zmq.NOBLOCK)
+            except zmq.Again:
+                # If there's nothing connected or listening, don't block; just
+                # means slave-driver has shut down and we're about to follow
+                pass
             self.last_run = datetime.utcnow()
