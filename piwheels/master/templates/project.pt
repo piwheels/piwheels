@@ -11,6 +11,33 @@
       var showMore = document.getElementById('show-' + className + 's');
       showMore.classList.add('hidden-version');
     }
+
+    function getDownloads(data, package) {
+      for (var i=0; i<=data.length; i++) {
+        var packageData = data[i];
+        if (packageData[0] == package) {
+          return packageData;
+        }
+      }
+      return 0;
+    }
+
+    function showDownloads() {
+      var downloadsAll = document.getElementById('downloads-all');
+      var downloads30 = document.getElementById('downloads-30');
+      $.getJSON("/packages.json")
+        .fail(function() {
+          downloadsAll.textContent = '???';
+          downloads30.textContent = '???';
+        })
+        .done(function(data) {
+          var downloads = getDownloads(data, '${package}');
+          downloadsAll.textContent = downloads[2];
+          downloads30.textContent = downloads[1];
+        })
+    }
+
+    window.onload = showDownloads;
     </script>
     <div class="row">
       <div class="small-12 medium-6 columns">
@@ -33,11 +60,11 @@
           </tr>
           <tr>
             <th>Downloads (all time)</th>
-            <td>XXX,XXX</td>
+            <td id="downloads-all">XXX,XXX</td>
           </tr>
           <tr>
             <th>Downloads (last 30 days)</th>
-            <td>XXX,XXX</td>
+            <td id="downloads-30">loading...</td>
           </tr>
         </table>
       </div>
@@ -115,3 +142,4 @@ sudo pip3 install ${package}</pre>
     </div>
   </div>
 </div>
+
