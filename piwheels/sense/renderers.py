@@ -194,7 +194,8 @@ class MainRenderer(Renderer):
         # Then the slave status pixels
         for index, slave in enumerate(self.slaves):
             x, y = self._slave_coords(index)
-            buf[y, x] = slave.color
+            if 0 <= x < 8 and 0 <= y < 8:
+                buf[y, x] = slave.color
         x, y = self.position
         base = Color(*buf[y, x])
         grad = list(base.gradient(Color('white'), steps=15))
