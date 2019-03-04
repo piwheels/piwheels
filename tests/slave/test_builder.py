@@ -35,6 +35,7 @@ from unittest import mock
 from pathlib import Path
 from threading import Thread, Event
 from subprocess import TimeoutExpired
+from datetime import datetime, timedelta
 
 import zmq
 import pytest
@@ -290,7 +291,7 @@ def test_builder_init():
 
 def test_builder_as_message():
     b = builder.PiWheelsBuilder('foo', '0.1')
-    assert b.as_message == ['foo', '0.1', False, None, '', {}]
+    assert b.as_message == ['foo', '0.1', False, None, '', []]
 
 
 def test_builder_build_success(mock_archive, mock_systemd, tmpdir):
@@ -314,11 +315,14 @@ def test_builder_build_success(mock_archive, mock_systemd, tmpdir):
 def test_builder_build_timeout(mock_systemd, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-            mock.patch('piwheels.slave.builder.time') as time_mock:
+            mock.patch('piwheels.slave.builder.datetime') as time_mock:
         tmpdir_mock().name = str(tmpdir)
         popen_mock().wait.side_effect = TimeoutExpired('pip3', 300)
         popen_mock().returncode = -9
-        time_mock.side_effect = [0, 100, 1000, 1001]
+        now = datetime.utcnow()
+        time_mock.utcnow.side_effect = [
+            now, now + timedelta(seconds=100), now + timedelta(seconds=1000),
+            now + timedelta(seconds=1001)]
         b = builder.PiWheelsBuilder('foo', '0.1')
         b.build()
         assert not b.status

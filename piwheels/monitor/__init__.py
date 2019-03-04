@@ -44,9 +44,9 @@ from time import sleep
 
 import zmq
 
-from .. import terminal, const
-from . import widgets
+from .. import terminal, const, protocols, transport
 from ..format import format_size
+from . import widgets
 
 
 class PiWheelsMonitor:
@@ -92,15 +92,17 @@ class PiWheelsMonitor:
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
 
-        ctx = zmq.Context()
-        self.status_queue = ctx.socket(zmq.SUB)
+        ctx = transport.Context.instance()
+        self.status_queue = ctx.socket(
+            zmq.SUB, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
         sleep(1)
-        self.ctrl_queue = ctx.socket(zmq.PUSH)
+        self.ctrl_queue = ctx.socket(
+            zmq.PUSH, protocol=reversed(protocols.master_control))
         self.ctrl_queue.connect(config.control_queue)
-        self.ctrl_queue.send_pyobj(['HELLO'])
+        self.ctrl_queue.send_msg('HELLO')
         try:
             self.loop = widgets.MainLoop(
                 *self.build_ui(),
@@ -190,11 +192,12 @@ class PiWheelsMonitor:
         * The timestamp when the message was sent
         * The message itself
         """
-        slave_id, timestamp, msg, *args = self.status_queue.recv_pyobj()
-        if msg == 'STATUS':
-            self.update_status(args[0])
-        else:
-            self.slave_list.message(slave_id, timestamp, msg, *args)
+        msg, data = self.status_queue.recv_msg()
+        if msg == 'STATS':
+            self.update_status(data)
+        elif msg == 'SLAVE':
+            slave_id, timestamp, (msg, data) = data
+            self.slave_list.message(slave_id, timestamp, msg)
 
     def tick(self):
         """
@@ -297,14 +300,14 @@ class PiWheelsMonitor:
         Click handler for the Pause button.
         """
         # pylint: disable=unused-argument
-        self.ctrl_queue.send_pyobj(['PAUSE'])
+        self.ctrl_queue.send_msg('PAUSE')
 
     def resume(self, widget=None):
         """
         Click handler for the Resume button.
         """
         # pylint: disable=unused-argument
-        self.ctrl_queue.send_pyobj(['RESUME'])
+        self.ctrl_queue.send_msg('RESUME')
 
     def kill_slave(self, widget=None):
         """
@@ -333,7 +336,7 @@ class PiWheelsMonitor:
         # pylint: disable=unused-argument
         self.close_popup()
         slave = self.slave_list.slaves[self.slave_to_kill]
-        self.ctrl_queue.send_pyobj(['KILL', self.slave_to_kill])
+        self.ctrl_queue.send_msg('KILL', self.slave_to_kill)
         self.slave_to_kill = None
 
     def terminate_master(self, widget=None):
@@ -352,7 +355,7 @@ class PiWheelsMonitor:
 
     def _terminate_master(self, widget=None):
         # pylint: disable=unused-argument
-        self.ctrl_queue.send_pyobj(['QUIT'])
+        self.ctrl_queue.send_msg('QUIT')
         raise widgets.ExitMainLoop()
 
 
@@ -398,7 +401,7 @@ class SlaveListWalker(widgets.ListWalker):
         self.focus = position
         self._modified()
 
-    def message(self, slave_id, timestamp, msg, *args):
+    def message(self, slave_id, timestamp, msg, data):
         """
         Update the list with a message from the external status queue.
 
@@ -411,8 +414,8 @@ class SlaveListWalker(widgets.ListWalker):
         :param str msg:
             The reply that was sent to the build slave.
 
-        :param *args:
-            Any arguments that went with the message.
+        :param data:
+            Any data that went with the message.
         """
         try:
             state = self.slaves[slave_id]
@@ -420,7 +423,7 @@ class SlaveListWalker(widgets.ListWalker):
             state = SlaveState(slave_id)
             self.slaves[slave_id] = state
             self.widgets.append(state.widget)
-        state.update(timestamp, msg, *args)
+        state.update(timestamp, msg, data)
         if msg == 'HELLO':
             # ABI and/or label of a slave have potentially changed; time to
             # re-sort the widget list
@@ -438,7 +441,7 @@ class SlaveListWalker(widgets.ListWalker):
         let the user see the terminated state).
         """
         # Remove terminated slaves
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         for slave_id, state in list(self.slaves.items()):
             if state.terminated and (now - state.last_seen > timedelta(seconds=5)):
                 # Be careful not to change the sort-order here...
@@ -507,7 +510,7 @@ class SlaveState:
         self.status = ''
         self.label = ''
 
-    def update(self, timestamp, msg, *args):
+    def update(self, timestamp, msg, data):
         """
         Update the slave's state from an incoming reply message.
 
@@ -517,8 +520,8 @@ class SlaveState:
         :param str msg:
             The message itself.
 
-        :param *args:
-            Any arguments sent with the message.
+        :param data:
+            Any data sent with the message.
         """
         self.last_msg = msg
         self.last_seen = timestamp
@@ -531,7 +534,7 @@ class SlaveState:
                 self.abi,
                 self.platform,
                 self.label
-            ) = args
+            ) = data
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
         elif msg == 'BYE':
@@ -551,9 +554,9 @@ class SlaveState:
         initial "*" on the entry.
         """
         if self.first_seen is not None:
-            if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
+            if datetime.now(tz=UTC) - self.last_seen > timedelta(minutes=15):
                 return 'silent'
-            elif datetime.utcnow() - self.last_seen > self.timeout:
+            elif datetime.now(tz=UTC) - self.last_seen > self.timeout:
                 return 'dead'
         if self.terminated:
             return 'dead'
@@ -610,7 +613,7 @@ def since(timestamp):
     if timestamp is None:
         return '-'
     else:
-        return str(datetime.utcnow().replace(microsecond=0) -
+        return str(datetime.now(tz=UTC).replace(microsecond=0) -
                    timestamp.replace(microsecond=0))
 
 

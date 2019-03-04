@@ -1,28 +1,28 @@
 digraph slave {
     /* Sent messages */
     node [shape=house, fontname=Sans, fontsize=10, style=filled, fillcolor="#ffaaaa", penwidth=0];
-    HELLO1 [label="HELLO"];
+    HELLO [label="HELLO"];
     IDLE;
     BUILT;
     SENT;
-    BYE2 [label="BYE"];
+    BYE [label="BYE"];
 
     /* Received messages */
     node [shape=invhouse, fontname=Sans, fontsize=10, style=filled, fillcolor="#aaffaa", penwidth=0];
-    HELLO2 [label="HELLO"];
+    ACK [label="ACK"];
     BUILD;
     SEND;
     DONE;
     SLEEP;
-    BYE1 [label="BYE"];
+    DIE [label="DIE"];
 
     /* Edges */
     edge [fontname=Sans, fontsize=10];
-    HELLO1->HELLO2 [label="[timeout,\npyver,\nabi,\n..."];
-    HELLO2->IDLE [label="[id]"];
+    HELLO->ACK [label="[timeout,\npyver,\nabi,\n..."];
+    ACK->IDLE [label="[id]"];
     IDLE->BUILD [label="[package,\nversion]"];
     IDLE->SLEEP;
-    IDLE->BYE1;
+    IDLE->DIE;
     SLEEP->IDLE;
     BUILD->BUILT [label="[status,\nduration,\noutput,\n..."];
     BUILT->DONE [label="failure"];
@@ -31,5 +31,5 @@ digraph slave {
     SENT->DONE [label="success"];
     SENT->SEND [label="failure/more"];
     DONE->IDLE;
-    BYE1->BYE2;
+    DIE->BYE;
 }

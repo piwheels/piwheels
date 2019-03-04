@@ -46,7 +46,7 @@ from pathlib import PosixPath
 import zmq
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
-from .. import __version__, terminal, const
+from .. import __version__, terminal, const, protocols, transport
 
 
 # Workaround: lars bug; User-Agent instead of User-agent
@@ -97,8 +97,8 @@ as the piw-master script.
             'common_vhost': COMMON_VHOST,
             'combined': COMBINED,
         }.get(config.format, config.format)
-        ctx = zmq.Context.instance()
-        queue = ctx.socket(zmq.PUSH)
+        ctx = transport.Context.instance()
+        queue = ctx.socket(zmq.PUSH, protocol=protocols.lumberjack)
         queue.connect(config.log_queue)
         try:
             for filename in config.files:
@@ -108,7 +108,7 @@ as the piw-master script.
                         for row in src:
                             if log_filter(row):
                                 if not config.drop or queue.poll(1000, zmq.POLLOUT):
-                                    queue.send_pyobj(['LOG'] + log_transform(row))
+                                    queue.send_msg('LOG', log_transform(row))
                                 else:
                                     logging.warning('dropping log entry')
                 finally:

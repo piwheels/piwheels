@@ -35,7 +35,7 @@ import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__
+from piwheels import __version__, protocols
 from piwheels.remove import main
 
 
@@ -46,7 +46,7 @@ def import_queue_name(request, tmpdir):
 
 @pytest.fixture()
 def import_queue(request, mock_context, import_queue_name, tmpdir):
-    queue = mock_context.socket(zmq.REP)
+    queue = mock_context.socket(zmq.REP, protocol=protocols.mr_chase)
     queue.hwm = 1
     queue.bind(import_queue_name)
     yield queue
@@ -101,8 +101,8 @@ def test_remove(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
-            assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
-            import_queue.send_pyobj(['DONE'])
+            assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
+            import_queue.send_msg('DONE')
             thread.join(10)
             assert thread.exitcode == 0
 
@@ -111,16 +111,16 @@ def test_remove_and_skip(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
-            assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', 'legal']
-            import_queue.send_pyobj(['DONE'])
+            assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', 'legal'])
+            import_queue.send_msg('DONE')
             thread.join(10)
             assert thread.exitcode == 0
 
 
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
-        import_queue.send_pyobj(['ERROR', 'Package foo does not exist'])
+        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
+        import_queue.send_msg('ERROR', 'Package foo does not exist')
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
         assert 'Package foo does not exist' in str(thread.exception)
@@ -128,8 +128,8 @@ def test_failure(mock_context, import_queue_name, import_queue):
 
 def test_unexpected(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_pyobj() == ['REMOVE', 'foo', '0.1', None]
-        import_queue.send_pyobj(['FOO'])
+        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', None])
+        import_queue.send_msg('SEND', 'foo.whl')
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
-        assert 'Unexpected response' in str(thread.exception)
+        assert 'Unexpected response from master' in str(thread.exception)

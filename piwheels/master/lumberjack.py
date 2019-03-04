@@ -35,6 +35,7 @@ Defines the :class:`Lumberjack` task; see class for more details.
 
 import zmq
 
+from .. import protocols
 from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .states import DownloadState
@@ -51,7 +52,7 @@ class Lumberjack(PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        log_queue = self.ctx.socket(zmq.PULL)
+        log_queue = self.ctx.socket(zmq.PULL, protocol=protocols.lumberjack)
         log_queue.bind(config.log_queue)
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config)
@@ -67,11 +68,13 @@ class Lumberjack(PauseableTask):
         See the :doc:`logger` chapter for an overview of the protocol for
         messages between the logger and the :class:`Lumberjack`.
         """
-        msg, *args = queue.recv_pyobj()
-        if msg != 'LOG':
-            self.logger.warning('invalid message: %s', msg)
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            download = DownloadState(*args)
+            assert msg == 'LOG'
+            download = DownloadState.from_message(data)
             self.logger.info('logging download of %s from %s',
                              download.filename, download.host)
             self.db.log_download(download)

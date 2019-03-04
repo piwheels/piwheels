@@ -41,7 +41,7 @@ import logging
 
 import zmq
 
-from .. import __version__, terminal, const
+from .. import __version__, terminal, const, transport, protocols
 
 
 def main(args=None):
@@ -95,16 +95,16 @@ def do_remove(config):
     :param config:
         The configuration obtained from parsing the command line.
     """
-    ctx = zmq.Context.instance()
-    queue = ctx.socket(zmq.REQ)
+    ctx = transport.Context.instance()
+    queue = ctx.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
-        queue.send_pyobj(['REMOVE', config.package, config.version,
-                          config.skip])
-        msg, *args = queue.recv_pyobj()
+        queue.send_msg('REMOVE', [
+            config.package, config.version, config.skip])
+        msg, data = queue.recv_msg()
         if msg == 'ERROR':
-            raise RuntimeError(*args)
+            raise RuntimeError(data)
         logging.info('Removed builds successfully')
         if msg != 'DONE':
             raise RuntimeError('Unexpected response from master')

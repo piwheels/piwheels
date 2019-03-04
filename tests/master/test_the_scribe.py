@@ -32,7 +32,7 @@ import json
 from unittest import mock
 from pathlib import Path
 from time import time, sleep
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from html.parser import HTMLParser
 from threading import Event
 
@@ -40,20 +40,14 @@ import zmq
 import pytest
 from pkg_resources import resource_listdir
 
-from piwheels import const
+from piwheels import const, protocols
+from piwheels.master.the_oracle import ProjectFilesRow, ProjectVersionsRow
 from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
-
-
-FilesRow = namedtuple('FilesRow', ('filename', 'filehash'))
-ProjVersRow = namedtuple('ProjVersRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
-ProjFilesRow = namedtuple('ProjFilesRow', (
-    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
 
 
 @pytest.fixture()
 def scribe_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PUSH)
+    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.the_scribe))
     queue.hwm = 10
     queue.bind(const.SCRIBE_QUEUE)
     yield queue
@@ -65,15 +59,6 @@ def task(request, zmq_context, master_config, db_queue, scribe_queue):
     task = TheScribe(master_config)
     yield task
     task.close()
-
-
-def wait_for_file(path, timeout=1):
-    # Eurgh ... no built-in efficient file polling in the stdlib?
-    start = time()
-    while not path.exists():
-        sleep(0.01)
-        if time() - start > timeout:
-            assert False, 'timed out waiting for %s' % path
 
 
 class ContainsParser(HTMLParser):
@@ -120,8 +105,8 @@ def test_atomic_write_failed(tmpdir):
 
 
 def test_scribe_first_start(db_queue, task, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
     task.once()
     db_queue.check()
     root = Path(master_config.output_path)
@@ -141,8 +126,8 @@ def test_scribe_second_start(db_queue, task, master_config):
     (root / 'stats.html').touch()
     (root / 'simple').mkdir()
     (root / 'simple' / 'index.html').touch()
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
     task.once()
     db_queue.check()
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
@@ -152,8 +137,8 @@ def test_scribe_second_start(db_queue, task, master_config):
 
 
 def test_write_root_index_fails(db_queue, task, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', None])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK')
     with pytest.raises(TypeError):
         task.once()
     db_queue.check()
@@ -162,9 +147,9 @@ def test_write_root_index_fails(db_queue, task, master_config):
 
 
 def test_bad_request(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['FOO'])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send(b'FOO')
     e = Event()
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
@@ -176,13 +161,13 @@ def test_bad_request(db_queue, task, scribe_queue, master_config):
 
 
 def test_write_homepage(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['HOME', {
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('HOME', {
         'packages_built': 123,
         'files_count': 234,
         'downloads_last_month': 345
-    }])
+    })
     task.once()
     task.poll()
     db_queue.check()
@@ -191,9 +176,9 @@ def test_write_homepage(db_queue, task, scribe_queue, master_config):
 
 
 def test_write_homepage_fails(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['HOME', {}])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('HOME', {})
     task.once()
     with pytest.raises(NameError):
         task.poll()
@@ -203,27 +188,27 @@ def test_write_homepage_fails(db_queue, task, scribe_queue, master_config):
 
 
 def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['PKGBOTH', 'foo'])
-    db_queue.expect(['PKGFILES', 'foo'])
-    db_queue.send(['OK', [
-        FilesRow('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        FilesRow('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
-    ]])
-    db_queue.expect(['PROJVERS', 'foo'])
-    db_queue.send(['OK', [
-        ProjVersRow('0.1', False, 2, 0),
-    ]])
-    db_queue.expect(['PROJFILES', 'foo'])
-    db_queue.send(['OK', [
-        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                     123456, '123456123456'),
-        ProjFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                     123456, '123456123456'),
-    ]])
-    db_queue.expect(['FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl'])
-    db_queue.send(['OK', {'apt': {'libc6'}}])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGBOTH', 'foo')
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': '123456123456',
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': '123456123456',
+    })
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 2, 0),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456'),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456'),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.send('OK', {'apt': {'libc6'}})
     task.once()
     task.poll()
     db_queue.check()
@@ -236,50 +221,52 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     assert contains_elem(
         index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
     )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
 
 
-def test_write_pkg_index_fails(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['PKGBOTH', 'foo'])
-    db_queue.expect(['PKGFILES', 'foo'])
-    db_queue.send(['OK', [
-        # Send ordinary tuples (method expects rows with attributes named
-        # after columns)
-        ('foo-0.1-cp34-cp34m-linux_armv7l.whl', '123456123456'),
-        ('foo-0.1-cp34-cp34m-linux_armv6l.whl', '123456123456'),
-    ]])
+def test_write_pkg_project(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGPROJ', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 0, 1),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [])
     task.once()
-    with pytest.raises(AttributeError):
-        task.poll()
+    task.poll()
     db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
     assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
 
 
 def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo'}])
-    scribe_queue.send_pyobj(['PKGBOTH', 'bar'])
-    db_queue.expect(['PKGFILES', 'bar'])
-    db_queue.send(['OK', [
-        FilesRow('bar-1.0-cp34-cp34m-linux_armv7l.whl', '123456abcdef'),
-        FilesRow('bar-1.0-cp34-cp34m-linux_armv6l.whl', '123456abcdef'),
-    ]])
-    db_queue.expect(['PROJVERS', 'bar'])
-    db_queue.send(['OK', [
-        ProjVersRow('1.0', False, 2, 1),
-    ]])
-    db_queue.expect(['PROJFILES', 'bar'])
-    db_queue.send(['OK', [
-        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                     123456, '123456abcdef'),
-        ProjFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                     123456, '123456abcdef'),
-    ]])
-    db_queue.expect(['FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl'])
-    db_queue.send(['OK', {'apt': {'libc6'}}])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGBOTH', 'bar')
+    db_queue.expect('PKGFILES', 'bar')
+    db_queue.send('OK', {
+        'bar-1.0-cp34-cp34m-linux_armv7l.whl': '123456abcdef',
+        'bar-1.0-cp34-cp34m-linux_armv6l.whl': '123456abcdef',
+    })
+    db_queue.expect('PROJVERS', 'bar')
+    db_queue.send('OK', [
+        ProjectVersionsRow('1.0', False, 2, 1),
+    ])
+    db_queue.expect('PROJFILES', 'bar')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef'),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.send('OK', {'apt': {'libc6'}})
     task.once()
     task.poll()
     db_queue.check()
@@ -295,38 +282,25 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     assert contains_elem(
         pkg_index, 'a', [('href', 'bar-1.0-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
     )
+    project = root / 'project' / 'bar' / 'index.html'
+    assert project.exists() and project.is_file()
 
 
 def test_write_search_index(db_queue, task, scribe_queue, master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo', 'bar'}])
-    search_index = [
-        ('foo', 10),
-        ('bar', 1),
-    ]
-    scribe_queue.send_pyobj(['SEARCH', search_index])
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo', 'bar'})
+    search_index = {
+        'foo': 10,
+        'bar': 1,
+    }
+    scribe_queue.send_msg('SEARCH', search_index)
     task.once()
     task.poll()
     db_queue.check()
     root = Path(master_config.output_path)
     packages_json = root / 'packages.json'
     assert packages_json.exists() and packages_json.is_file()
-    assert json.load(packages_json.open('r')) == [list(i) for i in search_index]
-
-
-def test_write_search_index_fails(db_queue, task, scribe_queue,
-                                  master_config):
-    db_queue.expect(['ALLPKGS'])
-    db_queue.send(['OK', {'foo', 'bar'}])
-    search_index = [
-        ('foo', 10),
-        ('bar', 1 + 2j),  # complex download counts :)
-    ]
-    scribe_queue.send_pyobj(['SEARCH', search_index])
-    task.once()
-    with pytest.raises(TypeError):
-        task.poll()
-    db_queue.check()
-    root = Path(master_config.output_path)
-    packages_json = root / 'packages.json'
-    assert not packages_json.exists()
+    assert search_index == {
+        pkg: count
+        for pkg, count in json.load(packages_json.open('r'))
+    }

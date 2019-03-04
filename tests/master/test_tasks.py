@@ -33,6 +33,7 @@ from time import sleep
 import zmq
 import pytest
 
+from piwheels import protocols
 from piwheels.master.tasks import Task, TaskQuit, PauseableTask
 
 
@@ -40,8 +41,8 @@ class CounterTask(PauseableTask):
     # A trivial task purely for test purposes, with a very rapid poll cycle
     name = 'counter'
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, control_protocol=protocols.task_control):
+        super().__init__(config, control_protocol)
         self.count = 0
 
     def loop(self):
@@ -102,6 +103,31 @@ def test_task_quit_while_paused(master_config, master_control_queue):
     assert not task.is_alive()
 
 
+def test_task_resume_while_not_paused(master_config, master_control_queue):
+    task = CounterTask(master_config)
+    task.logger = mock.Mock()
+    task.start()
+    task.resume()
+    task.quit()
+    task.join(10)
+    assert not task.is_alive()
+    assert task.logger.warning.call_count == 1
+
+
+def test_broken_control(master_config, master_control_queue):
+    protocol = protocols.Protocol(recv={
+        'FOO': protocols.NoData,
+        'QUIT': protocols.NoData,
+    })
+    task = CounterTask(master_config, control_protocol=protocol)
+    task.start()
+    task._ctrl('FOO')
+    task.join(10)
+    assert not task.is_alive()
+    # Ensure the broken task tells the master to quit
+    assert master_control_queue.recv_msg() == ('QUIT', None)
+
+
 def test_broken_task_quits(master_config, master_control_queue):
     class BrokenTask(Task):
         def loop(self):
@@ -111,16 +137,4 @@ def test_broken_task_quits(master_config, master_control_queue):
     task.join(10)
     assert not task.is_alive()
     # Ensure the broken task tells the master to quit
-    assert master_control_queue.recv_pyobj() == ['QUIT']
-
-
-def test_task_bad_controls(master_config, master_control_queue):
-    task = Task(master_config)
-    task.logger = mock.Mock()
-    task.logger.error.call_count == 0
-    task.start()
-    task._ctrl(['FOO'])
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
-    task.logger.error.call_count == 1
+    assert master_control_queue.recv_msg() == ('QUIT', None)

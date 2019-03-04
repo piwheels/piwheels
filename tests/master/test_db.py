@@ -252,9 +252,20 @@ def test_get_build_queue_partial(db_intf, with_build):
 
 
 def test_get_statistics(db_intf, with_files):
-    assert db_intf.get_statistics() == (
-        1, 1, 1, 1, 1, 1, 0, timedelta(minutes=5), 2, 123456, 0
-    )
+    expected = {
+        'packages_count': 1,
+        'packages_built': 1,
+        'versions_count': 1,
+        'versions_tried': 1,
+        'builds_count': 1,
+        'builds_count_success': 1,
+        'builds_count_last_hour': 0,
+        'builds_time': timedelta(minutes=5),
+        'files_count': 2,
+        'builds_size': 123456,
+        'downloads_last_month': 0,
+    }
+    assert db_intf.get_statistics() == expected
 
 
 @pytest.mark.xfail(reason="downloads_recent view needs fixing")
@@ -263,11 +274,8 @@ def test_get_downloads_recent(db_intf, with_downloads):
 
 
 def test_get_package_files(db_intf, with_files):
-    assert {
-        (r.filename, r.filehash)
-        for r in db_intf.get_package_files('foo')
-    } == {
-        (s.filename, s.filehash)
+    assert db_intf.get_package_files('foo') == {
+        s.filename: s.filehash
         for s in with_files
     }
 

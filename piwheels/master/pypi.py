@@ -34,10 +34,12 @@ import logging
 import http.client
 import xmlrpc.client
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .. import __version__
 
+
+UTC = timezone.utc
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -85,7 +87,7 @@ class PyPIEvents:
     def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
                  serial=0, retries=3, cache_size=1000):
         self.retries = retries
-        self.next_read = datetime.utcnow()
+        self.next_read = datetime.now(tz=UTC)
         self.serial = serial
         # Keep a list of the last cache_size (package, version) tuples so we
         # can make a vague attempt at reducing duplicate reports
@@ -113,11 +115,11 @@ class PyPIEvents:
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
         # end of the event log entries
-        if datetime.utcnow() > self.next_read:
+        if datetime.now(tz=UTC) > self.next_read:
             events = self._get_events()
             if events:
                 for (package, version, timestamp, action, serial) in events:
-                    timestamp = datetime.utcfromtimestamp(timestamp)
+                    timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
                     match = self.add_file_re.search(action)
                     if match is not None:
                         source = match.group(1) == 'source'
@@ -143,4 +145,4 @@ class PyPIEvents:
                 # If the read is empty we've reached the end of the event log
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
-                self.next_read = datetime.utcnow() + timedelta(seconds=10)
+                self.next_read = datetime.now(tz=UTC) + timedelta(seconds=10)

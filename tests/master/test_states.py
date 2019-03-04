@@ -29,14 +29,14 @@
 
 import warnings
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 
 import zmq
 import pytest
 
-from piwheels import const
+from piwheels import const, protocols
 from piwheels.master.db import Database
 from piwheels.master.states import (
     SlaveState,
@@ -47,9 +47,13 @@ from piwheels.master.states import (
 )
 
 
+UTC = timezone.utc
+
+
 @pytest.fixture()
 def slave_queue(request, zmq_context, master_status_queue):
-    SlaveState.status_queue = zmq_context.socket(zmq.PUSH)
+    SlaveState.status_queue = zmq_context.socket(
+        zmq.PUSH, protocol=protocols.monitor_stats)
     SlaveState.status_queue.connect(const.INT_STATUS_QUEUE)
     def fin():
         SlaveState.status_queue.close()
@@ -85,7 +89,7 @@ def test_build_state_init(build_state, file_state):
     assert build_state[2] == build_state.version == '0.1'
     assert build_state[3] == build_state.abi_tag == 'cp34m'
     assert build_state[4] == build_state.status == True
-    assert build_state[5] == build_state.duration == 300
+    assert build_state[5] == build_state.duration == timedelta(seconds=300)
     assert build_state[6] == build_state.output == 'Built successfully'
     assert build_state[7] == build_state.files == {
         'foo-0.1-cp34-cp34m-linux_armv7l.whl': file_state
@@ -117,11 +121,12 @@ def test_build_state_logged(build_state, file_state):
 
 
 def test_slave_state_init():
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     with mock.patch('piwheels.master.states.datetime') as dt:
-        dt.utcnow.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
+        dt.now.return_value = now
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
         assert slave_state.slave_id == 1
         assert slave_state.address == '10.0.0.2'
         assert slave_state.label == 'piwheels2'
@@ -130,7 +135,7 @@ def test_slave_state_init():
         assert slave_state.native_abi == 'cp34m'
         assert slave_state.native_platform == 'linux_armv7l'
         assert slave_state.first_seen == now
-        assert slave_state.last_seen is None
+        assert slave_state.last_seen == now
         assert slave_state.request is None
         assert slave_state.reply is None
         assert slave_state.build is None
@@ -138,117 +143,112 @@ def test_slave_state_init():
 
 
 def test_slave_state_kill():
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     assert not slave_state.terminated
     slave_state.kill()
     assert slave_state.terminated
 
 
 def test_slave_state_expired():
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
-    slave_state._first_seen = datetime.utcnow() - timedelta(hours=5)
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
+    slave_state._first_seen = datetime.now(tz=UTC) - timedelta(hours=5)
     assert not slave_state.expired
-    slave_state._last_seen = datetime.utcnow() - timedelta(hours=4)
+    slave_state._last_seen = datetime.now(tz=UTC) - timedelta(hours=4)
     assert slave_state.expired
 
 
 def test_slave_state_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
-        slave_state.reply = ['HELLO', slave_state.slave_id, const.PYPI_XMLRPC]
-        assert master_status_queue.recv_pyobj() == [
-            slave_state.slave_id, now, 'HELLO',
-            timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
-        ]
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
+        slave_state.reply = ('HELLO', [slave_state.slave_id, const.PYPI_XMLRPC])
+        assert master_status_queue.recv_msg() == ('SLAVE', [
+            slave_state.slave_id, now, 'HELLO', [
+                timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
+            ]
+        ])
 
 
 def test_slave_recv_request(build_state, file_state):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        assert slave_state.last_seen is None
-        slave_state.request = ['IDLE']
-        assert slave_state.request == ['IDLE']
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state.request = ('IDLE', None)
+        assert slave_state.request == ('IDLE', None)
         assert slave_state.last_seen == now
         assert slave_state.build is None
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        slave_state._reply = ['BUILD', 'foo', '0.1']
-        slave_state.request = [
-            'BUILT',
-            build_state.status, build_state.duration, build_state.output, {
-                file_state.filename: (
-                    file_state.filesize, file_state.filehash,
-                    file_state.package_tag, file_state.package_version_tag,
-                    file_state.py_version_tag, file_state.abi_tag,
-                    file_state.platform_tag, file_state.dependencies
-                )
-            }
-        ]
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state._reply = ('BUILD', ['foo', '0.1'])
+        slave_state.request = ('BUILT', [
+            build_state.status, build_state.duration, build_state.output,
+            [file_state.as_message()]
+        ])
         assert slave_state.last_seen == now
         build_state._slave_id = slave_state.slave_id
         assert slave_state.build == build_state
 
 
 def test_slave_recv_reply(build_state, file_state, slave_queue):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        slave_state._reply = ['BUILD', 'foo', '0.1']
-        slave_state.request = [
-            'BUILT',
-            build_state.status, build_state.duration, build_state.output, {
-                file_state.filename: (
-                    file_state.filesize, file_state.filehash,
-                    file_state.package_tag, file_state.package_version_tag,
-                    file_state.py_version_tag, file_state.abi_tag,
-                    file_state.platform_tag, file_state.dependencies
-                )
-            }
-        ]
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state._reply = ('BUILD', ['foo', '0.1'])
+        slave_state.request = ('BUILT', [
+            build_state.status, build_state.duration, build_state.output,
+            [file_state.as_message()]
+        ])
         build_state._slave_id = slave_state.slave_id
         assert slave_state.build == build_state
-        slave_state.reply = ['DONE']
+        slave_state.reply = ('DONE', None)
         assert slave_state.build is None
 
 
 def test_slave_recv_bad_built(build_state, file_state, slave_queue):
-    slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                             'linux_armv7l', 'piwheels2')
+    slave_state = SlaveState(
+        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+        'piwheels2')
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        slave_state._reply = ['BUILD', 'foo', '0.1']
-        slave_state.request = ['BUILT']
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state._reply = ('BUILD', ['foo', '0.1'])
+        slave_state.request = ('BUILT', None)
         assert slave_state.build is None
-        slave_state.reply = ['DONE']
+        slave_state.reply = ('DONE', None)
         assert slave_state.build is None
 
 
 def test_slave_state_recv_hello(master_status_queue, slave_queue):
     with mock.patch('piwheels.master.states.datetime') as dt:
-        now = datetime.utcnow()
-        dt.utcnow.return_value = now
-        slave_state = SlaveState('10.0.0.2', 3 * 60 * 60, '34', 'cp34m',
-                                 'linux_armv7l', 'piwheels2')
-        slave_state._reply = ['IDLE']
+        now = datetime.now(tz=UTC)
+        dt.now.return_value = now
+        slave_state = SlaveState(
+            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+            'piwheels2')
+        slave_state._reply = ('IDLE', None)
         slave_state.hello()
-        assert master_status_queue.recv_pyobj() == [
-            slave_state.slave_id, now, 'HELLO',
-            timedelta(hours=3), '34', 'cp34m', 'linux_armv7l', 'piwheels2'
-        ]
-        assert master_status_queue.recv_pyobj() == [
-            slave_state.slave_id, None, 'IDLE'
-        ]
+        assert master_status_queue.recv_msg() == ('SLAVE', [
+            slave_state.slave_id, now, 'HELLO', [
+                timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
+                'piwheels2'
+            ]
+        ])
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [slave_state.slave_id, now, 'IDLE', None]
+        )
 
 
 def test_transfer_state_init(tmpdir, file_state):
@@ -267,8 +267,8 @@ def test_transfer_state_fetch1(tmpdir, file_state, file_content):
     assert trans_state.fetch() == range(TransferState.chunk_size)
     trans_state.chunk(0, file_content[:TransferState.chunk_size])
     assert trans_state.fetch() == range(TransferState.chunk_size, 123456)
-    trans_state.chunk(TransferState.chunk_size,
-                      file_content[TransferState.chunk_size:])
+    trans_state.chunk(
+        TransferState.chunk_size, file_content[TransferState.chunk_size:])
     assert trans_state.fetch() is None
     assert trans_state.done
     trans_state.reset_credit()

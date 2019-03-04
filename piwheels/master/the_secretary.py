@@ -33,15 +33,16 @@ Defines the :class:`TheSecretary` task; see class for more details.
     :members:
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import deque, namedtuple
 
 import zmq
 
-from .. import const
+from .. import const, protocols
 from .tasks import PauseableTask
 
 
+UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
@@ -64,11 +65,13 @@ class TheSecretary(PauseableTask):
         super().__init__(config)
         self.buffer = deque()
         self.commands = {}
-        web_queue = self.ctx.socket(zmq.PULL)
+        web_queue = self.ctx.socket(
+            zmq.PULL, protocol=protocols.the_scribe)
         web_queue.hwm = 100
         web_queue.bind(config.web_queue)
         self.register(web_queue, self.handle_input)
-        self.output = self.ctx.socket(zmq.PUSH)
+        self.output = self.ctx.socket(
+            zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.bind(const.SCRIBE_QUEUE)
 
@@ -77,31 +80,33 @@ class TheSecretary(PauseableTask):
         super().close()
 
     def loop(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         while self.buffer:
             first = self.buffer[0]
             if now - first.timestamp > timedelta(minutes=1):
                 self.buffer.popleft()
                 message = self.commands.pop(first.package)
-                self.output.send_pyobj([message, first.package])
+                self.output.send_msg(message, first.package)
             else:
                 break
 
     def handle_input(self, queue):
-        msg, *args = queue.recv_pyobj()
-        if msg in ['HOME', 'SEARCH']:
-            # HOME and SEARCH messages pass-thru immediately without alteration
-            # or buffering as they're sufficiently rare
-            self.output.send_pyobj([msg] + args)
-        elif msg in ['PKGPROJ', 'PKGBOTH']:
-            package = args[0]
-            if package in self.commands:
-                if msg == 'PKGBOTH':
-                    # "Upgrade" PKGPROJ messages to PKGBOTH but leave the
-                    # timestamp alone
-                    self.commands[package] = msg
-            else:
-                self.buffer.append(IndexTask(package, datetime.utcnow()))
-                self.commands[package] = msg
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            self.logger.error('invalid web_queue message: %s', msg)
+            if msg in ['HOME', 'SEARCH']:
+                # HOME and SEARCH messages pass-thru immediately without
+                # alteration or buffering as they're sufficiently rare
+                self.output.send_msg(msg, data)
+            elif msg in ['PKGPROJ', 'PKGBOTH']:
+                package = data
+                if package in self.commands:
+                    if msg == 'PKGBOTH':
+                        # "Upgrade" PKGPROJ messages to PKGBOTH but leave the
+                        # timestamp alone
+                        self.commands[package] = msg
+                else:
+                    self.buffer.append(IndexTask(package, datetime.now(tz=UTC)))
+                    self.commands[package] = msg

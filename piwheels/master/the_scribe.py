@@ -44,7 +44,7 @@ import zmq
 import pkg_resources
 from chameleon import PageTemplateLoader
 
-from .. import const
+from .. import const, protocols
 from ..format import format_size
 from .html import tag
 from .tasks import PauseableTask
@@ -118,7 +118,7 @@ class TheScribe(PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.output_path = Path(config.output_path)
-        scribe_queue = self.ctx.socket(zmq.PULL)
+        scribe_queue = self.ctx.socket(zmq.PULL, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
         scribe_queue.connect(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)
@@ -196,25 +196,27 @@ class TheScribe(PauseableTask):
             partially written file and that temporary files are cleaned up in
             the event of any exceptions.
         """
-        msg, *args = queue.recv_pyobj()
-        if msg == 'PKGBOTH':
-            package = args[0]
-            if package not in self.package_cache:
-                self.package_cache.add(package)
-                self.write_root_index()
-            self.write_package_index(package)
-            self.write_project_page(package)
-        elif msg == 'PKGPROJ':
-            package = args[0]
-            self.write_project_page(package)
-        elif msg == 'HOME':
-            status_info = args[0]
-            self.write_homepage(status_info)
-        elif msg == 'SEARCH':
-            search_index = args[0]
-            self.write_search_index(search_index)
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            self.logger.error('invalid scribe_queue message: %s', msg)
+            if msg == 'PKGBOTH':
+                package = data
+                if package not in self.package_cache:
+                    self.package_cache.add(package)
+                    self.write_root_index()
+                self.write_package_index(package)
+                self.write_project_page(package)
+            elif msg == 'PKGPROJ':
+                package = data
+                self.write_project_page(package)
+            elif msg == 'HOME':
+                status_info = data
+                self.write_homepage(status_info)
+            elif msg == 'SEARCH':
+                search_index = data
+                self.write_search_index(search_index)
 
     def write_homepage(self, statistics):
         """
@@ -243,6 +245,12 @@ class TheScribe(PauseableTask):
         self.logger.info('writing search index')
         with AtomicReplaceFile(self.output_path / 'packages.json',
                                encoding='utf-8') as index:
+            # Re-organize into a list of package, count tuples as this is
+            # what the JS actually wants
+            search_index = [
+                (package, count)
+                for package, count in search_index.items()
+            ]
             json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))
 
@@ -292,10 +300,12 @@ class TheScribe(PauseableTask):
                     tag.body(
                         tag.h1('Links for ', package),
                         ((tag.a(
-                            f.filename,
-                            href='{f.filename}#sha256={f.filehash}'.format(f=f),
+                            filename,
+                            href='{filename}#sha256={filehash}'.format(
+                                filename=filename, filehash=filehash),
                             rel='internal'), tag.br(), '\n')
-                         for f in self.db.get_package_files(package))
+                         for filename, filehash
+                         in self.db.get_package_files(package).items())
                     )
                 )
             )

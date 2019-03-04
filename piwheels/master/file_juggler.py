@@ -49,8 +49,9 @@ from pathlib import Path
 import zmq
 import zmq.error
 
+from .. import transport, protocols
 from .tasks import Task
-from .states import TransferState
+from .states import TransferState, FileState
 
 
 class TransferError(Exception):
@@ -96,14 +97,17 @@ class FileJuggler(Task):
         super().__init__(config)
         self.output_path = Path(config.output_path)
         TransferState.output_path = self.output_path
-        file_queue = self.ctx.socket(zmq.ROUTER)
+        file_queue = self.ctx.socket(
+            zmq.ROUTER, protocol=protocols.file_juggler_files)
         file_queue.ipv6 = True
         file_queue.hwm = TransferState.pipeline_size * 50
         file_queue.bind(config.file_queue)
-        fs_queue = self.ctx.socket(zmq.REP)
+        fs_queue = self.ctx.socket(
+            zmq.REP, protocol=protocols.file_juggler_fs)
         fs_queue.hwm = 1
         fs_queue.bind(config.fs_queue)
-        self.stats_queue = self.ctx.socket(zmq.PUSH)
+        self.stats_queue = self.ctx.socket(
+            zmq.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.register(file_queue, self.handle_file)
@@ -117,26 +121,32 @@ class FileJuggler(Task):
         super().close()
 
     def once(self):
-        self.stats_queue.send_pyobj(
-            ['STATFS', os.statvfs(str(self.output_path))])
+        stats = os.statvfs(str(self.output_path))
+        self.stats_queue.send_msg(
+            'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
 
     def handle_fs_request(self, queue):
         """
         Handle incoming messages from :class:`FsClient` instances.
         """
-        msg, *args = queue.recv_pyobj()
         try:
-            handler = {
-                'EXPECT': self.do_expect,
-                'VERIFY': self.do_verify,
-                'REMOVE': self.do_remove,
-            }[msg]
-            result = handler(*args)
-        except Exception as exc:
-            self.logger.error('error handling fs request: %s', msg)
-            queue.send_pyobj(['ERR', exc])
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
+            queue.send_msg('ERROR', str(e))
         else:
-            queue.send_pyobj(['OK', result])
+            try:
+                handler = {
+                    'EXPECT': self.do_expect,
+                    'VERIFY': self.do_verify,
+                    'REMOVE': self.do_remove,
+                }[msg]
+                result = handler(*data)
+            except Exception as exc:
+                self.logger.error('error handling fs request: %s', msg)
+                queue.send_msg('ERROR', str(exc))
+            else:
+                queue.send_msg('OK', result)
 
     def do_expect(self, slave_id, file_state):
         """
@@ -148,10 +158,11 @@ class FileJuggler(Task):
         :param int slave_id:
             The identity of the build slave about to begin the transfer.
 
-        :param FileState file_state:
+        :param list file_state:
             The details of the file to be transferred including the expected
             hash.
         """
+        file_state = FileState.from_message(file_state)
         self.pending[slave_id] = TransferState(slave_id, file_state)
         self.logger.info('expecting transfer: %s', file_state.filename)
 
@@ -179,13 +190,21 @@ class FileJuggler(Task):
         else:
             transfer.commit(package)
             self.logger.info('verified: %s', transfer.file_state.filename)
-            self.stats_queue.send_pyobj(
-                ['STATFS', os.statvfs(str(self.output_path))])
+            stats = os.statvfs(str(self.output_path))
+            self.stats_queue.send_msg(
+                'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
 
     def do_remove(self, package, filename):
         """
         Message sent by :class:`FsClient` to request that *filename* in
         *package* should be removed.
+
+        :param str package:
+            The name of the package from which the specified file is to be
+            removed.
+
+        :param str filename:
+            The name of the file to remove from *package*.
         """
         path = self.output_path / 'simple' / package / filename
         try:
@@ -194,8 +213,9 @@ class FileJuggler(Task):
             self.logger.warning('remove failed (not found): %s', path)
         else:
             self.logger.info('removed: %s', path)
-            self.stats_queue.send_pyobj(
-                ['STATFS', os.statvfs(str(self.output_path))])
+            stats = os.statvfs(str(self.output_path))
+            self.stats_queue.send_msg(
+                'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
 
     def handle_file(self, queue):
         """
@@ -316,36 +336,37 @@ class FsClient:
     RPC client class for talking to :class:`FileJuggler`.
     """
     def __init__(self, config):
-        self.ctx = zmq.Context.instance()
-        self.fs_queue = self.ctx.socket(zmq.REQ)
+        self.ctx = transport.Context.instance()
+        self.fs_queue = self.ctx.socket(
+            zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
         self.fs_queue.hwm = 1
         self.fs_queue.connect(config.fs_queue)
 
     def close(self):
         self.fs_queue.close()
 
-    def _execute(self, msg):
+    def _execute(self, msg, data=protocols.NoData):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
-        self.fs_queue.send_pyobj(msg, flags=zmq.NOBLOCK)
-        status, result = self.fs_queue.recv_pyobj()
+        self.fs_queue.send_msg(msg, data, flags=zmq.NOBLOCK)
+        status, result = self.fs_queue.recv_msg()
         if status == 'OK':
             return result
         else:
-            raise result
+            raise IOError(result)
 
     def expect(self, slave_id, file_state):
         """
         See :meth:`FileJuggler.do_expect`.
         """
-        self._execute(['EXPECT', slave_id, file_state])
+        self._execute('EXPECT', [slave_id, file_state.as_message()])
 
     def verify(self, slave_id, package):
         """
         See :meth:`FileJuggler.do_verify`.
         """
         try:
-            self._execute(['VERIFY', slave_id, package])
+            self._execute('VERIFY', [slave_id, package])
         except IOError:
             return False
         else:
@@ -355,4 +376,4 @@ class FsClient:
         """
         See :meth:`FileJuggler.do_remove`.
         """
-        self._execute(['REMOVE', package, filename])
+        self._execute('REMOVE', [package, filename])

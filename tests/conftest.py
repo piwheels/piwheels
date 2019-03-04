@@ -29,7 +29,7 @@
 
 import os
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from threading import Thread, Event
 from time import sleep
@@ -37,12 +37,17 @@ from time import sleep
 import zmq
 import pytest
 from sqlalchemy import create_engine
+from voluptuous import Schema, ExactSequence, Extra, Any
 
-from piwheels import const
+from piwheels import const, transport, protocols
+from piwheels.protocols import NoData
 from piwheels.initdb import get_script, parse_statements
 from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.master.the_oracle import TheOracle
 from piwheels.master.seraph import Seraph
+
+
+UTC = timezone.utc
 
 
 # The database tests all assume that a database (default: piwheels_test)
@@ -102,7 +107,7 @@ def file_state_universal(request, file_content):
 def build_state(request, file_state):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300, 'Built successfully',
+        file_state.abi_tag, True, timedelta(seconds=300), 'Built successfully',
         {file_state.filename: file_state})
 
 
@@ -110,7 +115,7 @@ def build_state(request, file_state):
 def build_state_hacked(request, file_state, file_state_hacked):
     return BuildState(
         1, file_state.package_tag, file_state.package_version_tag,
-        file_state.abi_tag, True, 300, 'Built successfully', {
+        file_state.abi_tag, True, timedelta(seconds=300), 'Built successfully', {
             file_state.filename: file_state,
             file_state_hacked.filename: file_state_hacked,
         })
@@ -119,8 +124,9 @@ def build_state_hacked(request, file_state, file_state_hacked):
 @pytest.fixture()
 def download_state(request, file_state):
     return DownloadState(
-        file_state.filename, '123.4.5.6', datetime(2018, 1, 1, 0, 0, 0),
-        'armv7l', 'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
+        file_state.filename, '123.4.5.6',
+        datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
+        'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
 
 
 @pytest.fixture(scope='session')
@@ -214,7 +220,7 @@ def with_build(request, db, with_package_version, build_state):
             build_state.package,
             build_state.version,
             build_state.slave_id,
-            timedelta(seconds=build_state.duration),
+            build_state.duration,
             build_state.abi_tag).first()[0]
         db.execute(
             "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)
@@ -301,7 +307,7 @@ def master_config(request, tmpdir):
 
 @pytest.fixture(scope='session')
 def zmq_context(request):
-    context = zmq.Context.instance()
+    context = transport.Context.instance()
     yield context
     context.destroy(linger=1000)
     context.term()
@@ -309,7 +315,7 @@ def zmq_context(request):
 
 @pytest.fixture()
 def mock_context(request, zmq_context, tmpdir):
-    with mock.patch('zmq.Context.instance') as inst_mock:
+    with mock.patch('piwheels.transport.Context.instance') as inst_mock:
         ctx_mock = mock.Mock(wraps=zmq_context)
         inst_mock.return_value = ctx_mock
         # Neuter the term() and destroy() methods
@@ -344,7 +350,7 @@ def mock_systemd(request):
 
 @pytest.fixture(scope='function')
 def master_control_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(zmq.PULL, protocol=protocols.master_control)
     queue.hwm = 1
     queue.bind(master_config.control_queue)
     yield queue
@@ -353,56 +359,31 @@ def master_control_queue(request, zmq_context, master_config):
 
 @pytest.fixture(scope='function')
 def master_status_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PULL)
+    queue = zmq_context.socket(
+        zmq.PULL, protocol=reversed(protocols.monitor_stats))
     queue.hwm = 1
     queue.bind(const.INT_STATUS_QUEUE)
     yield queue
     queue.close()
 
 
-@pytest.fixture()
-def sock_push_pull(request, zmq_context):
-    # XXX Could extend this to be a factory fixture (permitting multiple pairs)
-    pull = zmq_context.socket(zmq.PULL)
-    push = zmq_context.socket(zmq.PUSH)
-    pull.hwm = 1
-    push.hwm = 1
-    pull.bind('inproc://push-pull')
-    push.connect('inproc://push-pull')
-    yield push, pull
-    push.close()
-    pull.close()
-
-
-@pytest.fixture()
-def sock_pair(request, zmq_context):
-    # XXX Could extend this to be a factory fixture (permitting multiple pairs)
-    sock1 = zmq_context.socket(zmq.PAIR)
-    sock2 = zmq_context.socket(zmq.PAIR)
-    sock1.hwm = 1
-    sock2.hwm = 1
-    sock1.bind('inproc://pair-pair')
-    sock2.connect('inproc://pair-pair')
-    yield sock1, sock2
-    sock2.close()
-    sock1.close()
-
-
 class MockMessage:
-    def __init__(self, action, message):
+    def __init__(self, action, message, data):
         assert action in ('send', 'recv')
+        if data is NoData:
+            data = None
         self.action = action
-        self.message = message
-        self.result = None
+        self.expect = (message, data)
+        self.actual = None
 
     def __repr__(self):
-        if self.result is None:
+        if self.actual is None:
             return '%s: %r' % (
-                ('TX', 'RX')[self.action == 'recv'], self.message)
+                ('TX', 'RX')[self.action == 'recv'], self.expect[0])
         else:
             return '%s: %s' % (
-                ('!!', 'OK')[self.action == 'send' or self.message == self.result],
-                self.result)
+                ('!!', 'OK')[self.action == 'send' or self.expect == self.actual],
+                self.actual)
 
 
 class MockTask(Thread):
@@ -413,17 +394,28 @@ class MockTask(Thread):
     FsClient to downstream tasks.
     """
     ident = 0
+    protocol = protocols.Protocol(recv={
+        'QUIT':  NoData,
+        'SEND':  ExactSequence([str, Extra]),
+        'RECV':  ExactSequence([str, Extra]),
+        'TEST':  Any(int, float),
+        'RESET': NoData,
+    }, send={
+        'OK': NoData,
+        'ERROR': Schema(Exception),
+    })
 
-    def __init__(self, ctx, sock_type, sock_addr):
+
+    def __init__(self, ctx, sock_type, sock_addr, sock_protocol):
         address = 'inproc://mock-%d' % MockTask.ident
         super().__init__(target=self.loop, args=(ctx, address))
         MockTask.ident += 1
         self.sock_type = sock_type
         self.sock_addr = sock_addr
-        self.control = ctx.socket(zmq.REQ)
+        self.control = ctx.socket(zmq.REQ, protocol=reversed(self.protocol))
         self.control.hwm = 1
         self.control.bind(address)
-        self.sock = ctx.socket(sock_type)
+        self.sock = ctx.socket(sock_type, protocol=sock_protocol)
         self.sock.hwm = 1
         self.sock.bind(sock_addr)
         self.daemon = True
@@ -433,8 +425,10 @@ class MockTask(Thread):
         return '<MockTask sock_addr="%s">' % self.sock_addr
 
     def close(self):
-        self.control.send_pyobj(['QUIT'])
-        assert self.control.recv_pyobj() == ['OK']
+        self.control.send_msg('QUIT')
+        msg, data = self.control.recv_msg()
+        if msg == 'ERROR':
+            raise data
         self.join(10)
         self.control.close()
         self.control = None
@@ -443,23 +437,23 @@ class MockTask(Thread):
         self.sock.close()
         self.sock = None
 
-    def expect(self, message):
-        self.control.send_pyobj(['RECV', message])
-        assert self.control.recv_pyobj() == ['OK']
+    def expect(self, message, data=NoData):
+        self.control.send_msg('RECV', (message, data))
+        assert self.control.recv_msg()[0] == 'OK'
 
-    def send(self, message):
-        self.control.send_pyobj(['SEND', message])
-        assert self.control.recv_pyobj() == ['OK']
+    def send(self, message, data=NoData):
+        self.control.send_msg('SEND', (message, data))
+        assert self.control.recv_msg()[0] == 'OK'
 
     def check(self, timeout=1):
-        self.control.send_pyobj(['TEST', timeout])
-        exc = self.control.recv_pyobj()
-        if exc is not None:
-            raise exc
+        self.control.send_msg('TEST', timeout)
+        msg, data = self.control.recv_msg()
+        if msg == 'ERROR':
+            raise data
 
     def reset(self):
-        self.control.send_pyobj(['RESET'])
-        assert self.control.recv_pyobj() == ['OK']
+        self.control.send_msg('RESET')
+        assert self.control.recv_msg()[0] == 'OK'
 
     def loop(self, ctx, address):
         tested = False
@@ -469,14 +463,14 @@ class MockTask(Thread):
 
         def handle_queue():
             if self.sock in socks and queue[0].action == 'recv':
-                queue[0].result = self.sock.recv_pyobj()
+                queue[0].actual = self.sock.recv_msg()
                 done.append(queue.pop(0))
             elif queue[0].action == 'send':
-                self.sock.send_pyobj(queue[0].message)
-                queue[0].result = queue[0].message
+                self.sock.send_msg(*queue[0].expect)
+                queue[0].actual = queue[0].expect
                 done.append(queue.pop(0))
 
-        control = ctx.socket(zmq.REP)
+        control = ctx.socket(zmq.REP, protocol=self.protocol)
         control.hwm = 1
         control.connect(address)
         try:
@@ -486,39 +480,40 @@ class MockTask(Thread):
             while True:
                 socks = dict(poller.poll(10))
                 if control in socks:
-                    msg, *args = control.recv_pyobj()
+                    msg, data = control.recv_msg()
                     if msg == 'QUIT':
                         if tested or not queue:
-                            control.send_pyobj(['OK'])
+                            control.send_msg('OK')
                         else:
-                            control.send_pyobj(['NOTEST'])
+                            control.send_msg(
+                                'ERROR', RuntimeError('forgot to call check()'))
                         break
                     elif msg == 'SEND':
-                        queue.append(MockMessage('send', args[0]))
-                        control.send_pyobj(['OK'])
+                        queue.append(MockMessage('send', *data))
+                        control.send_msg('OK')
                     elif msg == 'RECV':
-                        queue.append(MockMessage('recv', args[0]))
-                        control.send_pyobj(['OK'])
+                        queue.append(MockMessage('recv', *data))
+                        control.send_msg('OK')
                     elif msg == 'TEST':
                         tested = True
                         try:
-                            timeout = timedelta(seconds=args[0])
-                            start = datetime.utcnow()
-                            while queue and datetime.utcnow() - start < timeout:
+                            timeout = timedelta(seconds=data)
+                            start = datetime.now(tz=UTC)
+                            while queue and datetime.now(tz=UTC) - start < timeout:
                                 socks = dict(poller.poll(10))
                                 handle_queue()
                             if queue:
                                 assert False, 'Still waiting for %r' % queue[0]
                             for item in done:
-                                assert item.message == item.result
+                                assert item.expect == item.actual
                         except Exception as exc:
-                            control.send_pyobj(exc)
+                            control.send_msg('ERROR', exc)
                         else:
-                            control.send_pyobj(None)
+                            control.send_msg('OK')
                     elif msg == 'RESET':
                         queue = []
                         done = []
-                        control.send_pyobj(['OK'])
+                        control.send_msg('OK')
                 if queue:
                     handle_queue()
         finally:
@@ -527,13 +522,15 @@ class MockTask(Thread):
 
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.db_queue)
+    task = MockTask(zmq_context, zmq.REP, master_config.db_queue,
+                    protocols.the_oracle)
     yield task
     task.close()
 
 
 @pytest.fixture(scope='function')
 def fs_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue)
+    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue,
+                    protocols.file_juggler_fs)
     yield task
     task.close()

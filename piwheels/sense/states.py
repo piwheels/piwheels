@@ -37,9 +37,12 @@ Implements the classes for tracking slave states.
 """
 
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from colorzero import Color
+
+
+UTC = timezone.utc
 
 
 class SlaveList:
@@ -66,7 +69,7 @@ class SlaveList:
                       key=lambda slave: (slave.abi, slave.label))
 
     def prune(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         for slave in list(self):
             if slave.terminated and (now - slave.last_seen >
                                      timedelta(seconds=5)):
@@ -164,8 +167,8 @@ class SlaveState:
         Calculate a simple color indicator for the slave.
         """
         if self.last_seen is not None:
-            if datetime.utcnow() - self.last_seen > timedelta(minutes=15):
+            if datetime.now(tz=UTC) - self.last_seen > timedelta(minutes=15):
                 return Color('#760')  # silent
-            elif datetime.utcnow() - self.last_seen > self.timeout:
+            elif datetime.now(tz=UTC) - self.last_seen > self.timeout:
                 return Color('red')  # dead
         return self._color

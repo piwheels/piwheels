@@ -50,7 +50,7 @@ import zmq
 import dateutil.parser
 from wheel import pep425tags
 
-from .. import __version__, terminal
+from .. import __version__, terminal, transport, protocols
 from ..systemd import get_systemd
 from .builder import PiWheelsBuilder, PiWheelsPackage
 
@@ -108,11 +108,12 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.error('Slave must not be run as root')
             return 1
         self.systemd = get_systemd()
-        ctx = zmq.Context.instance()
+        ctx = transport.Context.instance()
         queue = None
         try:
             while True:
-                queue = ctx.socket(zmq.REQ)
+                queue = ctx.socket(
+                    zmq.REQ, protocol=reversed(protocols.slave_driver))
                 queue.hwm = 10
                 queue.ipv6 = True
                 queue.connect('tcp://{master}:5555'.format(
@@ -126,7 +127,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     queue.close(linger=1000)
         finally:
             self.systemd.stopping()
-            queue.send_pyobj(['BYE'])
+            queue.send_msg('BYE')
             queue.close()
             ctx.destroy(linger=1000)
             ctx.term()
@@ -150,19 +151,19 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         from the master and raises :exc:`MasterTimeout` if *timeout* seconds
         are exceeded.
         """
-        request = ['HELLO', self.config.timeout,
-                   pep425tags.get_impl_ver(),
-                   pep425tags.get_abi_tag(),
-                   pep425tags.get_platform(),
-                   self.label]
+        msg, data = 'HELLO', [
+            self.config.timeout,
+            pep425tags.get_impl_ver(), pep425tags.get_abi_tag(),
+            pep425tags.get_platform(), self.label
+        ]
         while True:
-            queue.send_pyobj(request)
+            queue.send_msg(msg, data)
             start = time()
             while True:
                 self.systemd.watchdog_ping()
                 if queue.poll(1000):
-                    reply, *args = queue.recv_pyobj()
-                    request = self.handle_reply(reply, *args)
+                    msg, data = queue.recv_msg()
+                    msg, data = self.handle_reply(msg, data)
                     break
                 elif time() - start > timeout:
                     self.logger.warning('Timed out waiting for master')
@@ -173,40 +174,36 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     self.slave_id = None
                     raise MasterTimeout()
 
-    def handle_reply(self, reply, *args):
+    def handle_reply(self, msg, data):
         """
         Dispatch a message from the master to an appropriate handler method.
         """
-        try:
-            handler = {
-                'HELLO': self.do_hello,
-                'SLEEP': self.do_sleep,
-                'BUILD': self.do_build,
-                'SEND': self.do_send,
-                'DONE': self.do_done,
-                'BYE': self.do_bye,
-            }[reply]
-        except KeyError:
-            assert False, 'Invalid message from master %r' % reply
-        else:
-            return handler(*args)
+        handler = {
+            'ACK': lambda: self.do_ack(*data),
+            'SLEEP': self.do_sleep,
+            'BUILD': lambda: self.do_build(*data),
+            'SEND': lambda: self.do_send(data),
+            'DONE': self.do_done,
+            'DIE': self.do_die,
+        }[msg]
+        return handler()
 
-    def do_hello(self, new_id, pypi_url):
+    def do_ack(self, new_id, pypi_url):
         """
         In response to our initial "HELLO" (detailing our various :pep:`425`
-        tags), the master is expected to send "HELLO" back with an integer
+        tags), the master is expected to send "ACK" back with an integer
         identifier and the URL of the PyPI repository to download from. We use
         the identifier in all future log messages for the ease of the
         administrator.
 
         We reply with "IDLE" to indicate we're ready to accept a build job.
         """
-        assert self.slave_id is None, 'Duplicate hello'
+        assert self.slave_id is None, 'Duplicate ACK'
         self.slave_id = int(new_id)
         self.pypi_url = pypi_url
         self.logger = logging.getLogger('slave-%d' % self.slave_id)
         self.logger.info('Connected to master')
-        return ['IDLE']
+        return 'IDLE', protocols.NoData
 
     def do_sleep(self):
         """
@@ -214,10 +211,10 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         the master has nothing for us to do currently. Sleep for a little while
         then try "IDLE" again.
         """
-        assert self.slave_id is not None, 'Sleep before hello'
+        assert self.slave_id is not None, 'SLEEP before ACK'
         self.logger.info('No available jobs; sleeping')
         sleep(randint(5, 15))
-        return ['IDLE']
+        return 'IDLE', protocols.NoData
 
     def do_build(self, package, version):
         """
@@ -226,7 +223,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         wheel and send back a "BUILT" message with a full report of the
         outcome.
         """
-        assert self.slave_id is not None, 'Build before hello'
+        assert self.slave_id is not None, 'BUILD before ACK'
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
         self.builder = PiWheelsBuilder(package, version)
@@ -234,7 +231,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.info('Build succeeded')
         else:
             self.logger.warning('Build failed')
-        return ['BUILT'] + self.builder.as_message[2:]
+        return 'BUILT', self.builder.as_message[2:]
 
     def do_send(self, filename):
         """
@@ -245,7 +242,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         for more details). Once the transfers concludes, reply to the master
         with "SENT".
         """
-        assert self.slave_id is not None, 'Send before hello'
+        assert self.slave_id is not None, 'SEND before ACK'
         assert self.builder, 'Send before build / after failed build'
         assert self.builder.status, 'Send after failed build'
         pkg = [f for f in self.builder.files if f.filename == filename][0]
@@ -260,7 +257,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             pkg.transfer(queue, self.slave_id)
         finally:
             queue.close()
-        return ['SENT']
+        return 'SENT', protocols.NoData
 
     def do_done(self):
         """
@@ -268,16 +265,16 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         will reply with "DONE" indicating we can remove all associated build
         artifacts. We respond with "IDLE".
         """
-        assert self.slave_id is not None, 'Done before hello'
+        assert self.slave_id is not None, 'DONE before ACK'
         assert self.builder, 'Done before build'
         self.logger.info('Removing temporary build directories')
         self.builder.clean()
         self.builder = None
-        return ['IDLE']
+        return 'IDLE', protocols.NoData
 
-    def do_bye(self):
+    def do_die(self):
         """
-        The master may respond with "BYE" at any time indicating we should
+        The master may respond with "DIE" at any time indicating we should
         immediately terminate (first cleaning up any extant build). We raise
         :exc:`SystemExit` to cause :meth:`main_loop` to exit.
         """
@@ -296,7 +293,7 @@ def duration(s):
     return (
         dateutil.parser.parse(s, default=datetime(1, 1, 1)) -
         datetime(1, 1, 1)
-    ).total_seconds()
+    )
 
 
 main = PiWheelsSlave()  # pylint: disable=invalid-name

@@ -49,10 +49,13 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import namedtuple
 
 from .ranges import exclude, intersect
+
+
+UTC = timezone.utc
 
 # pylint complains about all these classes having too many attributes (and thus
 # their constructors having too many arguments) and about the lack of (entirely
@@ -123,6 +126,21 @@ class FileState:
         self._platform_tag = platform_tag
         self._dependencies = dependencies
         self._transferred = transferred
+
+    def as_message(self):
+        """
+        Convert the :class:`FileState` object into a simpler list for
+        serialization and transport.
+        """
+        return list(self[:-1])  # never include transferred
+
+    @classmethod
+    def from_message(cls, value):
+        """
+        Convert the output from :meth:`as_message` back into a
+        :class:`BuildState`.
+        """
+        return cls(*value)
 
     def __len__(self):
         return 10
@@ -224,7 +242,7 @@ class BuildState:
     :param bool status:
         ``True`` if the build succeeded, ``False`` if it failed.
 
-    :param float duration:
+    :param timedelta duration:
         The amount of time (in seconds) it took to complete the build.
 
     :param str output:
@@ -250,6 +268,27 @@ class BuildState:
         self._output = output
         self._files = files
         self._build_id = build_id
+
+    def as_message(self):
+        """
+        Convert the :class:`BuildState`, and its nested :class:`FileState`
+        objects into simpler lists for serialization and transport.
+        """
+        return [
+            v if i != 7 else [f.as_message() for f in v.values()]
+            for i, v in enumerate(self[:-1])  # never include build_id
+        ]
+
+    @classmethod
+    def from_message(cls, value):
+        """
+        Convert the output from :meth:`as_message` back into a
+        :class:`BuildState`.
+        """
+        value = list(value)
+        value[7] = [FileState.from_message(f) for f in value[7]]
+        value[7] = {f.filename: f for f in value[7]}
+        return cls(*value)
 
     def __len__(self):
         return 9
@@ -380,12 +419,11 @@ class SlaveState:
         self._address = address
         self._slave_id = SlaveState.counter
         self._label = label
-        self._timeout = timedelta(seconds=timeout)
+        self._timeout = timeout
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
-        self._first_seen = datetime.utcnow()
-        self._last_seen = None
+        self._first_seen = self._last_seen = datetime.now(tz=UTC)
         self._request = None
         self._reply = None
         self._build = None
@@ -397,7 +435,7 @@ class SlaveState:
             "last_seen={last_seen}, last_reply={reply}, {alive}>".format(
                 slave_id=self.slave_id,
                 label=self.label,
-                last_seen=datetime.utcnow() - self.last_seen,
+                last_seen=datetime.now(tz=UTC) - self.last_seen,
                 reply='none' if self.reply is None else self.reply[0],
                 alive='killed'
                 if self.terminated else 'expired'
@@ -406,15 +444,20 @@ class SlaveState:
         )
 
     def hello(self):
-        SlaveState.status_queue.send_pyobj(
-            [self._slave_id, self._first_seen, 'HELLO',
-             self._timeout, self._native_py_version, self._native_abi,
-             self._native_platform, self._label])
+        SlaveState.status_queue.send_msg(
+            'SLAVE', [
+                self._slave_id, self._first_seen, 'HELLO', [
+                     self._timeout, self._native_py_version, self._native_abi,
+                     self._native_platform, self._label
+                ]
+            ]
+        )
         if self._reply is not None and self._reply[0] != 'HELLO':
             # Replay the last reply for the sake of monitors that have just
             # connected to the master
-            SlaveState.status_queue.send_pyobj(
-                [self._slave_id, self._last_seen] + self._reply)
+            msg, data = self._reply
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
     def kill(self):
         self._terminated = True
@@ -463,9 +506,7 @@ class SlaveState:
     def expired(self):
         # There's a fudge factor of 10% here to allow slaves a little extra
         # time before we expire and forget them
-        if self._last_seen is None:
-            return False
-        return (datetime.utcnow() - self._last_seen) > (self._timeout * 1.1)
+        return (datetime.now(tz=UTC) - self._last_seen) > (self._timeout * 1.1)
 
     @property
     def build(self):
@@ -477,20 +518,26 @@ class SlaveState:
 
     @request.setter
     def request(self, value):
-        self._last_seen = datetime.utcnow()
+        self._last_seen = datetime.now(tz=UTC)
         self._request = value
-        if value[0] == 'BUILT':
-            try:
-                status, duration, output, files = value[1:]
-                self._build = BuildState(
-                    self._slave_id, self._reply[1], self._reply[2],
-                    self.native_abi, status, duration, output, files={
-                        filename: FileState(filename, *filestate)
-                        for filename, filestate in files.items()
-                    }
-                )
-            except (ValueError, TypeError):
-                logging.error('Invalid BUILT message: %r', value)
+        msg, data = value
+        if msg == 'BUILT':
+            if self._reply[0] == 'BUILD':
+                try:
+                    status, duration, output, files = data
+                    files = [FileState.from_message(f) for f in files]
+                    msg, (package, version) = self._reply
+                    self._build = BuildState(
+                        self._slave_id, package, version,
+                        self.native_abi, status, duration, output, files={
+                            f.filename: f for f in files
+                        }
+                    )
+                except (ValueError, TypeError):
+                    logging.error('Invalid BUILT data: %r', data)
+                    self._build = None
+            else:
+                logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
 
     @property
@@ -500,13 +547,14 @@ class SlaveState:
     @reply.setter
     def reply(self, value):
         self._reply = value
-        if value[0] == 'DONE':
+        msg, data = value
+        if msg == 'DONE':
             self._build = None
-        if value[0] == 'HELLO':
+        if msg == 'HELLO':
             self.hello()
         else:
-            SlaveState.status_queue.send_pyobj(
-                [self._slave_id, self._last_seen] + value)
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
 
 class TransferState:
@@ -642,7 +690,7 @@ class TransferState:
         Path(self._file.name).unlink()
 
 
-DownloadState = namedtuple('DownloadState', (
+class DownloadState(namedtuple('DownloadState', (
     'filename',
     'host',
     'timestamp',
@@ -653,7 +701,15 @@ DownloadState = namedtuple('DownloadState', (
     'os_version',
     'py_name',
     'py_version',
-))
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
 
 
 def mkdir_override_symlink(pkg_dir):
