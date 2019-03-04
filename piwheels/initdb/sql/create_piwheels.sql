@@ -16,37 +16,37 @@ CREATE TABLE configuration (
 );
 
 INSERT INTO configuration(id, version) VALUES (1, '0.14');
-GRANT SELECT,UPDATE ON configuration TO {username};
+GRANT SELECT ON configuration TO {username};
 
 -- packages
 -------------------------------------------------------------------------------
 -- The "packages" table defines all available packages on PyPI, derived from
 -- the list_packages() API. The "skip" column defaults to NULL but can be set
--- to a non-NULL string indicating why a package should not be built.
+-- to a non-empty string indicating why a package should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE packages (
     package VARCHAR(200) NOT NULL,
-    skip    VARCHAR(100) DEFAULT NULL,
+    skip    VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT packages_pk PRIMARY KEY (package)
 );
 
-GRANT SELECT,INSERT,UPDATE ON packages TO {username};
+GRANT SELECT ON packages TO {username};
 
 -- versions
 -------------------------------------------------------------------------------
 -- The "versions" table defines all versions of packages *with files* on PyPI;
 -- note that versions without released files (a common occurrence) are
 -- excluded. Like the "packages" table, the "skip" column can be set to a
--- non-NULL string indicating why a version should not be built.
+-- non-empty string indicating why a version should not be built.
 -------------------------------------------------------------------------------
 
 CREATE TABLE versions (
     package  VARCHAR(200) NOT NULL,
     version  VARCHAR(200) NOT NULL,
     released TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
-    skip     VARCHAR(100) DEFAULT NULL,
+    skip     VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT versions_pk PRIMARY KEY (package, version),
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
@@ -54,8 +54,7 @@ CREATE TABLE versions (
 );
 
 CREATE INDEX versions_package ON versions(package);
-CREATE INDEX versions_skip ON versions((skip IS NULL), package);
-GRANT SELECT,INSERT,UPDATE ON versions TO {username};
+GRANT SELECT ON versions TO {username};
 
 -- build_abis
 -------------------------------------------------------------------------------
@@ -114,8 +113,7 @@ CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
 CREATE INDEX builds_pkgver ON builds(package, version);
 CREATE INDEX builds_pkgverid ON builds(build_id, package, version);
 CREATE INDEX builds_pkgverabi ON builds(build_id, package, version, abi_tag);
-GRANT SELECT,INSERT,DELETE ON builds TO {username};
-GRANT USAGE ON builds_build_id_seq TO {username};
+GRANT SELECT ON builds TO {username};
 
 -- output
 -------------------------------------------------------------------------------
@@ -135,7 +133,7 @@ CREATE TABLE output (
         REFERENCES builds (build_id) ON DELETE CASCADE
 );
 
-GRANT SELECT,INSERT ON output TO {username};
+GRANT SELECT ON output TO {username};
 
 -- files
 -------------------------------------------------------------------------------
@@ -169,7 +167,8 @@ CREATE TABLE files (
 CREATE INDEX files_builds ON files(build_id);
 CREATE INDEX files_size ON files(platform_tag, filesize) WHERE platform_tag <> 'linux_armv6l';
 CREATE INDEX files_abi ON files(build_id, abi_tag);
-GRANT SELECT,INSERT,DELETE ON files TO {username};
+CREATE INDEX files_packages ON files(package_tag);
+GRANT SELECT ON files TO {username};
 
 -- dependencies
 -------------------------------------------------------------------------------
@@ -192,7 +191,7 @@ CREATE TABLE dependencies (
     CONSTRAINT dependencies_tool_ck CHECK (tool IN ('apt', 'pip', ''))
 );
 
-GRANT SELECT,INSERT ON dependencies TO {username};
+GRANT SELECT ON dependencies TO {username};
 
 -- downloads
 -------------------------------------------------------------------------------
@@ -215,7 +214,7 @@ CREATE TABLE downloads (
 
 CREATE INDEX downloads_files ON downloads(filename);
 CREATE INDEX downloads_accessed_at ON downloads(accessed_at DESC);
-GRANT SELECT,INSERT ON downloads TO {username};
+GRANT SELECT ON downloads TO {username};
 
 -- searches
 -------------------------------------------------------------------------------
@@ -240,7 +239,7 @@ CREATE TABLE searches (
 
 CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
-GRANT SELECT,INSERT ON searches TO {username};
+GRANT SELECT ON searches TO {username};
 
 -- versions_detail
 -------------------------------------------------------------------------------
@@ -255,7 +254,7 @@ CREATE VIEW versions_detail AS
 SELECT
     v.package,
     v.version,
-    (p.skip IS NOT NULL) or (v.skip IS NOT NULL) AS skipped,
+    (p.skip <> '') OR (v.skip <> '') AS skipped,
     COUNT(*) FILTER (WHERE b.status) AS builds_succeeded,
     COUNT(*) FILTER (WHERE NOT b.status) AS builds_failed
 FROM
@@ -306,8 +305,8 @@ FROM (
         JOIN versions AS v ON v.package = p.package
         CROSS JOIN build_abis AS b
     WHERE
-        v.skip IS NULL
-        AND p.skip IS NULL
+        v.skip = ''
+        AND p.skip = ''
 
     EXCEPT ALL
 
@@ -354,21 +353,7 @@ GRANT SELECT ON builds_pending TO {username};
 -------------------------------------------------------------------------------
 
 CREATE VIEW statistics AS
-    WITH package_stats AS (
-        SELECT COUNT(*) AS packages_count
-        FROM packages
-        WHERE skip IS NULL
-    ),
-    version_stats AS (
-        SELECT COUNT(*) AS versions_count
-        FROM packages p JOIN versions v ON p.package = v.package
-        WHERE p.skip IS NULL AND v.skip IS NULL
-    ),
-    build_vers AS (
-        SELECT COUNT(*) AS versions_tried
-        FROM (SELECT DISTINCT package, version FROM builds) AS t
-    ),
-    build_stats AS (
+    WITH build_stats AS (
         SELECT
             COUNT(*) AS builds_count,
             COUNT(*) FILTER (WHERE status) AS builds_count_success,
@@ -388,21 +373,16 @@ CREATE VIEW statistics AS
         FROM builds
         WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
     ),
-    build_pkgs AS (
-        SELECT COUNT(*) AS packages_built
-        FROM (
-            SELECT DISTINCT package
-            FROM builds b JOIN files f ON b.build_id = f.build_id
-            WHERE b.status
-        ) AS t
-    ),
     file_count AS (
-        SELECT COUNT(*) AS files_count
+        SELECT
+            COUNT(*) AS files_count,
+            COUNT(DISTINCT package_tag) AS packages_built
         FROM files
     ),
     file_stats AS (
-        -- Exclude armv6l packages as they're just hard-links to armv7l packages
-        -- and thus don't really count towards space used
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
         SELECT COALESCE(SUM(filesize), 0) AS builds_size
         FROM files
         WHERE platform_tag <> 'linux_armv6l'
@@ -413,10 +393,7 @@ CREATE VIEW statistics AS
         WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
     )
     SELECT
-        p.packages_count,
-        bp.packages_built,
-        v.versions_count,
-        bv.versions_tried,
+        fc.packages_built,
         bs.builds_count,
         bs.builds_count_success,
         bl.builds_count_last_hour,
@@ -425,10 +402,6 @@ CREATE VIEW statistics AS
         fs.builds_size,
         dl.downloads_last_month
     FROM
-        package_stats p,
-        version_stats v,
-        build_pkgs bp,
-        build_vers bv,
         build_stats bs,
         build_latest bl,
         file_count fc,
@@ -461,5 +434,334 @@ WHERE
 GROUP BY p.package;
 
 GRANT SELECT ON downloads_recent TO {username};
+
+-- set_pypi_serial(new_serial)
+-------------------------------------------------------------------------------
+-- Called to update the last PyPI serial number seen in the "configuration"
+-- table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION set_pypi_serial(new_serial INTEGER)
+    RETURNS VOID
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    IF (SELECT pypi_serial FROM configuration) > new_serial THEN
+        RAISE EXCEPTION integrity_constraint_violation
+            USING MESSAGE = 'pypi_serial number cannot go backwards';
+    END IF;
+    UPDATE configuration SET pypi_serial = new_serial WHERE id = 1;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION set_pypi_serial(INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_pypi_serial(INTEGER) TO {username};
+
+-- add_new_package(package, skip=NULL)
+-------------------------------------------------------------------------------
+-- Called to insert a new row in the "packages" table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
+    RETURNS BOOLEAN
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    INSERT INTO packages (package, skip) VALUES (package, skip);
+    RETURN true;
+EXCEPTION
+    WHEN unique_violation THEN RETURN false;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT) TO {username};
+
+-- add_new_package_version(package, version, released=NULL, skip=NULL)
+-------------------------------------------------------------------------------
+-- Called to insert a new row in the "versions" table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION add_new_package_version(
+    package TEXT,
+    version TEXT,
+    released TIMESTAMP = NULL,
+    skip TEXT = ''
+)
+    RETURNS BOOLEAN
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    INSERT INTO versions (package, version, released, skip)
+        VALUES (package, version, COALESCE(released, '1970-01-01 00:00:00'), skip);
+    RETURN true;
+EXCEPTION
+    WHEN unique_violation THEN RETURN false;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION add_new_package_version(
+    TEXT, TEXT, TIMESTAMP, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package_version(
+    TEXT, TEXT, TIMESTAMP, TEXT
+    ) TO {username};
+
+-- skip_package(package, reason)
+-------------------------------------------------------------------------------
+-- Sets the "skip" field on the specified row in "packages" to the given value.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION skip_package(package TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE packages SET skip = reason WHERE package = package;
+$sql$;
+
+REVOKE ALL ON FUNCTION skip_package(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package(TEXT, TEXT) TO {username};
+
+-- skip_package_version(package, version, reason)
+-------------------------------------------------------------------------------
+-- Sets the "skip" field on the specified row in "versions" to the given value.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION skip_package_version(package TEXT, version TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE versions SET skip = reason
+    WHERE package = package AND version = version;
+$sql$;
+
+REVOKE ALL ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) TO {username};
+
+-- log_download(filename, accessed_by, accessed_at, arch, distro_name,
+--              distro_version, os_name, os_version, py_name, py_version)
+-------------------------------------------------------------------------------
+-- Adds a new entry to the downloads table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION log_download(
+    filename TEXT,
+    accessed_by INET,
+    accessed_at TIMESTAMP,
+    arch TEXT = NULL,
+    distro_name TEXT = NULL,
+    distro_version TEXT = NULL,
+    os_name TEXT = NULL,
+    os_version TEXT = NULL,
+    py_name TEXT = NULL,
+    py_version TEXT = NULL
+)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    INSERT INTO downloads (
+        filename,
+        accessed_by,
+        accessed_at,
+        arch,
+        distro_name,
+        distro_version,
+        os_name,
+        os_version,
+        py_name,
+        py_version
+    )
+    VALUES (
+        filename,
+        accessed_by,
+        accessed_at,
+        arch,
+        distro_name,
+        distro_version,
+        os_name,
+        os_version,
+        py_name,
+        py_version
+    );
+$sql$;
+
+REVOKE ALL ON FUNCTION log_download(
+    TEXT, INET, TIMESTAMP,
+    TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_download(
+    TEXT, INET, TIMESTAMP,
+    TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+    ) TO {username};
+
+-- log_build_success(package, version, build_by, ...)
+-- log_build_failure(package, version, build_by, ...)
+-------------------------------------------------------------------------------
+-- Adds a new entry to the builds table, and any associated files
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION log_build_success(
+    package TEXT,
+    version TEXT,
+    built_by INTEGER,
+    duration INTERVAL,
+    abi_tag TEXT,
+    output TEXT,
+    build_files files ARRAY,
+    build_deps dependencies ARRAY
+)
+    RETURNS INTEGER
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+DECLARE
+    new_build_id INTEGER;
+BEGIN
+    IF ARRAY_LENGTH(build_files, 1) = 0 THEN
+        RAISE EXCEPTION integrity_constraint_violation
+            USING MESSAGE = 'Successful build must include at least one file';
+    END IF;
+    INSERT INTO builds (
+            package,
+            version,
+            built_by,
+            duration,
+            status,
+            abi_tag
+        )
+        VALUES (
+            package,
+            version,
+            built_by,
+            duration,
+            TRUE,
+            abi_tag
+        )
+        RETURNING build_id
+        INTO new_build_id;
+    INSERT INTO output VALUES (new_build_id, output);
+    -- We delete the existing entries from files rather than using INSERT..ON
+    -- CONFLICT UPDATE because we need to delete dependencies associated with
+    -- those files too. This is considerably simpler than a multi-layered
+    -- upsert across tables.
+    DELETE FROM files f
+        USING UNNEST(build_files) AS b
+        WHERE f.filename = b.filename;
+    INSERT INTO files
+        SELECT
+            b.filename,
+            new_build_id,
+            b.filesize,
+            b.filehash,
+            b.package_tag,
+            b.package_version_tag,
+            b.py_version_tag,
+            b.abi_tag,
+            b.platform_tag
+        FROM
+            UNNEST(build_files) AS b;
+    INSERT INTO dependencies
+        SELECT
+            d.filename,
+            d.tool,
+            d.dependency
+        FROM
+            UNNEST(build_deps) AS d;
+    RETURN new_build_id;
+END;
+$sql$;
+
+CREATE FUNCTION log_build_failure(
+    package TEXT,
+    version TEXT,
+    built_by INTEGER,
+    duration INTERVAL,
+    abi_tag TEXT,
+    output TEXT
+)
+    RETURNS INTEGER
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+DECLARE
+    new_build_id INTEGER;
+BEGIN
+    INSERT INTO builds (
+            package,
+            version,
+            built_by,
+            duration,
+            status,
+            abi_tag
+        )
+        VALUES (
+            package,
+            version,
+            built_by,
+            duration,
+            FALSE,
+            abi_tag
+        )
+        RETURNING build_id
+        INTO new_build_id;
+    INSERT INTO output VALUES (new_build_id, output);
+    RETURN new_build_id;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION log_build_success(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT, files ARRAY, dependencies ARRAY
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_build_success(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT, files ARRAY, dependencies ARRAY
+    ) TO {username};
+REVOKE ALL ON FUNCTION log_build_failure(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT
+    ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION log_build_failure(
+    TEXT, TEXT, INTEGER, INTERVAL, TEXT, TEXT
+    ) TO {username};
+
+-- delete_build(package, version)
+-------------------------------------------------------------------------------
+-- Deletes build, output, and files information for the specified *version*
+-- of *package*.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION delete_build(package TEXT, version TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    -- Foreign keys take care of the rest
+    DELETE FROM builds WHERE package = package AND version = version;
+$sql$;
+
+REVOKE ALL ON FUNCTION delete_build(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_build(TEXT, TEXT) TO {username};
 
 COMMIT;

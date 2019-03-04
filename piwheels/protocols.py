@@ -80,9 +80,7 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
 
 
 _statistics = {      # statistics
-    'packages_count':        int,
     'packages_built':        int,
-    'versions_count':        int,
     'builds_count':          int,
     'builds_last_hour':      int,
     'builds_success':        int,
@@ -203,7 +201,7 @@ mr_chase = Protocol(recv={
         str,            # output
         [_file_state],  # filename: filestate
     ]),
-    'REMOVE': ExactSequence([str, str, Maybe(str)]),  # package, version, skip-reason XXX remove Maybe
+    'REMOVE': ExactSequence([str, str, str]),  # package, version, skip-reason
     'SENT':   NoData,
 }, send={
     'SEND':   str,  # filename
@@ -236,11 +234,10 @@ slave_driver = Protocol(recv={
 the_oracle = Protocol(recv={
     'ALLPKGS':     NoData,
     'ALLVERS':     NoData,
-    # XXX Remove Maybe from skip reasons below when stored-procs-ftw is merged
-    'NEWPKG':      ExactSequence([str, Maybe(str)]),  # package, skip reason
-    'NEWVER':      ExactSequence([str, str, dt.datetime, Maybe(str)]),  # package, version, released, skip reason
-    'SKIPPKG':     ExactSequence([str, Maybe(str)]),  # package, skip reason
-    'SKIPVER':     ExactSequence([str, str, Maybe(str)]),  # package, version, skip reason
+    'NEWPKG':      ExactSequence([str, str]),  # package, skip reason
+    'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
+    'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
+    'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
     'LOGDOWNLOAD': _download_state,
     'LOGBUILD':    _build_state,
     'DELBUILD':    ExactSequence([str, str]),  # package, version

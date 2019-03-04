@@ -88,7 +88,7 @@ def test_add_new_package_version(db_intf, db, with_package):
 def test_skip_package(db_intf, db, with_package):
     assert db.execute(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == (None,)
+        "WHERE package = 'foo'").first() == ('',)
     db_intf.skip_package('foo', 'manual override')
     assert db.execute(
         "SELECT skip FROM packages "
@@ -99,11 +99,11 @@ def test_skip_package_version(db_intf, db, with_package_version):
     assert db.execute(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
-        "AND version = '0.1'").first() == (None,)
+        "AND version = '0.1'").first() == ('',)
     db_intf.skip_package_version('foo', '0.1', 'binary only')
     assert db.execute(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == (None,)
+        "WHERE package = 'foo'").first() == ('',)
     assert db.execute(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
@@ -191,36 +191,6 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
             build_state.output)
 
 
-def test_log_files(db_intf, db, with_build, build_state):
-    build_state.logged(with_build.build_id)
-    for file_state in build_state.files.values():
-        break
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
-    db_intf.log_file(build_state, file_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
-    assert db.execute(
-        "SELECT build_id, filename, filesize, filehash "
-        "FROM files").first() == (
-            build_state.build_id,
-            file_state.filename,
-            file_state.filesize,
-            file_state.filehash)
-    file_state._filesize = 123455
-    db_intf.log_file(build_state, file_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
-    assert db.execute(
-        "SELECT build_id, filename, filesize, filehash "
-        "FROM files "
-        "WHERE filename = %s", file_state.filename).first() == (
-            build_state.build_id,
-            file_state.filename,
-            file_state.filesize,
-            file_state.filehash)
-
-
 def test_get_build_abis(db_intf, with_build_abis):
     assert db_intf.get_build_abis() == with_build_abis
 
@@ -253,10 +223,7 @@ def test_get_build_queue_partial(db_intf, with_build):
 
 def test_get_statistics(db_intf, with_files):
     expected = {
-        'packages_count': 1,
         'packages_built': 1,
-        'versions_count': 1,
-        'versions_tried': 1,
         'builds_count': 1,
         'builds_count_success': 1,
         'builds_count_last_hour': 0,
@@ -287,7 +254,7 @@ def test_get_version_files(db_intf, with_files):
 
 
 def test_get_version_skip(db_intf, with_package_version):
-    assert db_intf.get_version_skip('foo', '0.1') is None
+    assert db_intf.get_version_skip('foo', '0.1') == ''
 
 
 def test_get_project_versions(db_intf, with_files):

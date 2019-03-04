@@ -60,9 +60,7 @@ class BigBrother(PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.stats = {
-            'packages_count':        0,
             'packages_built':        0,
-            'versions_count':        0,
             'builds_count':          0,
             'builds_last_hour':      0,
             'builds_success':        0,
@@ -118,7 +116,6 @@ class BigBrother(PauseableTask):
             # Rename a couple of columns
             rec['builds_last_hour'] = rec.pop('builds_count_last_hour')
             rec['builds_success'] = rec.pop('builds_count_success')
-            rec.pop('versions_tried', None)
             self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)

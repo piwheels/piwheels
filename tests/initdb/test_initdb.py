@@ -38,6 +38,66 @@ from piwheels import __version__
 from piwheels.initdb import main, detect_version, parse_statements
 
 
+@pytest.fixture()
+def create_script_04(request):
+    # The database creation script for v0.4. This is used in the database
+    # upgrade tests below.
+    return """
+CREATE TABLE packages (
+    package VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
+    CONSTRAINT packages_pk PRIMARY KEY (package)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON packages TO piwheels;
+CREATE INDEX packages_skip ON packages(skip);
+CREATE TABLE versions (
+    package VARCHAR(200) NOT NULL,
+    version VARCHAR(200) NOT NULL,
+    skip    BOOLEAN DEFAULT false NOT NULL,
+    CONSTRAINT versions_pk PRIMARY KEY (package, version),
+    CONSTRAINT versions_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE RESTRICT
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON versions TO piwheels;
+CREATE INDEX versions_skip ON versions(skip);
+CREATE TABLE builds (
+    build_id        SERIAL NOT NULL,
+    package         VARCHAR(200) NOT NULL,
+    version         VARCHAR(200) NOT NULL,
+    built_by        INTEGER NOT NULL,
+    built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    duration        INTERVAL NOT NULL,
+    status          BOOLEAN DEFAULT true NOT NULL,
+    output          TEXT NOT NULL,
+    CONSTRAINT builds_pk PRIMARY KEY (build_id),
+    CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
+    CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
+        REFERENCES versions ON DELETE CASCADE,
+    CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON builds TO piwheels;
+CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
+CREATE INDEX builds_pkgver ON builds(package, version);
+CREATE TABLE files (
+    filename            VARCHAR(255) NOT NULL,
+    build_id            INTEGER NOT NULL,
+    filesize            INTEGER NOT NULL,
+    filehash            CHAR(64) NOT NULL,
+    package_version_tag VARCHAR(100) NOT NULL,
+    py_version_tag      VARCHAR(100) NOT NULL,
+    abi_tag             VARCHAR(100) NOT NULL,
+    platform_tag        VARCHAR(100) NOT NULL,
+
+    CONSTRAINT files_pk PRIMARY KEY (filename),
+    CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
+        REFERENCES builds (build_id) ON DELETE CASCADE
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON files TO piwheels;
+CREATE UNIQUE INDEX files_pkgver ON files(build_id);
+CREATE INDEX files_size ON files(filesize);
+"""
+
+
 def test_help(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
@@ -152,66 +212,13 @@ def test_init(db, with_clean_db, db_super_url, caplog):
                         'Initializing database at version %s' % __version__)
 
 
-def test_full_upgrade(db, with_clean_db, db_super_url, caplog):
+def test_full_upgrade(db, with_clean_db, db_super_url, caplog, create_script_04):
     # The following is the creation script from the ancient 0.4 version; this
     # is deliberately picked so we run through all subsequent update scripts
-    # testing they all apply cleanly
-    create_04 = """
-CREATE TABLE packages (
-    package VARCHAR(200) NOT NULL,
-    skip    BOOLEAN DEFAULT false NOT NULL,
-    CONSTRAINT packages_pk PRIMARY KEY (package)
-);
-GRANT SELECT,INSERT,UPDATE,DELETE ON packages TO piwheels;
-CREATE INDEX packages_skip ON packages(skip);
-CREATE TABLE versions (
-    package VARCHAR(200) NOT NULL,
-    version VARCHAR(200) NOT NULL,
-    skip    BOOLEAN DEFAULT false NOT NULL,
-    CONSTRAINT versions_pk PRIMARY KEY (package, version),
-    CONSTRAINT versions_package_fk FOREIGN KEY (package)
-        REFERENCES packages ON DELETE RESTRICT
-);
-GRANT SELECT,INSERT,UPDATE,DELETE ON versions TO piwheels;
-CREATE INDEX versions_skip ON versions(skip);
-CREATE TABLE builds (
-    build_id        SERIAL NOT NULL,
-    package         VARCHAR(200) NOT NULL,
-    version         VARCHAR(200) NOT NULL,
-    built_by        INTEGER NOT NULL,
-    built_at        TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    duration        INTERVAL NOT NULL,
-    status          BOOLEAN DEFAULT true NOT NULL,
-    output          TEXT NOT NULL,
-    CONSTRAINT builds_pk PRIMARY KEY (build_id),
-    CONSTRAINT builds_unique UNIQUE (package, version, built_at, built_by),
-    CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
-        REFERENCES versions ON DELETE CASCADE,
-    CONSTRAINT builds_built_by_ck CHECK (built_by >= 1)
-);
-GRANT SELECT,INSERT,UPDATE,DELETE ON builds TO piwheels;
-CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);
-CREATE INDEX builds_pkgver ON builds(package, version);
-CREATE TABLE files (
-    filename            VARCHAR(255) NOT NULL,
-    build_id            INTEGER NOT NULL,
-    filesize            INTEGER NOT NULL,
-    filehash            CHAR(64) NOT NULL,
-    package_version_tag VARCHAR(100) NOT NULL,
-    py_version_tag      VARCHAR(100) NOT NULL,
-    abi_tag             VARCHAR(100) NOT NULL,
-    platform_tag        VARCHAR(100) NOT NULL,
-
-    CONSTRAINT files_pk PRIMARY KEY (filename),
-    CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
-        REFERENCES builds (build_id) ON DELETE CASCADE
-);
-GRANT SELECT,INSERT,UPDATE,DELETE ON files TO piwheels;
-CREATE UNIQUE INDEX files_pkgver ON files(build_id);
-CREATE INDEX files_size ON files(filesize);
-"""
+    # testing they all apply cleanly ... albeit with an empty database which
+    # won't test the harder bits
     with db.begin():
-        for statement in parse_statements(create_04):
+        for statement in parse_statements(create_script_04):
             db.execute(statement)
     assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
     with db.begin():
@@ -222,4 +229,118 @@ CREATE INDEX files_size ON files(filesize);
             assert False, "Didn't find version row in configuration"
     assert find_message(caplog.records,
                         'Upgrading database to version %s' % __version__)
-    # FIXME Should test structure of result is equivalent
+
+
+def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
+    # The following checks that the resulting database structure from a full
+    # upgrade (see above) matches that of a clean creation
+    def db_structure():
+        with db.begin():
+            return {
+                'relations': list(db.execute("""\
+                    SELECT
+                        cls.relname,
+                        cls.relkind,
+                        CASE WHEN cls.relkind IN ('v', 'm')
+                            THEN pg_get_viewdef(cls.oid)
+                            ELSE ''
+                        END AS reldef,
+                        obj_description(cls.oid, 'pg_class') AS relcomment
+                    FROM
+                        pg_catalog.pg_class cls
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
+                    WHERE
+                        nsp.nspname = 'public'
+                    ORDER BY
+                        relname;
+                    """)),
+                'columns': list(db.execute("""\
+                    SELECT
+                        attrelid::regclass::name AS attrelname,
+                        ROW_NUMBER() OVER (PARTITION BY attrelid ORDER BY attnum) AS attnum,
+                        attname,
+                        atttypid::regtype::name AS atttype,
+                        atttypmod,
+                        attnotnull,
+                        pg_get_expr(ad.adbin, cls.oid) AS attdefault,
+                        col_description(cls.oid, att.attnum) AS attcomment
+                    FROM
+                        pg_catalog.pg_attribute att
+                        JOIN pg_catalog.pg_class cls
+                            ON att.attrelid = cls.oid
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
+                        LEFT JOIN pg_catalog.pg_attrdef ad
+                            ON att.attrelid = ad.adrelid AND att.attnum = ad.adnum
+                    WHERE
+                        nsp.nspname = 'public'
+                        AND att.attnum > 0
+                        AND NOT att.attisdropped
+                    ORDER BY
+                        attrelname, attnum
+                    """)),
+                'constraints': list(db.execute("""\
+                    SELECT
+                        con.conname,
+                        pg_get_constraintdef(con.oid) AS condef,
+                        obj_description(con.oid, 'pg_constraint') AS concomment
+                    FROM
+                        pg_catalog.pg_constraint con
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON con.connamespace = nsp.oid
+                    WHERE
+                        nsp.nspname = 'public'
+                    ORDER BY
+                        conname;
+                    """)),
+                'functions': list(db.execute("""\
+                    SELECT
+                        pro.proname,
+                        pg_get_function_arguments(pro.oid) AS proargs,
+                        pg_get_functiondef(pro.oid) AS prodef,
+                        obj_description(pro.oid, 'pg_proc') AS procomment
+                    FROM
+                        pg_catalog.pg_proc pro
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON pro.pronamespace = nsp.oid
+                    WHERE
+                        nsp.nspname = 'public'
+                    ORDER BY
+                        proname, proargs;
+                    """)),
+                'triggers': list(db.execute("""\
+                    SELECT
+                        tg.tgname,
+                        tg.tgrelid::regclass::name AS tgrelname,
+                        tg.tgtype,
+                        tg.tgfoid::regproc::name AS tgprocname,
+                        obj_description(tg.oid, 'pg_trigger') AS tgcomment
+                    FROM
+                        pg_catalog.pg_trigger tg
+                        JOIN pg_catalog.pg_class cls
+                            ON tg.tgrelid = cls.oid
+                        JOIN pg_catalog.pg_namespace nsp
+                            ON cls.relnamespace = nsp.oid
+                    WHERE
+                        nsp.nspname = 'public'
+                        AND NOT tg.tgisinternal
+                    ORDER BY
+                        tgrelname, tgname;
+                    """)),
+            }
+            permissions = []
+            return relation_defs, column_defs, constraint_defs, function_defs, trigger_defs
+    create_structure = db_structure()
+    with db.begin():
+        # Wipe the public schema and re-create it with standard defaults
+        db.execute("DROP SCHEMA public CASCADE")
+        db.execute("CREATE SCHEMA public AUTHORIZATION postgres")
+        db.execute("GRANT CREATE ON SCHEMA public TO PUBLIC")
+        db.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
+    with db.begin():
+        for statement in parse_statements(create_script_04):
+            db.execute(statement)
+    assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
+    upgrade_structure = db_structure()
+    assert create_structure == upgrade_structure

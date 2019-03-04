@@ -109,9 +109,9 @@ def test_oracle_badly_formed_request(mock_seraph, task):
 
 def test_database_error(db, with_schema, db_client):
     with db.begin():
-        db.execute("REVOKE INSERT ON packages FROM %s" % PIWHEELS_USER)
+        db.execute("REVOKE SELECT ON statistics FROM %s" % PIWHEELS_USER)
     with pytest.raises(IOError):
-        db_client.add_new_package('foo', None)
+        db_client.get_statistics()
 
 
 def test_get_all_packages(db, with_package, db_client):
@@ -125,11 +125,11 @@ def test_get_all_package_versions(db, with_package_version, db_client):
 def test_add_new_package(db, with_schema, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 0
-    db_client.add_new_package('foo', None)
+    db_client.add_new_package('foo', '')
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 1
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', None)
+            "SELECT package, skip FROM packages").first() == ('foo', '')
 
 
 def test_add_new_package_version(db, with_package, db_client):
@@ -142,13 +142,13 @@ def test_add_new_package_version(db, with_package, db_client):
         assert db.execute(
             "SELECT package, version, released, skip "
             "FROM versions").first() == (
-                'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8), None)
+                'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8), '')
 
 
 def test_skip_package(db, with_package, db_client):
     with db.begin():
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', None)
+            "SELECT package, skip FROM packages").first() == ('foo', '')
     db_client.skip_package('foo', 'manual build')
     with db.begin():
         assert db.execute(
@@ -159,7 +159,7 @@ def test_skip_package_version(db, with_package_version, db_client):
     with db.begin():
         assert db.execute(
             "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', None)
+            "FROM versions").first() == ('foo', '0.1', '')
     db_client.skip_package_version('foo', '0.1', 'binary only')
     with db.begin():
         assert db.execute(
@@ -250,10 +250,7 @@ def test_set_pypi_serial(db, with_schema, db_client):
 
 def test_get_statistics(db_client, db, with_files):
     expected = {
-        'packages_count': 1,
         'packages_built': 1,
-        'versions_count': 1,
-        'versions_tried': 1,
         'builds_count': 1,
         'builds_count_success': 1,
         'builds_count_last_hour': 0,

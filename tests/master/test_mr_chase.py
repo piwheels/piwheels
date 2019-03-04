@@ -426,7 +426,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
 def test_normal_remove(db_queue, fs_queue, web_queue, task, import_queue,
                        build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMOVE', [bsh.package, bsh.version, None])
+    import_queue.send_msg('REMOVE', [bsh.package, bsh.version, ''])
     db_queue.expect('PKGEXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     db_queue.expect('VERFILES', [bsh.package, bsh.version])
@@ -474,7 +474,7 @@ def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMOVE', [bs.package, bs.version, None])
+    import_queue.send_msg('REMOVE', [bs.package, bs.version, ''])
     db_queue.expect('PKGEXISTS', [bs.package, bs.version])
     db_queue.send('OK', False)
     task.poll()

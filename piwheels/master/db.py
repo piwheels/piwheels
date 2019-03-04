@@ -133,45 +133,30 @@ class Database:
             self._conn.close()
             self._conn = None
 
-    def add_new_package(self, package, skip=None):
+    def add_new_package(self, package, skip=''):
         """
         Insert a new package record into the database. Returns True if the row
         was inserted successfully, or False if a key violation occurred.
         """
         with self._conn.begin():
-            try:
-                self._conn.execute(
-                    self._packages.insert(),
-                    package=package,
-                    skip=skip
-                )
-            except IntegrityError:
-                return False
-            else:
-                return True
+            return self._conn.execute(
+                "VALUES (add_new_package(%s, %s))", (package, skip)).scalar()
 
     def add_new_package_version(self, package, version,
-                                released=None, skip=None):
+                                released=None, skip=''):
         """
         Insert a new package version record into the database. Returns True if
         the row was inserted successfully, or False if a key violation
         occurred.
         """
         with self._conn.begin():
-            try:
-                if released is None:
-                    released = datetime.now(tz=UTC)
-                self._conn.execute(
-                    self._versions.insert(),
-                    package=package,
-                    version=version,
-                    released=released.astimezone(UTC).replace(tzinfo=None),
-                    skip=skip
-                )
-            except IntegrityError:
-                return False
-            else:
-                return True
+            if released is None:
+                released = datetime.now(tz=UTC)
+            return self._conn.execute(
+                "VALUES (add_new_package_version(%s, %s, %s, %s))",
+                (package, version,
+                 released.astimezone(UTC).replace(tzinfo=None), skip)
+            ).scalar()
 
     def skip_package(self, package, reason):
         """
@@ -180,10 +165,7 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                self._packages.update().
-                where(self._packages.c.package == package),
-                skip=reason
-            )
+                "VALUES (skip_package(%s, %s))", (package, reason))
 
     def skip_package_version(self, package, version, reason):
         """
@@ -192,11 +174,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                self._versions.update().
-                where(self._versions.c.package == package).
-                where(self._versions.c.version == version),
-                skip=reason
-            )
+                "VALUES (skip_package_version(%s, %s, %s))",
+                (package, version, reason))
 
     def test_package_version(self, package, version):
         """
@@ -217,80 +196,74 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                self._downloads.insert(),
-                filename=download.filename,
-                accessed_by=download.host,
-                accessed_at=download.timestamp.astimezone(UTC).replace(tzinfo=None),
-                arch=download.arch,
-                distro_name=download.distro_name,
-                distro_version=download.distro_version,
-                os_name=download.os_name,
-                os_version=download.os_version,
-                py_name=download.py_name,
-                py_version=download.py_version,
-            )
+                "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+                (
+                    download.filename,
+                    download.host,
+                    download.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    download.arch,
+                    download.distro_name,
+                    download.distro_version,
+                    download.os_name,
+                    download.os_version,
+                    download.py_name,
+                    download.py_version,
+                ))
 
     def log_build(self, build):
         """
         Log a build attempt in the database, including build output and wheel
-        info if successful
+        info if successful.
         """
         with self._conn.begin():
-            build.logged(self._conn.scalar(
-                self._builds.insert().returning(self._builds.c.build_id),
-                package=build.package,
-                version=build.version,
-                abi_tag=build.abi_tag,
-                built_by=build.slave_id,
-                # XXX Should we be accepting this or defaulting it?
-                #built_at=build.built_at.astimezone(UTC).replace(tzinfo=None),
-                duration=build.duration,
-                status=build.status
-            ))
-            self._conn.execute(
-                self._output.insert(),
-                build_id=build.build_id,
-                output=sanitize(build.output)
-            )
             if build.status:
-                for f in build.files.values():
-                    self.log_file(build, f)
-
-    def log_file(self, build, file):
-        """
-        Log a pending file transfer in the database, including file-size, hash,
-        and various tags
-        """
-        # NOTE: This method is not exposed on TheOracle as it is only required
-        # by log_build above
-        with self._conn.begin():
-            self._conn.execute(
-                self._files.delete().
-                where(self._files.c.filename == file.filename)
-            )
-            self._conn.execute(
-                self._files.insert(),
-                filename=file.filename,
-                build_id=build.build_id,
-                filesize=file.filesize,
-                filehash=file.filehash,
-                package_tag=file.package_tag,
-                package_version_tag=file.package_version_tag,
-                py_version_tag=file.py_version_tag,
-                abi_tag=file.abi_tag,
-                platform_tag=file.platform_tag
-            )
-            for tool, dependency in file.dependencies:
-                self._conn.execute(
-                    self._dependencies.insert(),
-                    filename=file.filename,
-                    tool=tool,
-                    dependency=dependency
-                )
+                build_id = self._conn.execute(
+                    "VALUES (log_build_success(%s, %s, %s, %s, %s, %s, "
+                    "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
+                    "))",
+                    (
+                        build.package,
+                        build.version,
+                        build.slave_id,
+                        build.duration,
+                        build.abi_tag,
+                        build.output,
+                        [(
+                            file.filename,
+                            None,
+                            file.filesize,
+                            file.filehash,
+                            file.package_tag,
+                            file.package_version_tag,
+                            file.py_version_tag,
+                            file.abi_tag,
+                            file.platform_tag,
+                        )
+                        for file in build.files.values()],
+                        [(
+                            file.filename,
+                            tool,
+                            dependency,
+                        )
+                        for file in build.files.values()
+                        for tool, dependency in file.dependencies]
+                    )).scalar()
+            else:
+                build_id = self._conn.execute(
+                    "VALUES (log_build_failure(%s, %s, %s, %s, %s, %s))",
+                    (
+                        build.package,
+                        build.version,
+                        build.slave_id,
+                        build.duration,
+                        build.abi_tag,
+                        build.output,
+                    )).scalar()
+            build.logged(build_id)
 
     def get_build_abis(self):
         """
-        Return the set of ABIs that the master should attempt to build
+        Return the set of ABIs that the master should attempt to build.
         """
         with self._conn.begin():
             return {
@@ -300,7 +273,7 @@ class Database:
 
     def get_pypi_serial(self):
         """
-        Return the serial number of the last PyPI event
+        Return the serial number of the last PyPI event.
         """
         with self._conn.begin():
             return self._conn.scalar(
@@ -310,18 +283,14 @@ class Database:
 
     def set_pypi_serial(self, serial):
         """
-        Update the serial number of the last PyPI event
+        Update the serial number of the last PyPI event.
         """
         with self._conn.begin():
-            self._conn.execute(
-                self._configuration.update().
-                where(self._configuration.c.id == 1),
-                pypi_serial=serial
-            )
+            self._conn.execute("VALUES (set_pypi_serial(%s))", (serial,))
 
     def get_all_packages(self):
         """
-        Returns the set of all known package names
+        Returns the set of all known package names.
         """
         with self._conn.begin():
             return {
@@ -331,7 +300,7 @@ class Database:
 
     def get_all_package_versions(self):
         """
-        Returns the set of all known (package, version) tuples
+        Returns the set of all known (package, version) tuples.
         """
         with self._conn.begin():
             return {
@@ -402,7 +371,7 @@ class Database:
                 for row in self._conn.execute(
                     select([
                         self._versions.c.version,
-                        ((self._packages.c.skip != None) | (self._versions.c.skip != None)).label('skipped'),
+                        ((self._packages.c.skip != '') | (self._versions.c.skip != '')).label('skipped'),
                         func.count().filter(self._builds.c.status).label('builds_succeeded'),
                         func.count().filter(~self._builds.c.status).label('builds_failed'),
                     ]).
@@ -436,7 +405,7 @@ class Database:
 
     def get_version_files(self, package, version):
         """
-        Returns the names of all files for *version* of *package*
+        Returns the names of all files for *version* of *package*.
         """
         with self._conn.begin():
             return {
@@ -452,7 +421,7 @@ class Database:
 
     def get_version_skip(self, package, version):
         """
-        Returns the reason for skipping *version* of *package*
+        Returns the reason for skipping *version* of *package*.
         """
         with self._conn.begin():
             return self._conn.scalar(
@@ -485,11 +454,8 @@ class Database:
     def delete_build(self, package, version):
         """
         Remove all builds for the specified package and version, along with
-        all files and download records
+        all files records.
         """
         with self._conn.begin():
             self._conn.execute(
-                self._builds.delete().
-                where(self._builds.c.package == package).
-                where(self._builds.c.version == version)
-            )
+                "VALUES (delete_build(%s, %s))", (package, version))
