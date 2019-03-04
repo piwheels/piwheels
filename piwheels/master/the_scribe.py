@@ -34,6 +34,7 @@ Defines the :class:`TheScribe` task; see class for more details.
 """
 
 import re
+import io
 import os
 import json
 import shutil
@@ -124,6 +125,9 @@ class TheScribe(tasks.PauseableTask):
         self.db = DbClient(config)
         self.package_cache = None
         self.statistics = {}
+        with pkg_resources.resource_stream(__name__, 'default_libs.txt') as s:
+            with io.TextIOWrapper(s, encoding='ascii') as t:
+                self.default_libs = set(line.strip() for line in t)
         self.templates = PageTemplateLoader(
             search_path=[
                 pkg_resources.resource_filename(__name__, 'templates')
@@ -351,6 +355,8 @@ class TheScribe(tasks.PauseableTask):
             ), reverse=True)
         if files:
             dependencies = self.db.get_file_dependencies(files[0].filename)
+            if 'apt' in dependencies:
+                dependencies['apt'] = dependencies['apt'] - self.default_libs
         else:
             dependencies = {}
         self.logger.info('writing project page for %s', package)

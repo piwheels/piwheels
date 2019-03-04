@@ -62,19 +62,40 @@ def task(request, zmq_context, master_config, db_queue, scribe_queue):
 
 
 class ContainsParser(HTMLParser):
-    def __init__(self, find_tag, find_attrs):
+    def __init__(self, tag, attrs=None, content=None):
         super().__init__(convert_charrefs=True)
-        self.found = False
-        self.find_tag = find_tag
-        self.find_attrs = set(find_attrs)
+        self.state = 'not found'
+        self.tag = tag
+        self.attrs = set() if attrs is None else set(attrs)
+        self.content = content
+        self.compare = None
 
     def handle_starttag(self, tag, attrs):
-        if tag == self.find_tag and self.find_attrs <= set(attrs):
-            self.found = True
+        if tag == self.tag and self.attrs <= set(attrs):
+            if self.content is None:
+                self.state = 'found'
+            else:
+                self.state = 'in tag'
+                self.compare = ''
+
+    def handle_data(self, data):
+        if self.state == 'in tag':
+            self.compare += data
+
+    def handle_endtag(self, tag):
+        # Yes, this isn't sufficient to deal with nested equivalent tags but
+        # it's only meant to be a simple matcher
+        if tag == self.tag and self.state == 'in tag':
+            if self.content == self.compare:
+                self.state = 'found'
+
+    @property
+    def found(self):
+        return self.state == 'found'
 
 
-def contains_elem(path, tag, attrs):
-    parser = ContainsParser(tag, attrs)
+def contains_elem(path, tag, attrs=None, content=None):
+    parser = ContainsParser(tag, attrs, content)
     with path.open('r', encoding='utf-8') as f:
         while True:
             chunk = f.read(8192)
@@ -225,7 +246,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     assert project.exists() and project.is_file()
 
 
-def test_write_pkg_project(db_queue, task, scribe_queue, master_config):
+def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     scribe_queue.send_msg('PKGPROJ', 'foo')
@@ -243,6 +264,86 @@ def test_write_pkg_project(db_queue, task, scribe_queue, master_config):
     assert not index.exists()
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'th', content='No files')
+
+
+def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGPROJ', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 0, 1),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef'),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.send('OK', {})
+    task.once()
+    task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(project, 'pre', content='sudo pip3 install foo')
+
+
+def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    scribe_queue.send_msg('PKGPROJ', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 0, 1),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef'),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.send('OK', {'apt': {'libc6', 'zlib1g', 'libfoo'}})
+    task.once()
+    task.poll()
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(project, 'pre', content='sudo apt install libfoo\nsudo pip3 install foo')
 
 
 def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
