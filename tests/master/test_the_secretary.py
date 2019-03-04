@@ -82,6 +82,7 @@ def stats_dict(request):
         'disk_free': 0,
         'disk_size': 1,
         'downloads_last_month': 10,
+        'downloads_all': 100,
     }
 
 
@@ -89,9 +90,9 @@ def test_pass_through(task, web_queue, scribe_queue, stats_dict):
     web_queue.send_msg('HOME', stats_dict)
     task.poll()
     assert scribe_queue.recv_msg() == ('HOME', stats_dict)
-    web_queue.send_msg('SEARCH', {'foo': 1})
+    web_queue.send_msg('SEARCH', {'foo': (0, 1)})
     task.poll()
-    assert scribe_queue.recv_msg() == ('SEARCH', {'foo': 1})
+    assert scribe_queue.recv_msg() == ('SEARCH', {'foo': [0, 1]})
 
 
 def test_bad_request(task, web_queue):

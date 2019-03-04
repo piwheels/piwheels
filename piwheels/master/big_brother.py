@@ -70,6 +70,7 @@ class BigBrother(tasks.PauseableTask):
             'disk_free':             0,
             'disk_size':             1,
             'downloads_last_month':  0,
+            'downloads_all':         0,
         }
         self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
         stats_queue = self.ctx.socket(

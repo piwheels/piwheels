@@ -91,6 +91,7 @@ _statistics = {      # statistics
     'disk_free':             int,
     'disk_size':             int,
     'downloads_last_month':  int,
+    'downloads_all':         int,
 }
 
 
@@ -167,7 +168,7 @@ the_scribe = Protocol(recv={
     'PKGBOTH': str,  # package name
     'PKGPROJ': str,  # package name
     'HOME':    _statistics,  # statistics
-    'SEARCH':  {str: int},  # package: download-count
+    'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
 })
 
 

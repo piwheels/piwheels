@@ -134,6 +134,24 @@ FROM
     ) AS t;
 GRANT SELECT ON builds_pending TO {username};
 
+DROP VIEW downloads_recent;
+CREATE VIEW downloads_recent AS
+SELECT
+    p.package,
+    COALESCE(COUNT(d.filename) FILTER (
+        WHERE d.accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+    ), 0) AS downloads_recent,
+    COALESCE(COUNT(d.filename), 0) AS downloads_all
+FROM
+    packages AS p
+    LEFT JOIN (
+        builds AS b
+        JOIN files AS f ON b.build_id = f.build_id
+        JOIN downloads AS d ON d.filename = f.filename
+    ) ON p.package = b.package
+GROUP BY p.package;
+GRANT SELECT ON downloads_recent TO {username};
+
 DROP VIEW statistics;
 CREATE VIEW statistics AS
     WITH build_stats AS (
@@ -171,9 +189,12 @@ CREATE VIEW statistics AS
         WHERE platform_tag <> 'linux_armv6l'
     ),
     download_stats AS (
-        SELECT COUNT(*) AS downloads_last_month
+        SELECT
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            ) AS downloads_last_month,
+            COUNT(*) AS downloads_all
         FROM downloads
-        WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '1 month'
     )
     SELECT
         fc.packages_built,
@@ -183,7 +204,8 @@ CREATE VIEW statistics AS
         bs.builds_time,
         fc.files_count,
         fs.builds_size,
-        dl.downloads_last_month
+        dl.downloads_last_month,
+        dl.downloads_all
     FROM
         build_stats bs,
         build_latest bl,

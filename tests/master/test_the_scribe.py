@@ -391,8 +391,8 @@ def test_write_search_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo', 'bar'})
     search_index = {
-        'foo': 10,
-        'bar': 1,
+        'foo': (10, 100),
+        'bar': (0, 1),
     }
     scribe_queue.send_msg('SEARCH', search_index)
     task.once()
@@ -402,6 +402,6 @@ def test_write_search_index(db_queue, task, scribe_queue, master_config):
     packages_json = root / 'packages.json'
     assert packages_json.exists() and packages_json.is_file()
     assert search_index == {
-        pkg: count
-        for pkg, count in json.load(packages_json.open('r'))
+        pkg: (count_recent, count_all)
+        for pkg, count_recent, count_all in json.load(packages_json.open('r'))
     }

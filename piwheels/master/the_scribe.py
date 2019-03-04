@@ -251,8 +251,8 @@ class TheScribe(tasks.PauseableTask):
             # Re-organize into a list of package, count tuples as this is
             # what the JS actually wants
             search_index = [
-                (package, count)
-                for package, count in search_index.items()
+                (package, count_recent, count_all)
+                for package, (count_recent, count_all) in search_index.items()
             ]
             json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))

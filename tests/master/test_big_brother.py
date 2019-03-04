@@ -53,6 +53,7 @@ def stats_result(request):
         'files_count':            0,
         'builds_size':            0,
         'downloads_last_month':   10,
+        'downloads_all':          100,
     }
 
 
@@ -70,6 +71,7 @@ def stats_dict(request):
         'disk_free': 0,
         'disk_size': 1,
         'downloads_last_month': 10,
+        'downloads_all': 100,
     }
 
 
@@ -136,12 +138,12 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
         db_queue.expect('GETDL')
-        db_queue.send('OK', {'foo': 10})
+        db_queue.send('OK', {'foo': (10, 100)})
         task.loop()  # crank the handle once
         db_queue.check()
         assert master_status_queue.recv_msg() == ('STATS', stats_dict)
         assert web_queue.recv_msg() == ('HOME', stats_dict)
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
 
 
 def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
@@ -158,12 +160,12 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
         db_queue.expect('GETDL')
-        db_queue.send('OK', {'foo': 10})
+        db_queue.send('OK', {'foo': (10, 100)})
         task.loop()
         db_queue.check()
         assert web_queue.recv_msg() == ('HOME', stats_dict)
         assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
 
 
 def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
@@ -178,12 +180,12 @@ def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
         db_queue.expect('GETDL')
-        db_queue.send('OK', {'foo': 10})
+        db_queue.send('OK', {'foo': (10, 100)})
         task.loop()
         db_queue.check()
         assert web_queue.recv_msg() == ('HOME', stats_dict)
         assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': 10})
+        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
 
 
 def test_bad_stats(db_queue, master_status_queue, web_queue, task,

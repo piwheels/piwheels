@@ -361,7 +361,7 @@ class Database:
         """
         with self._conn.begin():
             return {
-                rec.package: rec.downloads
+                rec.package: (rec.downloads_recent, rec.downloads_all)
                 for rec in self._conn.execute(self._downloads_recent.select())
             }
 
