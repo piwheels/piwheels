@@ -35,7 +35,6 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 
 import pickle
 from datetime import datetime, timezone
-from collections import defaultdict
 
 import zmq
 
@@ -69,7 +68,7 @@ class SlaveDriver(Task):
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.master_control)
         self.paused = False
-        self.abi_queues = defaultdict(set)
+        self.abi_queues = {}
         slave_queue = self.ctx.socket(
             zmq.ROUTER, protocol=protocols.slave_driver)
         slave_queue.ipv6 = True
@@ -103,8 +102,8 @@ class SlaveDriver(Task):
         self.db.close()
         self.stats_queue.close()
         self.web_queue.close()
-        self.status_queue.close()
         SlaveState.status_queue = None
+        self.status_queue.close()
         super().close()
 
     def list_slaves(self):
@@ -174,21 +173,33 @@ class SlaveDriver(Task):
 
     def handle_build(self, queue):
         """
-        Build up ABI-specific queues of package versions waiting to be built.
-        The queues are limited to 1000 packages per ABI, and are kept as sets
-        to eliminate duplicate versions that will inevitably appear due to
-        re-runs of the build-queue query (in :class:`TheArchitect`) while
-        queried versions are actively being built.
+        Refresh the ABI-specific queues of package versions waiting to be The
+        queues are limited to 1000 packages per ABI, and are kept as lists
+        ordered by release date. When a message arrives from
+        :class:`TheArchitect` it refreshes (replaces) all current queues. There
+        is, however, still a duplication possibility as :class:`TheArchitect`
+        doesn't know what packages are actively being built; this method
+        handles filtering out such packages.
+
+        Even if the active builds fail (because build slaves crash, or the
+        network dies) this doesn't matter as a future re-run of the build
+        queue query will return these packages again, and if no build slaves
+        are actively working on them at that time they will then be retried.
         """
+        active_builds = set(self.active_builds())
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
             self.logger.error(str(e))
         else:
-            abi, package, version = data
-            queue = self.abi_queues[abi]
-            if len(queue) < 1000:
-                queue.add((package, version))
+            self.abi_queues = {
+                abi: [
+                    (package, version)
+                    for package, version in build_queue
+                    if (abi, package, version) not in active_builds
+                ][::-1]  # reversed to simplify popping stuff off the "front"
+                for abi, build_queue in data.items()
+            }
             self.stats_queue.send_msg('STATBQ', {
                 abi: len(queue) for (abi, queue) in self.abi_queues.items()
             })
@@ -299,7 +310,7 @@ class SlaveDriver(Task):
         else:
             try:
                 package, version = self.abi_queues[slave.native_abi].pop()
-            except KeyError:
+            except (KeyError, IndexError) as e:
                 pass
             else:
                 if (package, version) not in self.active_builds():
@@ -307,6 +318,10 @@ class SlaveDriver(Task):
                         'slave %d: build %s %s',
                         slave.slave_id, package, version)
                     return 'BUILD', [package, version]
+            finally:
+                self.stats_queue.send_msg('STATBQ', {
+                    abi: len(queue) for (abi, queue) in self.abi_queues.items()
+                })
             self.logger.info(
                 'slave %d (%s): sleeping because no builds',
                 slave.slave_id, slave.label)
@@ -393,14 +408,14 @@ class SlaveDriver(Task):
 
     def active_builds(self):
         """
-        Generator method which yields all (package, version) tuples currently
-        being built by build slaves.
+        Generator method which yields all (abi, package, version) tuples
+        currently being built by build slaves.
         """
         for slave in self.slaves.values():
             if slave.reply is not None and slave.reply[0] == 'BUILD':
                 if slave.last_seen + slave.timeout > datetime.now(tz=UTC):
                     msg, (package, version) = slave.reply
-                    yield package, version
+                    yield (slave.native_abi, package, version)
 
 
 def build_armv6l_hack(build):

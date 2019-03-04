@@ -77,7 +77,7 @@ class Task(Thread):
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(
             zmq.PUSH, protocol=reversed(protocols.master_control))
-        self.quit_queue.hwm = 1
+        self.quit_queue.hwm = 10
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
 
@@ -152,11 +152,17 @@ class Task(Thread):
         # We deliberately don't catch the IOError that can result from recv_msg
         # here as this queue is guaranteed to be in-process. If something sends
         # us an invalid message it's a bug and we should shut down (see run)
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise TaskQuit
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            self.logger.warning('cannot pause or resume %s', self.name)
+            if msg == 'QUIT':
+                raise TaskQuit
+            elif msg in ('PAUSE', 'RESUME'):
+                self.logger.warning('cannot pause or resume %s', self.name)
+            else:
+                self.logger.error('missing control handler for %s', msg)
 
     def once(self):
         """
@@ -205,7 +211,7 @@ class Task(Thread):
             self.logger.info('stopping')
         except:
             self.quit_queue.send_msg('QUIT')
-            self.logger.exception('unhandled exception')
+            self.logger.exception('unhandled exception in %r', self)
         finally:
             self.close()
             self.logger.info('stopped')

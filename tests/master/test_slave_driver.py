@@ -123,14 +123,14 @@ def test_control_pause(task):
 
 def test_new_builds(task, builds_queue, stats_queue):
     assert not task.abi_queues
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
-    assert task.abi_queues['cp34m'] == {('foo', '0.1')}
+    assert task.abi_queues['cp34m'] == [('foo', '0.1')]
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    builds_queue.send_msg('QUEUE', ['cp35m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp35m': [('foo', '0.1')]})
     task.poll()
-    assert task.abi_queues['cp35m'] == {('foo', '0.1')}
-    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
+    assert task.abi_queues['cp35m'] == [('foo', '0.1')]
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp35m': 1})
 
 
 def test_slave_says_hello(task, slave_queue):
@@ -290,7 +290,7 @@ def test_slave_says_hello(task, slave_queue):
         assert False, "No slaves found"
 
 
-def test_slave_says_idle_invalid(task, slave_queue, master_config):
+def test_slave_says_idle_invalid(task, slave_queue, master_config, stats_queue):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
@@ -324,7 +324,8 @@ def test_master_says_idle_when_terminated(task, slave_queue, master_config):
     assert slave_queue.recv_msg() == ('DIE', None)
 
 
-def test_master_kills_correct_slave(task, slave_queue, master_config):
+def test_master_kills_correct_slave(task, slave_queue, master_config,
+                                    stats_queue):
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
@@ -334,10 +335,11 @@ def test_master_kills_correct_slave(task, slave_queue, master_config):
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('SLEEP', None)
+    assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
 def test_slave_says_idle_no_builds(task, slave_queue, builds_queue,
-                                   master_config):
+                                   master_config, stats_queue):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
@@ -346,26 +348,32 @@ def test_slave_says_idle_no_builds(task, slave_queue, builds_queue,
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('SLEEP', None)
+    assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
 def test_slave_says_idle_with_build(task, slave_queue, builds_queue,
-                                    master_config):
+                                    master_config, stats_queue):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
-    builds_queue.send_msg('QUEUE', ['cp35m', 'bar', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')],
+                                    'cp35m': [('bar', '0.1')]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
 
 
 def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
-                                           builds_queue, master_config):
+                                           builds_queue, stats_queue,
+                                           master_config):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
@@ -375,27 +383,31 @@ def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels2'])
     task.poll()
     assert slave2_queue.recv_msg() == ('ACK', [2, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
     slave2_queue.send_msg('IDLE')
     task.poll()
     assert slave2_queue.recv_msg() == ('SLEEP', None)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
 
 
 def test_slave_says_idle_when_paused(task, slave_queue, builds_queue,
-                                     master_config):
+                                     master_config, stats_queue):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     task.pause()
     task.poll()
     slave_queue.send_msg('IDLE')
@@ -406,6 +418,7 @@ def test_slave_says_idle_when_paused(task, slave_queue, builds_queue,
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
 
 
 def test_slave_says_built_invalid(task, slave_queue, master_config):
@@ -421,17 +434,19 @@ def test_slave_says_built_invalid(task, slave_queue, master_config):
 
 
 def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
-                                 web_queue, master_config):
+                                 web_queue, master_config, stats_queue):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     slave_queue.send_msg('BUILT', [False, timedelta(seconds=5), '', []])
     bs = BuildState(
         1, 'foo', '0.1', 'cp34m', False, timedelta(seconds=5), '', {})
@@ -445,18 +460,21 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
 
 
 def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
-                                    builds_queue, web_queue, master_config,
-                                    file_state, file_state_hacked):
+                                    builds_queue, web_queue, stats_queue,
+                                    master_config, file_state,
+                                    file_state_hacked):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', 'foo', '0.1'])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     slave_queue.send_msg('BUILT', [
         True, timedelta(seconds=5), 'Woohoo!', [file_state.as_message()]
     ])
@@ -492,7 +510,7 @@ def test_slave_says_sent_invalid(task, slave_queue, master_config):
 
 
 def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
-                                builds_queue, master_config,
+                                builds_queue, stats_queue, master_config,
                                 build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
@@ -501,11 +519,13 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
+    builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     slave_queue.send_msg('BUILT', [
         bs.status, bs.duration, bs.output, [fs1.as_message()]
     ])
@@ -525,8 +545,8 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
 
 
 def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
-                                   builds_queue, web_queue, master_config,
-                                   build_state_hacked):
+                                   builds_queue, web_queue, stats_queue,
+                                   master_config, build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
@@ -534,11 +554,13 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
+    builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     slave_queue.send_msg('BUILT', [
         bs.status, bs.duration, bs.output, [fs1.as_message()]
     ])
@@ -559,8 +581,8 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
 
 
 def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
-                                        builds_queue, web_queue, master_config,
-                                        build_state_hacked):
+                                        builds_queue, web_queue, stats_queue,
+                                        master_config, build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
     fs2 = [f for f in bs.files.values() if f.transferred][0]
@@ -569,11 +591,13 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
     task.poll()
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    builds_queue.send_msg('QUEUE', ['cp34m', bs.package, bs.version])
+    builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll()
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     slave_queue.send_msg('IDLE')
     task.poll()
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     slave_queue.send_msg('BUILT', [
         bs.status, bs.duration, bs.output,
         [f.as_message() for f in bs.files.values()]

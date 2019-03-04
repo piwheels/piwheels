@@ -295,7 +295,7 @@ class DbClient:
         self.ctx = transport.Context.instance()
         self.db_queue = self.ctx.socket(
             zmq.REQ, protocol=reversed(protocols.the_oracle))
-        self.db_queue.hwm = 1
+        self.db_queue.hwm = 10
         self.db_queue.connect(config.db_queue)
 
     def close(self):

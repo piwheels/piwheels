@@ -26,6 +26,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from unittest import mock
+from datetime import datetime, timedelta
+
 import zmq
 import pytest
 
@@ -50,10 +53,17 @@ def builds_queue(request, zmq_context, master_config):
 
 
 def test_architect_queue(db, with_build, task, builds_queue):
-    task.loop()
-    assert builds_queue.recv_msg() == ('QUEUE', ['cp35m', 'foo', '0.1'])
-    with db.begin():
-        db.execute("DELETE FROM builds")
-    task.loop()  # Empty loop on StopIteration
-    task.loop()
-    assert builds_queue.recv_msg() == ('QUEUE', ['cp34m', 'foo', '0.1'])
+    with mock.patch('piwheels.master.the_architect.datetime') as dtmock:
+        now = datetime.utcnow()
+        dtmock.utcnow.side_effect = [
+            now,
+            now,
+            now + timedelta(seconds=300),
+            now + timedelta(seconds=300),
+        ]
+        task.loop()
+        assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
+        with db.begin():
+            db.execute("DELETE FROM builds")
+        task.loop()
+        assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})

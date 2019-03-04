@@ -171,7 +171,7 @@ the_scribe = Protocol(recv={
 
 
 the_architect = Protocol(send={
-    'QUEUE': ExactSequence([str, str, str]),  # abi, package, version
+    'QUEUE': {str: [ExactSequence([str, str])]},  # abi: [(package, version), ...]
 })
 
 
