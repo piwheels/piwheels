@@ -114,7 +114,7 @@ autodoc_member_order = 'groupwise'
 # -- Intersphinx configuration --------------------------------------------
 
 intersphinx_mapping = {
-    'python': ('http://docs.python.org/3.5', None),
+    'python': ('https://docs.python.org/3.5', None),
 }
 intersphinx_cache_limit = 7
 
