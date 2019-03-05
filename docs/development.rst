@@ -397,7 +397,6 @@ protocol follows a strict request-reply sequence which is illustrated below
 .. image:: images/import_protocol.*
     :align: center
 
-
 1. The importer sends "IMPORT" with data ``[abi_tag, package, version, status,
    duration, output, files]``:
 
@@ -473,7 +472,6 @@ protocol follows a strict request-reply sequence which is illustrated below
 .. image:: images/import_protocol.*
     :align: center
 
-
 1. The utility sends "REMOVE" with data ``[package, version, skip]``:
 
    * *package* is the name of the package to remove.
@@ -489,6 +487,32 @@ protocol follows a strict request-reply sequence which is illustrated below
    error that occurred).
 
 3. If the removal is successful, the master replies with "DONE".
+
+
+Mr Chase (rebuilding)
+---------------------
+
+The queue that talks to :ref:`mr-chase` is a ZeroMQ REQ socket, hence the
+protocol follows a strict request-reply sequence which is illustrated below
+(see above for documentation of the ``IMPORT`` path):
+
+.. image:: images/import_protocol.*
+    :align: center
+
+1. The utility sends "REBUILD" with data ``[part, package]``:
+
+   * *part* is the part of the website to rebuild. It must be one of "HOME",
+     "SEARCH", "PKGPROJ" or "PKGBOTH".
+
+   * *package* is the name of the package to rebuild indexes and/or project
+     pages for or ``None`` if pages for all packages should be rebuilt. This
+     parameter is omitted if *part* is "HOME" or "SEARCH".
+
+2. If the rebuild request fails (e.g. if the package does not exist), the
+   master will send "ERROR" with data ``message`` (a string describing the
+   error that occurred).
+
+3. If the rebuild request is successful, the master replies with "DONE".
 
 
 .. _file-juggler-protocol:

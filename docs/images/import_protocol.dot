@@ -3,6 +3,7 @@ digraph slave {
     node [shape=house, fontname=Sans, fontsize=10, style=filled, fillcolor="#ffaaaa", penwidth=0];
     IMPORT;
     REMOVE;
+    REBUILD;
     SENT;
 
     /* Received messages */
@@ -20,4 +21,6 @@ digraph slave {
     SENT->SEND [label="failure/more"];
     REMOVE->DONE [label="[package,\nversion,\nskip]"];
     REMOVE->ERROR;
+    REBUILD->DONE [label="[part,\npackage]"];
+    REBUILD->ERROR;
 }
