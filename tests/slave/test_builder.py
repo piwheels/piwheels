@@ -160,6 +160,7 @@ def test_package_metadata(mock_package):
 
 
 def test_package_dependencies(mock_package, tmpdir):
+    builder.PiWheelsPackage.apt_cache = None
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
