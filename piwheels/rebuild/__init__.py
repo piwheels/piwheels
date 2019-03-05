@@ -92,19 +92,17 @@ piw-master script.
         help="The address of the queue used by piw-rebuild (default: "
         "(%(default)s); this should always be an ipc address")
     config = parser.parse_args(args)
-    print(config)
     terminal.configure_logging(config.log_level, config.log_file)
 
     logging.info("PiWheels Rebuilder version %s", __version__)
 
     if not config.yes:
-        if config.part in ('PKGPROJ', 'PKGBOTH'):
-            if config.package is None:
-                s = 'This will rebuild pages for ALL packages; proceed?'
-                if not terminal.yes_no_prompt(s):
-                    logging.warning('User aborted rebuild')
-                    return 2
-                logging.warning('Go make coffee...')
+        if config.part in ('PKGPROJ', 'PKGBOTH') and config.package is None:
+            s = 'This will rebuild pages for ALL packages; proceed?'
+            if not terminal.yes_no_prompt(s):
+                logging.warning('User aborted rebuild')
+                return 2
+            logging.warning('Go make coffee...')
     logging.info('Connecting to master at %s', config.import_queue)
     do_rebuild(config)
     return 0

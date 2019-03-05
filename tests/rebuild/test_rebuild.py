@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os
+import argparse
 from unittest import mock
 from threading import Thread
 
@@ -96,6 +96,11 @@ def test_abort(caplog):
     assert find_message(caplog.records, 'User aborted rebuild')
 
 
+def test_invalid_part(caplog):
+    with pytest.raises(argparse.ArgumentError):
+        main(['foo'])
+
+
 def test_rebuild_home(mock_context, import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'home']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['HOME'])
@@ -124,6 +129,14 @@ def test_rebuild_all(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RebuildThread(['--import-queue', import_queue_name, 'project']) as thread:
+            assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', None])
+            import_queue.send_msg('DONE')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_rebuild_all_yes(mock_context, import_queue_name, import_queue):
+        with RebuildThread(['--yes', '--import-queue', import_queue_name, 'project']) as thread:
             assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', None])
             import_queue.send_msg('DONE')
             thread.join(10)
