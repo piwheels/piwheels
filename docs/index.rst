@@ -31,6 +31,7 @@ Table of Contents
     sense
     initdb
     importer
+    rebuild
     remove
     logger
     development
