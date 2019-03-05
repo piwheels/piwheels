@@ -106,6 +106,9 @@ class BigBrother(PauseableTask):
                 self.stats['disk_size'] = f_frsize * f_blocks
             elif msg == 'STATBQ':
                 self.stats['builds_pending'] = sum(data.values())
+            elif msg == 'HOME':
+                # Forced rebuild from Mr. Chase
+                self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
 
     def loop(self):
         # The big brother task is not reactive; it just pumps out stats

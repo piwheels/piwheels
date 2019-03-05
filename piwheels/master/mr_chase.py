@@ -72,6 +72,9 @@ class MrChase(PauseableTask):
             zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
+        self.stats_queue = self.ctx.socket(
+            zmq.PUSH, protocol=reversed(protocols.big_brother))
+        self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)
         self.states = {}
@@ -107,8 +110,8 @@ class MrChase(PauseableTask):
                 # mechanism?
                 state = BuildState.from_message([0] + data)
                 self.states[address] = state
-            elif msg == 'REMOVE':
-                # No need to store state for the remover
+            elif msg in ('REMOVE', 'REBUILD'):
+                # No need to store state for these tools
                 state = data
             elif msg == 'SENT':
                 self.logger.error('SENT before IMPORT')
@@ -118,6 +121,7 @@ class MrChase(PauseableTask):
         handler = {
             'IMPORT': self.do_import,
             'REMOVE': self.do_remove,
+            'REBUILD': self.do_rebuild,
             'SENT': self.do_sent,
         }[msg]
         msg, data = handler(state)
@@ -204,7 +208,7 @@ class MrChase(PauseableTask):
 
     def do_remove(self, state):
         """
-        Handler for the importer's "REMOVE" message, indicating a request to
+        Handler for the remover's "REMOVE" message, indicating a request to
         remove a specific version of a package from the system.
         """
         package, version, reason = state
@@ -220,4 +224,23 @@ class MrChase(PauseableTask):
             self.fs.remove(package, filename)
         self.db.delete_build(package, version)
         self.web_queue.send_msg('PKGBOTH', package)
+        return 'DONE', protocols.NoData
+
+    def do_rebuild(self, state):
+        """
+        Handler for the rebuilder's "REBUILD" message, indicating a request
+        to rebuild part of the website.
+        """
+        part, *state = state
+        if part in ('HOME', 'SEARCH'):
+            self.stats_queue.send_msg('HOME')
+        else:  # ('PKGPROJ', 'PKGBOTH'):
+            package, = state
+            if package is None:
+                for package in self.db.get_all_packages():
+                    self.web_queue.send_msg(part, package)
+            elif self.db.test_package(package):
+                self.web_queue.send_msg(part, package)
+            else:
+                return 'ERROR', 'unknown package %s' % package
         return 'DONE', protocols.NoData

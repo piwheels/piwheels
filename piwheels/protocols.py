@@ -159,6 +159,7 @@ master_control = Protocol(recv={
 big_brother = Protocol(recv={
     'STATFS': ExactSequence([int, int, int]),  # frsize, bavail, blocks
     'STATBQ': {str: int},  # abi: queue-size
+    'HOME':   NoData,
 })
 
 
@@ -202,6 +203,12 @@ mr_chase = Protocol(recv={
         [_file_state],  # filename: filestate
     ]),
     'REMOVE': ExactSequence([str, str, str]),  # package, version, skip-reason
+    'REBUILD': Any(
+        ExactSequence(['HOME']),
+        ExactSequence(['SEARCH']),
+        ExactSequence(['PKGPROJ', Maybe(str)]),
+        ExactSequence(['PKGBOTH', Maybe(str)]),
+    ),
     'SENT':   NoData,
 }, send={
     'SEND':   str,  # filename
@@ -246,7 +253,8 @@ the_oracle = Protocol(recv={
     'PROJFILES':   str,                        # package
     'VERFILES':    ExactSequence([str, str]),  # package, version
     'GETSKIP':     ExactSequence([str, str]),  # package, version
-    'PKGEXISTS':   ExactSequence([str, str]),  # package, version
+    'PKGEXISTS':   str,                        # package
+    'VEREXISTS':   ExactSequence([str, str]),  # package, version
     'GETABIS':     NoData,
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number

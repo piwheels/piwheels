@@ -77,6 +77,16 @@ digraph piwheels {
         Importer [label="main"];
     }
 
+    subgraph cluster_rebuild {
+        graph [label="piw-rebuild"];
+        Rebuild [label="main"];
+    }
+
+    subgraph cluster_remove {
+        graph [label="piw-remove"];
+        Remove [label="main"];
+    }
+
 
     PyPI->CloudGazer;
     PyPI->Slave1;
@@ -87,6 +97,8 @@ digraph piwheels {
     Slave2->FileJuggler [dir=both];
     Importer->MrChase [dir=both];
     Importer->FileJuggler [dir=both];
+    Rebuild->MrChase [dir=both];
+    Remove->MrChase [dir=both];
     main->monitor;
     monitor->main;
 
@@ -103,6 +115,7 @@ digraph piwheels {
     TheArchitect->SlaveDriver;
     MrChase->FileJuggler [dir=both];
     MrChase->Seraph [dir=both];
+    MrChase->BigBrother;
     Lumberjack->Seraph [dir=both];
     httpd->Users;
 }

@@ -177,6 +177,17 @@ class Database:
                 "VALUES (skip_package_version(%s, %s, %s))",
                 (package, version, reason))
 
+    def test_package(self, package):
+        """
+        Check whether *package* already exists in the database. Returns a
+        boolean.
+        """
+        with self._conn.begin():
+            return bool(self._conn.scalar(
+                self._packages.select().
+                where(self._packages.c.package == package)
+            ))
+
     def test_package_version(self, package, version):
         """
         Check whether *version* of *package* already exists in the database.

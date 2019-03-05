@@ -171,6 +171,11 @@ def test_get_version_skip(db, with_package_version, db_client):
     assert not db_client.get_version_skip('foo', '0.1')
 
 
+def test_test_package(db, with_package, db_client):
+    assert db_client.test_package('foo')
+    assert not db_client.test_package('quux')
+
+
 def test_test_package_version(db, with_package_version, db_client):
     assert db_client.test_package_version('foo', '0.1')
     assert not db_client.test_package_version('foo', '0.2')

@@ -110,6 +110,12 @@ def test_skip_package_version(db_intf, db, with_package_version):
         "AND version = '0.1'").first() == ('binary only',)
 
 
+def test_test_package(db_intf, db, with_build_abis):
+    assert not db_intf.test_package('foo')
+    db_intf.add_new_package('foo')
+    assert db_intf.test_package('foo')
+
+
 def test_test_package_version(db_intf, db, with_package):
     assert not db_intf.test_package_version(with_package, '0.1')
     db_intf.add_new_package_version(with_package, '0.1')

@@ -118,7 +118,8 @@ class TheOracle(Task):
                         'PROJFILES':   lambda: self.do_projfiles(data),
                         'VERFILES':    lambda: self.do_verfiles(*data),
                         'GETSKIP':     lambda: self.do_getskip(*data),
-                        'PKGEXISTS':   lambda: self.do_pkgexists(*data),
+                        'PKGEXISTS':   lambda: self.do_pkgexists(data),
+                        'VEREXISTS':   lambda: self.do_verexists(*data),
                         'GETABIS':     lambda: self.do_getabis(),
                         'GETPYPI':     lambda: self.do_getpypi(),
                         'SETPYPI':     lambda: self.do_setpypi(data),
@@ -234,9 +235,16 @@ class TheOracle(Task):
         """
         return self.db.get_version_skip(package, version)
 
-    def do_pkgexists(self, package, version):
+    def do_pkgexists(self, package):
         """
         Handler for "PKGEXISTS" message, sent by :class:`DbClient` to request
+        whether or not the specified *package* exists.
+        """
+        return self.db.test_package(package)
+
+    def do_verexists(self, package, version):
+        """
+        Handler for "VEREXISTS" message, sent by :class:`DbClient` to request
         whether or not the specified *version* of *package* exists.
         """
         return self.db.test_package_version(package, version)
@@ -335,11 +343,17 @@ class DbClient:
         """
         self._execute('SKIPVER', [package, version, reason])
 
+    def test_package(self, package):
+        """
+        See :meth:`.db.Database.test_package`.
+        """
+        return self._execute('PKGEXISTS', package)
+
     def test_package_version(self, package, version):
         """
         See :meth:`.db.Database.test_package_version`.
         """
-        return self._execute('PKGEXISTS', [package, version])
+        return self._execute('VEREXISTS', [package, version])
 
     def log_download(self, download):
         """
