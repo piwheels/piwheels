@@ -38,15 +38,14 @@ from collections import deque, namedtuple
 
 import zmq
 
-from .. import const, protocols
-from .tasks import PauseableTask
+from .. import const, protocols, tasks
 
 
 UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
-class TheSecretary(PauseableTask):
+class TheSecretary(tasks.PauseableTask):
     """
     This task buffers requests for the scribe, for the purpose of consolidating
     multiple consecutive (duplicate) requests.

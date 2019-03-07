@@ -33,11 +33,10 @@ from time import sleep
 import zmq
 import pytest
 
-from piwheels import protocols
-from piwheels.master.tasks import Task, TaskQuit, PauseableTask
+from piwheels import protocols, tasks
 
 
-class CounterTask(PauseableTask):
+class CounterTask(tasks.PauseableTask):
     # A trivial task purely for test purposes, with a very rapid poll cycle
     name = 'counter'
 
@@ -53,7 +52,7 @@ class CounterTask(PauseableTask):
 
 
 def test_task_quits(master_config, master_control_queue):
-    task = Task(master_config)
+    task = tasks.Task(master_config)
     task.start()
     task.quit()
     task.join(10)
@@ -129,7 +128,7 @@ def test_broken_control(master_config, master_control_queue):
 
 
 def test_broken_task_quits(master_config, master_control_queue):
-    class BrokenTask(Task):
+    class BrokenTask(tasks.Task):
         def loop(self):
             raise Exception("Don't panic!")
     task = BrokenTask(master_config)

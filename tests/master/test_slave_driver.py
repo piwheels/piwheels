@@ -33,8 +33,7 @@ from unittest import mock
 import zmq
 import pytest
 
-from piwheels import const, protocols
-from piwheels.master.tasks import TaskQuit
+from piwheels import const, protocols, tasks
 from piwheels.master.slave_driver import SlaveDriver
 from piwheels.master.states import SlaveState, BuildState
 
@@ -106,7 +105,7 @@ def slave2_queue(request, zmq_context, master_config):
 
 
 def test_control_quit(task):
-    with pytest.raises(TaskQuit):
+    with pytest.raises(tasks.TaskQuit):
         task.quit()
         task.poll()
 

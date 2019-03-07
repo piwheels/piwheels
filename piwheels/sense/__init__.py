@@ -44,8 +44,7 @@ import zmq
 from pisense import SenseHAT, array
 from colorzero import Color
 
-from .. import terminal, const
-from .tasks import Task, TaskQuit
+from .. import terminal, const, protocols, transport, tasks
 from .renderers import MainRenderer, StatusRenderer, QuitRenderer
 
 
@@ -83,7 +82,7 @@ class PiWheelsSense:
 
         with SenseHAT() as hat:
             hat.rotation = config.rotate
-            ctx = zmq.Context()
+            ctx = transport.Context.instance()
             try:
                 stick = StickTask(config, hat)
                 stick.start()
@@ -107,8 +106,9 @@ class StickTask(Thread):
         super().__init__()
         self._quit = False
         self.stick = hat.stick
-        self.ctx = zmq.Context.instance()
-        self.stick_queue = self.ctx.socket(zmq.PUSH)
+        self.ctx = transport.Context.instance()
+        self.stick_queue = self.ctx.socket(
+            zmq.PUSH, protocol=protocols.sense_stick)
         self.stick_queue.hwm = 10
         self.stick_queue.bind('inproc://stick')
 
@@ -125,7 +125,7 @@ class StickTask(Thread):
             self.stick_queue.close()
 
 
-class ScreenTask(Task):
+class ScreenTask(tasks.Task):
     name = "screen"
 
     def __init__(self, config, hat):
@@ -139,10 +139,12 @@ class ScreenTask(Task):
         self._screen_iter = None
         self.renderer = self.renderers['main']
         self.transition = self.screen.fade_to
-        stick_queue = self.ctx.socket(zmq.PULL)
+        stick_queue = self.ctx.socket(
+            zmq.PULL, protocol=reversed(protocols.sense_stick))
         stick_queue.hwm = 10
         stick_queue.connect('inproc://stick')
-        status_queue = self.ctx.socket(zmq.SUB)
+        status_queue = self.ctx.socket(
+            zmq.SUB, protocol=reversed(protocols.monitor_stats))
         status_queue.hwm = 10
         status_queue.connect(config.status_queue)
         status_queue.setsockopt_string(zmq.SUBSCRIBE, '')

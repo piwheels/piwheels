@@ -38,9 +38,8 @@ from datetime import datetime, timezone
 
 import zmq
 
-from .. import const, protocols
+from .. import const, protocols, tasks
 from .states import SlaveState, FileState
-from .tasks import Task, TaskQuit
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 
@@ -48,7 +47,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class SlaveDriver(Task):
+class SlaveDriver(tasks.Task):
     """
     This task handles interaction with the build slaves using the slave
     protocol. Interaction is driven by the slaves (i.e. the master doesn't
@@ -157,7 +156,7 @@ class SlaveDriver(Task):
         msg, data = queue.recv_msg()
         if msg == 'QUIT':
             # TODO Kill all slaves...
-            raise TaskQuit
+            raise tasks.TaskQuit
         elif msg == 'PAUSE':
             self.paused = True
         elif msg == 'RESUME':

@@ -37,8 +37,7 @@ from datetime import datetime, timedelta, timezone
 
 import zmq
 
-from .. import const, protocols
-from .tasks import PauseableTask
+from .. import const, protocols, tasks
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 
@@ -46,7 +45,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class BigBrother(PauseableTask):
+class BigBrother(tasks.PauseableTask):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the

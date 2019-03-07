@@ -35,13 +35,12 @@ Defines the :class:`Lumberjack` task; see class for more details.
 
 import zmq
 
-from .. import protocols
-from .tasks import PauseableTask
+from .. import protocols, tasks
 from .the_oracle import DbClient
 from .states import DownloadState
 
 
-class Lumberjack(PauseableTask):
+class Lumberjack(tasks.PauseableTask):
     """
     This task handles incoming log entries from the httpd server, and updates
     the database with them. The external :program:`piw-logger` script handles

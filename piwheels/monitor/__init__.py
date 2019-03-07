@@ -39,7 +39,7 @@ or terminate the master itself.
 """
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 import zmq
@@ -47,6 +47,9 @@ import zmq
 from .. import terminal, const, protocols, transport
 from ..format import format_size
 from . import widgets
+
+
+UTC = timezone.utc
 
 
 class PiWheelsMonitor:
@@ -94,7 +97,7 @@ class PiWheelsMonitor:
 
         ctx = transport.Context.instance()
         self.status_queue = ctx.socket(
-            zmq.SUB, protocol=protocols.monitor_stats)
+            zmq.SUB, protocol=reversed(protocols.monitor_stats))
         self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
         self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')

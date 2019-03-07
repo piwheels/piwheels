@@ -37,15 +37,14 @@ import pickle
 
 import zmq
 
-from .. import const, protocols
+from .. import const, protocols, tasks
 from .states import BuildState, FileState
-from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 from .slave_driver import build_armv6l_hack
 
 
-class MrChase(PauseableTask):
+class MrChase(tasks.PauseableTask):
     """
     This task handles smuggling packages into the database manually. It is the
     task that the :program:`piw-import` script talks to in order to import

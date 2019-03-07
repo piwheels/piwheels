@@ -47,7 +47,7 @@ import zmq
 
 from .. import __version__, terminal, const, systemd, transport, protocols
 from ..systemd import get_systemd
-from .tasks import TaskQuit
+from ..tasks import TaskQuit
 from .big_brother import BigBrother
 from .the_architect import TheArchitect
 from .the_oracle import TheOracle

@@ -35,13 +35,12 @@ Defines the :class:`CloudGazer` task; see class for more details.
 
 import zmq
 
-from .. import protocols
-from .tasks import PauseableTask
+from .. import protocols, tasks
 from .pypi import PyPIEvents
 from .the_oracle import DbClient
 
 
-class CloudGazer(PauseableTask):
+class CloudGazer(tasks.PauseableTask):
     """
     This task scrapes PyPI for the list of available packages, and the versions
     of those packages. This information is written into the backend database

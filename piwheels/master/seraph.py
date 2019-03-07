@@ -36,11 +36,10 @@ Defines the :class:`Seraph` task; see class for more details.
 import zmq
 import zmq.error
 
-from .. import const
-from .tasks import Task
+from .. import const, tasks
 
 
-class Seraph(Task):
+class Seraph(tasks.Task):
     """
     This task is a simple load-sharing router for
     :class:`~.the_oracle.TheOracle` tasks.

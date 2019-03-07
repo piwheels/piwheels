@@ -49,8 +49,7 @@ from pathlib import Path
 import zmq
 import zmq.error
 
-from .. import transport, protocols
-from .tasks import Task
+from .. import transport, protocols, tasks
 from .states import TransferState, FileState
 
 
@@ -75,7 +74,7 @@ class TransferDone(TransferError):
     """
 
 
-class FileJuggler(Task):
+class FileJuggler(tasks.Task):
     """
     This task handles file transfers from the build slaves. The specifics of
     the file transfer protocol are best understood from the implementation of

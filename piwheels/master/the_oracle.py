@@ -42,13 +42,12 @@ import pickle
 import zmq
 import zmq.error
 
-from .. import const, protocols, transport
+from .. import const, protocols, transport, tasks
 from .states import BuildState, DownloadState
-from .tasks import Task
 from .db import Database, ProjectVersionsRow, ProjectFilesRow
 
 
-class TheOracle(Task):
+class TheOracle(tasks.Task):
     """
     This task provides an RPC-like interface to the database; it handles
     requests such as registering a new package, version, or build, and

@@ -37,12 +37,11 @@ from datetime import datetime, timedelta
 
 import zmq
 
-from .. import protocols
-from .tasks import Task
+from .. import protocols, tasks
 from .db import Database
 
 
-class TheArchitect(Task):
+class TheArchitect(tasks.Task):
     """
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It pushes

@@ -44,10 +44,9 @@ import zmq
 import pkg_resources
 from chameleon import PageTemplateLoader
 
-from .. import const, protocols
+from .. import const, protocols, tasks
 from ..format import format_size
 from .html import tag
-from .tasks import PauseableTask
 from .the_oracle import DbClient
 from .states import mkdir_override_symlink
 
@@ -98,7 +97,7 @@ class AtomicReplaceFile:
         return result
 
 
-class TheScribe(PauseableTask):
+class TheScribe(tasks.PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It
     reads the names of packages off the internal "indexes" queue and rebuilds
