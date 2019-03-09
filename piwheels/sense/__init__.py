@@ -178,15 +178,8 @@ class ScreenTask(tasks.Task):
     def handle_status(self, queue):
         """
         Handler for messages received from the PUB/SUB external status queue.
-        As usual, messages are a list of python objects. In this case messages
-        always have at least 3 elements:
-
-        * The slave id that the message relates to (this will be -1 in the case
-          of messages that don't relate to a specific build slave)
-        * The timestamp when the message was sent
-        * The message itself
         """
-        self.renderers['main'].message(*queue.recv_pyobj())
+        self.renderers['main'].message(*queue.recv_msg())
 
 
 main = PiWheelsSense()  # pylint: disable=invalid-name

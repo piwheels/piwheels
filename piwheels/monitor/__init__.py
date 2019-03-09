@@ -187,20 +187,13 @@ class PiWheelsMonitor:
     def status_message(self):
         """
         Handler for messages received from the PUB/SUB external status queue.
-        As usual, messages are a list of python objects. In this case messages
-        always have at least 3 elements:
-
-        * The slave id that the message relates to (this will be -1 in the case
-          of messages that don't relate to a specific build slave)
-        * The timestamp when the message was sent
-        * The message itself
         """
         msg, data = self.status_queue.recv_msg()
         if msg == 'STATS':
             self.update_status(data)
         elif msg == 'SLAVE':
-            slave_id, timestamp, (msg, data) = data
-            self.slave_list.message(slave_id, timestamp, msg)
+            slave_id, timestamp, msg, data = data
+            self.slave_list.message(slave_id, timestamp, msg, data)
 
     def tick(self):
         """

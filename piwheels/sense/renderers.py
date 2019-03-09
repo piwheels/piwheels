@@ -109,12 +109,13 @@ class MainRenderer(Renderer):
         self.last_message = datetime(1970, 1, 1)
         self.blue_grad = list(Color('blue').gradient(Color('white'), 32))
 
-    def message(self, slave_id, timestamp, msg, *args):
+    def message(self, msg, data):
         self.last_message = datetime.now(tz=UTC)
-        if msg == 'STATUS':
-            self.status = args[0]
-        else:
-            self.slaves.message(slave_id, timestamp, msg, *args)
+        if msg == 'STATS':
+            self.status = data
+        elif msg == 'SLAVE':
+            slave_id, timestamp, msg, data = data
+            self.slaves.message(slave_id, timestamp, msg, data)
 
     @staticmethod
     def _slave_coords(index):

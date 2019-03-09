@@ -75,7 +75,7 @@ class SlaveList:
                                      timedelta(seconds=5)):
                 del self.slaves[slave.slave_id]
 
-    def message(self, slave_id, timestamp, msg, *args):
+    def message(self, slave_id, timestamp, msg, data):
         """
         Update the list with a message from the external status queue.
 
@@ -88,15 +88,15 @@ class SlaveList:
         :param str msg:
             The reply that was sent to the build slave.
 
-        :param *args:
-            Any arguments that went with the message.
+        :param data:
+            Any data that went with the message.
         """
         try:
             state = self.slaves[slave_id]
         except KeyError:
             state = SlaveState(slave_id)
             self.slaves[slave_id] = state
-        state.update(timestamp, msg, *args)
+        state.update(timestamp, msg, data)
 
 
 class SlaveState:
@@ -119,7 +119,7 @@ class SlaveState:
         self.label = '???'
         self._color = Color('red')
 
-    def update(self, timestamp, msg, *args):
+    def update(self, timestamp, msg, data):
         """
         Update the slave's state from an incoming reply message.
 
@@ -129,8 +129,8 @@ class SlaveState:
         :param str msg:
             The message itself.
 
-        :param *args:
-            Any arguments sent with the message.
+        :param data:
+            Any data sent with the message.
         """
         self.last_msg = msg
         self.last_seen = timestamp
@@ -143,7 +143,7 @@ class SlaveState:
                 self.abi,
                 self.platform,
                 self.label
-            ) = args
+            ) = data
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
             self._color = Color('#333')
@@ -152,7 +152,7 @@ class SlaveState:
             self.status = 'Terminating'
             self._color = Color('red')
         elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(args[0], args[1])
+            self.status = 'Building {} {}'.format(data[0], data[1])
             self._color = Color('#060')
         elif msg == 'SEND':
             self.status = 'Transferring file'
