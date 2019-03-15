@@ -172,9 +172,9 @@ class SlaveDriver(tasks.Task):
 
     def handle_build(self, queue):
         """
-        Refresh the ABI-specific queues of package versions waiting to be The
-        queues are limited to 1000 packages per ABI, and are kept as lists
-        ordered by release date. When a message arrives from
+        Refresh the ABI-specific queues of package versions waiting to be
+        built. The queues are limited to 1000 packages per ABI, and are kept as
+        lists ordered by release date. When a message arrives from
         :class:`TheArchitect` it refreshes (replaces) all current queues. There
         is, however, still a duplication possibility as :class:`TheArchitect`
         doesn't know what packages are actively being built; this method
