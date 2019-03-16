@@ -45,7 +45,7 @@ UTC = timezone.utc
 def builds_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(zmq.PUSH, protocol=protocols.the_architect)
     queue.hwm = 1
-    queue.bind(master_config.builds_queue)
+    queue.connect(master_config.builds_queue)
     yield queue
     queue.close()
 
@@ -71,8 +71,8 @@ def stats_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def task(request, zmq_context, builds_queue, web_queue, stats_queue,
-         master_status_queue, master_config):
+def task(request, zmq_context, web_queue, stats_queue, master_status_queue,
+         master_config):
     SlaveState.status_queue = zmq_context.socket(
         zmq.PUSH, protocol=reversed(protocols.slave_driver))
     SlaveState.status_queue.hwm = 1

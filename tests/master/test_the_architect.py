@@ -37,19 +37,19 @@ from piwheels.master.the_architect import TheArchitect
 
 
 @pytest.fixture(scope='function')
-def task(request, master_config):
-    task = TheArchitect(master_config)
-    yield task
-    task.close()
-
-
-@pytest.fixture(scope='function')
 def builds_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
         zmq.PULL, protocol=reversed(protocols.the_architect))
-    queue.connect(master_config.builds_queue)
+    queue.bind(master_config.builds_queue)
     yield queue
     queue.close()
+
+
+@pytest.fixture(scope='function')
+def task(request, builds_queue, master_config):
+    task = TheArchitect(master_config)
+    yield task
+    task.close()
 
 
 def test_architect_queue(db, with_build, task, builds_queue):

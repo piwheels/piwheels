@@ -46,19 +46,19 @@ from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
 
 
 @pytest.fixture()
-def scribe_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.the_scribe))
-    queue.hwm = 10
-    queue.bind(const.SCRIBE_QUEUE)
-    yield queue
-    queue.close()
-
-
-@pytest.fixture()
-def task(request, zmq_context, master_config, db_queue, scribe_queue):
+def task(request, zmq_context, master_config, db_queue):
     task = TheScribe(master_config)
     yield task
     task.close()
+
+
+@pytest.fixture()
+def scribe_queue(request, zmq_context):
+    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.the_scribe))
+    queue.hwm = 10
+    queue.connect(const.SCRIBE_QUEUE)
+    yield queue
+    queue.close()
 
 
 class ContainsParser(HTMLParser):
