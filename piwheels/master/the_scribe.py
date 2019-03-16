@@ -52,52 +52,6 @@ from .the_oracle import DbClient
 from .states import mkdir_override_symlink
 
 
-class AtomicReplaceFile:
-    """
-    A context manager for atomically replacing a target file.
-
-    Uses :class:`tempfile.NamedTemporaryFile` to construct a temporary file in
-    the same directory as the target file. The associated file-like object is
-    returned as the context manager's variable; you should write the content
-    you wish to this object.
-
-    When the context manager exits, if no exception has occurred, the temporary
-    file will be renamed over the target file atomically (and sensible
-    permissions will be set, i.e. 0644 & umask).  If an exception occurs during
-    the context manager's block, the temporary file will be deleted leaving the
-    original target file unaffected and the exception will be re-raised.
-
-    :param pathlib.Path path:
-        The full path and filename of the target file. This is expected to be
-        an absolute path.
-
-    :param str encoding:
-        If ``None`` (the default), the temporary file will be opened in binary
-        mode. Otherwise, this specifies the encoding to use with text mode.
-    """
-    def __init__(self, path, encoding=None):
-        if isinstance(path, str):
-            path = Path(path)
-        self._path = path
-        self._tempfile = tempfile.NamedTemporaryFile(
-            mode='wb' if encoding is None else 'w',
-            dir=str(self._path.parent), encoding=encoding, delete=False)
-        self._withfile = None
-
-    def __enter__(self):
-        self._withfile = self._tempfile.__enter__()
-        return self._withfile
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        os.fchmod(self._withfile.file.fileno(), 0o644)
-        result = self._tempfile.__exit__(exc_type, exc_value, exc_tb)
-        if exc_type is None:
-            os.rename(self._withfile.name, str(self._path))
-        else:
-            os.unlink(self._withfile.name)
-        return result
-
-
 class TheScribe(tasks.PauseableTask):
     """
     This task is responsible for writing web-page ``index.html`` files. It
@@ -391,3 +345,49 @@ def canonicalize_name(name):
     # pylint: disable=missing-docstring
     # This is taken from PEP 503.
     return _canonicalize_regex.sub("-", name).lower()
+
+
+class AtomicReplaceFile:
+    """
+    A context manager for atomically replacing a target file.
+
+    Uses :class:`tempfile.NamedTemporaryFile` to construct a temporary file in
+    the same directory as the target file. The associated file-like object is
+    returned as the context manager's variable; you should write the content
+    you wish to this object.
+
+    When the context manager exits, if no exception has occurred, the temporary
+    file will be renamed over the target file atomically (and sensible
+    permissions will be set, i.e. 0644 & umask).  If an exception occurs during
+    the context manager's block, the temporary file will be deleted leaving the
+    original target file unaffected and the exception will be re-raised.
+
+    :param pathlib.Path path:
+        The full path and filename of the target file. This is expected to be
+        an absolute path.
+
+    :param str encoding:
+        If ``None`` (the default), the temporary file will be opened in binary
+        mode. Otherwise, this specifies the encoding to use with text mode.
+    """
+    def __init__(self, path, encoding=None):
+        if isinstance(path, str):
+            path = Path(path)
+        self._path = path
+        self._tempfile = tempfile.NamedTemporaryFile(
+            mode='wb' if encoding is None else 'w',
+            dir=str(self._path.parent), encoding=encoding, delete=False)
+        self._withfile = None
+
+    def __enter__(self):
+        self._withfile = self._tempfile.__enter__()
+        return self._withfile
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        os.fchmod(self._withfile.file.fileno(), 0o644)
+        result = self._tempfile.__exit__(exc_type, exc_value, exc_tb)
+        if exc_type is None:
+            os.rename(self._withfile.name, str(self._path))
+        else:
+            os.unlink(self._withfile.name)
+        return result
