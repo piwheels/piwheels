@@ -537,7 +537,7 @@ class SlaveState:
             self.terminated = True
             self.status = 'Terminating'
         elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(args[0], args[1])
+            self.status = 'Building {} {}'.format(data[0], data[1])
         elif msg == 'SEND':
             self.status = 'Transferring file'
         elif msg == 'DONE':
