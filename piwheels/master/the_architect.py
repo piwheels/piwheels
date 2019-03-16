@@ -56,7 +56,7 @@ class TheArchitect(tasks.Task):
         self.builds_queue = self.ctx.socket(
             zmq.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
-        self.builds_queue.bind(config.builds_queue)
+        self.builds_queue.connect(config.builds_queue)
 
     def close(self):
         self.db.close()

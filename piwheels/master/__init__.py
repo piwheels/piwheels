@@ -192,15 +192,15 @@ write access to the output directory.
                 TheOracle,
                 TheOracle,
                 TheOracle,
-                TheArchitect,
                 Lumberjack,
-                TheSecretary,
                 TheScribe,
+                TheSecretary,
                 BigBrother,
                 FileJuggler,
-                CloudGazer,
-                SlaveDriver,
                 MrChase,
+                SlaveDriver,
+                TheArchitect,
+                CloudGazer,
             )
         ]
         self.logger.info('starting tasks')

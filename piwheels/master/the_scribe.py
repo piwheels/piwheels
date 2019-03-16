@@ -74,7 +74,7 @@ class TheScribe(tasks.PauseableTask):
         self.output_path = Path(config.output_path)
         scribe_queue = self.ctx.socket(zmq.PULL, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
-        scribe_queue.connect(const.SCRIBE_QUEUE)
+        scribe_queue.bind(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)
         self.db = DbClient(config)
         self.package_cache = None

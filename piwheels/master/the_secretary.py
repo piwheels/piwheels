@@ -76,7 +76,7 @@ class TheSecretary(tasks.PauseableTask):
         self.output = self.ctx.socket(
             zmq.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
-        self.output.bind(const.SCRIBE_QUEUE)
+        self.output.connect(const.SCRIBE_QUEUE)
 
     def close(self):
         self.output.close()

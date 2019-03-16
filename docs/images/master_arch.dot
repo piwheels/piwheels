@@ -1,5 +1,5 @@
 digraph piwheels {
-    graph [nodesep=0.5, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc"];
+    graph [splines=ortho, nodesep=0.5, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc"];
     node [shape=rect, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
     edge [fontname=Sans, fontsize=8];
 
@@ -87,6 +87,11 @@ digraph piwheels {
         Remove [label="main"];
     }
 
+    subgraph cluster_logger {
+        graph [label="piw-logger"];
+        Logger [label="main"];
+    }
+
 
     PyPI->CloudGazer;
     PyPI->Slave1;
@@ -99,6 +104,7 @@ digraph piwheels {
     Importer->FileJuggler [dir=both];
     Rebuild->MrChase [dir=both];
     Remove->MrChase [dir=both];
+    Logger->Lumberjack;
     main->monitor;
     monitor->main;
 

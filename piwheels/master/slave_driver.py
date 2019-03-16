@@ -76,7 +76,7 @@ class SlaveDriver(tasks.Task):
         builds_queue = self.ctx.socket(
             zmq.PULL, protocol=reversed(protocols.the_architect))
         builds_queue.hwm = 10
-        builds_queue.connect(config.builds_queue)
+        builds_queue.bind(config.builds_queue)
         self.register(builds_queue, self.handle_build)
         self.status_queue = self.ctx.socket(
             zmq.PUSH, protocol=protocols.monitor_stats)
