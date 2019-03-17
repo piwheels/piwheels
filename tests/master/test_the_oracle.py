@@ -209,7 +209,7 @@ def test_get_file_dependencies(db, with_files, db_client):
 
 def test_get_project_versions(db, with_files, db_client):
     assert db_client.get_project_versions('foo') == [
-        ('0.1', False, 1, 0),
+        ('0.1', False, 'cp34m', ''),
     ]
 
 

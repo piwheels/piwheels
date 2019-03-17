@@ -266,7 +266,7 @@ def test_get_version_skip(db_intf, with_package_version):
 
 def test_get_project_versions(db_intf, with_files):
     assert list(db_intf.get_project_versions('foo')) == [
-        ('0.1', False, 1, 0),
+        ('0.1', False, 'cp34m', ''),
     ]
 
 

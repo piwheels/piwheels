@@ -42,7 +42,7 @@ from itertools import chain, groupby
 from operator import itemgetter, attrgetter
 from collections import namedtuple
 
-from sqlalchemy import MetaData, Table, select, create_engine, func
+from sqlalchemy import MetaData, Table, select, create_engine, func, distinct
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__
@@ -392,9 +392,16 @@ class Database:
                 for row in self._conn.execute(
                     select([
                         self._versions.c.version,
-                        ((self._packages.c.skip != '') | (self._versions.c.skip != '')).label('skipped'),
-                        func.count().filter(self._builds.c.status).label('builds_succeeded'),
-                        func.count().filter(~self._builds.c.status).label('builds_failed'),
+                        (
+                            (self._packages.c.skip != '') |
+                            (self._versions.c.skip != '')
+                        ).label('skipped'),
+                        func.coalesce(func.string_agg(
+                            distinct(self._builds.c.abi_tag), ','
+                        ).filter(self._builds.c.status), '').label('builds_succeeded'),
+                        func.coalesce(func.string_agg(
+                            distinct(self._builds.c.abi_tag), ','
+                        ).filter(~self._builds.c.status), '').label('builds_failed'),
                     ]).
                     select_from(self._packages.join(self._versions.outerjoin(self._builds))).
                     where(self._versions.c.package == package).
