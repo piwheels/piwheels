@@ -232,13 +232,16 @@ class MrChase(tasks.PauseableTask):
         """
         part, *state = state
         if part in ('HOME', 'SEARCH'):
+            self.logger.info('requesting rebuild of homepage and search')
             self.stats_queue.send_msg('HOME')
         else:  # ('PKGPROJ', 'PKGBOTH'):
             package, = state
             if package is None:
+                self.logger.warning('requesting rebuild of *all* pages')
                 for package in self.db.get_all_packages():
                     self.web_queue.send_msg(part, package)
             elif self.db.test_package(package):
+                self.logger.info('requesting rebuild of pages for %s', package)
                 self.web_queue.send_msg(part, package)
             else:
                 return 'ERROR', 'unknown package %s' % package
