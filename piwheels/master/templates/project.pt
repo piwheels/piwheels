@@ -60,7 +60,7 @@
           </tr>
           <tr>
             <th>Downloads (all time)</th>
-            <td id="downloads-all">XXX,XXX</td>
+            <td id="downloads-all">loading...</td>
           </tr>
           <tr>
             <th>Downloads (last 30 days)</th>
@@ -142,4 +142,3 @@ sudo pip3 install ${package}</pre>
     </div>
   </div>
 </div>
-
