@@ -72,6 +72,16 @@ digraph piwheels {
         Slave2 [label="main"];
     }
 
+    subgraph cluster_slave3 {
+        graph [label="piw-slave"];
+        Slave3 [label="main"];
+    }
+
+    subgraph cluster_slave4 {
+        graph [label="piw-slave"];
+        Slave4 [label="main"];
+    }
+
     subgraph cluster_import {
         graph [label="piw-import"];
         Importer [label="main"];
@@ -96,10 +106,16 @@ digraph piwheels {
     PyPI->CloudGazer;
     PyPI->Slave1;
     PyPI->Slave2;
+    PyPI->Slave3;
+    PyPI->Slave4;
     Slave1->SlaveDriver [dir=both];
     Slave2->SlaveDriver [dir=both];
+    Slave3->SlaveDriver [dir=both];
+    Slave4->SlaveDriver [dir=both];
     Slave1->FileJuggler [dir=both];
     Slave2->FileJuggler [dir=both];
+    Slave3->FileJuggler [dir=both];
+    Slave4->FileJuggler [dir=both];
     Importer->MrChase [dir=both];
     Importer->FileJuggler [dir=both];
     Rebuild->MrChase [dir=both];
