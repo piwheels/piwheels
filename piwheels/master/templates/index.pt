@@ -17,7 +17,7 @@
         <table class="stats">
           <tr><th>Packages</th><td>${packages_built}</td></tr>
           <tr><th>Wheels</th><td>${files_count}</td></tr>
-          <tr><th>Downloads (all time)</th><td>XXX,XXX</td></tr>
+          <tr><th>Downloads (all time)</th><td>${downloads_all}</td></tr>
           <tr><th>Downloads (last 30 days)</th><td>${downloads_last_month}</td></tr>
         </table>
       </div>
