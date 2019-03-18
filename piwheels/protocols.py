@@ -131,13 +131,13 @@ _download_state = ExactSequence([
     str,          # filename
     str,          # host
     dt.datetime,  # timestamp
-    str,          # arch
-    str,          # distro_name
-    str,          # distro_version
-    str,          # os_name
-    str,          # os_version
-    str,          # py_name
-    str,          # py_version
+    Maybe(str),   # arch
+    Maybe(str),   # distro_name
+    Maybe(str),   # distro_version
+    Maybe(str),   # os_name
+    Maybe(str),   # os_version
+    Maybe(str),   # py_name
+    Maybe(str),   # py_version
 ])
 
 

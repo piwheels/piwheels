@@ -42,6 +42,7 @@ import logging
 import datetime as dt
 import ipaddress
 from pathlib import PosixPath
+from datetime import timezone
 
 import zmq
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
@@ -51,6 +52,7 @@ from .. import __version__, terminal, const, protocols, transport
 
 # Workaround: lars bug; User-Agent instead of User-agent
 COMBINED = '%h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-Agent}i"'
+UTC = timezone.utc
 
 
 def main(args=None):
@@ -62,6 +64,9 @@ def main(args=None):
 
     .. _piped log script: https://httpd.apache.org/docs/2.4/logs.html#piped
     """
+    sys.excepthook = terminal.error_handler
+    terminal.error_handler[RuntimeError] = (
+        terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'logger'
     parser = terminal.configure_parser("""\
 The piw-logger script is intended for use as an Apache "piped log script"
@@ -87,43 +92,36 @@ as the piw-master script.
         help="Drop log records if unable to send them to the master after a "
         "short timeout; this should generally be specified when piw-logger "
         "is used as a piped log script")
-    try:
-        config = parser.parse_args(args)
-        terminal.configure_logging(config.log_level, config.log_file)
+    config = parser.parse_args(args)
+    terminal.configure_logging(config.log_level, config.log_file)
 
-        logging.info("PiWheels Logger version %s", __version__)
-        config.format = {
-            'common': COMMON,
-            'common_vhost': COMMON_VHOST,
-            'combined': COMBINED,
-        }.get(config.format, config.format)
-        ctx = transport.Context.instance()
-        queue = ctx.socket(zmq.PUSH, protocol=protocols.lumberjack)
-        queue.connect(config.log_queue)
-        try:
-            for filename in config.files:
-                log_file = log_open(filename)
-                try:
-                    with ApacheSource(log_file, config.format) as src:
-                        for row in src:
-                            if log_filter(row):
-                                if not config.drop or queue.poll(1000, zmq.POLLOUT):
-                                    queue.send_msg('LOG', log_transform(row))
-                                else:
-                                    logging.warning('dropping log entry')
-                finally:
-                    log_file.close()
-        finally:
-            queue.close()
-            ctx.destroy(linger=1000)
-            ctx.term()
-    except RuntimeError as err:
-        logging.error(err)
-        return 1
-    except:  # pylint: disable=bare-except
-        return terminal.error_handler(*sys.exc_info())
-    else:
-        return 0
+    logging.info("PiWheels Logger version %s", __version__)
+    config.format = {
+        'common': COMMON,
+        'common_vhost': COMMON_VHOST,
+        'combined': COMBINED,
+    }.get(config.format, config.format)
+    ctx = transport.Context.instance()
+    queue = ctx.socket(zmq.PUSH, protocol=reversed(protocols.lumberjack))
+    queue.connect(config.log_queue)
+    try:
+        for filename in config.files:
+            log_file = log_open(filename)
+            try:
+                with ApacheSource(log_file, config.format) as src:
+                    for row in src:
+                        if log_filter(row):
+                            if not config.drop or queue.poll(1000, zmq.POLLOUT):
+                                queue.send_msg('LOG', log_transform(row))
+                            else:
+                                logging.warning('dropping log entry')
+            finally:
+                log_file.close()
+    finally:
+        queue.close()
+        ctx.destroy(linger=1000)
+        ctx.term()
+    return 0
 
 
 def log_open(filename):
@@ -190,12 +188,12 @@ def log_transform(row, decoder=json.JSONDecoder()):
         # some database backends)
         path.name,
         str(row.remote_host),
-        row.time.replace(),
+        row.time.replace(tzinfo=UTC),
         user_data.get('cpu'),
         user_data.get('distro', {}).get('name'),
         user_data.get('distro', {}).get('version'),
         user_data.get('system', {}).get('name'),
-        user_data.get('system', {}).get('version'),
+        user_data.get('system', {}).get('release'),
         user_data.get('implementation', {'name': 'CPython'}).get('name'),
         user_data.get('implementation', {'version': user_data.get('python')}).get('version'),
     ]
