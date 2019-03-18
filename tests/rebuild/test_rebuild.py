@@ -101,7 +101,7 @@ def test_invalid_part(caplog):
         main(['foo'])
 
 
-def test_rebuild_home(mock_context, import_queue_name, import_queue):
+def test_rebuild_home(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'home']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['HOME'])
         import_queue.send_msg('DONE')
@@ -109,7 +109,7 @@ def test_rebuild_home(mock_context, import_queue_name, import_queue):
         assert thread.exitcode == 0
 
 
-def test_rebuild_search(mock_context, import_queue_name, import_queue):
+def test_rebuild_search(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'search']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['SEARCH'])
         import_queue.send_msg('DONE')
@@ -117,7 +117,7 @@ def test_rebuild_search(mock_context, import_queue_name, import_queue):
         assert thread.exitcode == 0
 
 
-def test_rebuild_project(mock_context, import_queue_name, import_queue):
+def test_rebuild_project(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
         import_queue.send_msg('DONE')
@@ -125,7 +125,7 @@ def test_rebuild_project(mock_context, import_queue_name, import_queue):
         assert thread.exitcode == 0
 
 
-def test_rebuild_all(mock_context, import_queue_name, import_queue):
+def test_rebuild_all(import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RebuildThread(['--import-queue', import_queue_name, 'project']) as thread:
@@ -135,7 +135,7 @@ def test_rebuild_all(mock_context, import_queue_name, import_queue):
             assert thread.exitcode == 0
 
 
-def test_rebuild_all_yes(mock_context, import_queue_name, import_queue):
+def test_rebuild_all_yes(import_queue_name, import_queue):
         with RebuildThread(['--yes', '--import-queue', import_queue_name, 'project']) as thread:
             assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', None])
             import_queue.send_msg('DONE')
@@ -143,7 +143,7 @@ def test_rebuild_all_yes(mock_context, import_queue_name, import_queue):
             assert thread.exitcode == 0
 
 
-def test_rebuild_failure(mock_context, import_queue_name, import_queue):
+def test_rebuild_failure(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
         import_queue.send_msg('ERROR', 'Package foo does not exist')
@@ -152,7 +152,7 @@ def test_rebuild_failure(mock_context, import_queue_name, import_queue):
         assert 'Package foo does not exist' in str(thread.exception)
 
 
-def test_unexpected(mock_context, import_queue_name, import_queue):
+def test_unexpected(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
         import_queue.send_msg('SEND', 'foo.whl')
