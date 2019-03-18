@@ -178,6 +178,9 @@ class ErrorHandler:
     def __setitem__(self, key, value):
         self._config[key] = ErrorAction(*value)
 
+    def __delitem__(self, key):
+        del self._config[key]
+
     def __call__(self, exc_type, exc_value, exc_tb):
         for exc_class, (message, value) in self._config.items():
             if issubclass(exc_type, exc_class):
