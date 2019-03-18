@@ -187,7 +187,8 @@ def test_write_homepage(db_queue, task, scribe_queue, master_config):
     scribe_queue.send_msg('HOME', {
         'packages_built': 123,
         'files_count': 234,
-        'downloads_last_month': 345
+        'downloads_last_month': 345,
+        'downloads_all': 123456,
     })
     task.once()
     task.poll()
