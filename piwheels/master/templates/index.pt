@@ -15,10 +15,10 @@
 
       <div class="small-12 medium-4 columns">
         <table class="stats">
-          <tr><th>Packages</th><td>${packages_built}</td></tr>
-          <tr><th>Wheels</th><td>${files_count}</td></tr>
-          <tr><th>Downloads (all time)</th><td>${downloads_all}</td></tr>
-          <tr><th>Downloads (last 30 days)</th><td>${downloads_last_month}</td></tr>
+          <tr><th>Packages</th><td>${'{:,}'.format(packages_built)}</td></tr>
+          <tr><th>Wheels</th><td>${'{:,}'.format(files_count)}</td></tr>
+          <tr><th>Downloads (all time)</th><td>${'{:,}'.format(downloads_all)}</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td>${'{:,}'.format(downloads_last_month)}</td></tr>
         </table>
       </div>
     </div>
@@ -57,9 +57,10 @@ $ rm -rf testpip/</pre>
       <div class="small-12 columns">
         <h2>Support</h2>
 
-        <p>Wheels provided support all Raspberry Pi models (Pi 3, Pi 2, Pi 1
-        and Pi Zero). Wheels are provided for Python 3.4 and 3.5. We plan to
-        add support for Python 3.6, 3.7 and 2.7.</p>
+        <p>Wheels provided support all Raspberry Pi models (Pi 3, Pi 2, Pi 1 and
+        Pi Zero). Wheels are provided for Raspbian Jessie (Python 3.4) and
+        Raspbian Stretch (Python 3.5). We plan to add support for Raspbian
+        Buster (Python 3.7) in due course.</p>
       </div>
     </div>
   </div>

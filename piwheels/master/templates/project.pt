@@ -1,44 +1,15 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">${package}</div>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/project.js"></script>
+  </div>
   <div metal:fill-slot="content">
     <script>
-    function showHiddenRows(className) {
-      var rows = document.getElementsByClassName(className);
-      while (rows.length > 0) {
-        var row = rows[0];
-        row.classList.remove(className);
-      }
-      var showMore = document.getElementById('show-' + className + 's');
-      showMore.classList.add('hidden-version');
-    }
-
-    function getDownloads(data, package) {
-      for (var i=0; i<=data.length; i++) {
-        var packageData = data[i];
-        if (packageData[0] == package) {
-          return packageData;
-        }
-      }
-      return 0;
-    }
-
-    function showDownloads() {
-      var downloadsAll = document.getElementById('downloads-all');
-      var downloads30 = document.getElementById('downloads-30');
-      $.getJSON("/packages.json")
-        .fail(function() {
-          downloadsAll.textContent = '???';
-          downloads30.textContent = '???';
-        })
-        .done(function(data) {
-          var downloads = getDownloads(data, '${package}');
-          downloadsAll.textContent = downloads[2];
-          downloads30.textContent = downloads[1];
-        })
-    }
-
-    window.onload = showDownloads;
+    window.onload = function() {
+    showDownloads('${package}');
+    };
     </script>
+
     <div class="row">
       <div class="small-12 medium-6 columns">
         <h2>${package}</h2>
@@ -52,11 +23,11 @@
           </tr>
           <tr>
             <th>Versions</th>
-            <td>${len(versions)}</td>
+            <td>${'{:,}'.format(len(versions))}</td>
           </tr>
           <tr>
             <th>Files</th>
-            <td>${len(files)}</td>
+            <td>${'{:,}'.format(len(files))}</td>
           </tr>
           <tr>
             <th>Downloads (all time)</th>
