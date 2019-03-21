@@ -397,10 +397,10 @@ class Database:
                             (self._versions.c.skip != '')
                         ).label('skipped'),
                         func.coalesce(func.string_agg(
-                            distinct(self._builds.c.abi_tag), ','
+                            distinct(self._builds.c.abi_tag), ', '
                         ).filter(self._builds.c.status), '').label('builds_succeeded'),
                         func.coalesce(func.string_agg(
-                            distinct(self._builds.c.abi_tag), ','
+                            distinct(self._builds.c.abi_tag), ', '
                         ).filter(~self._builds.c.status), '').label('builds_failed'),
                     ]).
                     select_from(self._packages.join(self._versions.outerjoin(self._builds))).

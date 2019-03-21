@@ -75,11 +75,12 @@ sudo pip3 install ${package}</pre>
       <div class="small-12 columns">
         <h3>Files</h3>
         <table tal:condition="files">
-          <tr><th>Filename</th><th>ABI</th><th>Size</th></tr>
+          <tr><th>Version</th><th>ABI</th><th>Filename</th><th>Size</th></tr>
           <span tal:repeat="row files" tal:omit-tag="True">
             <tr class="${'hidden-file' if repeat.row.number > 5 else ''}">
-              <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
+              <td>${row.version}</td>
               <td>${row.abi_tag}</td>
+              <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
               <td>${format_size(row.filesize)}</td>
             </tr>
           </span>
