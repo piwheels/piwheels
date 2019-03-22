@@ -19,6 +19,7 @@ function getDownloads(data, package) {
       return packageData;
     }
   }
+  console.error('Package not found in packages.json');
   return [package, 0, 0];
 }
 
@@ -27,6 +28,7 @@ function showDownloads(package) {
   var downloads30 = document.getElementById('downloads-30');
   $.getJSON("/packages.json")
     .fail(function() {
+      console.error('Failed to load packages.json');
       downloadsAll.textContent = '???';
       downloads30.textContent = '???';
     })
