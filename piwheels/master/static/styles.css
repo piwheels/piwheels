@@ -65,7 +65,6 @@ h2 {
   color: #77777a;
   word-wrap: break-all;
 }
-p { text-align: justify; }
 a { color: #222; text-decoration: underline; }
 
 table.stats {
@@ -106,4 +105,8 @@ pre {
 
 #status {
   font-weight: bold;
+}
+
+p.small {
+  text-align: right;
 }

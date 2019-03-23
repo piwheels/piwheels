@@ -40,6 +40,7 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
+from datetime import datetime
 
 import zmq
 import pkg_resources
@@ -184,10 +185,12 @@ class TheScribe(tasks.PauseableTask):
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
+        dt = datetime.now()
         with AtomicReplaceFile(self.output_path / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['index'](
                 layout=self.templates['layout']['layout'],
+                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
                 page='home',
                 **statistics))
 
@@ -316,6 +319,7 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
+        dt = datetime.now()
         with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
@@ -324,6 +328,7 @@ class TheScribe(tasks.PauseableTask):
                 files=files,
                 dependencies=dependencies,
                 format_size=format_size,
+                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
                 url=lambda filename, filehash:
                     '/simple/{package}/{filename}#sha256={filehash}'.format(
                         package=package, filename=filename, filehash=filehash),

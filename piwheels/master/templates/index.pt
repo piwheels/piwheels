@@ -61,6 +61,8 @@ $ rm -rf testpip/</pre>
         Pi Zero). Wheels are provided for Raspbian Jessie (Python 3.4) and
         Raspbian Stretch (Python 3.5). We plan to add support for Raspbian
         Buster (Python 3.7) in due course.</p>
+
+        <p class="small"><small>Page last updated ${timestamp}</small></p>
       </div>
     </div>
   </div>
