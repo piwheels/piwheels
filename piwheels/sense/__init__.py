@@ -40,8 +40,7 @@ from collections import OrderedDict
 from threading import Thread, main_thread
 from time import sleep
 
-import zmq
-from pisense import SenseHAT, array
+from pisense import SenseHAT, StickEvent, array
 from colorzero import Color
 
 from .. import terminal, const, protocols, transport, tasks
@@ -82,7 +81,7 @@ class PiWheelsSense:
 
         with SenseHAT() as hat:
             hat.rotation = config.rotate
-            ctx = transport.Context.instance()
+            ctx = transport.Context()
             try:
                 stick = StickTask(config, hat)
                 stick.start()
@@ -96,8 +95,7 @@ class PiWheelsSense:
                 screen.join()
                 stick.quit()
                 stick.join()
-                ctx.destroy(linger=1000)
-                ctx.term()
+                ctx.close()
                 hat.screen.fade_to(array(Color('black')))
 
 
@@ -106,9 +104,9 @@ class StickTask(Thread):
         super().__init__()
         self._quit = False
         self.stick = hat.stick
-        self.ctx = transport.Context.instance()
+        self.ctx = transport.Context()
         self.stick_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.sense_stick)
+            transport.PUSH, protocol=protocols.sense_stick)
         self.stick_queue.hwm = 10
         self.stick_queue.bind('inproc://stick')
 
@@ -120,7 +118,7 @@ class StickTask(Thread):
             while not self._quit:
                 event = self.stick.read(0.1)
                 if event is not None and event.pressed:
-                    self.stick_queue.send_pyobj(event)
+                    self.stick_queue.send_msg('EVENT', event)
         finally:
             self.stick_queue.close()
 
@@ -140,20 +138,21 @@ class ScreenTask(tasks.Task):
         self.renderer = self.renderers['main']
         self.transition = self.screen.fade_to
         stick_queue = self.ctx.socket(
-            zmq.PULL, protocol=reversed(protocols.sense_stick))
+            transport.PULL, protocol=reversed(protocols.sense_stick))
         stick_queue.hwm = 10
         stick_queue.connect('inproc://stick')
         status_queue = self.ctx.socket(
-            zmq.SUB, protocol=reversed(protocols.monitor_stats))
+            transport.SUB, protocol=reversed(protocols.monitor_stats))
         status_queue.hwm = 10
         status_queue.connect(config.status_queue)
-        status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        status_queue.subscribe('')
         self.register(stick_queue, self.handle_stick)
         self.register(status_queue, self.handle_status)
         sleep(1)
-        self.ctrl_queue = self.ctx.socket(zmq.PUSH)
+        self.ctrl_queue = self.ctx.socket(
+            transport.PUSH, protocol=reversed(protocols.master_control))
         self.ctrl_queue.connect(config.control_queue)
-        self.ctrl_queue.send_pyobj(['HELLO'])
+        self.ctrl_queue.send_msg('HELLO')
 
     def poll(self):
         super().poll(1 / 15)
@@ -172,8 +171,8 @@ class ScreenTask(tasks.Task):
         self._screen_iter = iter(value)
 
     def handle_stick(self, queue):
-        event = queue.recv_pyobj()
-        self.renderer.move(event, self)
+        msg, event = queue.recv_msg()
+        self.renderer.move(StickEvent._make(event), self)
 
     def handle_status(self, queue):
         """

@@ -32,10 +32,9 @@ from unittest import mock
 from threading import Event
 from datetime import datetime, timedelta, timezone
 
-import zmq
 import pytest
 
-from piwheels import const, protocols
+from piwheels import const, protocols, transport
 from piwheels.master.the_secretary import TheSecretary
 
 
@@ -44,7 +43,7 @@ UTC = timezone.utc
 
 @pytest.fixture()
 def scribe_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
+    queue = zmq_context.socket(transport.PULL, protocol=protocols.the_scribe)
     queue.hwm = 10
     queue.bind(const.SCRIBE_QUEUE)
     yield queue
@@ -61,7 +60,7 @@ def task(request, zmq_context, master_config, scribe_queue):
 @pytest.fixture()
 def web_queue(request, zmq_context, task, master_config):
     queue = zmq_context.socket(
-        zmq.PUSH, protocol=reversed(protocols.the_scribe))
+        transport.PUSH, protocol=reversed(protocols.the_scribe))
     queue.hwm = 10
     queue.connect(master_config.web_queue)
     yield queue
@@ -112,8 +111,8 @@ def test_buffer(task, web_queue, scribe_queue):
         web_queue.send_msg('PKGPROJ', 'foo')
         task.poll()
         task.loop()
-        with pytest.raises(zmq.error.Again):
-            assert scribe_queue.recv_pyobj(flags=zmq.NOBLOCK)
+        with pytest.raises(transport.Again):
+            scribe_queue.recv_msg(flags=transport.NOBLOCK)
         dt.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
         task.loop()
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')

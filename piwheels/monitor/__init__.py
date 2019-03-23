@@ -42,8 +42,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 from time import sleep
 
-import zmq
-
 from .. import terminal, const, protocols, transport
 from ..format import format_size
 from . import widgets
@@ -95,15 +93,15 @@ class PiWheelsMonitor:
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
 
-        ctx = transport.Context.instance()
+        ctx = transport.Context()
         self.status_queue = ctx.socket(
-            zmq.SUB, protocol=reversed(protocols.monitor_stats))
+            transport.SUB, protocol=reversed(protocols.monitor_stats))
         self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
-        self.status_queue.setsockopt_string(zmq.SUBSCRIBE, '')
+        self.status_queue.subscribe('')
         sleep(1)
         self.ctrl_queue = ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.master_control))
+            transport.PUSH, protocol=reversed(protocols.master_control))
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_msg('HELLO')
         try:
@@ -116,8 +114,7 @@ class PiWheelsMonitor:
             self.loop.event_loop.alarm(1, self.tick)
             self.loop.run()
         finally:
-            ctx.destroy(linger=1000)
-            ctx.term()
+            ctx.close()
 
     def build_ui(self):
         """

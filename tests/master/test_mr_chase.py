@@ -28,17 +28,17 @@
 
 from unittest import mock
 
-import zmq
 import pytest
 
-from piwheels import protocols
+from piwheels import protocols, transport
 from piwheels.master.mr_chase import MrChase
 from piwheels.master.slave_driver import build_armv6l_hack
 
 
 @pytest.fixture()
 def import_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
+    queue = zmq_context.socket(
+        transport.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 1
     queue.connect(master_config.import_queue)
     yield queue
@@ -47,7 +47,8 @@ def import_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
+    queue = zmq_context.socket(
+        transport.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -56,7 +57,8 @@ def web_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.big_brother)
+    queue = zmq_context.socket(
+        transport.PULL, protocol=protocols.big_brother)
     queue.hwm = 1
     queue.bind(master_config.stats_queue)
     yield queue

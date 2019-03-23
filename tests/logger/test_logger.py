@@ -32,11 +32,10 @@ import gzip
 from unittest import mock
 from datetime import datetime, timezone
 
-import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__, protocols
+from piwheels import __version__, protocols, transport
 from piwheels.logger import main
 
 
@@ -107,7 +106,7 @@ def logger_queue_name(request, tmpdir):
 
 @pytest.fixture()
 def logger_queue(request, mock_context, logger_queue_name, tmpdir):
-    queue = mock_context.socket(zmq.PULL, protocol=protocols.lumberjack)
+    queue = mock_context.socket(transport.PULL, protocol=protocols.lumberjack)
     queue.hwm = 1
     queue.bind(logger_queue_name)
     yield queue

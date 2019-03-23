@@ -42,11 +42,10 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-import zmq
 import pkg_resources
 from chameleon import PageTemplateLoader
 
-from .. import const, protocols, tasks
+from .. import const, protocols, tasks, transport
 from ..format import format_size
 from .html import tag
 from .the_oracle import DbClient
@@ -73,7 +72,8 @@ class TheScribe(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.output_path = Path(config.output_path)
-        scribe_queue = self.ctx.socket(zmq.PULL, protocol=protocols.the_scribe)
+        scribe_queue = self.ctx.socket(
+            transport.PULL, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
         scribe_queue.bind(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)

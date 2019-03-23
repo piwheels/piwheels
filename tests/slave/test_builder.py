@@ -37,10 +37,9 @@ from threading import Thread, Event
 from subprocess import TimeoutExpired
 from datetime import datetime, timedelta
 
-import zmq
 import pytest
 
-from piwheels import systemd
+from piwheels import systemd, transport
 from piwheels.slave import builder
 
 
@@ -87,8 +86,8 @@ def mock_package(request, mock_archive):
 
 @pytest.fixture()
 def transfer_thread(request, zmq_context, mock_systemd, mock_package):
-    with zmq_context.socket(zmq.DEALER) as server_sock, \
-            zmq_context.socket(zmq.DEALER) as client_sock:
+    with zmq_context.socket(transport.DEALER) as server_sock, \
+            zmq_context.socket(transport.DEALER) as client_sock:
         server_sock.bind('inproc://test-transfer')
         client_sock.connect('inproc://test-transfer')
         filesize, filehash = mock_package

@@ -41,8 +41,6 @@ import logging
 from datetime import timedelta
 from pathlib import Path
 
-import zmq
-
 from .. import __version__, terminal, const, transport, protocols
 from ..slave import duration
 from ..slave.builder import PiWheelsPackage, PiWheelsBuilder
@@ -116,8 +114,8 @@ def do_rebuild(config):
     :param config:
         The configuration obtained from parsing the command line.
     """
-    ctx = transport.Context.instance()
-    queue = ctx.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
+    ctx = transport.Context()
+    queue = ctx.socket(transport.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
@@ -133,5 +131,4 @@ def do_rebuild(config):
         logging.info('Queued rebuild request for page(s) successfully')
     finally:
         queue.close()
-        ctx.destroy(linger=1000)
-        ctx.term()
+        ctx.close()

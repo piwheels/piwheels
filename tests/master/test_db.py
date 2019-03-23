@@ -63,10 +63,14 @@ def test_add_new_package(db_intf, db, with_schema):
     assert db.execute("SELECT * FROM packages").first() is None
     assert db_intf.add_new_package('foo')
     assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
-    assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert db.execute("SELECT package, skip FROM packages").first() == ('foo', '')
     assert not db_intf.add_new_package('foo')
     assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
     assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert db_intf.add_new_package('bar', 'skipped')
+    assert db.execute("SELECT COUNT(*) FROM packages").first() == (2, )
+    assert db.execute("SELECT package, skip FROM packages "
+                      "WHERE package = 'bar'").first() == ('bar', 'skipped')
 
 
 def test_add_new_package_version(db_intf, db, with_package):

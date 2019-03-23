@@ -47,8 +47,6 @@ import logging
 from datetime import timedelta
 from pathlib import Path
 
-import zmq
-
 from .. import __version__, terminal, const, transport, protocols
 from ..slave import duration
 from ..slave.builder import PiWheelsPackage, PiWheelsBuilder
@@ -187,8 +185,8 @@ def do_import(config, builder):
     :param PiWheelsBuilder builder:
         The object representing the state of the build.
     """
-    ctx = transport.Context.instance()
-    queue = ctx.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
+    ctx = transport.Context()
+    queue = ctx.socket(transport.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
@@ -205,8 +203,7 @@ def do_import(config, builder):
             raise RuntimeError('Unexpected response from master')
     finally:
         queue.close()
-        ctx.destroy(linger=1000)
-        ctx.term()
+        ctx.close()
 
 
 def abi(config, builder, default=None):
@@ -229,9 +226,9 @@ def do_send(builder, filename):
     """
     logging.info('Sending %s to master on localhost', filename)
     pkg = [f for f in builder.files if f.filename == filename][0]
-    ctx = transport.Context.instance()
+    ctx = transport.Context()
     queue = ctx.socket(
-        zmq.DEALER, protocol=reversed(protocols.file_juggler_files))
+        transport.DEALER, protocol=reversed(protocols.file_juggler_files))
     queue.ipv6 = True
     queue.hwm = 10
     # NOTE: The following assumes that we're running on the master; this

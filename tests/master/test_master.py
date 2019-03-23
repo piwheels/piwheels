@@ -31,11 +31,10 @@ import os
 from unittest import mock
 from threading import Thread
 
-import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__, protocols
+from piwheels import __version__, protocols, transport
 from piwheels.master import main, const
 
 
@@ -54,7 +53,7 @@ def mock_signal(request):
 
 @pytest.fixture()
 def mock_context(request, zmq_context):
-    with mock.patch('piwheels.transport.Context.instance') as ctx_mock:
+    with mock.patch('piwheels.transport.Context') as ctx_mock:
         # Pass thru calls to Context.socket, but ignore everything else (in
         # particular, destroy and term calls as we want the testing context to
         # stick around)
@@ -78,7 +77,7 @@ def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
     yield main_thread
     if main_thread.is_alive():
         with mock_context().socket(
-                zmq.PUSH, protocol=reversed(protocols.master_control)) as control:
+                transport.PUSH, protocol=reversed(protocols.master_control)) as control:
             control.connect('ipc://' + str(tmpdir.join('control-queue')))
             control.send_msg('QUIT')
         main_thread.join(10)
@@ -88,7 +87,7 @@ def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
 @pytest.fixture()
 def master_control(request, tmpdir, mock_context):
     control = mock_context().socket(
-        zmq.PUSH, protocol=reversed(protocols.master_control))
+        transport.PUSH, protocol=reversed(protocols.master_control))
     control.connect('ipc://' + str(tmpdir.join('control-queue')))
     yield control
     control.close()
@@ -157,10 +156,10 @@ def test_bad_control(mock_systemd, master_thread, master_control, caplog):
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
     master_thread.start()
     assert mock_systemd._ready.wait(10)
-    with mock_context().socket(zmq.PUSH, protocol=protocols.monitor_stats) as int_status, \
-            mock_context().socket(zmq.SUB, protocol=reversed(protocols.monitor_stats)) as ext_status:
+    with mock_context().socket(transport.PUSH, protocol=protocols.monitor_stats) as int_status, \
+            mock_context().socket(transport.SUB, protocol=reversed(protocols.monitor_stats)) as ext_status:
         ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
-        ext_status.setsockopt_string(zmq.SUBSCRIBE, '')
+        ext_status.subscribe('')
         # Wait for the first statistics message (from BigBrother) to get the
         # SUB queue working
         msg, data = ext_status.recv_msg()

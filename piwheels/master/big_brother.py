@@ -35,9 +35,7 @@ Defines the :class:`BigBrother` task; see class for more details.
 
 from datetime import datetime, timedelta, timezone
 
-import zmq
-
-from .. import const, protocols, tasks
+from .. import const, protocols, transport, tasks
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 
@@ -74,16 +72,16 @@ class BigBrother(tasks.PauseableTask):
         }
         self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
         stats_queue = self.ctx.socket(
-            zmq.PULL, protocol=protocols.big_brother)
+            transport.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
         stats_queue.bind(config.stats_queue)
         self.register(stats_queue, self.handle_stats)
         self.status_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.monitor_stats)
+            transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.db = DbClient(config)

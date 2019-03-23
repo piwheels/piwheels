@@ -30,7 +30,7 @@ import ipaddress as ip
 import datetime as dt
 from collections import namedtuple
 
-from voluptuous import Schema, ExactSequence, Extra, Maybe, Any
+from voluptuous import Schema, ExactSequence, Extra, Any
 
 
 class _NoData:
@@ -128,16 +128,16 @@ _build_state = ExactSequence([
 
 
 _download_state = ExactSequence([
-    str,          # filename
-    str,          # host
-    dt.datetime,  # timestamp
-    Maybe(str),   # arch
-    Maybe(str),   # distro_name
-    Maybe(str),   # distro_version
-    Maybe(str),   # os_name
-    Maybe(str),   # os_version
-    Maybe(str),   # py_name
-    Maybe(str),   # py_version
+    str,              # filename
+    str,              # host
+    dt.datetime,      # timestamp
+    Any(str, None),   # arch
+    Any(str, None),   # distro_name
+    Any(str, None),   # distro_version
+    Any(str, None),   # os_name
+    Any(str, None),   # os_version
+    Any(str, None),   # py_name
+    Any(str, None),   # py_version
 ])
 
 
@@ -197,7 +197,7 @@ mr_chase = Protocol(recv={
     'IMPORT': ExactSequence([
         str,            # package
         str,            # version
-        Maybe(str),     # abi_tag
+        Any(str, None), # abi_tag
         bool,           # status
         dt.timedelta,   # duration
         str,            # output
@@ -207,8 +207,8 @@ mr_chase = Protocol(recv={
     'REBUILD': Any(
         ExactSequence(['HOME']),
         ExactSequence(['SEARCH']),
-        ExactSequence(['PKGPROJ', Maybe(str)]),
-        ExactSequence(['PKGBOTH', Maybe(str)]),
+        ExactSequence(['PKGPROJ', Any(str, None)]),
+        ExactSequence(['PKGBOTH', Any(str, None)]),
     ),
     'SENT':   NoData,
 }, send={
@@ -271,4 +271,9 @@ the_oracle = Protocol(recv={
 monitor_stats = Protocol(send={
     'STATS': _statistics,
     'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
+})
+
+
+sense_stick = Protocol(send={
+    'EVENT': ExactSequence([dt.datetime, str, bool, bool])  # timestamp, direction, pressed, held
 })

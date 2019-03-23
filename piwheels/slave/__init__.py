@@ -46,7 +46,6 @@ from datetime import datetime
 from time import time, sleep
 from random import randint
 
-import zmq
 import dateutil.parser
 from wheel import pep425tags
 
@@ -64,7 +63,7 @@ class MasterTimeout(IOError):
 class PiWheelsSlave:
     """
     This is the main class for the :program:`piw-slave` script. It connects
-    (over zmq sockets) to a master (see :program:`piw-master`) then loops
+    (over 0MQ sockets) to a master (see :program:`piw-master`) then loops
     around the slave protocol (see the :doc:`slaves` chapter). It retrieves
     source packages directly from `PyPI`_, attempts to build a wheel in a
     sandbox directory and, if successful, transmits the results to the master.
@@ -108,14 +107,13 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.error('Slave must not be run as root')
             return 1
         self.systemd = get_systemd()
-        ctx = transport.Context.instance()
+        ctx = transport.Context()
         queue = None
         try:
             while True:
                 queue = ctx.socket(
-                    zmq.REQ, protocol=reversed(protocols.slave_driver))
+                    transport.REQ, protocol=reversed(protocols.slave_driver))
                 queue.hwm = 10
-                queue.ipv6 = True
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
                 self.systemd.ready()
@@ -123,14 +121,14 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     self.main_loop(queue)
                 except MasterTimeout:
                     self.systemd.reloading()
+                    print('resetting')
                     self.logger.warning('Resetting connection')
-                    queue.close(linger=1000)
+                    queue.close(linger=1)
         finally:
             self.systemd.stopping()
             queue.send_msg('BYE')
             queue.close()
-            ctx.destroy(linger=1000)
-            ctx.term()
+            ctx.close()
 
     # A general note about the design of the slave: the build slave is
     # deliberately designed to be "brittle". In other words to fall over and
@@ -151,6 +149,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         from the master and raises :exc:`MasterTimeout` if *timeout* seconds
         are exceeded.
         """
+        print('main loop')
         msg, data = 'HELLO', [
             self.config.timeout,
             pep425tags.get_impl_ver(), pep425tags.get_abi_tag(),
@@ -161,7 +160,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             start = time()
             while True:
                 self.systemd.watchdog_ping()
-                if queue.poll(1000):
+                if queue.poll(1):
                     msg, data = queue.recv_msg()
                     msg, data = self.handle_reply(msg, data)
                     break
@@ -248,9 +247,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         pkg = [f for f in self.builder.files if f.filename == filename][0]
         self.logger.info(
             'Sending %s to master on %s', pkg.filename, self.config.master)
-        ctx = zmq.Context.instance()
-        queue = ctx.socket(zmq.DEALER)
-        queue.ipv6 = True
+        ctx = transport.Context()
+        queue = ctx.socket(transport.DEALER)
         queue.hwm = 10
         queue.connect('tcp://{master}:5556'.format(master=self.config.master))
         try:

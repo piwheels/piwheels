@@ -34,17 +34,17 @@ from threading import Thread
 from subprocess import DEVNULL
 from itertools import chain, cycle
 
-import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__, protocols
+from piwheels import __version__, protocols, transport
 from piwheels.slave import PiWheelsSlave, MasterTimeout
 
 
 @pytest.fixture()
 def mock_slave_driver(request, zmq_context, tmpdir):
-    queue = zmq_context.socket(zmq.ROUTER, protocol=protocols.slave_driver)
+    queue = zmq_context.socket(
+        transport.ROUTER, protocol=protocols.slave_driver)
     queue.hwm = 1
     queue.bind('ipc://' + str(tmpdir.join('slave-driver-queue')))
     yield queue
@@ -53,7 +53,8 @@ def mock_slave_driver(request, zmq_context, tmpdir):
 
 @pytest.fixture()
 def mock_file_juggler(request, zmq_context, tmpdir):
-    queue = zmq_context.socket(zmq.DEALER, protocol=protocols.file_juggler)
+    queue = zmq_context.socket(
+        transport.DEALER, protocol=protocols.file_juggler)
     queue.hwm = 1
     queue.bind('ipc://' + str(tmpdir.join('file-juggler-queue')))
     yield queue

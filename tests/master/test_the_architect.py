@@ -29,17 +29,16 @@
 from unittest import mock
 from datetime import datetime, timedelta
 
-import zmq
 import pytest
 
-from piwheels import protocols
+from piwheels import protocols, transport
 from piwheels.master.the_architect import TheArchitect
 
 
 @pytest.fixture(scope='function')
 def builds_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.PULL, protocol=reversed(protocols.the_architect))
+        transport.PULL, protocol=reversed(protocols.the_architect))
     queue.bind(master_config.builds_queue)
     yield queue
     queue.close()

@@ -44,7 +44,6 @@ import ipaddress
 from pathlib import PosixPath
 from datetime import timezone
 
-import zmq
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
 from .. import __version__, terminal, const, protocols, transport
@@ -101,8 +100,8 @@ as the piw-master script.
         'common_vhost': COMMON_VHOST,
         'combined': COMBINED,
     }.get(config.format, config.format)
-    ctx = transport.Context.instance()
-    queue = ctx.socket(zmq.PUSH, protocol=reversed(protocols.lumberjack))
+    ctx = transport.Context()
+    queue = ctx.socket(transport.PUSH, protocol=reversed(protocols.lumberjack))
     queue.connect(config.log_queue)
     try:
         for filename in config.files:
@@ -111,7 +110,7 @@ as the piw-master script.
                 with ApacheSource(log_file, config.format) as src:
                     for row in src:
                         if log_filter(row):
-                            if not config.drop or queue.poll(1000, zmq.POLLOUT):
+                            if not config.drop or queue.poll(1, transport.POLLOUT):
                                 queue.send_msg('LOG', log_transform(row))
                             else:
                                 logging.warning('dropping log entry')
@@ -119,8 +118,7 @@ as the piw-master script.
                 log_file.close()
     finally:
         queue.close()
-        ctx.destroy(linger=1000)
-        ctx.term()
+        ctx.close()
     return 0
 
 

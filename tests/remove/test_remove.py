@@ -31,11 +31,10 @@ import os
 from unittest import mock
 from threading import Thread
 
-import zmq
 import pytest
 
 from conftest import find_message
-from piwheels import __version__, protocols
+from piwheels import __version__, protocols, transport
 from piwheels.remove import main
 
 
@@ -46,7 +45,7 @@ def import_queue_name(request, tmpdir):
 
 @pytest.fixture()
 def import_queue(request, mock_context, import_queue_name, tmpdir):
-    queue = mock_context.socket(zmq.REP, protocol=protocols.mr_chase)
+    queue = mock_context.socket(transport.REP, protocol=protocols.mr_chase)
     queue.hwm = 1
     queue.bind(import_queue_name)
     yield queue

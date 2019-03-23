@@ -33,10 +33,9 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 
-import zmq
 import pytest
 
-from piwheels import const, protocols
+from piwheels import const, protocols, transport
 from piwheels.master.db import Database
 from piwheels.master.states import (
     SlaveState,
@@ -53,7 +52,7 @@ UTC = timezone.utc
 @pytest.fixture()
 def slave_queue(request, zmq_context, master_status_queue):
     SlaveState.status_queue = zmq_context.socket(
-        zmq.PUSH, protocol=protocols.monitor_stats)
+        transport.PUSH, protocol=protocols.monitor_stats)
     SlaveState.status_queue.connect(const.INT_STATUS_QUEUE)
     def fin():
         SlaveState.status_queue.close()

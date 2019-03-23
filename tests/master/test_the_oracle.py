@@ -30,11 +30,10 @@
 from datetime import datetime, timedelta, timezone
 from operator import itemgetter
 
-import zmq
 import pytest
 
 from conftest import PIWHEELS_USER
-from piwheels import const, cbor2
+from piwheels import const, cbor2, transport
 from piwheels.master.db import Database
 from piwheels.master.seraph import Seraph
 from piwheels.master.the_oracle import TheOracle, DbClient
@@ -47,25 +46,21 @@ UTC = timezone.utc
 def task(request, zmq_context, master_config, db, with_schema):
     task = TheOracle(master_config)
     task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill the_oracle task')
-        task.close()
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.quit()
+    task.join(2)
+    if task.is_alive():
+        raise RuntimeError('failed to kill the_oracle task')
+    task.close()
 
 
 @pytest.fixture(scope='function')
 def mock_seraph(request, zmq_context):
-    queue = zmq_context.socket(zmq.REP)
-    def fin():
-        queue.close()
-    request.addfinalizer(fin)
+    queue = zmq_context.socket(transport.REP)
     queue.hwm = 10
     queue.bind(const.ORACLE_QUEUE)
-    return queue
+    yield queue
+    queue.close()
 
 
 @pytest.fixture(scope='function')
@@ -74,13 +69,11 @@ def real_seraph(request, zmq_context, master_config):
     task.front_queue.router_mandatory = True  # don't drop msgs during test
     task.back_queue.router_mandatory = True
     task.start()
-    def fin():
-        task.quit()
-        task.join(2)
-        if task.is_alive():
-            raise RuntimeError('failed to kill seraph task')
-    request.addfinalizer(fin)
-    return task
+    yield task
+    task.quit()
+    task.join(2)
+    if task.is_alive():
+        raise RuntimeError('failed to kill seraph task')
 
 
 @pytest.fixture(scope='function')
@@ -97,14 +90,14 @@ def test_oracle_bad_request(mock_seraph, task):
     assert mock_seraph.recv() == b'READY'
     mock_seraph.send_multipart([b'foo', b'', cbor2.dumps('FOO')])
     address, empty, resp = mock_seraph.recv_multipart()
-    assert cbor2.loads(resp) == ['ERROR', 'unknown message: FOO']
+    assert cbor2.loads(resp) == ['ERROR', repr('')]
 
 
 def test_oracle_badly_formed_request(mock_seraph, task):
     assert mock_seraph.recv() == b'READY'
     mock_seraph.send_multipart([b'foo', b'', b'', b'', b''])
     address, empty, resp = mock_seraph.recv_multipart()
-    assert cbor2.loads(resp) == ['ERROR', 'too many values to unpack (expected 3)']
+    assert cbor2.loads(resp) == ['ERROR', repr('')]
 
 
 def test_database_error(db, with_schema, db_client):
@@ -130,6 +123,12 @@ def test_add_new_package(db, with_schema, db_client):
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 1
         assert db.execute(
             "SELECT package, skip FROM packages").first() == ('foo', '')
+    db_client.add_new_package('bar', 'skipped')
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 2
+        assert db.execute(
+            "SELECT package, skip FROM packages "
+            "WHERE package = 'bar'").first() == ('bar', 'skipped')
 
 
 def test_add_new_package_version(db, with_package, db_client):

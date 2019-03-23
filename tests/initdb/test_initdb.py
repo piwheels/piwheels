@@ -30,7 +30,6 @@
 import os
 from unittest import mock
 
-import zmq
 import pytest
 
 from conftest import find_message, PIWHEELS_USER, PIWHEELS_SUPERUSER

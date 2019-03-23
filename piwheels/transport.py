@@ -26,6 +26,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 import ipaddress as ip
 import datetime as dt
 
@@ -34,6 +35,26 @@ from voluptuous import Invalid
 
 from . import cbor2
 from .protocols import Protocol, NoData
+
+
+PUSH = zmq.PUSH
+PULL = zmq.PULL
+REQ = zmq.REQ
+REP = zmq.REP
+PUB = zmq.PUB
+SUB = zmq.SUB
+ROUTER = zmq.ROUTER
+DEALER = zmq.DEALER
+
+NOBLOCK = zmq.NOBLOCK
+POLLIN = zmq.POLLIN
+POLLOUT = zmq.POLLOUT
+
+SUBSCRIBE = zmq.SUBSCRIBE
+UNSUBSCRIBE = zmq.UNSUBSCRIBE
+
+Error = zmq.ZMQError
+Again = zmq.error.Again
 
 
 def default_encoder(encoder, value):
@@ -65,47 +86,48 @@ def default_decoder(decoder, tag, shareable_index=None):
     return tag
 
 
-class Socket(zmq.Socket):
-    # Customized zmq.Socket with protocol checking and CBOR-specific send and
-    # recv methods; _protocol needs to be defined at the class level otherwise
-    # pyzmq's __setattr__ denies assignment
-    _protocol = None
-    _encoder = None
-    _decoder = None
+class Context:
+    """
+    Wrapper for 0MQ :class:`zmq.Context`. This extends the :meth:`socket`
+    method to include parameters for the socket's protocol and logger.
+    """
+    def __init__(self):
+        self._context = zmq.Context.instance()
 
-    def __init__(self, *a, **kw):
-        protocol = kw.pop('protocol', Protocol())
-        super().__init__(*a, **kw)
+    def socket(self, sock_type, *, protocol=None, logger=None):
+        return Socket(self._context.socket(sock_type), protocol, logger)
+
+    def close(self, linger=1):
+        self._context.destroy(linger=linger * 1000)
+        self._context.term()
+
+
+class Socket:
+    """
+    Wrapper for 0MQ :class:`zmq.Socket`. This extends 0MQ's sockets to include
+    a protocol which will be used to validate messages that are sent and
+    received (via a voluptuous-based schema), and a logger which can be used
+    to debug socket behaviour.
+    """
+    def __init__(self, socket, protocol=None, logger=None):
+        if logger is None:
+            logger = logging.getLogger()
+        if protocol is None:
+            protocol = Protocol()
+        self._logger = logger
+        self._socket = socket
         self._protocol = protocol
         self._encoder = cbor2.CBOREncoder(None, default=default_encoder)
         self._decoder = cbor2.CBORDecoder(None, tag_hook=default_decoder)
+        self._socket.ipv6 = True
 
-    def send_cbor(self, obj, flags=0):
-        self.send(self._encoder.encode_to_bytes(obj), flags=flags)
+    def __enter__(self):
+        return self
 
-    def recv_cbor(self, flags=0):
-        buf = self.recv(flags=flags)
-        return self._decoder.decode_from_bytes(buf)
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
 
-    def send_msg(self, msg, data=NoData, flags=0):
-        self.send(self.dump_msg(msg, data), flags=flags)
-
-    def recv_msg(self, flags=0):
-        buf = self.recv(flags=flags)
-        return self.load_msg(buf)
-
-    def send_addr_msg(self, addr, msg, data=NoData, flags=0):
-        self.send_multipart([addr, b'', self.dump_msg(msg, data)], flags=flags)
-
-    def recv_addr_msg(self, flags=0):
-        try:
-            addr, empty, buf = self.recv_multipart()
-        except ValueError:
-            raise IOError('invalid message structure received')
-        msg, data = self.load_msg(buf)
-        return addr, msg, data
-
-    def dump_msg(self, msg, data=NoData):
+    def _dump_msg(self, msg, data=NoData):
         try:
             schema = self._protocol.send[msg]
         except KeyError:
@@ -126,7 +148,7 @@ class Socket(zmq.Socket):
             except cbor2.CBOREncodeError as e:
                 raise IOError('unable to serialize data')
 
-    def load_msg(self, buf):
+    def _load_msg(self, buf):
         try:
             msg = self._decoder.decode_from_bytes(buf)
         except cbor2.CBORDecodeError as e:
@@ -155,6 +177,86 @@ class Socket(zmq.Socket):
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
 
+    @property
+    def hwm(self):
+        return self._socket.hwm
 
-class Context(zmq.Context):
-    _socket_class = Socket
+    @hwm.setter
+    def hwm(self, value):
+        self._socket.hwm = value
+
+    def bind(self, address):
+        return self._socket.bind(address)
+
+    def connect(self, address):
+        return self._socket.connect(address)
+
+    def close(self, linger=None):
+        return self._socket.close(
+            linger=linger if linger is None else linger * 1000)
+
+    def subscribe(self, topic):
+        self._socket.setsockopt_string(SUBSCRIBE, topic)
+
+    def unsubscribe(self, topic):
+        self._socket.setsockopt_string(UNSUBSCRIBE, topic)
+
+    def poll(self, timeout=None, flags=POLLIN):
+        return self._socket.poll(
+            timeout if timeout is None else timeout * 1000, flags)
+
+    def send(self, buf, flags=0):
+        return self._socket.send(buf, flags)
+
+    def recv(self, flags=0):
+        return self._socket.recv(flags)
+
+    def send_multipart(self, msg_parts, flags=0):
+        return self._socket.send_multipart(msg_parts, flags)
+
+    def recv_multipart(self, flags=0):
+        return self._socket.recv_multipart(flags)
+
+    def send_msg(self, msg, data=NoData, flags=0):
+        return self.send(self._dump_msg(msg, data), flags)
+
+    def recv_msg(self, flags=0):
+        return self._load_msg(self.recv(flags))
+
+    def send_addr_msg(self, addr, msg, data=NoData, flags=0):
+        self.send_multipart([addr, b'', self._dump_msg(msg, data)], flags)
+
+    def recv_addr_msg(self, flags=0):
+        try:
+            addr, empty, buf = self.recv_multipart(flags)
+        except ValueError:
+            raise IOError('invalid message structure received')
+        msg, data = self._load_msg(buf)
+        return addr, msg, data
+
+
+class Poller:
+    """
+    Wrapper for 0MQ :class:`zmq.Poller`. This simply tweaks 0MQ's poller to use
+    seconds for timeouts, and to return a :class:`dict` by default from
+    :meth:`poll`.
+    """
+    def __init__(self):
+        self._poller = zmq.Poller()
+        self._map = {}
+
+    def register(self, sock, flags=POLLIN | POLLOUT):
+        if isinstance(sock, Socket):
+            self._map[sock._socket] = sock
+        return self._poller.register(sock._socket, flags)
+
+    def unregister(self, sock):
+        self._poller.unregister(sock._socket)
+        del self._map[sock._socket]
+
+    def poll(self, timeout=None):
+        return {
+            self._map.get(sock, sock): event
+            for sock, event in self._poller.poll(
+                timeout if timeout is None else timeout * 1000)
+        }

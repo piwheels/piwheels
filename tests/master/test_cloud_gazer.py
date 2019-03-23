@@ -29,11 +29,11 @@
 
 from unittest import mock
 
-import zmq
 import pytest
+from queue import Queue
 from datetime import datetime, timezone
 
-from piwheels import const, protocols
+from piwheels import const, protocols, transport
 from piwheels.master.cloud_gazer import CloudGazer
 
 
@@ -46,24 +46,17 @@ def dt(s):
 
 @pytest.fixture()
 def pypi_proxy(request, zmq_context):
-    pull = zmq_context.socket(zmq.PULL)
-    push = zmq_context.socket(zmq.PUSH)
-    pull.hwm = 1
-    push.hwm = 1
-    pull.bind('inproc://pypi')
-    push.connect('inproc://pypi')
+    q = Queue()
     proxy_patcher = mock.patch('xmlrpc.client.ServerProxy')
     proxy_mock = proxy_patcher.start()
-    proxy_mock().changelog_since_serial.side_effect = lambda serial: pull.recv_pyobj()
-    yield push
+    proxy_mock().changelog_since_serial.side_effect = lambda serial: q.get()
+    yield q
     proxy_patcher.stop()
-    push.close()
-    pull.close()
 
 
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
+    queue = zmq_context.socket(transport.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -98,7 +91,7 @@ def test_new_pkg(pypi_proxy, db_queue, task):
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
-    pypi_proxy.send_pyobj([
+    pypi_proxy.put([
         ('foo', '0.2', 1531327388, 'create', 0),
         ('foo', '0.2', 1531327388, 'add source file foo-0.2.tar.gz', 1),
     ])
@@ -119,7 +112,7 @@ def test_existing_ver(pypi_proxy, db_queue, task):
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
-    pypi_proxy.send_pyobj([
+    pypi_proxy.put([
         ('foo', '0.2', 1531327388, 'create', 0),
         ('foo', '0.2', 1531327388, 'add cp34 file foo-0.2-cp34-cp34m-manylinux1_x86_64.whl', 1),
     ])
@@ -142,7 +135,7 @@ def test_new_ver(pypi_proxy, db_queue, web_queue, task):
     db_queue.send('OK', 2)
     task.once()
     db_queue.check()
-    pypi_proxy.send_pyobj([
+    pypi_proxy.put([
         ('bar', '1.0', 1531327389, 'create', 2),
         ('bar', '1.0', 1531327389, 'add source file bar-1.0-py2.py3-none-any.whl', 3),
         ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
@@ -169,7 +162,7 @@ def test_enable_ver(pypi_proxy, db_queue, task):
     db_queue.send('OK', 3)
     task.once()
     db_queue.check()
-    pypi_proxy.send_pyobj([
+    pypi_proxy.put([
         ('foo', '1.0', 1531327389, 'add py2.py3 file foo-1.0-py2.py3-none-any.whl', 3),
         ('foo', '1.0', 1531327389, 'add cp34 file foo-0.1-cp34-cp34-manylinux1_x86_64.whl', 4),
         ('foo', '1.0', 1531327392, 'add source file foo-1.0-py2.py3-none-any.whl', 5),

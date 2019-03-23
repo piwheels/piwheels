@@ -43,8 +43,6 @@ import sys
 import signal
 import logging
 
-import zmq
-
 from .. import __version__, terminal, const, systemd, transport, protocols
 from ..systemd import get_systemd
 from ..tasks import TaskQuit
@@ -159,6 +157,8 @@ write access to the output directory.
         parser = self.configure_parser()
         config = parser.parse_args(args)
         config.output_path = os.path.expanduser(config.output_path)
+        if config.dev_mode:
+            config.log_level = logging.DEBUG
         terminal.configure_logging(config.log_level, config.log_file)
         # We want the logger name included in our console output
         terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
@@ -168,17 +168,20 @@ write access to the output directory.
         if os.geteuid() == 0:
             self.logger.error('Master must not be run as root')
             return 1
-        ctx = transport.Context.instance()
+        if config.dev_mode:
+            self.logger.warning('Starting in development mode; DO NOT use '
+                                'this in production!')
+        ctx = transport.Context()
         self.control_queue = ctx.socket(
-            zmq.PULL, protocol=protocols.master_control)
+            transport.PULL, protocol=protocols.master_control)
         self.control_queue.hwm = 10
         self.control_queue.bind(config.control_queue)
         self.int_status_queue = ctx.socket(
-            zmq.PULL, protocol=reversed(protocols.monitor_stats))
+            transport.PULL, protocol=reversed(protocols.monitor_stats))
         self.int_status_queue.hwm = 10
         self.int_status_queue.bind(const.INT_STATUS_QUEUE)
         self.ext_status_queue = ctx.socket(
-            zmq.PUB, protocol=protocols.monitor_stats)
+            transport.PUB, protocol=protocols.monitor_stats)
         self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
 
@@ -230,8 +233,7 @@ write access to the output directory.
             self.int_status_queue.close()
             self.ext_status_queue.close()
             self.logger.info('closed all queues')
-            ctx.destroy(linger=1000)
-            ctx.term()
+            ctx.close()
 
     def main_loop(self, systemd):
         """
@@ -241,9 +243,9 @@ write access to the output directory.
         attached). It also retrieves any messages sent to the control queue and
         dispatches them to a handler.
         """
-        poller = zmq.Poller()
-        poller.register(self.control_queue, zmq.POLLIN)
-        poller.register(self.int_status_queue, zmq.POLLIN)
+        poller = transport.Poller()
+        poller.register(self.control_queue, transport.POLLIN)
+        poller.register(self.int_status_queue, transport.POLLIN)
         while True:
             systemd.watchdog_ping()
             socks = dict(poller.poll(60000))

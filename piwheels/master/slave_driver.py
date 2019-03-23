@@ -36,9 +36,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 import pickle
 from datetime import datetime, timezone
 
-import zmq
-
-from .. import const, protocols, tasks
+from .. import const, protocols, tasks, transport
 from .states import SlaveState, FileState
 from .the_oracle import DbClient
 from .file_juggler import FsClient
@@ -69,26 +67,25 @@ class SlaveDriver(tasks.Task):
         self.paused = False
         self.abi_queues = {}
         slave_queue = self.ctx.socket(
-            zmq.ROUTER, protocol=protocols.slave_driver)
-        slave_queue.ipv6 = True
+            transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
         self.register(slave_queue, self.handle_slave)
         builds_queue = self.ctx.socket(
-            zmq.PULL, protocol=reversed(protocols.the_architect))
+            transport.PULL, protocol=reversed(protocols.the_architect))
         builds_queue.hwm = 10
         builds_queue.bind(config.builds_queue)
         self.register(builds_queue, self.handle_build)
         self.status_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.monitor_stats)
+            transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.big_brother))
+            transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)

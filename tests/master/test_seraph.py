@@ -29,10 +29,9 @@
 
 import pickle
 
-import zmq
 import pytest
 
-from piwheels import const
+from piwheels import const, cbor2, transport
 from piwheels.master.seraph import Seraph
 
 
@@ -40,16 +39,16 @@ def test_router(zmq_context, master_config):
     seraph = Seraph(master_config)
     seraph.start()
     try:
-        client = zmq_context.socket(zmq.REQ)
+        client = zmq_context.socket(transport.REQ)
         client.connect(master_config.db_queue)
-        worker = zmq_context.socket(zmq.REQ)
+        worker = zmq_context.socket(transport.REQ)
         worker.connect(const.ORACLE_QUEUE)
         worker.send(b'READY')
-        client.send_pyobj(['FOO'])
+        client.send(cbor2.dumps(['FOO']))
         client_addr, empty, msg = worker.recv_multipart()
-        assert pickle.loads(msg) == ['FOO']
-        worker.send_multipart([client_addr, empty, pickle.dumps(['BAR'])])
-        assert client.recv_pyobj() == ['BAR']
+        assert cbor2.loads(msg) == ['FOO']
+        worker.send_multipart([client_addr, empty, cbor2.dumps(['BAR'])])
+        assert cbor2.loads(client.recv()) == ['BAR']
     finally:
         seraph.quit()
         seraph.join()
@@ -59,18 +58,18 @@ def test_router_no_workers(zmq_context, master_config):
     seraph = Seraph(master_config)
     seraph.start()
     try:
-        client = zmq_context.socket(zmq.REQ)
+        client = zmq_context.socket(transport.REQ)
         client.connect(master_config.db_queue)
-        client.send_pyobj(['FOO'])
-        with pytest.raises(zmq.ZMQError):
-            client.recv_pyobj(flags=zmq.NOBLOCK)
-        worker = zmq_context.socket(zmq.REQ)
+        client.send(cbor2.dumps(['FOO']))
+        with pytest.raises(transport.Error):
+            client.recv(flags=transport.NOBLOCK)
+        worker = zmq_context.socket(transport.REQ)
         worker.connect(const.ORACLE_QUEUE)
         worker.send(b'READY')
         client_addr, empty, msg = worker.recv_multipart()
-        assert pickle.loads(msg) == ['FOO']
-        worker.send_multipart([client_addr, empty, pickle.dumps(['BAR'])])
-        assert client.recv_pyobj() == ['BAR']
+        assert cbor2.loads(msg) == ['FOO']
+        worker.send_multipart([client_addr, empty, cbor2.dumps(['BAR'])])
+        assert cbor2.loads(client.recv()) == ['BAR']
     finally:
         seraph.quit()
         seraph.join()

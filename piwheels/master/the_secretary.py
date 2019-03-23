@@ -36,9 +36,7 @@ Defines the :class:`TheSecretary` task; see class for more details.
 from datetime import datetime, timedelta, timezone
 from collections import deque, namedtuple
 
-import zmq
-
-from .. import const, protocols, tasks
+from .. import const, protocols, tasks, transport
 
 
 UTC = timezone.utc
@@ -69,12 +67,12 @@ class TheSecretary(tasks.PauseableTask):
         else:
             self.timeout = timedelta(minutes=1)
         web_queue = self.ctx.socket(
-            zmq.PULL, protocol=protocols.the_scribe)
+            transport.PULL, protocol=protocols.the_scribe)
         web_queue.hwm = 100
         web_queue.bind(config.web_queue)
         self.register(web_queue, self.handle_input)
         self.output = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.connect(const.SCRIBE_QUEUE)
 

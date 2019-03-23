@@ -30,17 +30,16 @@ import os
 from pathlib import Path
 from unittest import mock
 
-import zmq
 import pytest
 
-from piwheels import protocols
+from piwheels import protocols, transport
 from piwheels.master.file_juggler import FileJuggler
 from piwheels.master.states import TransferState
 
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.big_brother)
+    queue = zmq_context.socket(transport.PULL, protocol=protocols.big_brother)
     queue.hwm = 1
     queue.bind(master_config.stats_queue)
     yield queue
@@ -50,7 +49,7 @@ def stats_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def file_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.DEALER, protocol=reversed(protocols.file_juggler_files))
+        transport.DEALER, protocol=reversed(protocols.file_juggler_files))
     queue.hwm = 10
     queue.connect(master_config.file_queue)
     yield queue
@@ -60,7 +59,7 @@ def file_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def fs_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
+        transport.REQ, protocol=reversed(protocols.file_juggler_fs))
     queue.hwm = 1
     queue.connect(master_config.fs_queue)
     yield queue

@@ -39,9 +39,6 @@ to it.
 
 import pickle
 
-import zmq
-import zmq.error
-
 from .. import const, protocols, transport, tasks
 from .states import BuildState, DownloadState
 from .db import Database, ProjectVersionsRow, ProjectFilesRow
@@ -69,7 +66,8 @@ class TheOracle(tasks.Task):
         self.name = '%s_%d' % (TheOracle.name, TheOracle.instance)
         super().__init__(config)
         self.db = Database(config.dsn)
-        db_queue = self.ctx.socket(zmq.REQ, protocol=protocols.the_oracle)
+        db_queue = self.ctx.socket(
+            transport.REQ, protocol=protocols.the_oracle)
         db_queue.hwm = 10
         db_queue.connect(const.ORACLE_QUEUE)
         self.register(db_queue, self.handle_db_request)
@@ -84,8 +82,8 @@ class TheOracle(tasks.Task):
         Handle incoming requests from :class:`DbClient` instances.
         """
         try:
-            addr, empty, buf = queue.recv_multipart()
-        except ValueError as exc:
+            addr, msg, data = queue.recv_addr_msg()
+        except IOError as exc:
             self.logger.error(str(exc))
             # REQ sockets *must* send a reply even when stuff goes wrong
             # otherwise the send/recv cycle that REQ/REP depends upon breaks.
@@ -93,45 +91,38 @@ class TheOracle(tasks.Task):
             # reply address, so we just make one up (empty). This message
             # won't go anywhere (bogus address) but that doesn't matter as we
             # just want to get the socket back to receiving state
-            addr, msg, data = b'', 'ERROR', str(exc)
+            addr, msg, data = b'', '', str(exc)
+        try:
+            handler = {
+                'ALLPKGS':     lambda: self.do_allpkgs(),
+                'ALLVERS':     lambda: self.do_allvers(),
+                'NEWPKG':      lambda: self.do_newpkg(*data),
+                'NEWVER':      lambda: self.do_newver(*data),
+                'SKIPPKG':     lambda: self.do_skippkg(*data),
+                'SKIPVER':     lambda: self.do_skipver(*data),
+                'LOGDOWNLOAD': lambda: self.do_logdownload(data),
+                'LOGBUILD':    lambda: self.do_logbuild(data),
+                'DELBUILD':    lambda: self.do_delbuild(*data),
+                'PKGFILES':    lambda: self.do_pkgfiles(data),
+                'PROJVERS':    lambda: self.do_projvers(data),
+                'PROJFILES':   lambda: self.do_projfiles(data),
+                'VERFILES':    lambda: self.do_verfiles(*data),
+                'GETSKIP':     lambda: self.do_getskip(*data),
+                'PKGEXISTS':   lambda: self.do_pkgexists(data),
+                'VEREXISTS':   lambda: self.do_verexists(*data),
+                'GETABIS':     lambda: self.do_getabis(),
+                'GETPYPI':     lambda: self.do_getpypi(),
+                'SETPYPI':     lambda: self.do_setpypi(data),
+                'GETSTATS':    lambda: self.do_getstats(),
+                'GETDL':       lambda: self.do_getdl(),
+                'FILEDEPS':    lambda: self.do_filedeps(data),
+            }[msg]
+            result = handler()
+        except Exception as exc:
+            self.logger.error('Error handling db request: %s', msg)
+            msg, data = 'ERROR', str(exc)
         else:
-            try:
-                msg, data = queue.load_msg(buf)
-            except IOError as exc:
-                self.logger.error(str(exc))
-                msg, data = 'ERROR', str(exc)
-            else:
-                try:
-                    handler = {
-                        'ALLPKGS':     lambda: self.do_allpkgs(),
-                        'ALLVERS':     lambda: self.do_allvers(),
-                        'NEWPKG':      lambda: self.do_newpkg(*data),
-                        'NEWVER':      lambda: self.do_newver(*data),
-                        'SKIPPKG':     lambda: self.do_skippkg(*data),
-                        'SKIPVER':     lambda: self.do_skipver(*data),
-                        'LOGDOWNLOAD': lambda: self.do_logdownload(data),
-                        'LOGBUILD':    lambda: self.do_logbuild(data),
-                        'DELBUILD':    lambda: self.do_delbuild(*data),
-                        'PKGFILES':    lambda: self.do_pkgfiles(data),
-                        'PROJVERS':    lambda: self.do_projvers(data),
-                        'PROJFILES':   lambda: self.do_projfiles(data),
-                        'VERFILES':    lambda: self.do_verfiles(*data),
-                        'GETSKIP':     lambda: self.do_getskip(*data),
-                        'PKGEXISTS':   lambda: self.do_pkgexists(data),
-                        'VEREXISTS':   lambda: self.do_verexists(*data),
-                        'GETABIS':     lambda: self.do_getabis(),
-                        'GETPYPI':     lambda: self.do_getpypi(),
-                        'SETPYPI':     lambda: self.do_setpypi(data),
-                        'GETSTATS':    lambda: self.do_getstats(),
-                        'GETDL':       lambda: self.do_getdl(),
-                        'FILEDEPS':    lambda: self.do_filedeps(data),
-                    }[msg]
-                    result = handler()
-                except Exception as exc:
-                    self.logger.error('Error handling db request: %s', msg)
-                    msg, data = 'ERROR', str(exc)
-                else:
-                    msg, data = 'OK', result
+            msg, data = 'OK', result
         queue.send_addr_msg(addr, msg, data)  # see note above
 
     def do_allpkgs(self):
@@ -153,7 +144,7 @@ class TheOracle(tasks.Task):
         Handler for "NEWPKG" message, sent by :class:`DbClient` to register a
         new package.
         """
-        return self.db.add_new_package(package)
+        return self.db.add_new_package(package, skip)
 
     def do_newver(self, package, version, released, skip):
         """
@@ -299,9 +290,9 @@ class DbClient:
     RPC client class for talking to :class:`TheOracle`.
     """
     def __init__(self, config):
-        self.ctx = transport.Context.instance()
+        self.ctx = transport.Context()
         self.db_queue = self.ctx.socket(
-            zmq.REQ, protocol=reversed(protocols.the_oracle))
+            transport.REQ, protocol=reversed(protocols.the_oracle))
         self.db_queue.hwm = 10
         self.db_queue.connect(config.db_queue)
 
@@ -311,7 +302,7 @@ class DbClient:
     def _execute(self, msg, data=protocols.NoData):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
-        self.db_queue.send_msg(msg, data, flags=zmq.NOBLOCK)
+        self.db_queue.send_msg(msg, data, flags=transport.NOBLOCK)
         status, result = self.db_queue.recv_msg()
         if status == 'OK':
             return result

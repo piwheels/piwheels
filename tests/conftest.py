@@ -34,7 +34,6 @@ from hashlib import sha256
 from threading import Thread, Event
 from time import sleep
 
-import zmq
 import pytest
 from sqlalchemy import create_engine
 from voluptuous import Schema, ExactSequence, Extra, Any
@@ -308,24 +307,22 @@ def master_config(request, tmpdir):
 
 @pytest.fixture(scope='session')
 def zmq_context(request):
-    context = transport.Context.instance()
+    context = transport.Context()
     yield context
-    context.destroy(linger=1000)
-    context.term()
+    context.close()
 
 
 @pytest.fixture()
 def mock_context(request, zmq_context, tmpdir):
-    with mock.patch('piwheels.transport.Context.instance') as inst_mock:
+    with mock.patch('piwheels.transport.Context') as inst_mock:
         ctx_mock = mock.Mock(wraps=zmq_context)
         inst_mock.return_value = ctx_mock
-        # Neuter the term() and destroy() methods
-        ctx_mock.term = mock.Mock()
-        ctx_mock.destroy = mock.Mock()
+        # Neuter the close() method
+        ctx_mock.close = mock.Mock()
         # Override the socket() method so connect calls on the result get
         # re-directed to local IPC sockets
-        def socket(socket_type, **kwargs):
-            sock = zmq_context.socket(socket_type, **kwargs)
+        def socket(socket_type, *args, **kwargs):
+            sock = zmq_context.socket(socket_type, *args, **kwargs)
             def connect(addr):
                 if addr.startswith('tcp://') and addr.endswith(':5555'):
                     addr = 'ipc://' + str(tmpdir.join('slave-driver-queue'))
@@ -351,7 +348,8 @@ def mock_systemd(request):
 
 @pytest.fixture(scope='function')
 def master_control_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.master_control)
+    queue = zmq_context.socket(
+        transport.PULL, protocol=protocols.master_control)
     queue.hwm = 1
     queue.bind(master_config.control_queue)
     yield queue
@@ -361,7 +359,7 @@ def master_control_queue(request, zmq_context, master_config):
 @pytest.fixture(scope='function')
 def master_status_queue(request, zmq_context):
     queue = zmq_context.socket(
-        zmq.PULL, protocol=reversed(protocols.monitor_stats))
+        transport.PULL, protocol=reversed(protocols.monitor_stats))
     queue.hwm = 1
     queue.bind(const.INT_STATUS_QUEUE)
     yield queue
@@ -413,7 +411,8 @@ class MockTask(Thread):
         MockTask.ident += 1
         self.sock_type = sock_type
         self.sock_addr = sock_addr
-        self.control = ctx.socket(zmq.REQ, protocol=reversed(self.protocol))
+        self.control = ctx.socket(
+            transport.REQ, protocol=reversed(self.protocol))
         self.control.hwm = 1
         self.control.bind(address)
         self.sock = ctx.socket(sock_type, protocol=sock_protocol)
@@ -471,15 +470,15 @@ class MockTask(Thread):
                 queue[0].actual = queue[0].expect
                 done.append(queue.pop(0))
 
-        control = ctx.socket(zmq.REP, protocol=self.protocol)
+        control = ctx.socket(transport.REP, protocol=self.protocol)
         control.hwm = 1
         control.connect(address)
         try:
-            poller = zmq.Poller()
-            poller.register(control, zmq.POLLIN)
-            poller.register(self.sock, zmq.POLLIN)
+            poller = transport.Poller()
+            poller.register(control, transport.POLLIN)
+            poller.register(self.sock, transport.POLLIN)
             while True:
-                socks = dict(poller.poll(10))
+                socks = poller.poll(0.1)
                 if control in socks:
                     msg, data = control.recv_msg()
                     if msg == 'QUIT':
@@ -523,7 +522,7 @@ class MockTask(Thread):
 
 @pytest.fixture(scope='function')
 def db_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.db_queue,
+    task = MockTask(zmq_context, transport.REP, master_config.db_queue,
                     protocols.the_oracle)
     yield task
     task.close()
@@ -531,7 +530,7 @@ def db_queue(request, zmq_context, master_config):
 
 @pytest.fixture(scope='function')
 def fs_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, zmq.REP, master_config.fs_queue,
+    task = MockTask(zmq_context, transport.REP, master_config.fs_queue,
                     protocols.file_juggler_fs)
     yield task
     task.close()

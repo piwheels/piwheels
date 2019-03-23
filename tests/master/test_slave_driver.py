@@ -30,10 +30,9 @@
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-import zmq
 import pytest
 
-from piwheels import const, protocols, tasks
+from piwheels import const, protocols, tasks, transport
 from piwheels.master.slave_driver import SlaveDriver
 from piwheels.master.states import SlaveState, BuildState
 
@@ -43,7 +42,7 @@ UTC = timezone.utc
 
 @pytest.fixture()
 def builds_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PUSH, protocol=protocols.the_architect)
+    queue = zmq_context.socket(transport.PUSH, protocol=protocols.the_architect)
     queue.hwm = 1
     queue.connect(master_config.builds_queue)
     yield queue
@@ -53,7 +52,7 @@ def builds_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.PULL, protocol=protocols.the_scribe)
+        transport.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -63,7 +62,7 @@ def web_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.PULL, protocol=protocols.big_brother)
+        transport.PULL, protocol=protocols.big_brother)
     queue.hwm = 1
     queue.bind(master_config.stats_queue)
     yield queue
@@ -74,7 +73,7 @@ def stats_queue(request, zmq_context, master_config):
 def task(request, zmq_context, web_queue, stats_queue, master_status_queue,
          master_config):
     SlaveState.status_queue = zmq_context.socket(
-        zmq.PUSH, protocol=reversed(protocols.slave_driver))
+        transport.PUSH, protocol=reversed(protocols.slave_driver))
     SlaveState.status_queue.hwm = 1
     SlaveState.status_queue.connect(const.INT_STATUS_QUEUE)
     SlaveState.counter = 0
@@ -87,7 +86,7 @@ def task(request, zmq_context, web_queue, stats_queue, master_status_queue,
 @pytest.fixture()
 def slave_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.REQ, protocol=reversed(protocols.slave_driver))
+        transport.REQ, protocol=reversed(protocols.slave_driver))
     queue.hwm = 1
     queue.connect(master_config.slave_queue)
     yield queue
@@ -97,7 +96,7 @@ def slave_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def slave2_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.REQ, protocol=reversed(protocols.slave_driver))
+        transport.REQ, protocol=reversed(protocols.slave_driver))
     queue.hwm = 1
     queue.connect(master_config.slave_queue)
     yield queue
@@ -215,8 +214,8 @@ def test_slave_commits_suicide(task, slave_queue, master_status_queue,
 def test_master_lists_nothing(task, master_status_queue):
     task.list_slaves()
     task.poll()
-    with pytest.raises(zmq.ZMQError):
-        master_status_queue.recv_msg(flags=zmq.NOBLOCK)
+    with pytest.raises(transport.Error):
+        master_status_queue.recv_msg(flags=transport.NOBLOCK)
 
 
 def test_master_lists_slaves(task, slave_queue, master_config,

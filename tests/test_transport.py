@@ -32,20 +32,19 @@ import ipaddress as ip
 import datetime as dt
 from unittest import mock
 
-import zmq
 import pytest
 from voluptuous import Any
 
 from piwheels import cbor2
 from piwheels.protocols import Protocol, NoData
-from piwheels.transport import Context, Socket
+from piwheels.transport import Context, Socket, PUSH, PULL
 
 
 def test_ipaddress_roundtrip():
     protocol = Protocol(recv={'FOO': Any(ip.IPv4Address, ip.IPv6Address)})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     address4 = ip.IPv4Address('192.168.0.1')
@@ -60,9 +59,9 @@ def test_ipaddress_roundtrip():
 
 def test_timedelta_roundtrip():
     protocol = Protocol(recv={'FOO': dt.timedelta})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     delta = dt.timedelta(minutes=5)
@@ -74,9 +73,9 @@ def test_timedelta_roundtrip():
 
 def test_encoding_unknown_type():
     protocol = Protocol(recv={'FOO': Exception})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     with pytest.raises(IOError):
@@ -86,9 +85,9 @@ def test_encoding_unknown_type():
 
 
 def test_decoding_unknown_type():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL)
-    push = ctx.socket(zmq.PUSH)
+    ctx = Context()
+    pull = ctx.socket(PULL)
+    push = ctx.socket(PUSH)
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send(cbor2.dumps(cbor2.CBORTag(4000, None)))
@@ -98,26 +97,10 @@ def test_decoding_unknown_type():
     pull.close()
 
 
-def test_cbor_roundtrip():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL)
-    push = ctx.socket(zmq.PUSH)
-    pull.bind('inproc://foo')
-    push.connect('inproc://foo')
-    push.send_cbor(True)
-    assert pull.recv_cbor() == True
-    push.send_cbor(10000000000)
-    assert pull.recv_cbor() == 10000000000
-    push.send_cbor(['foo', 'bar'])
-    assert pull.recv_cbor() == ['foo', 'bar']
-    push.close()
-    pull.close()
-
-
 def test_recv_invalid_addr_msg_structure():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL)
-    push = ctx.socket(zmq.PUSH)
+    ctx = Context()
+    pull = ctx.socket(PULL)
+    push = ctx.socket(PUSH)
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send_multipart([b'foo', b'', b'', b''])
@@ -127,9 +110,9 @@ def test_recv_invalid_addr_msg_structure():
 
 def test_send_data_for_pure_msg():
     protocol = Protocol(recv={'FOO': NoData})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     with pytest.raises(IOError):
@@ -140,9 +123,9 @@ def test_send_data_for_pure_msg():
 
 def test_send_no_data_for_msg():
     protocol = Protocol(recv={'FOO': int})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     with pytest.raises(IOError):
@@ -153,9 +136,9 @@ def test_send_no_data_for_msg():
 
 def test_send_bad_data_for_msg():
     protocol = Protocol(recv={'FOO': int})
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=protocol)
-    push = ctx.socket(zmq.PUSH, protocol=reversed(protocol))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=protocol)
+    push = ctx.socket(PUSH, protocol=reversed(protocol))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     with pytest.raises(IOError):
@@ -165,9 +148,9 @@ def test_send_bad_data_for_msg():
 
 
 def test_recv_bad_data_from_msg():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=Protocol(recv={'FOO': int}))
-    push = ctx.socket(zmq.PUSH, protocol=Protocol(send={'FOO': str}))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=Protocol(recv={'FOO': int}))
+    push = ctx.socket(PUSH, protocol=Protocol(send={'FOO': str}))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send_msg('FOO', 'bar')
@@ -178,9 +161,9 @@ def test_recv_bad_data_from_msg():
 
 
 def test_recv_no_data_from_msg():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=Protocol(recv={'FOO': int}))
-    push = ctx.socket(zmq.PUSH, protocol=Protocol(send={'FOO': NoData}))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=Protocol(recv={'FOO': int}))
+    push = ctx.socket(PUSH, protocol=Protocol(send={'FOO': NoData}))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send_msg('FOO')
@@ -191,9 +174,9 @@ def test_recv_no_data_from_msg():
 
 
 def test_recv_unknown_msg():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL)
-    push = ctx.socket(zmq.PUSH, protocol=Protocol(send={'FOO': int}))
+    ctx = Context()
+    pull = ctx.socket(PULL)
+    push = ctx.socket(PUSH, protocol=Protocol(send={'FOO': int}))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send_msg('FOO', 1)
@@ -204,9 +187,9 @@ def test_recv_unknown_msg():
 
 
 def test_recv_unexpected_data():
-    ctx = Context.instance()
-    pull = ctx.socket(zmq.PULL, protocol=Protocol(recv={'FOO': NoData}))
-    push = ctx.socket(zmq.PUSH, protocol=Protocol(send={'FOO': int}))
+    ctx = Context()
+    pull = ctx.socket(PULL, protocol=Protocol(recv={'FOO': NoData}))
+    push = ctx.socket(PUSH, protocol=Protocol(send={'FOO': int}))
     pull.bind('inproc://foo')
     push.connect('inproc://foo')
     push.send_msg('FOO', 1)

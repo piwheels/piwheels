@@ -43,8 +43,6 @@ master.
 import logging
 from threading import Thread
 
-import zmq
-
 from . import transport, protocols
 
 
@@ -67,16 +65,18 @@ class Task(Thread):
 
     def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__()
-        self.ctx = transport.Context.instance()
+        self.ctx = transport.Context()
         self.handlers = {}
-        self.poller = zmq.Poller()
+        self.poller = transport.Poller()
         self.logger = logging.getLogger(self.name)
         self.control_protocol = control_protocol
-        control_queue = self.ctx.socket(zmq.PULL, protocol=control_protocol)
+        control_queue = self.ctx.socket(
+            transport.PULL, protocol=control_protocol, logger=self.logger)
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
         self.quit_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.master_control))
+            transport.PUSH, protocol=reversed(protocols.master_control),
+            logger=self.logger)
         self.quit_queue.hwm = 10
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
@@ -90,14 +90,14 @@ class Task(Thread):
             queue.close()
         self.quit_queue.close()
 
-    def register(self, queue, handler, flags=zmq.POLLIN):
+    def register(self, queue, handler, flags=transport.POLLIN):
         """
         Register *queue* to be polled on each cycle of the task. Any messages
         with the relevant *flags* (defaults to ``POLLIN``) will trigger the
         specified *handler* method which is expected to take a single argument
         which will be *queue*.
 
-        :param zmq.Socket queue:
+        :param transport.Socket queue:
             The queue to poll.
 
         :param handler:
@@ -112,7 +112,7 @@ class Task(Thread):
 
     def _ctrl(self, msg, data=protocols.NoData):
         queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(self.control_protocol))
+            transport.PUSH, protocol=reversed(self.control_protocol))
         try:
             queue.connect('inproc://ctrl-%s' % self.name)
             queue.send_msg(msg, data)
@@ -187,11 +187,11 @@ class Task(Thread):
         the poll is successful.
         """
         while True:
-            socks = dict(self.poller.poll(timeout * 1000))
+            socks = self.poller.poll(timeout)
             try:
                 for queue in socks:
                     self.handlers[queue](queue)
-            except zmq.error.Again:
+            except transport.Again:
                 continue  # pragma: no cover
             break
 

@@ -35,9 +35,7 @@ Defines :class:`TheArchitect` task; see class for more details.
 
 from datetime import datetime, timedelta
 
-import zmq
-
-from .. import protocols, tasks
+from .. import protocols, tasks, transport
 from .db import Database
 
 
@@ -54,7 +52,7 @@ class TheArchitect(tasks.Task):
         self.db = Database(config.dsn)
         self.last_run = datetime(1970, 1, 1)
         self.builds_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.the_architect)
+            transport.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.connect(config.builds_queue)
 
@@ -76,11 +74,5 @@ class TheArchitect(tasks.Task):
         # Leave 60 seconds between each run of the (expensive) builds
         # pending query
         if datetime.utcnow() - self.last_run > timedelta(seconds=60):
-            try:
-                self.builds_queue.send_msg('QUEUE', self.db.get_build_queue(),
-                                           flags=zmq.NOBLOCK)
-            except zmq.Again:
-                # If there's nothing connected or listening, don't block; just
-                # means slave-driver has shut down and we're about to follow
-                pass
+            self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
             self.last_run = datetime.utcnow()

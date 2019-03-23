@@ -39,8 +39,6 @@ Contains the functions that implement the :program:`piw-remove` script.
 import sys
 import logging
 
-import zmq
-
 from .. import __version__, terminal, const, transport, protocols
 
 
@@ -95,8 +93,8 @@ def do_remove(config):
     :param config:
         The configuration obtained from parsing the command line.
     """
-    ctx = transport.Context.instance()
-    queue = ctx.socket(zmq.REQ, protocol=reversed(protocols.mr_chase))
+    ctx = transport.Context()
+    queue = ctx.socket(transport.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
@@ -110,5 +108,4 @@ def do_remove(config):
             raise RuntimeError('Unexpected response from master')
     finally:
         queue.close()
-        ctx.destroy(linger=1000)
-        ctx.term()
+        ctx.close()

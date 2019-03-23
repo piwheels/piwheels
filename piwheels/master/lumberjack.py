@@ -33,9 +33,7 @@ Defines the :class:`Lumberjack` task; see class for more details.
     :members:
 """
 
-import zmq
-
-from .. import protocols, tasks
+from .. import protocols, transport, tasks
 from .the_oracle import DbClient
 from .states import DownloadState
 
@@ -51,7 +49,8 @@ class Lumberjack(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        log_queue = self.ctx.socket(zmq.PULL, protocol=protocols.lumberjack)
+        log_queue = self.ctx.socket(
+            transport.PULL, protocol=protocols.lumberjack)
         log_queue.bind(config.log_queue)
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config)

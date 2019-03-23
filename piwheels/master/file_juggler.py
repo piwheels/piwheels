@@ -46,9 +46,6 @@ for interacting with it.
 import os
 from pathlib import Path
 
-import zmq
-import zmq.error
-
 from .. import transport, protocols, tasks
 from .states import TransferState, FileState
 
@@ -97,16 +94,15 @@ class FileJuggler(tasks.Task):
         self.output_path = Path(config.output_path)
         TransferState.output_path = self.output_path
         file_queue = self.ctx.socket(
-            zmq.ROUTER, protocol=protocols.file_juggler_files)
-        file_queue.ipv6 = True
+            transport.ROUTER, protocol=protocols.file_juggler_files)
         file_queue.hwm = TransferState.pipeline_size * 50
         file_queue.bind(config.file_queue)
         fs_queue = self.ctx.socket(
-            zmq.REP, protocol=protocols.file_juggler_fs)
+            transport.REP, protocol=protocols.file_juggler_fs)
         fs_queue.hwm = 10
         fs_queue.bind(config.fs_queue)
         self.stats_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.big_brother))
+            transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.register(file_queue, self.handle_file)
@@ -335,9 +331,9 @@ class FsClient:
     RPC client class for talking to :class:`FileJuggler`.
     """
     def __init__(self, config):
-        self.ctx = transport.Context.instance()
+        self.ctx = transport.Context()
         self.fs_queue = self.ctx.socket(
-            zmq.REQ, protocol=reversed(protocols.file_juggler_fs))
+            transport.REQ, protocol=reversed(protocols.file_juggler_fs))
         self.fs_queue.hwm = 10
         self.fs_queue.connect(config.fs_queue)
 
@@ -347,7 +343,7 @@ class FsClient:
     def _execute(self, msg, data=protocols.NoData):
         # If sending blocks this either means we're shutting down, or
         # something's gone horribly wrong (either way, raising EAGAIN is fine)
-        self.fs_queue.send_msg(msg, data, flags=zmq.NOBLOCK)
+        self.fs_queue.send_msg(msg, data, flags=transport.NOBLOCK)
         status, result = self.fs_queue.recv_msg()
         if status == 'OK':
             return result

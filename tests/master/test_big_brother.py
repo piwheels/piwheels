@@ -31,11 +31,10 @@ from unittest import mock
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 
-import zmq
 import pytest
 
 from conftest import MockTask
-from piwheels import const, protocols
+from piwheels import const, protocols, transport
 from piwheels.master.big_brother import BigBrother
 
 
@@ -96,7 +95,8 @@ def stats_disk(request):
 
 @pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.big_brother))
+    queue = zmq_context.socket(
+        transport.PUSH, protocol=reversed(protocols.big_brother))
     queue.hwm = 1
     queue.connect(master_config.stats_queue)
     yield queue
@@ -105,7 +105,8 @@ def stats_queue(request, zmq_context, master_config):
 
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(zmq.PULL, protocol=protocols.the_scribe)
+    queue = zmq_context.socket(
+        transport.PULL, protocol=protocols.the_scribe)
     queue.hwm = 1
     queue.bind(master_config.web_queue)
     yield queue
@@ -124,10 +125,10 @@ def test_gen_skip(master_status_queue, web_queue, task):
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         task.loop()  # crank the handle once
-        with pytest.raises(zmq.ZMQError):
-            master_status_queue.recv_msg(flags=zmq.NOBLOCK)
-        with pytest.raises(zmq.ZMQError):
-            web_queue.recv_msg(flags=zmq.NOBLOCK)
+        with pytest.raises(transport.Error):
+            master_status_queue.recv_msg(flags=transport.NOBLOCK)
+        with pytest.raises(transport.Error):
+            web_queue.recv_msg(flags=transport.NOBLOCK)
 
 
 def test_gen_stats(db_queue, master_status_queue, web_queue, task,

@@ -29,10 +29,9 @@
 
 from unittest import mock
 
-import zmq
 import pytest
 
-from piwheels import protocols
+from piwheels import protocols, transport
 from piwheels.master.lumberjack import Lumberjack
 
 
@@ -47,7 +46,7 @@ def task(request, zmq_context, master_config):
 @pytest.fixture(scope='function')
 def log_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
-        zmq.PUSH, protocol=reversed(protocols.lumberjack))
+        transport.PUSH, protocol=reversed(protocols.lumberjack))
     queue.connect(master_config.log_queue)
     yield queue
     queue.close()

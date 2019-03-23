@@ -36,11 +36,10 @@ from collections import namedtuple, OrderedDict
 from html.parser import HTMLParser
 from threading import Event
 
-import zmq
 import pytest
 from pkg_resources import resource_listdir
 
-from piwheels import const, protocols
+from piwheels import const, protocols, transport
 from piwheels.master.the_oracle import ProjectFilesRow, ProjectVersionsRow
 from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
 
@@ -54,7 +53,8 @@ def task(request, zmq_context, master_config, db_queue):
 
 @pytest.fixture()
 def scribe_queue(request, zmq_context):
-    queue = zmq_context.socket(zmq.PUSH, protocol=reversed(protocols.the_scribe))
+    queue = zmq_context.socket(
+        transport.PUSH, protocol=reversed(protocols.the_scribe))
     queue.hwm = 10
     queue.connect(const.SCRIBE_QUEUE)
     yield queue

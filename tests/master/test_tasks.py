@@ -30,7 +30,6 @@
 from unittest import mock
 from time import sleep
 
-import zmq
 import pytest
 
 from piwheels import protocols, tasks

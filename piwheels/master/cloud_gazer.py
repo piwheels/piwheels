@@ -33,9 +33,7 @@ Defines the :class:`CloudGazer` task; see class for more details.
     :members:
 """
 
-import zmq
-
-from .. import protocols, tasks
+from .. import protocols, transport, tasks
 from .pypi import PyPIEvents
 from .the_oracle import DbClient
 
@@ -53,7 +51,7 @@ class CloudGazer(tasks.PauseableTask):
         self.db = DbClient(config)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.serial = -1

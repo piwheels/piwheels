@@ -33,10 +33,7 @@ Defines the :class:`Seraph` task; see class for more details.
     :members:
 """
 
-import zmq
-import zmq.error
-
-from .. import const, tasks
+from .. import const, tasks, transport
 
 
 class Seraph(tasks.Task):
@@ -48,10 +45,10 @@ class Seraph(tasks.Task):
 
     def __init__(self, config):
         super().__init__(config)
-        self.front_queue = self.ctx.socket(zmq.ROUTER)
+        self.front_queue = self.ctx.socket(transport.ROUTER)
         self.front_queue.hwm = 10
         self.front_queue.bind(config.db_queue)
-        self.back_queue = self.ctx.socket(zmq.ROUTER)
+        self.back_queue = self.ctx.socket(transport.ROUTER)
         self.back_queue.hwm = 10
         self.back_queue.bind(const.ORACLE_QUEUE)
         self.workers = []

@@ -35,9 +35,7 @@ Defines the :class:`MrChase` task; see class for more details.
 
 import pickle
 
-import zmq
-
-from .. import const, protocols, tasks
+from .. import const, protocols, transport, tasks
 from .states import BuildState, FileState
 from .the_oracle import DbClient
 from .file_juggler import FsClient
@@ -60,19 +58,19 @@ class MrChase(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         import_queue = self.ctx.socket(
-            zmq.ROUTER, protocol=protocols.mr_chase)
+            transport.ROUTER, protocol=protocols.mr_chase)
         import_queue.bind(config.import_queue)
         self.register(import_queue, self.handle_import)
         self.status_queue = self.ctx.socket(
-            zmq.PUSH, protocol=protocols.monitor_stats)
+            transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.ctx.socket(
-            zmq.PUSH, protocol=reversed(protocols.big_brother))
+            transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config)
         self.fs = FsClient(config)

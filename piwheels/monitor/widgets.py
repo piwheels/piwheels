@@ -36,8 +36,6 @@ from time import time
 from itertools import count
 from collections import namedtuple
 
-import zmq
-
 # This module is a one-stop shop for all the monitor's widget needs, hence all
 # the unused imports
 # pylint: disable=unused-import
@@ -92,6 +90,8 @@ except ImportError:
         def set_signal_handler(self, signum, handler):
             return signal.signal(signum, handler)
 
+from .. import transport
+
 
 # Stop the relentless march against nicely aligned code
 # pylint: disable=bad-whitespace
@@ -135,7 +135,7 @@ class ZMQEventLoop(EventLoop):
     def __init__(self):
         self._did_something = True
         self._alarms = []
-        self._poller = zmq.Poller()
+        self._poller = transport.Poller()
         self._queue_callbacks = {}
         self._idle_handle = 0
         self._idle_callbacks = {}
@@ -167,7 +167,7 @@ class ZMQEventLoop(EventLoop):
         except ValueError:
             return False
 
-    def watch_queue(self, queue, callback, flags=zmq.POLLIN):
+    def watch_queue(self, queue, callback, flags=transport.POLLIN):
         """
         Call *callback* when zmq *queue* has something to read (when *flags* is
         set to ``POLLIN``, the default) or is available to write (when *flags*
@@ -188,7 +188,7 @@ class ZMQEventLoop(EventLoop):
         self._queue_callbacks[queue] = callback
         return queue
 
-    def watch_file(self, fd, callback, flags=zmq.POLLIN):
+    def watch_file(self, fd, callback, flags=transport.POLLIN):
         """
         Call *callback* when *fd* has some data to read. No parameters are
         passed to the callback. The *flags* are as for :meth:`watch_queue`.
@@ -269,7 +269,7 @@ class ZMQEventLoop(EventLoop):
             while True:
                 try:
                     self._loop()
-                except zmq.ZMQError as exc:
+                except transport.Error as exc:
                     if exc.errno != errno.EINTR:
                         raise
         except ExitMainLoop:
@@ -287,7 +287,7 @@ class ZMQEventLoop(EventLoop):
                                         (self._alarms and timeout > 0)):
                 state = 'idle'
                 timeout = 0
-            ready = self._poller.poll(timeout * 1000)  # ms
+            ready = self._poller.poll(timeout)
         else:
             state = 'wait'
             ready = self._poller.poll()
@@ -301,7 +301,7 @@ class ZMQEventLoop(EventLoop):
                 task.callback()
                 self._did_something = True
 
-        for queue, _ in ready:
+        for queue, _ in ready.items():
             self._queue_callbacks[queue]()
             self._did_something = True
 
