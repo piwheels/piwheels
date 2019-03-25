@@ -246,33 +246,6 @@ CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
 GRANT SELECT ON searches TO {username};
 
--- versions_detail
--------------------------------------------------------------------------------
--- The "versions_detail" view augments the columns from "versions" with
--- additional details required for building the top page on packages' project
--- pages. This includes the number of successful and failed builds for each
--- version and whether or not versions are marked for skipping, whether at the
--- package or version level.
--------------------------------------------------------------------------------
-
-CREATE VIEW versions_detail AS
-SELECT
-    v.package,
-    v.version,
-    (p.skip <> '') OR (v.skip <> '') AS skipped,
-    COUNT(*) FILTER (WHERE b.status) AS builds_succeeded,
-    COUNT(*) FILTER (WHERE NOT b.status) AS builds_failed
-FROM
-    packages p
-    JOIN versions v ON p.package = v.package
-    LEFT JOIN builds b ON v.package = b.package AND v.version = b.version
-GROUP BY
-    v.package,
-    v.version,
-    skipped;
-
-GRANT SELECT ON versions_detail TO {username};
-
 -- builds_pending
 -------------------------------------------------------------------------------
 -- The "builds_pending" view is the basis of the build queue in the master. The

@@ -11,6 +11,7 @@ REVOKE INSERT ON dependencies FROM {username};
 
 DROP VIEW statistics;
 DROP VIEW downloads_recent;
+DROP VIEW versions_detail;
 
 DROP FUNCTION delete_build(TEXT, TEXT);
 CREATE FUNCTION delete_build(pkg TEXT, ver TEXT)
