@@ -42,6 +42,7 @@ master.
 
 import logging
 from threading import Thread
+from fnmatch import fnmatch
 
 from . import transport, protocols
 
@@ -66,10 +67,12 @@ class Task(Thread):
     def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__()
         self.logger = logging.getLogger(self.name)
-        if self.name in config.debug:
-            self.logger.setLevel(logging.DEBUG)
-        else:
-            self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.INFO)
+        if hasattr(config, 'debug'):
+            for pattern in config.debug:
+                if fnmatch(self.name, pattern):
+                    self.logger.setLevel(logging.DEBUG)
+                    break
         self.ctx = transport.Context()
         self.handlers = {}
         self.poller = transport.Poller()
