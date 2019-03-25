@@ -95,9 +95,6 @@ _statistics = {      # statistics
 }
 
 
-_dependency = ExactSequence([str, str])  # tool, package
-
-
 _file_state = ExactSequence([
     str,            # filename
     int,            # filesize
@@ -107,7 +104,7 @@ _file_state = ExactSequence([
     str,            # py_version_tag
     str,            # abi_tag
     str,            # platform_tag
-    {_dependency},  # dependencies
+    {str: [str]},   # dependencies
     # NOTE: the optional transferred field is never included. It is effectively
     # internal to whatever is tracking the file state
 ])
@@ -195,13 +192,13 @@ file_juggler_fs = Protocol(recv={
 
 mr_chase = Protocol(recv={
     'IMPORT': ExactSequence([
-        str,            # package
-        str,            # version
-        Any(str, None), # abi_tag
-        bool,           # status
-        dt.timedelta,   # duration
-        str,            # output
-        [_file_state],  # filename: filestate
+        str,             # package
+        str,             # version
+        Any(str, None),  # abi_tag
+        bool,            # status
+        dt.timedelta,    # duration
+        str,             # output
+        [_file_state],   # filename: filestate
     ]),
     'REMOVE': ExactSequence([str, str, str]),  # package, version, skip-reason
     'REBUILD': Any(

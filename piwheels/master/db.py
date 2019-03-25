@@ -247,7 +247,8 @@ class Database:
                             dependency,
                         )
                         for file in build.files.values()
-                        for tool, dependency in file.dependencies]
+                        for tool, dependencies in file.dependencies.items()
+                        for dependency in dependencies]
                     )).scalar()
             else:
                 build_id = self._conn.execute(
@@ -424,7 +425,7 @@ class Database:
         """
         with self._conn.begin():
             return {
-                tool: set(row.dependency for row in rows)
+                tool: [row.dependency for row in rows]
                 for tool, rows in groupby(
                     self._conn.execute(
                         select([

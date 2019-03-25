@@ -283,7 +283,7 @@ def test_get_project_files(db_intf, with_files, build_state_hacked):
 
 def test_get_file_dependencies(db_intf, with_files):
     assert db_intf.get_file_dependencies('foo-0.1-cp34-cp34m-linux_armv7l.whl') == {
-        'apt': {'libc6'},
+        'apt': ['libc6'],
     }
 
 

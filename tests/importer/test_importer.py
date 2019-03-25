@@ -86,6 +86,7 @@ def import_queue_name(request, tmpdir):
 def import_queue(request, mock_context, import_queue_name, tmpdir):
     queue = mock_context.socket(transport.REP, protocol=protocols.mr_chase)
     queue.hwm = 1
+    print('bound queue', import_queue_name)
     queue.bind(import_queue_name)
     yield queue
     queue.close()
@@ -175,7 +176,7 @@ def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                             filesize, filehash, 'foo', '0.1',
-                            'cp34', 'cp34m', 'linux_armv7l', set(),
+                            'cp34', 'cp34m', 'linux_armv7l', {},
                         ],
                     ]
                 ]
@@ -198,7 +199,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                             filesize, filehash, 'foo', '0.1',
-                            'cp34', 'cp34m', 'linux_armv7l', set(),
+                            'cp34', 'cp34m', 'linux_armv7l', {},
                         ],
                     ]
                 ]
@@ -221,7 +222,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
+                        'cp34', 'cp34m', 'linux_armv7l', {},
                     ],
                 ]
             ]
@@ -245,7 +246,7 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
+                        'cp34', 'cp34m', 'linux_armv7l', {},
                     ],
                 ]
             ]
@@ -271,7 +272,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
+                        'cp34', 'cp34m', 'linux_armv7l', {},
                     ],
                 ]
             ]
@@ -296,7 +297,7 @@ def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, im
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
+                        'cp34', 'cp34m', 'linux_armv7l', {},
                     ],
                 ]
             ]
@@ -321,7 +322,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', set(),
+                        'cp34', 'cp34m', 'linux_armv7l', {},
                     ],
                 ]
             ]

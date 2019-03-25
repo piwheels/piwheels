@@ -241,7 +241,7 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock, \
             mock.patch('piwheels.slave.builder.tempfile.TemporaryDirectory') as tmpdir_mock:
         popen_mock().returncode = 0
-        apt_mock.return_value = set()
+        apt_mock.return_value = {}
         tmpdir_mock().name = str(tmpdir)
         tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').ensure()
         slave_thread.start()

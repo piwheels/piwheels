@@ -202,7 +202,7 @@ def test_log_build(db, with_package_version, build_state_hacked, db_client):
 
 def test_get_file_dependencies(db, with_files, db_client):
     assert db_client.get_file_dependencies('foo-0.1-cp34-cp34m-linux_armv7l.whl') == {
-        'apt': {'libc6'},
+        'apt': ['libc6'],
     }
 
 

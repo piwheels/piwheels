@@ -47,6 +47,7 @@ import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta
 from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
+from collections import defaultdict
 
 try:
     import apt
@@ -186,7 +187,7 @@ class PiWheelsPackage:
             PiWheelsPackage.apt_cache = apt.cache.Cache()
         cache = PiWheelsPackage.apt_cache
         find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
-        deps = set()
+        deps = defaultdict(set)
         libs = set()
         with tempfile.TemporaryDirectory() as tempdir:
             with zipfile.ZipFile(self.open()) as wheel:
@@ -218,10 +219,10 @@ class PiWheelsPackage:
                                 and lib_path in pkg.installed_files}
                             assert len(providers) <= 1
                             try:
-                                deps.add(('apt', providers.pop()))
+                                deps['apt'].add(providers.pop())
                             except KeyError:
-                                deps.add(('', lib_path))
-        return deps
+                                deps[''].add(lib_path)
+        return {tool: sorted(deps) for tool, deps in deps.items()}
 
     @property
     def dependencies(self):
@@ -230,7 +231,7 @@ class PiWheelsPackage:
                 warnings.warn(
                     Warning('Cannot import apt module; unable to calculate '
                             'apt dependencies'))
-                self._dependencies = set()
+                self._dependencies = {}
             else:
                 self._dependencies = self._calculate_apt_dependencies()
         return self._dependencies

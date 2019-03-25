@@ -71,7 +71,7 @@ def test_file_state_init(file_state):
     assert file_state[5] == file_state.py_version_tag == 'cp34'
     assert file_state[6] == file_state.abi_tag == 'cp34m'
     assert file_state[7] == file_state.platform_tag == 'linux_armv7l'
-    assert file_state[8] == file_state.dependencies == {('apt', 'libc6')}
+    assert file_state[8] == file_state.dependencies == {'apt': ['libc6']}
     assert file_state[9] == file_state.transferred == False
 
 

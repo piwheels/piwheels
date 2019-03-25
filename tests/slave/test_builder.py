@@ -200,11 +200,8 @@ def test_package_dependencies(mock_package, tmpdir):
         path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
         pkg = builder.PiWheelsPackage(path)
         assert pkg.dependencies == {
-            ('apt', 'libc6'),
-            ('apt', 'libopenblas-base'),
-            ('apt', 'libgcc1'),
-            ('apt', 'libgfortran3'),
-            ('', '/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'),
+            'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
+            '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
         }
 
 
@@ -219,7 +216,7 @@ def test_package_dependencies_missing(mock_package, tmpdir):
         popen_mock().returncode = 0
         path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
         pkg = builder.PiWheelsPackage(path)
-        assert pkg.dependencies == set()
+        assert pkg.dependencies == {}
 
 
 def test_package_dependencies_cached(mock_package, tmpdir):
@@ -233,9 +230,9 @@ def test_package_dependencies_cached(mock_package, tmpdir):
         popen_mock().returncode = 0
         path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
         pkg = builder.PiWheelsPackage(path)
-        assert pkg.dependencies == set()
+        assert pkg.dependencies == {}
         tmpdir_mock.reset_mock()
-        assert pkg.dependencies == set()
+        assert pkg.dependencies == {}
         assert tmpdir_mock.call_count == 0
 
 
@@ -248,7 +245,7 @@ def test_package_dependencies_failed(mock_package, tmpdir):
             TimeoutExpired('ldd', 10), (b"", b"")]
         path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
         pkg = builder.PiWheelsPackage(path)
-        assert pkg.dependencies == set()
+        assert pkg.dependencies == {}
 
 
 def test_package_transfer(mock_archive, mock_package, transfer_thread):
