@@ -138,7 +138,7 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
         task.timestamp = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
-        db_queue.expect('GETDL')
+        db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
         task.loop()  # crank the handle once
         db_queue.check()
@@ -160,7 +160,7 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
         stats_dict['disk_size'] = frsize * blocks
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
-        db_queue.expect('GETDL')
+        db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
         task.loop()
         db_queue.check()
@@ -180,7 +180,7 @@ def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
         stats_dict['builds_pending'] = 1
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
-        db_queue.expect('GETDL')
+        db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
         task.loop()
         db_queue.check()

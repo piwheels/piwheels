@@ -1,5 +1,6 @@
 UPDATE configuration SET version = '0.10';
 
+GRANT SELECT ON configuration TO {username};
 GRANT UPDATE ON packages TO {username};
 GRANT UPDATE ON versions TO {username};
 GRANT DELETE ON builds TO {username};

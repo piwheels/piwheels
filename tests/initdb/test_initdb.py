@@ -164,7 +164,6 @@ def test_no_path(db, with_schema, db_super_url, caplog):
 def test_too_ancient(db, with_schema):
     with db.begin():
         db.execute("DROP TABLE configuration")
-        db.execute("DROP VIEW statistics")
         db.execute("DROP TABLE files CASCADE")
     with pytest.raises(RuntimeError) as exc:
         detect_version(db)
@@ -174,13 +173,13 @@ def test_too_ancient(db, with_schema):
 def test_detect_04(db, with_schema):
     with db.begin():
         db.execute("DROP TABLE configuration")
-        db.execute("DROP VIEW statistics")
     assert detect_version(db) == '0.4'
 
 
 def test_detect_05(db, with_schema):
     with db.begin():
         db.execute("DROP TABLE configuration")
+        db.execute("CREATE VIEW statistics(i) AS VALUES (1)")
     assert detect_version(db) == '0.5'
 
 
@@ -327,6 +326,62 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                     ORDER BY
                         tgrelname, tgname;
                     """)),
+                'privileges': list(db.execute("""\
+                    WITH users(name) AS (
+                        VALUES ('{user}'), ('{superuser}'), ('public')
+                    ),
+                    schemas(name) AS (
+                        VALUES ('public')
+                    ),
+                    tables AS (
+                        SELECT t.table_schema || '.' || t.table_name AS name
+                        FROM information_schema.tables t
+                        JOIN schemas s ON s.name = t.table_schema
+                        WHERE table_type IN ('BASE TABLE', 'VIEW')
+                    ),
+                    db_privs(name) AS (
+                        VALUES ('CREATE'), ('CONNECT'), ('TEMPORARY')
+                    ),
+                    schema_privs(name) AS (
+                        VALUES ('CREATE'), ('USAGE')
+                    ),
+                    table_privs(name) AS (
+                        VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
+                               ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')
+                    )
+                    SELECT
+                        'database'         AS obj_type,
+                        current_database() AS obj_id,
+                        dp.name            AS privilege,
+                        u.name             AS username
+                    FROM users u, db_privs dp
+                    WHERE has_database_privilege(u.name, current_database(), dp.name)
+
+                    UNION ALL
+
+                    SELECT
+                        'schema'           AS obj_type,
+                        sc.name            AS obj_id,
+                        sp.name            AS privilege,
+                        u.name             AS username
+                    FROM users u, schemas sc, schema_privs sp
+                    WHERE has_schema_privilege(u.name, sc.name, sp.name)
+
+                    UNION ALL
+
+                    SELECT
+                        'table'            AS obj_type,
+                        tb.name            AS obj_id,
+                        tp.name            AS privilege,
+                        u.name             AS username
+                    FROM users u, tables tb, table_privs tp
+                    WHERE has_table_privilege(u.name, tb.name, tp.name)
+
+                    ORDER BY obj_type, obj_id, privilege, username
+                    """.format(
+                        user=PIWHEELS_USER,
+                        superuser=PIWHEELS_SUPERUSER
+                    ))),
             }
             permissions = []
             return relation_defs, column_defs, constraint_defs, function_defs, trigger_defs

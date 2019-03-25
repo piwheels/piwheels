@@ -35,7 +35,7 @@ from threading import Thread, Event
 from time import sleep
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from voluptuous import Schema, ExactSequence, Extra, Any
 
 from piwheels import const, transport, protocols
@@ -177,8 +177,8 @@ def with_schema(request, db, with_clean_db):
     with db.begin():
         # Create the piwheels structures from the create_*.sql script
         for stmt in parse_statements(get_script()):
-            stmt = stmt.format(username=PIWHEELS_USER)
-            db.execute(stmt)
+            stmt = stmt.format(username=PIWHEELS_USER, dbname=PIWHEELS_TESTDB)
+            db.execute(text(stmt))
     return 'schema'
 
 

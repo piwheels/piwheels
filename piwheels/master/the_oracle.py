@@ -114,7 +114,7 @@ class TheOracle(tasks.Task):
                 'GETPYPI':     lambda: self.do_getpypi(),
                 'SETPYPI':     lambda: self.do_setpypi(data),
                 'GETSTATS':    lambda: self.do_getstats(),
-                'GETDL':       lambda: self.do_getdl(),
+                'GETSEARCH':   lambda: self.do_getsearch(),
                 'FILEDEPS':    lambda: self.do_filedeps(data),
             }[msg]
             result = handler()
@@ -268,13 +268,13 @@ class TheOracle(tasks.Task):
         """
         return self.db.get_statistics()
 
-    def do_getdl(self):
+    def do_getsearch(self):
         """
-        Handler for "GETDL" message, sent by :class:`DbClient` to request
-        the recent download statistics, returned as a list of (name, count)
-        tuples.
+        Handler for "GETSEARCH" message, sent by :class:`DbClient` to request
+        the recent download statistics, returned as a mapping of package to
+        (downloads_recent, downloads_all) tuples.
         """
-        return self.db.get_downloads_recent()
+        return self.db.get_search_index()
 
     def do_filedeps(self, filename):
         """
@@ -395,11 +395,11 @@ class DbClient:
         """
         return self._execute('GETSTATS')
 
-    def get_downloads_recent(self):
+    def get_search_index(self):
         """
-        See :meth:`.db.Database.get_downloads_recent`.
+        See :meth:`.db.Database.get_search_index`.
         """
-        return self._execute('GETDL')
+        return self._execute('GETSEARCH')
 
     def get_package_files(self, package):
         """

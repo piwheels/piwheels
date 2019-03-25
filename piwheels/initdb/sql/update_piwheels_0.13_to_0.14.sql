@@ -33,7 +33,7 @@ CREATE TABLE dependencies (
         REFERENCES files(filename) ON DELETE CASCADE,
     CONSTRAINT dependencies_tool_ck CHECK (tool IN ('apt', 'pip', ''))
 );
-GRANT SELECT,INSERT ON dependencies TO {username};
+GRANT SELECT ON dependencies TO {username};
 
 ALTER TABLE downloads DROP CONSTRAINT downloads_filename_fk;
 REVOKE INSERT ON downloads FROM {username};

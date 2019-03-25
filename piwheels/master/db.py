@@ -117,13 +117,6 @@ class Database:
                 self._downloads = Table('downloads', self._meta, autoload=True)
                 self._build_abis = Table(
                     'build_abis', self._meta, autoload=True)
-                # The following are views on the tables above
-                self._builds_pending = Table(
-                    'builds_pending', self._meta, autoload=True)
-                self._statistics = Table(
-                    'statistics', self._meta, autoload=True)
-                self._downloads_recent = Table(
-                    'downloads_recent', self._meta, autoload=True)
         except:
             self._conn.close()
             raise
@@ -184,8 +177,7 @@ class Database:
         """
         with self._conn.begin():
             return bool(self._conn.scalar(
-                self._packages.select().
-                where(self._packages.c.package == package)
+                "VALUES (test_package(%s))", (package,)
             ))
 
     def test_package_version(self, package, version):
@@ -195,9 +187,7 @@ class Database:
         """
         with self._conn.begin():
             return bool(self._conn.scalar(
-                self._versions.select().
-                where(self._versions.c.package == package).
-                where(self._versions.c.version == version)
+                "VALUES (test_package_version(%s, %s))", (package, version)
             ))
 
     def log_download(self, download):
@@ -287,10 +277,7 @@ class Database:
         Return the serial number of the last PyPI event.
         """
         with self._conn.begin():
-            return self._conn.scalar(
-                select([self._configuration.c.pypi_serial]).
-                where(self._configuration.c.id == 1)
-            )
+            return self._conn.scalar("VALUES (get_pypi_serial())")
 
     def set_pypi_serial(self, serial):
         """
@@ -319,10 +306,10 @@ class Database:
                 for rec in self._conn.execute(self._versions.select())
             }
 
-    def get_build_queue(self):
+    def get_build_queue(self, limit=1000):
         """
-        Returns a mapping of ABI tags to an ordered list of up to 1000 package
-        version tuples which currently need building for that ABI.
+        Returns a mapping of ABI tags to an ordered list of up to *limit*
+        package version tuples which currently need building for that ABI.
         """
         # NOTE: This method is not exposed on TheOracle as it is only used by
         # TheArchitect task
@@ -334,27 +321,24 @@ class Database:
                 ]
                 for abi_tag, rows in groupby(
                     self._conn.execution_options(stream_results=True).\
-                    execute(
-                        self._builds_pending.select().
-                        where(self._builds_pending.c.position <= 1000).
-                        order_by(self._builds_pending.c.abi_tag,
-                                 self._builds_pending.c.position)
-                    ), key=attrgetter('abi_tag')
+                    execute("SELECT abi_tag, package, version "
+                            "FROM get_build_queue(%s)", (limit,)),
+                        key=attrgetter('abi_tag')
                 )
             }
 
     def get_statistics(self):
         """
-        Return various build related statistics from the database (see the
-        definition of the ``statistics`` view in the database creation script
-        for more information.
+        Return various build related statistics from the database.
         """
         with self._conn.begin():
             return dict(
-                self._conn.execute(self._statistics.select()).first().items()
+                self._conn.execute(
+                    "SELECT * FROM get_statistics()"
+                ).first().items()
             )
 
-    def get_downloads_recent(self):
+    def get_search_index(self):
         """
         Return a mapping of all packages to their download count for the last
         month. This is used to construct the searchable package index.
@@ -362,7 +346,9 @@ class Database:
         with self._conn.begin():
             return {
                 rec.package: (rec.downloads_recent, rec.downloads_all)
-                for rec in self._conn.execute(self._downloads_recent.select())
+                for rec in self._conn.execute(
+                    "SELECT package, downloads_recent, downloads_all "
+                    "FROM get_search_index()")
             }
 
     def get_package_files(self, package):
@@ -374,10 +360,21 @@ class Database:
             return {
                 row.filename: row.filehash
                 for row in self._conn.execute(
-                    select([self._files.c.filename, self._files.c.filehash]).
-                    select_from(self._builds.join(self._files)).
-                    where(self._builds.c.status).
-                    where(self._builds.c.package == package)
+                    "SELECT filename, filehash "
+                    "FROM get_package_files(%s)", (package,)
+                )
+            }
+
+    def get_version_files(self, package, version):
+        """
+        Returns the names of all files for *version* of *package*.
+        """
+        with self._conn.begin():
+            return {
+                row.filename
+                for row in self._conn.execute(
+                    "SELECT filename "
+                    "FROM get_version_files(%s, %s)", (package, version)
                 )
             }
 
@@ -390,22 +387,8 @@ class Database:
             return [
                 ProjectVersionsRow(*row)
                 for row in self._conn.execute(
-                    select([
-                        self._versions.c.version,
-                        (
-                            (self._packages.c.skip != '') |
-                            (self._versions.c.skip != '')
-                        ).label('skipped'),
-                        func.coalesce(func.string_agg(
-                            distinct(self._builds.c.abi_tag), ', '
-                        ).filter(self._builds.c.status), '').label('builds_succeeded'),
-                        func.coalesce(func.string_agg(
-                            distinct(self._builds.c.abi_tag), ', '
-                        ).filter(~self._builds.c.status), '').label('builds_failed'),
-                    ]).
-                    select_from(self._packages.join(self._versions.outerjoin(self._builds))).
-                    where(self._versions.c.package == package).
-                    group_by(self._versions.c.version, 'skipped')
+                    "SELECT version, skipped, builds_succeeded, builds_failed "
+                    "FROM get_project_versions(%s)", (package,)
                 )
             ]
 
@@ -418,34 +401,10 @@ class Database:
             return [
                 ProjectFilesRow(*row)
                 for row in self._conn.execute(
-                    select([
-                        self._builds.c.version,
-                        self._files.c.abi_tag,
-                        self._files.c.filename,
-                        self._files.c.filesize,
-                        self._files.c.filehash,
-                    ]).
-                    select_from(self._files.join(self._builds)).
-                    where(self._builds.c.status).
-                    where(self._builds.c.package == package)
+                    "SELECT version, abi_tag, filename, filesize, filehash "
+                    "FROM get_project_files(%s)", (package,)
                 )
             ]
-
-    def get_version_files(self, package, version):
-        """
-        Returns the names of all files for *version* of *package*.
-        """
-        with self._conn.begin():
-            return {
-                rec.filename
-                for rec in self._conn.execute(
-                    select([self._files.c.filename]).
-                    select_from(self._builds.join(self._files)).
-                    where(self._builds.c.status).
-                    where(self._builds.c.package == package).
-                    where(self._builds.c.version == version)
-                )
-            }
 
     def get_version_skip(self, package, version):
         """

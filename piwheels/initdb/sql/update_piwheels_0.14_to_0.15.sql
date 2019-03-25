@@ -1,0 +1,281 @@
+UPDATE configuration SET version = '0.15';
+
+REVOKE ALL PRIVILEGES ON DATABASE {dbname} FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC;
+GRANT CONNECT, TEMP ON DATABASE {dbname} TO {username};
+GRANT USAGE ON SCHEMA public TO {username};
+
+-- Fix some historic screw-ups in the privileges
+GRANT SELECT ON configuration TO {username};
+REVOKE INSERT ON dependencies FROM {username};
+
+DROP VIEW statistics;
+DROP VIEW downloads_recent;
+
+DROP FUNCTION delete_build(TEXT, TEXT);
+CREATE FUNCTION delete_build(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    -- Foreign keys take care of the rest
+    DELETE FROM builds b WHERE b.package = pkg AND b.version = ver;
+$sql$;
+REVOKE ALL ON FUNCTION delete_build(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_build(TEXT, TEXT) TO {username};
+
+CREATE FUNCTION get_pypi_serial()
+    RETURNS BIGINT
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT pypi_serial FROM configuration WHERE id = 1;
+$sql$;
+REVOKE ALL ON FUNCTION get_pypi_serial() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_pypi_serial() TO {username};
+
+CREATE FUNCTION test_package(pkg TEXT)
+    RETURNS BOOLEAN
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT COUNT(*) = 1 FROM packages p WHERE p.package = pkg;
+$sql$;
+REVOKE ALL ON FUNCTION test_package(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION test_package(TEXT) TO {username};
+
+CREATE FUNCTION test_package_version(pkg TEXT, ver TEXT)
+    RETURNS BOOLEAN
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT COUNT(*) = 1 FROM versions v
+    WHERE v.package = pkg AND v.version = ver;
+$sql$;
+REVOKE ALL ON FUNCTION test_package_version(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION test_package_version(TEXT, TEXT) TO {username};
+
+CREATE FUNCTION get_build_queue(lim INTEGER)
+    RETURNS TABLE(
+        abi_tag builds_pending.abi_tag%TYPE,
+        package builds_pending.package%TYPE,
+        version builds_pending.version%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT abi_tag, package, version
+    FROM builds_pending
+    WHERE position <= lim
+    ORDER BY abi_tag, position;
+$sql$;
+REVOKE ALL ON FUNCTION get_build_queue(INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_build_queue(INTEGER) TO {username};
+
+CREATE FUNCTION get_statistics()
+    RETURNS TABLE(
+        packages_built         INTEGER,
+        builds_count           INTEGER,
+        builds_count_success   INTEGER,
+        builds_count_last_hour INTEGER,
+        builds_time            INTERVAL,
+        files_count            INTEGER,
+        builds_size            BIGINT,
+        downloads_last_month   INTEGER,
+        downloads_all          INTEGER
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    WITH build_stats AS (
+        SELECT
+            COUNT(*) AS builds_count,
+            COUNT(*) FILTER (WHERE status) AS builds_count_success,
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
+        FROM
+            builds
+    ),
+    build_latest AS (
+        SELECT COUNT(*) AS builds_count_last_hour
+        FROM builds
+        WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+    ),
+    file_count AS (
+        SELECT
+            COUNT(*) AS files_count,
+            COUNT(DISTINCT package_tag) AS packages_built
+        FROM files
+    ),
+    file_stats AS (
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
+        SELECT COALESCE(SUM(filesize), 0) AS builds_size
+        FROM files
+        WHERE platform_tag <> 'linux_armv6l'
+    ),
+    download_stats AS (
+        SELECT
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            ) AS downloads_last_month,
+            COUNT(*) AS downloads_all
+        FROM downloads
+    )
+    SELECT
+        CAST(fc.packages_built AS INTEGER),
+        CAST(bs.builds_count AS INTEGER),
+        CAST(bs.builds_count_success AS INTEGER),
+        CAST(bl.builds_count_last_hour AS INTEGER),
+        bs.builds_time,
+        CAST(fc.files_count AS INTEGER),
+        fs.builds_size,
+        CAST(dl.downloads_last_month AS INTEGER),
+        CAST(dl.downloads_all AS INTEGER)
+    FROM
+        build_stats bs,
+        build_latest bl,
+        file_count fc,
+        file_stats fs,
+        download_stats dl;
+$sql$;
+REVOKE ALL ON FUNCTION get_statistics() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_statistics() TO {username};
+
+CREATE FUNCTION get_search_index()
+    RETURNS TABLE(
+        package packages.package%TYPE,
+        downloads_recent INTEGER,
+        downloads_all INTEGER
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        p.package,
+        CAST(COALESCE(COUNT(d.filename) FILTER (
+            WHERE d.accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+        ), 0) AS INTEGER) AS downloads_recent,
+        CAST(COALESCE(COUNT(d.filename), 0) AS INTEGER) AS downloads_all
+    FROM
+        packages AS p
+        LEFT JOIN (
+            builds AS b
+            JOIN files AS f ON b.build_id = f.build_id
+            JOIN downloads AS d ON d.filename = f.filename
+        ) ON p.package = b.package
+    GROUP BY p.package;
+$sql$;
+REVOKE ALL ON FUNCTION get_search_index() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_search_index() TO {username};
+
+CREATE FUNCTION get_package_files(pkg TEXT)
+    RETURNS TABLE(
+        filename files.filename%TYPE,
+        filehash files.filehash%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT f.filename, f.filehash
+    FROM builds b JOIN files f USING (build_id)
+    WHERE b.status AND b.package = pkg;
+$sql$;
+REVOKE ALL ON FUNCTION get_package_files(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_package_files(TEXT) TO {username};
+
+CREATE FUNCTION get_version_files(pkg TEXT, ver TEXT)
+    RETURNS TABLE(
+        filename files.filename%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT f.filename
+    FROM builds b JOIN files f USING (build_id)
+    WHERE b.status AND b.package = pkg AND b.version = ver;
+$sql$;
+REVOKE ALL ON FUNCTION get_version_files(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_version_files(TEXT, TEXT) TO {username};
+
+CREATE FUNCTION get_project_versions(pkg TEXT)
+    RETURNS TABLE(
+        version versions.version%TYPE,
+        skipped versions.skip%TYPE,
+        builds_succeeded TEXT,
+        builds_failed TEXT
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        v.version,
+        COALESCE(NULLIF(v.skip, ''), p.skip) AS skipped,
+        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE b.status), '') AS builds_succeeded,
+        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE NOT b.status), '') AS builds_failed
+    FROM
+        packages p
+        JOIN versions v USING (package)
+        LEFT JOIN builds b USING (package, version)
+    WHERE v.package = pkg
+    GROUP BY version, skipped;
+$sql$;
+REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_project_versions(TEXT) TO {username};
+
+CREATE FUNCTION get_project_files(pkg TEXT)
+    RETURNS TABLE(
+        version builds.version%TYPE,
+        abi_tag files.abi_tag%TYPE,
+        filename files.filename%TYPE,
+        filesize files.filesize%TYPE,
+        filehash files.filehash%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        b.version,
+        f.abi_tag,
+        f.filename,
+        f.filesize,
+        f.filehash
+    FROM
+        builds b
+        JOIN files f USING (build_id)
+    WHERE b.status
+    AND b.package = pkg;
+$sql$;
+REVOKE ALL ON FUNCTION get_project_files(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_project_files(TEXT) TO {username};
+
+COMMIT;

@@ -260,7 +260,7 @@ the_oracle = Protocol(recv={
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number
     'GETSTATS':    NoData,
-    'GETDL':       NoData,
+    'GETSEARCH':   NoData,
     'FILEDEPS':    str,                        # filename
 }, send={
     'OK':          Extra,  # result XXX refine this? Would mean separate returns...

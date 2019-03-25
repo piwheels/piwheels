@@ -102,7 +102,7 @@ def test_oracle_badly_formed_request(mock_seraph, task):
 
 def test_database_error(db, with_schema, db_client):
     with db.begin():
-        db.execute("REVOKE SELECT ON statistics FROM %s" % PIWHEELS_USER)
+        db.execute("REVOKE EXECUTE ON FUNCTION get_statistics() FROM %s" % PIWHEELS_USER)
     with pytest.raises(IOError):
         db_client.get_statistics()
 
@@ -208,7 +208,7 @@ def test_get_file_dependencies(db, with_files, db_client):
 
 def test_get_project_versions(db, with_files, db_client):
     assert db_client.get_project_versions('foo') == [
-        ('0.1', False, 'cp34m', ''),
+        ('0.1', '', 'cp34m', ''),
     ]
 
 
@@ -220,6 +220,9 @@ def test_get_project_files(db, with_files, build_state_hacked, db_client):
 
 
 def test_delete_build(db, with_build, db_client):
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
+    db_client.delete_build('foo', '0.2')
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
     db_client.delete_build('foo', '0.1')

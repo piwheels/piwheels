@@ -120,8 +120,9 @@ take a backup of your database before using this script for upgrades.
             logging.warning("Upgrading database to version %s", __version__)
             logging.warning("Have patience: this can be a long operation!")
         with conn.begin():
+            dbname = conn.scalar("VALUES (current_database())")
             for statement in parse_statements(script):
-                statement = statement.format(username=config.user)
+                statement = statement.format(username=config.user, dbname=dbname)
                 logging.debug(statement)
                 conn.execute(text(statement))
                 if not config.debug:
