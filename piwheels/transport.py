@@ -29,6 +29,7 @@
 import logging
 import ipaddress as ip
 import datetime as dt
+from binascii import hexlify
 
 import zmq
 from voluptuous import Invalid
@@ -237,7 +238,8 @@ class Socket:
         return msg, data
 
     def send_addr_msg(self, addr, msg, data=NoData, flags=0):
-        self._logger.debug('>> %s %s %r', addr.hex(), msg, data)
+        self._logger.debug('>> %s %s %r',
+                           hexlify(addr).decode('ascii'), msg, data)
         self._socket.send_multipart([addr, b'', self._dump_msg(msg, data)],
                                     flags)
 
@@ -247,7 +249,8 @@ class Socket:
         except ValueError:
             raise IOError('invalid message structure received')
         msg, data = self._load_msg(buf)
-        self._logger.debug('<< %s %s %r', addr.hex(), msg, data)
+        self._logger.debug('<< %s %s %r',
+                           hexlify(addr).decode('ascii'), msg, data)
         return addr, msg, data
 
 
