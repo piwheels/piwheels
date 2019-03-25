@@ -79,6 +79,8 @@ database will be left unchanged. Nonetheless, it is strongly recommended you
 take a backup of your database before using this script for upgrades.
 """)
     parser.add_argument(
+        '--debug', action='store_true', help="Set logging to debug level")
+    parser.add_argument(
         '-d', '--dsn', default=const.DSN,
         help="The database to create or upgrade; this DSN must connect as "
         "the cluster superuser (default: %(default)s)")
@@ -90,6 +92,8 @@ take a backup of your database before using this script for upgrades.
         '-y', '--yes', action='store_true',
         help="Proceed without prompting before init/upgrades")
     config = parser.parse_args(args)
+    if config.debug:
+        config.log_level = logging.DEBUG
     terminal.configure_logging(config.log_level, config.log_file)
 
     logging.info("PiWheels Initialize Database version %s", __version__)
@@ -120,7 +124,8 @@ take a backup of your database before using this script for upgrades.
                 statement = statement.format(username=config.user)
                 logging.debug(statement)
                 conn.execute(text(statement))
-                print('.', end='', flush=True)
+                if not config.debug:
+                    print('.', end='', flush=True)
             print("")
         logging.info("Complete")
     return 0

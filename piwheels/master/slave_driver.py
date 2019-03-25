@@ -66,40 +66,37 @@ class SlaveDriver(tasks.Task):
         super().__init__(config, control_protocol=protocols.master_control)
         self.paused = False
         self.abi_queues = {}
-        slave_queue = self.ctx.socket(
+        slave_queue = self.socket(
             transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
         self.register(slave_queue, self.handle_slave)
-        builds_queue = self.ctx.socket(
+        builds_queue = self.socket(
             transport.PULL, protocol=reversed(protocols.the_architect))
         builds_queue.hwm = 10
         builds_queue.bind(config.builds_queue)
         self.register(builds_queue, self.handle_build)
-        self.status_queue = self.ctx.socket(
+        self.status_queue = self.socket(
             transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
-        self.web_queue = self.ctx.socket(
+        self.web_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
-        self.stats_queue = self.ctx.socket(
+        self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
-        self.db = DbClient(config)
-        self.fs = FsClient(config)
+        self.db = DbClient(config, self.logger)
+        self.fs = FsClient(config, self.logger)
         self.slaves = {}
         self.pypi_simple = config.pypi_simple
 
     def close(self):
         self.fs.close()
         self.db.close()
-        self.stats_queue.close()
-        self.web_queue.close()
         SlaveState.status_queue = None
-        self.status_queue.close()
         super().close()
 
     def list_slaves(self):

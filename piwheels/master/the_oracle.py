@@ -66,7 +66,7 @@ class TheOracle(tasks.Task):
         self.name = '%s_%d' % (TheOracle.name, TheOracle.instance)
         super().__init__(config)
         self.db = Database(config.dsn)
-        db_queue = self.ctx.socket(
+        db_queue = self.socket(
             transport.REQ, protocol=protocols.the_oracle)
         db_queue.hwm = 10
         db_queue.connect(const.ORACLE_QUEUE)
@@ -289,10 +289,11 @@ class DbClient:
     """
     RPC client class for talking to :class:`TheOracle`.
     """
-    def __init__(self, config):
+    def __init__(self, config, logger=None):
         self.ctx = transport.Context()
         self.db_queue = self.ctx.socket(
-            transport.REQ, protocol=reversed(protocols.the_oracle))
+            transport.REQ, protocol=reversed(protocols.the_oracle),
+            logger=logger)
         self.db_queue.hwm = 10
         self.db_queue.connect(config.db_queue)
 

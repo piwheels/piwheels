@@ -57,30 +57,28 @@ class MrChase(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        import_queue = self.ctx.socket(
+        import_queue = self.socket(
             transport.ROUTER, protocol=protocols.mr_chase)
         import_queue.bind(config.import_queue)
         self.register(import_queue, self.handle_import)
-        self.status_queue = self.ctx.socket(
+        self.status_queue = self.socket(
             transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.web_queue = self.ctx.socket(
+        self.web_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
-        self.stats_queue = self.ctx.socket(
+        self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.connect(config.stats_queue)
-        self.db = DbClient(config)
-        self.fs = FsClient(config)
+        self.db = DbClient(config, self.logger)
+        self.fs = FsClient(config, self.logger)
         self.states = {}
 
     def close(self):
         self.fs.close()
         self.db.close()
-        self.web_queue.close()
-        self.status_queue.close()
         super().close()
 
     def handle_import(self, queue):

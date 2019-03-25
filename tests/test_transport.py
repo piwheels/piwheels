@@ -197,3 +197,10 @@ def test_recv_unexpected_data():
         pull.recv_msg()
     push.close()
     pull.close()
+
+
+def test_hwm_attr():
+    ctx = Context()
+    sock = ctx.socket(PULL)
+    sock.hwm = 10
+    assert sock.hwm == 10

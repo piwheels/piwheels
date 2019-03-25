@@ -67,8 +67,6 @@ def web_queue(request, zmq_context, master_config):
 def task(request, db_queue, web_queue, master_config):
     task = CloudGazer(master_config)
     yield task
-    db_queue.expect('SETPYPI', task.serial)
-    db_queue.send('OK', None)
     task.close()
     db_queue.check()
 

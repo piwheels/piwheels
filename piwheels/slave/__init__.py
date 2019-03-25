@@ -89,6 +89,8 @@ to use must already be installed. The script will run until it is explicitly
 terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
 """)
         parser.add_argument(
+            '--debug', action='store_true', help="Set logging to debug level")
+        parser.add_argument(
             '-m', '--master', env_var='PIW_MASTER', metavar='HOST',
             default='localhost',
             help="The IP address or hostname of the master server "
@@ -99,6 +101,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             help="The time to wait before assuming a build has failed "
             "(default: %(default)s)")
         self.config = parser.parse_args(args)
+        if self.config.debug:
+            self.config.log_level = logging.DEBUG
         terminal.configure_logging(self.config.log_level,
                                    self.config.log_file)
 
@@ -112,7 +116,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         try:
             while True:
                 queue = ctx.socket(
-                    transport.REQ, protocol=reversed(protocols.slave_driver))
+                    transport.REQ, protocol=reversed(protocols.slave_driver),
+                    logger=self.logger)
                 queue.hwm = 10
                 queue.connect('tcp://{master}:5555'.format(
                     master=self.config.master))
@@ -121,7 +126,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     self.main_loop(queue)
                 except MasterTimeout:
                     self.systemd.reloading()
-                    print('resetting')
                     self.logger.warning('Resetting connection')
                     queue.close(linger=1)
         finally:
@@ -149,7 +153,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         from the master and raises :exc:`MasterTimeout` if *timeout* seconds
         are exceeded.
         """
-        print('main loop')
         msg, data = 'HELLO', [
             self.config.timeout,
             pep425tags.get_impl_ver(), pep425tags.get_abi_tag(),
@@ -248,7 +251,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         self.logger.info(
             'Sending %s to master on %s', pkg.filename, self.config.master)
         ctx = transport.Context()
-        queue = ctx.socket(transport.DEALER)
+        queue = ctx.socket(transport.DEALER, logger=self.logger)
         queue.hwm = 10
         queue.connect('tcp://{master}:5556'.format(master=self.config.master))
         try:

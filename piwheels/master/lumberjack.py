@@ -49,11 +49,11 @@ class Lumberjack(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        log_queue = self.ctx.socket(
+        log_queue = self.socket(
             transport.PULL, protocol=protocols.lumberjack)
         log_queue.bind(config.log_queue)
         self.register(log_queue, self.handle_log)
-        self.db = DbClient(config)
+        self.db = DbClient(config, self.logger)
 
     def close(self):
         self.db.close()

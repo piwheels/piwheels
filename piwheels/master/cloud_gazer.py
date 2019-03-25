@@ -48,9 +48,9 @@ class CloudGazer(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
-        self.db = DbClient(config)
+        self.db = DbClient(config, self.logger)
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
-        self.web_queue = self.ctx.socket(
+        self.web_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
@@ -60,11 +60,6 @@ class CloudGazer(tasks.PauseableTask):
             self.skip_default = 'development mode'
         else:
             self.skip_default = ''
-
-    def close(self):
-        self.web_queue.close()
-        self.db.set_pypi_serial(self.serial)
-        super().close()
 
     def once(self):
         self.logger.info('retrieving current state')

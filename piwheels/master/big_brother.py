@@ -71,25 +71,23 @@ class BigBrother(tasks.PauseableTask):
             'downloads_all':         0,
         }
         self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
-        stats_queue = self.ctx.socket(
+        stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
         stats_queue.bind(config.stats_queue)
         self.register(stats_queue, self.handle_stats)
-        self.status_queue = self.ctx.socket(
+        self.status_queue = self.socket(
             transport.PUSH, protocol=protocols.monitor_stats)
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
-        self.web_queue = self.ctx.socket(
+        self.web_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
-        self.db = DbClient(config)
+        self.db = DbClient(config, self.logger)
 
     def close(self):
         self.db.close()
-        self.web_queue.close()
-        self.status_queue.close()
         super().close()
 
     def handle_stats(self, queue):
@@ -120,4 +118,4 @@ class BigBrother(tasks.PauseableTask):
             self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)
-            self.web_queue.send_msg('SEARCH', self.db.get_downloads_recent())
+            self.web_queue.send_msg('SEARCH', self.db.get_search_index())

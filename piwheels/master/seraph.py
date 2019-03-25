@@ -45,10 +45,10 @@ class Seraph(tasks.Task):
 
     def __init__(self, config):
         super().__init__(config)
-        self.front_queue = self.ctx.socket(transport.ROUTER)
+        self.front_queue = self.socket(transport.ROUTER)
         self.front_queue.hwm = 10
         self.front_queue.bind(config.db_queue)
-        self.back_queue = self.ctx.socket(transport.ROUTER)
+        self.back_queue = self.socket(transport.ROUTER)
         self.back_queue.hwm = 10
         self.back_queue.bind(const.ORACLE_QUEUE)
         self.workers = []

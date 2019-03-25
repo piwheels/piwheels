@@ -72,12 +72,12 @@ class TheScribe(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.output_path = Path(config.output_path)
-        scribe_queue = self.ctx.socket(
+        scribe_queue = self.socket(
             transport.PULL, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
         scribe_queue.bind(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)
-        self.db = DbClient(config)
+        self.db = DbClient(config, self.logger)
         self.package_cache = None
         self.statistics = {}
         with pkg_resources.resource_stream(__name__, 'default_libs.txt') as s:

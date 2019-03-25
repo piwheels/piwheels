@@ -206,32 +206,48 @@ class Socket:
             timeout if timeout is None else timeout * 1000, flags)
 
     def send(self, buf, flags=0):
+        self._logger.debug('>> %s', buf.decode('ascii', 'replace'))
         return self._socket.send(buf, flags)
 
     def recv(self, flags=0):
-        return self._socket.recv(flags)
+        buf = self._socket.recv(flags)
+        self._logger.debug('<< %s', buf.decode('ascii', 'replace'))
+        return buf
 
     def send_multipart(self, msg_parts, flags=0):
+        self._logger.debug(
+            '>>' + (' %s' * len(msg_parts)),
+            *(buf.decode('ascii', 'replace') for buf in msg_parts))
         return self._socket.send_multipart(msg_parts, flags)
 
     def recv_multipart(self, flags=0):
-        return self._socket.recv_multipart(flags)
+        msg_parts = self._socket.recv_multipart(flags)
+        self._logger.debug(
+            '<<' + (' %s' * len(msg_parts)),
+            *(buf.decode('ascii', 'replace') for buf in msg_parts))
+        return msg_parts
 
     def send_msg(self, msg, data=NoData, flags=0):
-        return self.send(self._dump_msg(msg, data), flags)
+        self._logger.debug('>> %s %r', msg, data)
+        return self._socket.send(self._dump_msg(msg, data), flags)
 
     def recv_msg(self, flags=0):
-        return self._load_msg(self.recv(flags))
+        msg, data = self._load_msg(self._socket.recv(flags))
+        self._logger.debug('<< %s %r', msg, data)
+        return msg, data
 
     def send_addr_msg(self, addr, msg, data=NoData, flags=0):
-        self.send_multipart([addr, b'', self._dump_msg(msg, data)], flags)
+        self._logger.debug('>> %s %s %r', addr.hex(), msg, data)
+        self._socket.send_multipart([addr, b'', self._dump_msg(msg, data)],
+                                    flags)
 
     def recv_addr_msg(self, flags=0):
         try:
-            addr, empty, buf = self.recv_multipart(flags)
+            addr, empty, buf = self._socket.recv_multipart(flags)
         except ValueError:
             raise IOError('invalid message structure received')
         msg, data = self._load_msg(buf)
+        self._logger.debug('<< %s %s %r', addr.hex(), msg, data)
         return addr, msg, data
 
 

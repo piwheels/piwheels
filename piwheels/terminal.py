@@ -70,6 +70,20 @@ class ArgParser(configargparse.ArgParser):
         raise configargparse.ArgumentError(None, message)
 
 
+class WidthFormatter(logging.Formatter):
+    def __init__(self, fmt=None, datefmt=None, style='%', maxwidth=60,
+                 ellipsis='...'):
+        super().__init__(fmt, datefmt, style)
+        self.maxwidth = maxwidth
+        self.ellipsis = ellipsis
+
+    def formatMessage(self, record):
+        s = super().formatMessage(record)
+        if len(s) > self.maxwidth:
+            s = s[:self.maxwidth - len(self.ellipsis)] + self.ellipsis
+        return s
+
+
 def configure_parser(description, log_params=True):
     """
     Configure an argument parser with some common options and return it.
@@ -106,18 +120,20 @@ def configure_parser(description, log_params=True):
     return parser
 
 
-def configure_logging(log_level, log_filename=None):
+def configure_logging(log_level, log_filename=None, console_name=False):
     """
     Configures handlers for logging to the console and any specified log file.
     """
     _CONSOLE.setLevel(log_level)
+    _CONSOLE.setFormatter(WidthFormatter(
+        '%(name)s: %(message)s' if console_name else '%(message)s'))
     if log_filename is not None:
         log_file = logging.FileHandler(log_filename)
-        log_file.setFormatter(logging.Formatter(
+        log_file.setFormatter(WidthFormatter(
             '%(asctime)s %(name)s %(levelname)s: %(message)s'))
-        log_file.setLevel(logging.DEBUG)
+        log_file.setLevel(min(logging.INFO, log_level))
         logging.getLogger().addHandler(log_file)
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(min(logging.INFO, log_level))
 
 
 class ErrorAction(namedtuple('ErrorAction', ('message', 'exitcode'))):

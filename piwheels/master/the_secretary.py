@@ -66,19 +66,15 @@ class TheSecretary(tasks.PauseableTask):
             self.timeout = timedelta(seconds=3)
         else:
             self.timeout = timedelta(minutes=1)
-        web_queue = self.ctx.socket(
+        web_queue = self.socket(
             transport.PULL, protocol=protocols.the_scribe)
         web_queue.hwm = 100
         web_queue.bind(config.web_queue)
         self.register(web_queue, self.handle_input)
-        self.output = self.ctx.socket(
+        self.output = self.socket(
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.connect(const.SCRIBE_QUEUE)
-
-    def close(self):
-        self.output.close()
-        super().close()
 
     def loop(self):
         now = datetime.now(tz=UTC)

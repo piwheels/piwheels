@@ -65,18 +65,21 @@ class Task(Thread):
 
     def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__()
+        self.logger = logging.getLogger(self.name)
+        if self.name in config.debug:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(logging.INFO)
         self.ctx = transport.Context()
         self.handlers = {}
         self.poller = transport.Poller()
-        self.logger = logging.getLogger(self.name)
         self.control_protocol = control_protocol
-        control_queue = self.ctx.socket(
-            transport.PULL, protocol=control_protocol, logger=self.logger)
+        control_queue = self.socket(
+            transport.PULL, protocol=control_protocol)
         control_queue.hwm = 10
         control_queue.bind('inproc://ctrl-%s' % self.name)
-        self.quit_queue = self.ctx.socket(
-            transport.PUSH, protocol=reversed(protocols.master_control),
-            logger=self.logger)
+        self.quit_queue = self.socket(
+            transport.PUSH, protocol=reversed(protocols.master_control))
         self.quit_queue.hwm = 10
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
@@ -89,6 +92,17 @@ class Task(Thread):
         for queue in self.handlers:
             queue.close()
         self.quit_queue.close()
+
+    def socket(self, sock_type, protocol=None):
+        """
+        Construct a socket and link it to the logger for this task. This is
+        primarily useful for debugging purposes, but also ensures that the
+        task will implicitly close and clean up the socket when it closes.
+        """
+        socket = self.ctx.socket(
+            sock_type, protocol=protocol, logger=self.logger)
+        self.handlers[socket] = None
+        return socket
 
     def register(self, queue, handler, flags=transport.POLLIN):
         """

@@ -51,14 +51,13 @@ class TheArchitect(tasks.Task):
         super().__init__(config)
         self.db = Database(config.dsn)
         self.last_run = datetime(1970, 1, 1)
-        self.builds_queue = self.ctx.socket(
+        self.builds_queue = self.socket(
             transport.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.connect(config.builds_queue)
 
     def close(self):
         self.db.close()
-        self.builds_queue.close()
         super().close()
 
     def loop(self):

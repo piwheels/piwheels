@@ -101,6 +101,10 @@ write access to the output directory.
             help="Run the master in development mode, which reduces some "
             "timeouts and tweaks some defaults")
         parser.add_argument(
+            '--debug', action='append', metavar='TASK', default=[],
+            help="Set logging to debug level for the named task; can be "
+            "specified multiple times to debug many tasks")
+        parser.add_argument(
             '--pypi-xmlrpc', metavar='URL', default=const.PYPI_XMLRPC,
             help="The URL of the PyPI XML-RPC service (default: %(default)s)")
         parser.add_argument(
@@ -157,12 +161,11 @@ write access to the output directory.
         parser = self.configure_parser()
         config = parser.parse_args(args)
         config.output_path = os.path.expanduser(config.output_path)
-        if config.dev_mode:
+        if config.debug or config.dev_mode:
             config.log_level = logging.DEBUG
-        terminal.configure_logging(config.log_level, config.log_file)
-        # We want the logger name included in our console output
-        terminal._CONSOLE.setFormatter(  # pylint: disable=protected-access
-            logging.Formatter('%(name)s: %(message)s'))
+        terminal.configure_logging(config.log_level, config.log_file,
+                                   console_name=True)
+        self.logger.setLevel(min(logging.INFO, config.log_level))
 
         self.logger.info('PiWheels Master version %s', __version__)
         if os.geteuid() == 0:
@@ -173,15 +176,18 @@ write access to the output directory.
                                 'this in production!')
         ctx = transport.Context()
         self.control_queue = ctx.socket(
-            transport.PULL, protocol=protocols.master_control)
+            transport.PULL, protocol=protocols.master_control,
+            logger=self.logger)
         self.control_queue.hwm = 10
         self.control_queue.bind(config.control_queue)
         self.int_status_queue = ctx.socket(
-            transport.PULL, protocol=reversed(protocols.monitor_stats))
+            transport.PULL, protocol=reversed(protocols.monitor_stats),
+            logger=self.logger)
         self.int_status_queue.hwm = 10
         self.int_status_queue.bind(const.INT_STATUS_QUEUE)
         self.ext_status_queue = ctx.socket(
-            transport.PUB, protocol=protocols.monitor_stats)
+            transport.PUB, protocol=protocols.monitor_stats,
+            logger=self.logger)
         self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
 
@@ -248,9 +254,10 @@ write access to the output directory.
         poller.register(self.int_status_queue, transport.POLLIN)
         while True:
             systemd.watchdog_ping()
-            socks = dict(poller.poll(60000))
+            socks = poller.poll(5)
             if self.int_status_queue in socks:
-                self.ext_status_queue.send(self.int_status_queue.recv())
+                buf = self.int_status_queue.recv()
+                self.ext_status_queue.send(buf)
             if self.control_queue in socks:
                 try:
                     msg, data = self.control_queue.recv_msg()

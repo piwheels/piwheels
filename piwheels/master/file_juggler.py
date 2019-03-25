@@ -93,15 +93,15 @@ class FileJuggler(tasks.Task):
         super().__init__(config)
         self.output_path = Path(config.output_path)
         TransferState.output_path = self.output_path
-        file_queue = self.ctx.socket(
+        file_queue = self.socket(
             transport.ROUTER, protocol=protocols.file_juggler_files)
         file_queue.hwm = TransferState.pipeline_size * 50
         file_queue.bind(config.file_queue)
-        fs_queue = self.ctx.socket(
+        fs_queue = self.socket(
             transport.REP, protocol=protocols.file_juggler_fs)
         fs_queue.hwm = 10
         fs_queue.bind(config.fs_queue)
-        self.stats_queue = self.ctx.socket(
+        self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
@@ -110,10 +110,6 @@ class FileJuggler(tasks.Task):
         self.pending = {}   # keyed by slave_id
         self.active = {}    # keyed by slave address
         self.complete = {}  # keyed by slave_id
-
-    def close(self):
-        self.stats_queue.close()
-        super().close()
 
     def once(self):
         stats = os.statvfs(str(self.output_path))
@@ -330,10 +326,11 @@ class FsClient:
     """
     RPC client class for talking to :class:`FileJuggler`.
     """
-    def __init__(self, config):
+    def __init__(self, config, logger=None):
         self.ctx = transport.Context()
         self.fs_queue = self.ctx.socket(
-            transport.REQ, protocol=reversed(protocols.file_juggler_fs))
+            transport.REQ, protocol=reversed(protocols.file_juggler_fs),
+            logger=logger)
         self.fs_queue.hwm = 10
         self.fs_queue.connect(config.fs_queue)
 

@@ -154,12 +154,12 @@ def test_bad_control(mock_systemd, master_thread, master_control, caplog):
 
 
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
-    master_thread.start()
-    assert mock_systemd._ready.wait(10)
     with mock_context().socket(transport.PUSH, protocol=protocols.monitor_stats) as int_status, \
             mock_context().socket(transport.SUB, protocol=reversed(protocols.monitor_stats)) as ext_status:
         ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
         ext_status.subscribe('')
+        master_thread.start()
+        assert mock_systemd._ready.wait(10)
         # Wait for the first statistics message (from BigBrother) to get the
         # SUB queue working
         msg, data = ext_status.recv_msg()
