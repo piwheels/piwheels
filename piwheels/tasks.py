@@ -129,7 +129,8 @@ class Task(Thread):
 
     def _ctrl(self, msg, data=protocols.NoData):
         queue = self.ctx.socket(
-            transport.PUSH, protocol=reversed(self.control_protocol))
+            transport.PUSH, protocol=reversed(self.control_protocol),
+            logger=self.logger)
         try:
             queue.connect('inproc://ctrl-%s' % self.name)
             queue.send_msg(msg, data)

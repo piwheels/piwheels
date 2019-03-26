@@ -71,7 +71,7 @@ class ArgParser(configargparse.ArgParser):
 
 
 class WidthFormatter(logging.Formatter):
-    def __init__(self, fmt=None, datefmt=None, style='%', maxwidth=60,
+    def __init__(self, fmt=None, datefmt=None, style='%', maxwidth=120,
                  ellipsis='...'):
         super().__init__(fmt, datefmt, style)
         self.maxwidth = maxwidth

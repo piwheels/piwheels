@@ -256,8 +256,8 @@ write access to the output directory.
             systemd.watchdog_ping()
             socks = poller.poll(5)
             if self.int_status_queue in socks:
-                buf = self.int_status_queue.recv()
-                self.ext_status_queue.send(buf)
+                msg, data = self.int_status_queue.recv_msg()
+                self.ext_status_queue.send_msg(msg, data)
             if self.control_queue in socks:
                 try:
                     msg, data = self.control_queue.recv_msg()

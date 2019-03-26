@@ -207,25 +207,21 @@ class Socket:
             timeout if timeout is None else timeout * 1000, flags)
 
     def send(self, buf, flags=0):
-        self._logger.debug('>> %s', buf.decode('ascii', 'replace'))
+        self._logger.debug('>> %s', buf)
         return self._socket.send(buf, flags)
 
     def recv(self, flags=0):
         buf = self._socket.recv(flags)
-        self._logger.debug('<< %s', buf.decode('ascii', 'replace'))
+        self._logger.debug('<< %s', buf)
         return buf
 
     def send_multipart(self, msg_parts, flags=0):
-        self._logger.debug(
-            '>>' + (' %s' * len(msg_parts)),
-            *(buf.decode('ascii', 'replace') for buf in msg_parts))
+        self._logger.debug('>>' + (' %s' * len(msg_parts)), *msg_parts)
         return self._socket.send_multipart(msg_parts, flags)
 
     def recv_multipart(self, flags=0):
         msg_parts = self._socket.recv_multipart(flags)
-        self._logger.debug(
-            '<<' + (' %s' * len(msg_parts)),
-            *(buf.decode('ascii', 'replace') for buf in msg_parts))
+        self._logger.debug('<<' + (' %s' * len(msg_parts)), *msg_parts)
         return msg_parts
 
     def send_msg(self, msg, data=NoData, flags=0):
