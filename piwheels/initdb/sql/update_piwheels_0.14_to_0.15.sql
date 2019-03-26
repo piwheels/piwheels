@@ -279,4 +279,24 @@ $sql$;
 REVOKE ALL ON FUNCTION get_project_files(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_files(TEXT) TO {username};
 
+CREATE FUNCTION get_file_dependencies(fn TEXT)
+    RETURNS TABLE(
+        tool dependencies.tool%TYPE,
+        dependency dependencies.dependency%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        d.tool,
+        d.dependency
+    FROM dependencies d
+    WHERE d.filename = fn
+    ORDER BY tool, dependency;
+$sql$;
+REVOKE ALL ON FUNCTION get_file_dependencies(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_file_dependencies(TEXT) TO {username};
+
 COMMIT;

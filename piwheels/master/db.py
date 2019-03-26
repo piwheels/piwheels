@@ -39,7 +39,7 @@ itself.
 import warnings
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby
-from operator import itemgetter, attrgetter
+from operator import attrgetter
 from collections import namedtuple
 
 from sqlalchemy import MetaData, Table, select, create_engine, func, distinct
@@ -428,14 +428,10 @@ class Database:
                 tool: [row.dependency for row in rows]
                 for tool, rows in groupby(
                     self._conn.execute(
-                        select([
-                            self._dependencies.c.tool,
-                            self._dependencies.c.dependency
-                        ]).
-                        where(self._dependencies.c.filename == filename).
-                        order_by(self._dependencies.c.tool)
+                        "SELECT tool, dependency "
+                        "FROM get_file_dependencies(%s)", (filename,)
                     ),
-                    key=itemgetter(0)
+                    key=attrgetter('tool')
                 )
             }
 
