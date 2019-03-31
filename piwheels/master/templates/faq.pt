@@ -18,7 +18,7 @@
               <p>Simply add the following to <code>/etc/pip.conf</code>:</p>
 
               <pre>[global]
-  extra-index-url=https://www.piwheels.org/simple</pre>
+extra-index-url=https://www.piwheels.org/simple</pre>
 
               <h3>Raspbian Jessie:</h3>
               <p>Upgrade pip to &gt;=9.0.1 using <code>sudo pip3 install pip
