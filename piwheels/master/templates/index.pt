@@ -24,7 +24,7 @@
     </div>
 
     <div class="row">
-      <div class="small-12 columns">
+      <div class="small-12 medium-8 columns">
         <h2>Configuration</h2>
 
         <p><a href="https://www.raspberrypi.org/downloads/raspbian/">Raspbian
@@ -54,7 +54,7 @@ $ rm -rf testpip/</pre>
     </div>
 
     <div class="row">
-      <div class="small-12 columns">
+      <div class="small-12 medium-8 columns">
         <h2>Support</h2>
 
         <p>Wheels provided support all Raspberry Pi models (Pi 3, Pi 2, Pi 1 and
