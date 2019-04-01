@@ -13,6 +13,9 @@ DROP VIEW statistics;
 DROP VIEW downloads_recent;
 DROP VIEW versions_detail;
 
+ALTER TABLE build_abis
+    ADD COLUMN skip VARCHAR(100) DEFAULT '' NOT NULL;
+
 DROP FUNCTION delete_build(TEXT, TEXT);
 CREATE FUNCTION delete_build(pkg TEXT, ver TEXT)
     RETURNS VOID
@@ -63,6 +66,84 @@ AS $sql$
 $sql$;
 REVOKE ALL ON FUNCTION test_package_version(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION test_package_version(TEXT, TEXT) TO {username};
+
+DROP VIEW builds_pending;
+CREATE VIEW builds_pending AS
+-- Finally, because I can't write this in order due to postgres' annoying
+-- materialization of CTEs, the same set as below but augmented with a per-ABI
+-- build queue position, based on version release date, primarily for the
+-- purposes of filtering
+SELECT
+    abi_tag,
+    ROW_NUMBER() OVER (PARTITION BY abi_tag ORDER BY released) AS position,
+    package,
+    version
+FROM
+    (
+        -- The set of package versions against each ABI for which they haven't
+        -- been attempted and for which no covering "none" ABI wheel exists
+        SELECT
+            q.package,
+            q.version,
+            v.released,
+            MIN(q.abi_tag) AS abi_tag
+        FROM
+            (
+                -- The set of package versions X build ABIs that we want to
+                -- exist once the queue is complete
+                SELECT
+                    v.package,
+                    v.version,
+                    b.abi_tag
+                FROM
+                    packages AS p
+                    JOIN versions AS v ON v.package = p.package
+                    CROSS JOIN build_abis AS b
+                WHERE
+                    v.skip = ''
+                    AND p.skip = ''
+                    AND b.skip = ''
+
+                EXCEPT ALL
+
+                (
+                    -- The set of package versions that successfully produced
+                    -- wheels with ABI "none", and which therefore count as
+                    -- all build ABIs
+                    SELECT
+                        b.package,
+                        b.version,
+                        v.abi_tag
+                    FROM
+                        builds AS b
+                        JOIN files AS f ON b.build_id = f.build_id
+                        CROSS JOIN build_abis AS v
+                    WHERE f.abi_tag = 'none'
+
+                    UNION ALL
+
+                    -- The set of package versions that successfully produced a
+                    -- wheel with a single ABI (abi_tag <> 'none') or which
+                    -- were attempted but failed (build_id IS NULL)
+                    SELECT
+                        b.package,
+                        b.version,
+                        COALESCE(f.abi_tag, b.abi_tag) AS abi_tag
+                    FROM
+                        builds AS b
+                        LEFT JOIN files AS f ON b.build_id = f.build_id
+                    WHERE
+                        f.build_id IS NULL
+                        OR f.abi_tag <> 'none'
+                )
+            ) AS q
+            JOIN versions v ON q.package = v.package AND q.version = v.version
+        GROUP BY
+            q.package,
+            q.version,
+            v.released
+    ) AS t;
+GRANT SELECT ON builds_pending TO {username};
 
 CREATE FUNCTION get_build_queue(lim INTEGER)
     RETURNS TABLE(

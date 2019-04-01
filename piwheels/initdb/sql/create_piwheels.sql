@@ -72,6 +72,7 @@ GRANT SELECT ON versions TO {username};
 
 CREATE TABLE build_abis (
     abi_tag         VARCHAR(100) NOT NULL,
+    skip            VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
     CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
@@ -302,6 +303,7 @@ FROM
                 WHERE
                     v.skip = ''
                     AND p.skip = ''
+                    AND b.skip = ''
 
                 EXCEPT ALL
 
