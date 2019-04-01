@@ -88,8 +88,9 @@ in the system.
 .. warning::
 
     In the case a rebuild of **all** packages is requested, you will be
-    prompted to make sure you wish to continue. The :option:`--yes` option can
-    be used to skip this prompt but should be used carefully!
+    prompted to make sure you wish to continue (this option can take hours to
+    process on a system with many builds). The :option:`--yes` option can be
+    used to skip this prompt but should be used carefully!
 
 Note that the utility only requests the rebuild of the specified part. This
 request will be queued, and acted upon as soon as :ref:`the-scribe` reaches it
