@@ -64,18 +64,24 @@ def mock_context(request, zmq_context):
 @pytest.fixture()
 def master_thread(request, mock_pypi, mock_context, mock_systemd, mock_signal,
                   tmpdir, db_url, db, with_schema):
-    main_thread = Thread(daemon=True, target=main, args=([
-        '--dsn', db_url,
-        '--output-path', str(tmpdir.join('output')),
-        '--status-queue',  'ipc://' + str(tmpdir.join('status-queue')),
-        '--control-queue', 'ipc://' + str(tmpdir.join('control-queue')),
-        '--slave-queue',   'ipc://' + str(tmpdir.join('slave-queue')),
-        '--file-queue',    'ipc://' + str(tmpdir.join('file-queue')),
-        '--import-queue',  'ipc://' + str(tmpdir.join('import-queue')),
-        '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
-    ],))
-    yield main_thread
-    if main_thread.is_alive():
+    main_thread = None
+    def _master_thread(args=None):
+        nonlocal main_thread
+        if args is None:
+            args = []
+        main_thread = Thread(daemon=True, target=main, args=([
+            '--dsn', db_url,
+            '--output-path', str(tmpdir.join('output')),
+            '--status-queue',  'ipc://' + str(tmpdir.join('status-queue')),
+            '--control-queue', 'ipc://' + str(tmpdir.join('control-queue')),
+            '--slave-queue',   'ipc://' + str(tmpdir.join('slave-queue')),
+            '--file-queue',    'ipc://' + str(tmpdir.join('file-queue')),
+            '--import-queue',  'ipc://' + str(tmpdir.join('import-queue')),
+            '--log-queue',     'ipc://' + str(tmpdir.join('log-queue')),
+        ] + list(args),))
+        return main_thread
+    yield _master_thread
+    if main_thread is not None and main_thread.is_alive():
         with mock_context().socket(
                 transport.PUSH, protocol=reversed(protocols.master_control)) as control:
             control.connect('ipc://' + str(tmpdir.join('control-queue')))
@@ -117,40 +123,44 @@ def test_no_root(caplog):
 
 
 def test_quit_control(mock_systemd, master_thread, master_control):
-    master_thread.start()
+    thread = master_thread()
+    thread.start()
     assert mock_systemd._ready.wait(10)
     master_control.send_msg('QUIT')
-    master_thread.join(10)
-    assert not master_thread.is_alive()
+    thread.join(10)
+    assert not thread.is_alive()
 
 
 def test_system_exit(mock_systemd, master_thread, caplog):
     with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
         main_loop.side_effect = SystemExit(1)
-        master_thread.start()
+        thread = master_thread()
+        thread.start()
         assert mock_systemd._ready.wait(10)
-        master_thread.join(10)
-        assert not master_thread.is_alive()
+        thread.join(10)
+        assert not thread.is_alive()
     assert find_message(caplog.records, message='shutting down on SIGTERM')
 
 
 def test_system_ctrl_c(mock_systemd, master_thread, caplog):
     with mock.patch('piwheels.master.PiWheelsMaster.main_loop') as main_loop:
         main_loop.side_effect = KeyboardInterrupt()
-        master_thread.start()
+        thread = master_thread()
+        thread.start()
         assert mock_systemd._ready.wait(10)
-        master_thread.join(10)
-        assert not master_thread.is_alive()
+        thread.join(10)
+        assert not thread.is_alive()
     assert find_message(caplog.records, message='shutting down on Ctrl+C')
 
 
 def test_bad_control(mock_systemd, master_thread, master_control, caplog):
-    master_thread.start()
+    thread = master_thread()
+    thread.start()
     assert mock_systemd._ready.wait(10)
     master_control.send(b'FOO')
     master_control.send_msg('QUIT')
-    master_thread.join(10)
-    assert not master_thread.is_alive()
+    thread.join(10)
+    assert not thread.is_alive()
     assert find_message(caplog.records, message='unable to deserialize data')
 
 
@@ -159,7 +169,8 @@ def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
             mock_context().socket(transport.SUB, protocol=reversed(protocols.monitor_stats)) as ext_status:
         ext_status.connect('ipc://' + str(tmpdir.join('status-queue')))
         ext_status.subscribe('')
-        master_thread.start()
+        thread = master_thread()
+        thread.start()
         assert mock_systemd._ready.wait(10)
         # Wait for the first statistics message (from BigBrother) to get the
         # SUB queue working
@@ -181,35 +192,38 @@ def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
 
 def test_kill_control(mock_systemd, master_thread, master_control):
     with mock.patch('piwheels.master.SlaveDriver.kill_slave') as kill_slave:
-        master_thread.start()
+        thread = master_thread()
+        thread.start()
         assert mock_systemd._ready.wait(10)
         master_control.send_msg('KILL', 1)
         master_control.send_msg('QUIT')
-        master_thread.join(10)
-        assert not master_thread.is_alive()
+        thread.join(10)
+        assert not thread.is_alive()
         assert kill_slave.call_args == mock.call(1)
 
 
 def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
-    master_thread.start()
+    thread = master_thread()
+    thread.start()
     assert mock_systemd._ready.wait(10)
     master_control.send_msg('PAUSE')
     master_control.send_msg('RESUME')
     master_control.send_msg('QUIT')
-    master_thread.join(10)
-    assert not master_thread.is_alive()
+    thread.join(10)
+    assert not thread.is_alive()
     assert find_message(caplog.records, message='pausing operations')
     assert find_message(caplog.records, message='resuming operations')
 
 
 def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
     with mock.patch('piwheels.master.SlaveDriver.list_slaves') as list_slaves:
-        master_thread.start()
+        thread = master_thread()
+        thread.start()
         assert mock_systemd._ready.wait(10)
         master_control.send_msg('HELLO')
         master_control.send_msg('QUIT')
-        master_thread.join(10)
-        assert not master_thread.is_alive()
+        thread.join(10)
+        assert not thread.is_alive()
         assert find_message(caplog.records,
                             message='sending status to new monitor')
         assert list_slaves.call_args == mock.call()
