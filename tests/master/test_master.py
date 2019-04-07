@@ -227,3 +227,17 @@ def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
         assert find_message(caplog.records,
                             message='sending status to new monitor')
         assert list_slaves.call_args == mock.call()
+
+
+def test_debug(mock_systemd, master_thread, master_control, caplog):
+    thread = master_thread(args=['--debug', 'master.the_scribe',
+                                 '--debug', 'master.the_architect'])
+    thread.start()
+    assert mock_systemd._ready.wait(10)
+    master_control.send_msg('QUIT')
+    thread.join(10)
+    assert not thread.is_alive()
+    assert find_message(caplog.records, name='master.the_scribe',
+                        levelname='DEBUG', message='<< QUIT None')
+    assert find_message(caplog.records, name='master.the_architect',
+                        levelname='DEBUG', message='<< QUIT None')
