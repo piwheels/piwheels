@@ -92,7 +92,7 @@ def test_abort(caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         assert main(['index']) == 2
-    assert find_message(caplog.records, 'User aborted rebuild')
+    assert find_message(caplog.records, message='User aborted rebuild')
 
 
 def test_invalid_part(caplog):

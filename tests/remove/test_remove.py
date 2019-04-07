@@ -93,7 +93,7 @@ def test_abort(caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         assert main(['foo', '0.1']) == 2
-    assert find_message(caplog.records, 'User aborted removal')
+    assert find_message(caplog.records, message='User aborted removal')
 
 
 def test_remove(mock_context, import_queue_name, import_queue):

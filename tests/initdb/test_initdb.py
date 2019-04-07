@@ -144,14 +144,16 @@ def test_new_abort(db, with_clean_db, db_super_url, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER]) == 0
-    assert find_message(caplog.records, 'Database appears to be uninitialized')
+    assert find_message(caplog.records,
+                        message='Database appears to be uninitialized')
 
 
 def test_current_version(db, with_schema, db_super_url, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER]) == 0
-    assert find_message(caplog.records, 'Database is the current version')
+    assert find_message(caplog.records,
+                        message='Database is the current version')
 
 
 def test_no_path(db, with_schema, db_super_url, caplog):
@@ -207,7 +209,8 @@ def test_init(db, with_clean_db, db_super_url, caplog):
         else:
             assert False, "Didn't find version row in configuration"
     assert find_message(caplog.records,
-                        'Initializing database at version %s' % __version__)
+                        message='Initializing database at '
+                        'version %s' % __version__)
 
 
 def test_full_upgrade(db, with_clean_db, db_super_url, caplog, create_script_04):
@@ -226,7 +229,8 @@ def test_full_upgrade(db, with_clean_db, db_super_url, caplog, create_script_04)
         else:
             assert False, "Didn't find version row in configuration"
     assert find_message(caplog.records,
-                        'Upgrading database to version %s' % __version__)
+                        message='Upgrading database to '
+                        'version %s' % __version__)
 
 
 def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):

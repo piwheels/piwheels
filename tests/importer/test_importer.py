@@ -152,16 +152,16 @@ def test_auto_package_version(mock_wheel, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         main([mock_wheel])
-    assert find_message(caplog.records, 'Package:  foo')
-    assert find_message(caplog.records, 'Version:  0.1')
+    assert find_message(caplog.records, message='Package:  foo')
+    assert find_message(caplog.records, message='Version:  0.1')
 
 
 def test_manual_package_version(mock_wheel, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
         main(['--package', 'bar', '--package-version', '0.2', mock_wheel])
-    assert find_message(caplog.records, 'Package:  bar')
-    assert find_message(caplog.records, 'Version:  0.2')
+    assert find_message(caplog.records, message='Package:  bar')
+    assert find_message(caplog.records, message='Version:  0.2')
 
 
 def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):

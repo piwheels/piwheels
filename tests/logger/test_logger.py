@@ -34,7 +34,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from conftest import find_message
 from piwheels import __version__, protocols, transport
 from piwheels.logger import main
 

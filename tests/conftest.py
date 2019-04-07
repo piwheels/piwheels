@@ -64,8 +64,10 @@ PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
 PIWHEELS_SUPERPASS = os.environ.get('PIWHEELS_SUPERPASS', '')
 
 
-def find_message(records, message):
-    return any(record.message == message for record in records)
+def find_message(records, **kwargs):
+    for record in records:
+        if all(getattr(record, key) == value for key, value in kwargs.items()):
+            return record
 
 
 @pytest.fixture()

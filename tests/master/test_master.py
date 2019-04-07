@@ -112,7 +112,8 @@ def test_no_root(caplog):
     with mock.patch('os.geteuid') as geteuid:
         geteuid.return_value = 0
         assert main([]) != 0
-        assert find_message(caplog.records, 'Master must not be run as root')
+        assert find_message(caplog.records,
+                            message='Master must not be run as root')
 
 
 def test_quit_control(mock_systemd, master_thread, master_control):
@@ -130,7 +131,7 @@ def test_system_exit(mock_systemd, master_thread, caplog):
         assert mock_systemd._ready.wait(10)
         master_thread.join(10)
         assert not master_thread.is_alive()
-    assert find_message(caplog.records, 'shutting down on SIGTERM')
+    assert find_message(caplog.records, message='shutting down on SIGTERM')
 
 
 def test_system_ctrl_c(mock_systemd, master_thread, caplog):
@@ -140,7 +141,7 @@ def test_system_ctrl_c(mock_systemd, master_thread, caplog):
         assert mock_systemd._ready.wait(10)
         master_thread.join(10)
         assert not master_thread.is_alive()
-    assert find_message(caplog.records, 'shutting down on Ctrl+C')
+    assert find_message(caplog.records, message='shutting down on Ctrl+C')
 
 
 def test_bad_control(mock_systemd, master_thread, master_control, caplog):
@@ -150,7 +151,7 @@ def test_bad_control(mock_systemd, master_thread, master_control, caplog):
     master_control.send_msg('QUIT')
     master_thread.join(10)
     assert not master_thread.is_alive()
-    assert find_message(caplog.records, 'unable to deserialize data')
+    assert find_message(caplog.records, message='unable to deserialize data')
 
 
 def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
@@ -197,8 +198,8 @@ def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
     master_control.send_msg('QUIT')
     master_thread.join(10)
     assert not master_thread.is_alive()
-    assert find_message(caplog.records, 'pausing operations')
-    assert find_message(caplog.records, 'resuming operations')
+    assert find_message(caplog.records, message='pausing operations')
+    assert find_message(caplog.records, message='resuming operations')
 
 
 def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
@@ -209,5 +210,6 @@ def test_new_monitor(mock_systemd, master_thread, master_control, caplog):
         master_control.send_msg('QUIT')
         master_thread.join(10)
         assert not master_thread.is_alive()
-        assert find_message(caplog.records, 'sending status to new monitor')
+        assert find_message(caplog.records,
+                            message='sending status to new monitor')
         assert list_slaves.call_args == mock.call()

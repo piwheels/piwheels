@@ -90,7 +90,7 @@ def test_no_root(caplog):
     with mock.patch('os.geteuid') as geteuid:
         geteuid.return_value = 0
         assert main([]) != 0
-    assert find_message(caplog.records, 'Slave must not be run as root')
+    assert find_message(caplog.records, message='Slave must not be run as root')
 
 
 def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
@@ -131,7 +131,7 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, 'Timed out waiting for master')
+    assert find_message(caplog.records, message='Timed out waiting for master')
 
 
 def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
@@ -205,7 +205,7 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, 'Build failed')
+    assert find_message(caplog.records, message='Build failed')
 
 
 def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_driver, caplog):
@@ -231,8 +231,8 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, 'Build failed')
-    assert find_message(caplog.records, 'Timed out waiting for master')
+    assert find_message(caplog.records, message='Build failed')
+    assert find_message(caplog.records, message='Timed out waiting for master')
 
 
 def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tmpdir, caplog):
@@ -272,6 +272,8 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, 'Build succeeded')
-    assert find_message(caplog.records, 'Sending foo-0.1-cp34-cp34m-linux_armv7l.whl to master on localhost')
-    assert find_message(caplog.records, 'Removing temporary build directories')
+    assert find_message(caplog.records, message='Build succeeded')
+    assert find_message(caplog.records,
+                        message='Sending foo-0.1-cp34-cp34m-linux_armv7l.whl '
+                        'to master on localhost')
+    assert find_message(caplog.records, message='Removing temporary build directories')
