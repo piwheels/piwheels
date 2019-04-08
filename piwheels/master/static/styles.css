@@ -1,7 +1,6 @@
 html {
   height: 100%;
   box-sizing: border-box;
-  font-family: "Roboto", Arial, sans-serif;
 }
 
 *, *:before, *:after {
@@ -34,11 +33,16 @@ header h1 {
 header div.top-bar, header div.top-bar ul { background: #444; }
 header .menu-text a { padding: 0; }
 
+.menu .button {
+    font-family: "Roboto Mono", monospace;
+}
+
 body {
   position: relative;
   margin: 0;
   min-height: 100%;
   padding-bottom: 160px;
+  font-family: "Roboto", Arial, sans-serif;
 }
 
 footer {
@@ -61,11 +65,23 @@ footer .row img {
 footer p {
   font-size: 11pt;
 }
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Roboto Condensed", Arial, sans-serif;
+}
 h2 {
   color: #77777a;
   word-wrap: break-all;
 }
 a { color: #222; text-decoration: underline; }
+
+pre, code {
+    font-family: "Roboto Mono", monospace;
+}
+
+code {
+    background-color: transparent;
+    border: 0;
+}
 
 table.stats {
   border-collapse: separate;
@@ -73,6 +89,7 @@ table.stats {
   background: #8addd5;
   border: 2px solid #15bcac;
   padding: 0.5em;
+  font-family: "Roboto Condensed", Arial, sans-serif;
 }
 
 table.stats tbody, table.stats tbody tr { background: transparent; }
@@ -100,6 +117,7 @@ pre {
   color: #14679e;
   font-size: 100%;
   text-decoration: none;
+  font-family: "Roboto Condensed", Arial, sans-serif;
 }
 #faq a.accordion-title:hover { background-color: #d6d6d6; }
 

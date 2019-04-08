@@ -18,7 +18,7 @@
               <p>Simply add the following to <code>/etc/pip.conf</code>:</p>
 
               <pre>[global]
-  extra-index-url=https://www.piwheels.org/simple</pre>
+extra-index-url=https://www.piwheels.org/simple</pre>
 
               <h3>Raspbian Jessie:</h3>
               <p>Upgrade pip to &gt;=9.0.1 using <code>sudo pip3 install pip
@@ -181,8 +181,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Which Raspberry Pi models are supported
-              by packages provided by piwheels?</a>
+            <a href="#" class="accordion-title">Which Raspberry Pi models are
+            supported by packages provided by piwheels?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>All current Raspberry Pi models (as of November 2018) are
@@ -219,8 +219,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Which Python versions does piwheels
-              support?</a>
+            <a href="#" class="accordion-title">Which Python versions does
+            piwheels support?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>Currently, piwheels supports Python 3 only. While most
@@ -238,9 +238,7 @@
               <p>Planned support:</p>
 
               <ul>
-                <li>Python 3.6</li>
                 <li>Python 3.7</li>
-                <li>Python 2.7</li>
               </ul>
             </div>
           </div>
@@ -256,8 +254,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">What infrastructure does the piwheels
-              project use?</a>
+            <a href="#" class="accordion-title">What infrastructure does the
+            piwheels project use?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>The piwheels project is hosted on a cluster of Raspberry Pi 3s
@@ -287,8 +285,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Why are the wheel files are tagged with
-              Armv6 and Armv7? What about Armv8?</a>
+            <a href="#" class="accordion-title">Why are the wheel files are
+            tagged with Armv6 and Armv7? What about Armv8?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>While the hardware in Raspberry Pi 1 and Zero is Armv6, Pi 2
@@ -307,8 +305,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Will wheels provided on piwheels work
-              on other Arm platforms?</a>
+            <a href="#" class="accordion-title">Will wheels provided on piwheels
+            work on other Arm platforms?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>Some wheels may work on other Arm platforms, but we can't
@@ -322,8 +320,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Does piwheels work for the Raspberry Pi
-              Desktop operating system for x86?</a>
+            <a href="#" class="accordion-title">Does piwheels work for the
+            Raspberry Pi Desktop operating system for x86?</a>
 
             <div class="accordion-content" data-tab-content>
             <p>See the following answer.</p>
@@ -331,8 +329,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Can I install packages from piwheels on
-              my PC/Mac to speed up installations?</a>
+            <a href="#" class="accordion-title">Can I install packages from
+            piwheels on my PC/Mac to speed up installations?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>Pure Python wheels will likely work, but there's a much
@@ -346,8 +344,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Are you going to upload all the wheels
-              to PyPI?</a>
+            <a href="#" class="accordion-title">Are you going to upload all the
+            wheels to PyPI?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>No - we can't. Only package maintainers can upload files to
@@ -356,23 +354,23 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I'm a package maintainer. Can I upload
-              an Arm wheel to PyPI?</a>
+            <a href="#" class="accordion-title">I'm a package maintainer. Can I
+            upload an Arm wheel to PyPI?</a>
 
             <div class="accordion-content" data-tab-content>
               <p>PyPI now allows uploading Armv6 and Armv7 wheels, but we
               recommend that you don't upload Arm wheels to PyPI for
               incompatibility reasons and other complications.</p>
 
-              <p>Wheels built on a Raspberry Pi 3, although tagged <code>armv7l</code>
-              are not truly Armv7, and may be incompatible with other Arm platforms.
-              If your package is made exclusively for the Raspberry Pi platform,
-              there is no harm in uploading Arm wheels to PyPI, and this will
-              speed up the installation for users who do not have pip
-              configured to use piwheels. However, it is not possible to
-              upload two indentical wheel files with <code>armv6l</code> and
-              <code>armv7l</code> platform tags, so the second one will be
-              rejected by PyPI.</p>
+              <p>Wheels built on a Raspberry Pi 3, although tagged
+              <code>armv7l</code> are not truly Armv7, and may be incompatible
+              with other Arm platforms. If your package is made exclusively for
+              the Raspberry Pi platform, there is no harm in uploading Arm
+              wheels to PyPI, and this will speed up the installation for users
+              who do not have pip configured to use piwheels. However, it is not
+              possible to upload two indentical wheel files with
+              <code>armv6l</code> and <code>armv7l</code> platform tags, so the
+              second one will be rejected by PyPI.</p>
 
               <p>If you intend for your package to be installed by users in
               multiple Arm platforms, you may be best not to upload Arm wheels
@@ -383,8 +381,8 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I'm a package maintainer. How can I
-              remove a wheel from piwheels?</a>
+            <a href="#" class="accordion-title">I'm a package maintainer. How
+            can I remove a wheel from piwheels?</a>
 
             <div class="accordion-content" data-tab-content>
               <p><a
@@ -413,14 +411,14 @@
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I installed a package from piwheels
-            and I get an <code>ImportError</code> with the message
-            <code>cannot open shared object file</code>.</a>
+            <a href="#" class="accordion-title">I installed a package from
+            piwheels and I get an ImportError with the message "cannot open
+            shared object file".</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>Packages built by piwheels may depend on the presence of certain
-              shared libraries. This is resolved by installing apt packages which
-              provide the required shared objects.</p>
+              <p>Packages built by piwheels may depend on the presence of
+              certain shared libraries. This is resolved by installing apt
+              packages which provide the required shared objects.</p>
 
               <p>It is possible to discover which packages are required by using
               <code>ldd</code> and <code>apt-file</code>. Read more about this

@@ -129,7 +129,7 @@ class TheScribe(tasks.PauseableTask):
             if filename in startup_templates:
                 source = self.templates[filename](
                         layout=self.templates['layout']['layout'],
-                        page=filename.replace('.html', '')
+                        page=filename.replace('.pt', '')
                     )
                 with AtomicReplaceFile(
                         (self.output_path / filename).with_suffix('.html'),
