@@ -263,11 +263,16 @@ class Poller:
     def register(self, sock, flags=POLLIN | POLLOUT):
         if isinstance(sock, Socket):
             self._map[sock._socket] = sock
-        return self._poller.register(sock._socket, flags)
+            return self._poller.register(sock._socket, flags)
+        else:
+            return self._poller.register(sock, flags)
 
     def unregister(self, sock):
-        self._poller.unregister(sock._socket)
-        del self._map[sock._socket]
+        if isinstance(sock, Socket):
+            self._poller.unregister(sock._socket)
+            del self._map[sock._socket]
+        else:
+            self._poller.unregister(sock)
 
     def poll(self, timeout=None):
         return {
