@@ -41,6 +41,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime
+from itertools import zip_longest
 
 import pkg_resources
 from chameleon import PageTemplateLoader
@@ -172,6 +173,7 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'HOME':
                 status_info = data
                 self.write_homepage(status_info)
+                self.write_sitemap()
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
@@ -213,6 +215,37 @@ class TheScribe(tasks.PauseableTask):
             ]
             json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))
+
+    def write_sitemap(self):
+        """
+        (Re)writes the XML sitemap pages.
+        """
+        self.logger.info('writing sitemap')
+        links_per_page = 50000  # google sitemap limit
+        pages = grouper(self.package_cache, links_per_page)
+        for n, packages in enumerate(pages, start=1):
+            with AtomicReplaceFile(self.output_path / 'sitemap{}.xml'.format(n),
+                                   encoding='utf-8') as page:
+                page.file.write(self.templates['sitemap_page'](
+                    packages=packages)
+                )
+        self.write_sitemap_index(pages=n)
+
+    def write_sitemap_index(self, pages):
+        """
+        (Re)writes the XML sitemap index.
+
+        :param int pages:
+            The number of pages of sitemaps to include in the index.
+        """
+        self.logger.info('writing sitemap index')
+        dt = datetime.now()
+        with AtomicReplaceFile(self.output_path / 'sitemap.xml',
+                             encoding='utf-8') as sitemap:
+          sitemap.file.write(self.templates['sitemap_index'](
+              pages=range(pages),
+              timestamp=dt.strftime('%Y-%m-%d'))
+          )
 
     def write_root_index(self):
         """
@@ -350,6 +383,14 @@ def canonicalize_name(name):
     # pylint: disable=missing-docstring
     # This is taken from PEP 503.
     return _canonicalize_regex.sub("-", name).lower()
+
+
+# https://docs.python.org/3/library/itertools.html
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
 class AtomicReplaceFile:
