@@ -218,9 +218,14 @@ class TheScribe(tasks.PauseableTask):
 
     def write_sitemap(self):
         """
-        (Re)writes the XML sitemap pages.
+        (Re)writes the XML sitemap pages and index.
         """
         self.logger.info('writing sitemap')
+
+        pages = ['index.html', 'packages.html', 'faq.html', 'stats.html']
+        with AtomicReplaceFile(self.output_path / 'sitemap0.xml',
+                               encoding='utf-8') as page:
+            page.file.write(self.templates['sitemap_static'](pages=pages))
         links_per_page = 50000  # google sitemap limit
         pages = grouper(self.package_cache, links_per_page)
         for n, packages in enumerate(pages, start=1):
@@ -229,21 +234,11 @@ class TheScribe(tasks.PauseableTask):
                 page.file.write(self.templates['sitemap_page'](
                     packages=packages)
                 )
-        self.write_sitemap_index(pages=n)
-
-    def write_sitemap_index(self, pages):
-        """
-        (Re)writes the XML sitemap index.
-
-        :param int pages:
-            The number of pages of sitemaps to include in the index.
-        """
-        self.logger.info('writing sitemap index')
         dt = datetime.now()
         with AtomicReplaceFile(self.output_path / 'sitemap.xml',
                              encoding='utf-8') as sitemap:
           sitemap.file.write(self.templates['sitemap_index'](
-              pages=range(pages),
+              pages=range(n),
               timestamp=dt.strftime('%Y-%m-%d'))
           )
 
