@@ -38,10 +38,12 @@ user interfaces.
 from math import log
 
 
-def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0B'):
+def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0B',
+                template='{size:.0f}{suffix}'):
     try:
         index = min(len(suffixes) - 1, int(log(size, 2) // 10))
     except ValueError:
         return zero
     else:
-        return '%d%s' % (size / 2 ** (index * 10), suffixes[index])
+        return template.format(size=size / 2 ** (index * 10),
+                               suffix=suffixes[index])

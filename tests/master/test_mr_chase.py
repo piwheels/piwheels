@@ -94,19 +94,7 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
     bs, bsh = build_state, build_state_hacked  # for brevity!
     bs._slave_id = bsh._slave_id = 0
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -141,19 +129,7 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
         # Make the Armv6 file a "real" transfer
         f._transferred = False
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bsh.package, bsh.version, bsh.abi_tag, bsh.status, bsh.duration,
-            bsh.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bsh.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bsh.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -196,19 +172,7 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
     bs, bsh = build_state, build_state_hacked
     bs._slave_id = bsh._slave_id = 0
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -242,19 +206,7 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
     bs, bsh = build_state, build_state_hacked
     bs._slave_id = bsh._slave_id = 0
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, None, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     bsh._abi_tag = 'cp34m'
@@ -277,20 +229,9 @@ def test_import_bad_abi(db_queue, task, import_queue, build_state):
     task.logger = mock.Mock()
     bs = build_state
     bs._slave_id = 0
+    bs._abi_tag = 'cp36m'
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, 'cp36m', bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     task.poll()
@@ -302,19 +243,8 @@ def test_import_bad_abi(db_queue, task, import_queue, build_state):
 def test_import_failed_build(task, import_queue, build_state):
     task.logger = mock.Mock()
     bs = build_state
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, False, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    bs._status = False
+    import_queue.send_msg('IMPORT', bs.as_message())
     task.poll()
     assert import_queue.recv_msg() == (
         'ERROR', 'importing a failed build is not supported')
@@ -325,12 +255,8 @@ def test_import_failed_build(task, import_queue, build_state):
 def test_import_empty_build(task, import_queue, build_state):
     task.logger = mock.Mock()
     bs = build_state
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, []
-        ]
-    )
+    bs._files = {}
+    import_queue.send_msg('IMPORT', bs.as_message())
     task.poll()
     assert import_queue.recv_msg() == ('ERROR', 'no files listed for import')
     assert task.logger.error.call_count == 1
@@ -342,19 +268,7 @@ def test_import_unknown_pkg(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bs.package, bs.version])
@@ -372,19 +286,7 @@ def test_import_failed_log(db_queue, task, import_queue, build_state,
     bs, bsh = build_state, build_state_hacked
     bs._slave_id = 0
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag, fs.abi_tag,
-                    fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -403,19 +305,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     bs, bsh = build_state, build_state_hacked
     bs._slave_id = bsh._slave_id = 0
 
-    import_queue.send_msg(
-        'IMPORT', [
-            bs.package, bs.version, bs.abi_tag, bs.status, bs.duration,
-            bs.output, [
-                [
-                    fs.filename, fs.filesize, fs.filehash, fs.package_tag,
-                    fs.package_version_tag, fs.py_version_tag,
-                    fs.abi_tag, fs.platform_tag, fs.dependencies
-                ]
-                for fs in bs.files.values()
-            ]
-        ]
-    )
+    import_queue.send_msg('IMPORT', bs.as_message())
     db_queue.expect('GETABIS')
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])

@@ -100,10 +100,11 @@ class MrChase(tasks.PauseableTask):
             state = self.states[address]
         except KeyError:
             if msg == 'IMPORT':
+                state = BuildState.from_message(data)
                 # XXX Slave ID is always 0 ... what happens if two simultaneous
                 # imports are attempted, particularly re the file-expect
                 # mechanism?
-                state = BuildState.from_message([0] + data)
+                state._slave_id = 0
                 self.states[address] = state
             elif msg in ('REMOVE', 'REBUILD'):
                 # No need to store state for these tools
@@ -141,11 +142,6 @@ class MrChase(tasks.PauseableTask):
             return 'ERROR', 'no files listed for import'
         build_armv6l_hack(state)
         build_abis = self.db.get_build_abis()
-        if state.abi_tag is None:
-            # XXX Ought to use ORDER BY in SQL for this (in case Python's
-            # collation doesn't match Postgres') but this means adding more to
-            # the database API and I'm too lazy right now
-            state.abi_tag = min(build_abis)
         if state.abi_tag not in build_abis:
             self.logger.error('invalid ABI: %s', state.abi_tag)
             return 'ERROR', 'invalid ABI: %s' % state.abi_tag

@@ -406,7 +406,7 @@ class MockTask(Thread):
         'RESET': NoData,
     }, send={
         'OK': NoData,
-        'ERROR': Schema(Exception),
+        'ERROR': str,
     })
 
 
@@ -454,7 +454,7 @@ class MockTask(Thread):
         self.control.send_msg('TEST', timeout)
         msg, data = self.control.recv_msg()
         if msg == 'ERROR':
-            raise data
+            assert False, data
 
     def reset(self):
         self.control.send_msg('RESET')
@@ -491,7 +491,7 @@ class MockTask(Thread):
                             control.send_msg('OK')
                         else:
                             control.send_msg(
-                                'ERROR', RuntimeError('forgot to call check()'))
+                                'ERROR', 'forgot to call check()')
                         break
                     elif msg == 'SEND':
                         queue.append(MockMessage('send', *data))
@@ -512,7 +512,7 @@ class MockTask(Thread):
                             for item in done:
                                 assert item.expect == item.actual
                         except Exception as exc:
-                            control.send_msg('ERROR', exc)
+                            control.send_msg('ERROR', str(exc))
                         else:
                             control.send_msg('OK')
                     elif msg == 'RESET':

@@ -56,3 +56,9 @@ def test_format_floats():
     assert format_size(1024.0) == '1KB'
     assert format_size(1024.0 ** 2) == '1MB'
     assert format_size(1024.0 ** 3) == '1GB'
+
+
+def test_format_templates():
+    assert format_size(1, template='{size:.0f} {suffix}') == '1 B'
+    assert format_size(1024, template='{size}{suffix}') == '1.0KB'
+    assert format_size(1536, template='{size:.1f}{suffix}') == '1.5KB'

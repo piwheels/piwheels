@@ -79,6 +79,23 @@ class PiWheelsPackage:
         if self._parts[-2] == 'noabi':
             self._parts[-2] = 'none'
 
+    def as_message(self):
+        """
+        Return the state as a list suitable for use in the ``BUILT`` message
+        of :program:`piw-slave`.
+        """
+        return (
+            self.filename,
+            self.filesize,
+            self.filehash,
+            self.package_tag,
+            self.package_version_tag,
+            self.py_version_tag,
+            self.abi_tag,
+            self.platform_tag,
+            self.dependencies
+        )
+
     @property
     def filename(self):
         """
@@ -256,13 +273,14 @@ class PiWheelsPackage:
                     # having to restart there's a possibility we'll miss the
                     # watchdog timer, so ping it each time the poll fails
                     self.systemd.watchdog_ping()
-                req, *args = queue.recv_multipart()
-                if req == b'DONE':
-                    return
-                elif req == b'FETCH':
-                    offset, size = args
-                    f.seek(int(offset))
-                    queue.send_multipart([b'CHUNK', offset, f.read(int(size))])
+                else:
+                    req, *args = queue.recv_multipart()
+                    if req == b'DONE':
+                        return
+                    elif req == b'FETCH':
+                        offset, size = args
+                        f.seek(int(offset))
+                        queue.send_multipart([b'CHUNK', offset, f.read(int(size))])
 
 
 class PiWheelsBuilder:
@@ -285,29 +303,14 @@ class PiWheelsBuilder:
         self.files = []
         self.status = False
 
-    @property
     def as_message(self):
         """
-        Return the state as a list suitable for use in several protocol
-        messages (specifically those used by :program:`piw-slave` and
-        :program:`piw-import`).
+        Return the state as a list suitable for use in the ``BUILT`` message
+        of :program:`piw-slave`.
         """
         return [
             self.package, self.version, self.status, self.duration,
-            self.output, [
-                (
-                    pkg.filename,
-                    pkg.filesize,
-                    pkg.filehash,
-                    pkg.package_tag,
-                    pkg.package_version_tag,
-                    pkg.py_version_tag,
-                    pkg.abi_tag,
-                    pkg.platform_tag,
-                    pkg.dependencies,
-                )
-                for pkg in self.files
-            ]
+            self.output, [pkg.as_message() for pkg in self.files]
         ]
 
     def build(self, timeout=timedelta(minutes=5),
