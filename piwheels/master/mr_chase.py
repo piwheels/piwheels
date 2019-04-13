@@ -36,7 +36,7 @@ Defines the :class:`MrChase` task; see class for more details.
 import pickle
 
 from .. import const, protocols, transport, tasks
-from .states import BuildState, FileState
+from ..states import BuildState, FileState
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 from .slave_driver import build_armv6l_hack

@@ -33,32 +33,32 @@ from piwheels.format import format_size
 
 
 def test_format_zero():
-    assert format_size(0) == '0B'
+    assert format_size(0) == '0 B'
     assert format_size(0, zero='-') == '-'
     assert format_size(0.0, zero='-') == '-'
 
 
 def test_format_ints():
-    assert format_size(1) == '1B'
-    assert format_size(10) == '10B'
-    assert format_size(512) == '512B'
-    assert format_size(1023) == '1023B'
-    assert format_size(1024) == '1KB'
-    assert format_size(1024 ** 2) == '1MB'
-    assert format_size(1024 ** 3) == '1GB'
+    assert format_size(1) == '1 B'
+    assert format_size(10) == '10 B'
+    assert format_size(512) == '512 B'
+    assert format_size(1023) == '1023 B'
+    assert format_size(1024) == '1 KB'
+    assert format_size(1024 ** 2) == '1 MB'
+    assert format_size(1024 ** 3) == '1 GB'
 
 
 def test_format_floats():
-    assert format_size(1.0) == '1B'
-    assert format_size(10.0) == '10B'
-    assert format_size(512.0) == '512B'
-    assert format_size(1023.0) == '1023B'
-    assert format_size(1024.0) == '1KB'
-    assert format_size(1024.0 ** 2) == '1MB'
-    assert format_size(1024.0 ** 3) == '1GB'
+    assert format_size(1.0) == '1 B'
+    assert format_size(10.0) == '10 B'
+    assert format_size(512.0) == '512 B'
+    assert format_size(1023.0) == '1023 B'
+    assert format_size(1024.0) == '1 KB'
+    assert format_size(1024.0 ** 2) == '1 MB'
+    assert format_size(1024.0 ** 3) == '1 GB'
 
 
 def test_format_templates():
-    assert format_size(1, template='{size:.0f} {suffix}') == '1 B'
+    assert format_size(1, template='{size:.0f}{suffix}') == '1B'
     assert format_size(1024, template='{size}{suffix}') == '1.0KB'
-    assert format_size(1536, template='{size:.1f}{suffix}') == '1.5KB'
+    assert format_size(1536, template='{size:.1f} {suffix}') == '1.5 KB'

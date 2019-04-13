@@ -49,9 +49,9 @@ from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
 from ..format import format_size
+from ..states import FileState, BuildState
 from ..slave import duration
 from ..slave.builder import PiWheelsPackage
-from ..master.states import FileState, BuildState
 
 
 def main(args=None):

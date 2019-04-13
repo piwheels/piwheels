@@ -37,7 +37,7 @@ import pytest
 
 from piwheels import const, protocols, transport
 from piwheels.master.db import Database
-from piwheels.master.states import (
+from piwheels.states import (
     SlaveState,
     BuildState,
     FileState,
@@ -121,7 +121,7 @@ def test_build_state_logged(build_state, file_state):
 
 def test_slave_state_init():
     now = datetime.now(tz=UTC)
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         dt.now.return_value = now
         slave_state = SlaveState(
             '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
@@ -161,7 +161,7 @@ def test_slave_state_expired():
 
 
 def test_slave_state_hello(master_status_queue, slave_queue):
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state = SlaveState(
@@ -179,7 +179,7 @@ def test_slave_recv_request(build_state, file_state):
     slave_state = SlaveState(
         '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
         'piwheels2')
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state.request = ('IDLE', None)
@@ -202,7 +202,7 @@ def test_slave_recv_reply(build_state, file_state, slave_queue):
     slave_state = SlaveState(
         '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
         'piwheels2')
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
@@ -220,7 +220,7 @@ def test_slave_recv_bad_built(build_state, file_state, slave_queue):
     slave_state = SlaveState(
         '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
         'piwheels2')
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state._reply = ('BUILD', ['foo', '0.1'])
@@ -231,7 +231,7 @@ def test_slave_recv_bad_built(build_state, file_state, slave_queue):
 
 
 def test_slave_state_recv_hello(master_status_queue, slave_queue):
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
         slave_state = SlaveState(

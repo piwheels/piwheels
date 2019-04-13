@@ -39,9 +39,9 @@ from sqlalchemy import create_engine, text
 from voluptuous import Schema, ExactSequence, Extra, Any
 
 from piwheels import const, transport, protocols
+from piwheels.states import BuildState, FileState, DownloadState
 from piwheels.protocols import NoData
 from piwheels.initdb import get_script, parse_statements
-from piwheels.master.states import BuildState, FileState, DownloadState
 from piwheels.master.the_oracle import TheOracle
 from piwheels.master.seraph import Seraph
 

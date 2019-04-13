@@ -33,8 +33,8 @@ from unittest import mock
 import pytest
 
 from piwheels import const, protocols, tasks, transport
+from piwheels.states import SlaveState, BuildState
 from piwheels.master.slave_driver import SlaveDriver
-from piwheels.master.states import SlaveState, BuildState
 
 
 UTC = timezone.utc
@@ -187,7 +187,7 @@ def test_slave_protocol_error(task, slave_queue, master_config):
 
 def test_slave_commits_suicide(task, slave_queue, master_status_queue,
                                master_config):
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         dt.now.return_value = datetime.now(tz=UTC)
         task.logger = mock.Mock()
         slave_queue.send_msg('HELLO', [
@@ -220,7 +220,7 @@ def test_master_lists_nothing(task, master_status_queue):
 
 def test_master_lists_slaves(task, slave_queue, master_config,
                              master_status_queue):
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         dt.now.return_value = datetime.now(tz=UTC)
         slave_queue.send_msg('HELLO', [
             timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l',
@@ -249,7 +249,7 @@ def test_master_lists_slaves(task, slave_queue, master_config,
 
 def test_slave_remove_expired(task, slave_queue, master_config,
                               master_status_queue):
-    with mock.patch('piwheels.master.states.datetime') as dt:
+    with mock.patch('piwheels.states.datetime') as dt:
         dt.now.return_value = datetime.now(tz=UTC)
         slave_queue.send_msg('HELLO', [
             timedelta(seconds=300),

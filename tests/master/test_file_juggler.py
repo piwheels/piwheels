@@ -33,8 +33,8 @@ from unittest import mock
 import pytest
 
 from piwheels import protocols, transport
+from piwheels.states import TransferState
 from piwheels.master.file_juggler import FileJuggler
-from piwheels.master.states import TransferState
 
 
 @pytest.fixture()

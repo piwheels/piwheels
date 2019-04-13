@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from piwheels.master.ranges import (
+from piwheels.ranges import (
     consolidate,
     split,
     exclude,
