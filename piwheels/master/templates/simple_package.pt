@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+<head>
+<title>piwheels - Links for ${package}</title>
+</head>
+<body>
+<h1>Links for ${package}</h1>
+
+<span tal:repeat="row files" tal:omit-tag="True"><a href="${row.filename}#sha256=${row.filehash}">${row.filename}</a><br></span>
+</body>
+</html>

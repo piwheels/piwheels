@@ -41,13 +41,13 @@ import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime
+from itertools import zip_longest
 
 import pkg_resources
 from chameleon import PageTemplateLoader
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
-from .html import tag
 from .the_oracle import DbClient
 from .states import mkdir_override_symlink
 
@@ -102,7 +102,7 @@ class TheScribe(tasks.PauseableTask):
         # is primarily for limited setups which don't expect to see "new"
         # packages show up (the usual trigger for re-writing the root index)
         if not (self.output_path / 'simple' / 'index.html').exists():
-            self.write_root_index()
+            self.write_simple_index()
 
     def setup_output_path(self):
         """
@@ -163,7 +163,7 @@ class TheScribe(tasks.PauseableTask):
                 package = data
                 if package not in self.package_cache:
                     self.package_cache.add(package)
-                    self.write_root_index()
+                    self.write_simple_index()
                 self.write_package_index(package)
                 self.write_project_page(package)
             elif msg == 'PKGPROJ':
@@ -172,6 +172,7 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'HOME':
                 status_info = data
                 self.write_homepage(status_info)
+                self.write_sitemap()
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
@@ -214,7 +215,33 @@ class TheScribe(tasks.PauseableTask):
             json.dump(search_index, index.file,
                       check_circular=False, separators=(',', ':'))
 
-    def write_root_index(self):
+    def write_sitemap(self):
+        """
+        (Re)writes the XML sitemap pages and index.
+        """
+        self.logger.info('writing sitemap')
+
+        pages = ['index.html', 'packages.html', 'faq.html', 'stats.html']
+        with AtomicReplaceFile(self.output_path / 'sitemap0.xml',
+                               encoding='utf-8') as page:
+            page.file.write(self.templates['sitemap_static'](pages=pages))
+        links_per_page = 50000  # google sitemap limit
+        pages = grouper(self.package_cache, links_per_page)
+        for n, packages in enumerate(pages, start=1):
+            with AtomicReplaceFile(self.output_path / 'sitemap{}.xml'.format(n),
+                                   encoding='utf-8') as page:
+                page.file.write(self.templates['sitemap_page'](
+                    packages=packages)
+                )
+        dt = datetime.now()
+        with AtomicReplaceFile(self.output_path / 'sitemap.xml',
+                             encoding='utf-8') as sitemap:
+          sitemap.file.write(self.templates['sitemap_index'](
+              pages=range(n),
+              timestamp=dt.strftime('%Y-%m-%d'))
+          )
+
+    def write_simple_index(self):
         """
         (Re)writes the index of all packages. This is implicitly called when a
         request to write a package index is received for a package not present
@@ -223,19 +250,8 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('writing package index')
         with AtomicReplaceFile(self.output_path / 'simple' / 'index.html',
                                encoding='utf-8') as index:
-            index.file.write('<!DOCTYPE html>\n')
-            index.file.write(
-                tag.html(
-                    tag.head(
-                        tag.title('piwheels Simple Index'),
-                        tag.meta(name='api-version', value=2),
-                    ),
-                    tag.body(
-                        (tag.a(package, href=package), tag.br())
-                        for package in self.package_cache
-                    )
-                )
-            )
+            index.file.write(self.templates['simple_index'](
+                packages=self.package_cache))
 
     def write_package_index(self, package):
         """
@@ -249,26 +265,18 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
+        files = sorted(
+            self.db.get_project_files(package),
+            key=lambda row: (
+                pkg_resources.parse_version(row.version),
+                row.filename
+            ), reverse=True)
         with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
-            index.file.write('<!DOCTYPE html>\n')
-            index.file.write(
-                tag.html(
-                    tag.head(
-                        tag.title('Links for ', package)
-                    ),
-                    tag.body(
-                        tag.h1('Links for ', package),
-                        ((tag.a(
-                            filename,
-                            href='{filename}#sha256={filehash}'.format(
-                                filename=filename, filehash=filehash),
-                            rel='internal'), tag.br(), '\n')
-                         for filename, filehash
-                         in self.db.get_package_files(package).items())
-                    )
-                )
-            )
+            index.file.write(self.templates['simple_package'](
+                package=package,
+                files=files
+            ))
         try:
             # Workaround for #20: after constructing the index for a package
             # attempt to symlink the "canonicalized" package name to the actual
@@ -350,6 +358,14 @@ def canonicalize_name(name):
     # pylint: disable=missing-docstring
     # This is taken from PEP 503.
     return _canonicalize_regex.sub("-", name).lower()
+
+
+# https://docs.python.org/3/library/itertools.html
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
 class AtomicReplaceFile:

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://www.piwheels.org/sitemap0.xml</loc>
+    <lastmod>${timestamp}</lastmod>
+  </sitemap>
+  <span tal:repeat="page pages" tal:omit-tag="1">
+    <sitemap>
+      <loc>https://www.piwheels.org/sitemap${page+1}.xml</loc>
+      <lastmod>${timestamp}</lastmod>
+    </sitemap>
+  </span>
+</sitemapindex>

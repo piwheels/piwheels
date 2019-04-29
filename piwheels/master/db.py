@@ -425,7 +425,7 @@ class Database:
         """
         with self._conn.begin():
             return {
-                tool: [row.dependency for row in rows]
+                tool: {row.dependency for row in rows}
                 for tool, rows in groupby(
                     self._conn.execute(
                         "SELECT tool, dependency "

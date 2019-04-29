@@ -1,0 +1,10 @@
+<!doctype html>
+<html>
+<head>
+<meta name="api-version" value="2" />
+<title>piwheels - Simple index</title>
+</head>
+<body>
+<span tal:repeat="package packages" tal:omit-tag="True"><a href="${package}">${package}</a></span>
+</body>
+</html>
