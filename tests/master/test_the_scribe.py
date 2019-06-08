@@ -213,11 +213,13 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     scribe_queue.send_msg('PKGBOTH', 'foo')
-    db_queue.expect('PKGFILES', 'foo')
-    db_queue.send('OK', {
-        'foo-0.1-cp34-cp34m-linux_armv7l.whl': '123456123456',
-        'foo-0.1-cp34-cp34m-linux_armv6l.whl': '123456123456',
-    })
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456'),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456'),
+    ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
         ProjectVersionsRow('0.1', False, 2, 0),
