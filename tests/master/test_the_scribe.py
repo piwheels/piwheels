@@ -157,16 +157,6 @@ def test_scribe_second_start(db_queue, task, master_config):
             assert (root / filename).exists() and (root / filename).is_file()
 
 
-def test_write_root_index_fails(db_queue, task, master_config):
-    db_queue.expect('ALLPKGS')
-    db_queue.send('OK')
-    with pytest.raises(TypeError):
-        task.once()
-    db_queue.check()
-    root = Path(master_config.output_path)
-    assert not (root / 'simple' / 'index.html').exists()
-
-
 def test_bad_request(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
