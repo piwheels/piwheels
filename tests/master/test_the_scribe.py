@@ -353,23 +353,25 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     scribe_queue.send_msg('PKGBOTH', 'bar')
-    db_queue.expect('PKGFILES', 'bar')
-    db_queue.send('OK', {
-        'bar-1.0-cp34-cp34m-linux_armv7l.whl': '123456abcdef',
-        'bar-1.0-cp34-cp34m-linux_armv6l.whl': '123456abcdef',
-    })
+    db_queue.expect('PROJFILES', 'bar')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef'),
+        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef'),
+    ])
     db_queue.expect('PROJVERS', 'bar')
     db_queue.send('OK', [
         ProjectVersionsRow('1.0', False, 2, 1),
     ])
     db_queue.expect('PROJFILES', 'bar')
     db_queue.send('OK', [
-        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv6l.whl',
                         123456, '123456abcdef'),
-        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv7l.whl',
                         123456, '123456abcdef'),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.expect('FILEDEPS', 'bar-1.0-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
     task.once()
     task.poll()
