@@ -226,6 +226,7 @@ class TheScribe(tasks.PauseableTask):
                                encoding='utf-8') as page:
             page.file.write(self.templates['sitemap_static'](pages=pages))
         links_per_page = 50000  # google sitemap limit
+        n = 0
         pages = grouper(self.package_cache, links_per_page)
         for n, packages in enumerate(pages, start=1):
             with AtomicReplaceFile(self.output_path / 'sitemap{}.xml'.format(n),
