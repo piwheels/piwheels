@@ -433,7 +433,7 @@ class MockTask(Thread):
         self.control.send_msg('QUIT')
         msg, data = self.control.recv_msg()
         if msg == 'ERROR':
-            raise data
+            raise RuntimeError(data)
         self.join(10)
         self.control.close()
         self.control = None
