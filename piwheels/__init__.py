@@ -74,7 +74,8 @@ __author_email__ = 'ben@raspberrypi.org'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
-__requires__ = ['configargparse', 'pyzmq', 'voluptuous']
+__requires__ = ['configargparse', 'pyzmq', 'voluptuous',
+                'cbor2 @ git+https://github.com/agronholm/cbor2.git@master']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
