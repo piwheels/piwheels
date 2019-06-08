@@ -102,7 +102,7 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
     db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     bsh.logged(1234)
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)
@@ -112,7 +112,7 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
 
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
@@ -138,7 +138,7 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
     db_queue.send('OK', 1234)
     # XXX Sometimes we'll have a different order to the re-constructed file list on the server side
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     bsh.logged(1234)
     msg, filename = import_queue.recv_msg()
@@ -147,10 +147,10 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
 
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     bsh.files[filename].verified()
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     msg, filename = import_queue.recv_msg()
     assert msg == 'SEND'
@@ -180,7 +180,7 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
     db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     bsh.logged(1234)
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)
@@ -193,7 +193,7 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
 
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
@@ -215,7 +215,7 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
     db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)
     assert len(task.states) == 1
@@ -313,7 +313,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     db_queue.expect('LOGBUILD', bsh.as_message())
     db_queue.send('OK', 1234)
     fs_queue.expect('EXPECT', [0, bsh.files[bsh.next_file].as_message()])
-    fs_queue.send('OK')
+    fs_queue.send('OK', None)
     task.poll()
     assert import_queue.recv_msg() == ('SEND', bsh.next_file)
     assert len(task.states) == 1
@@ -335,9 +335,9 @@ def test_normal_remove(db_queue, fs_queue, web_queue, task, import_queue,
     db_queue.send('OK', files)
     for filename in files:
         fs_queue.expect('REMOVE', [bsh.package, filename])
-        fs_queue.send('OK')
+        fs_queue.send('OK', None)
     db_queue.expect('DELBUILD', [bsh.package, bsh.version])
-    db_queue.send('OK')
+    db_queue.send('OK', None)
     task.poll()
     assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
@@ -353,15 +353,15 @@ def test_remove_with_skip(db_queue, fs_queue, web_queue, task, import_queue,
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     db_queue.expect('SKIPVER', [bsh.package, bsh.version, 'broken version'])
-    db_queue.send('OK')
+    db_queue.send('OK', None)
     db_queue.expect('VERFILES', [bsh.package, bsh.version])
     files = [f.filename for f in bsh.files.values()]
     db_queue.send('OK', files)
     for filename in files:
         fs_queue.expect('REMOVE', [bsh.package, filename])
-        fs_queue.send('OK')
+        fs_queue.send('OK', None)
     db_queue.expect('DELBUILD', [bsh.package, bsh.version])
-    db_queue.send('OK')
+    db_queue.send('OK', None)
     task.poll()
     assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
