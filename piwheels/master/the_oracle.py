@@ -209,14 +209,14 @@ class TheOracle(tasks.Task):
         Handler for "PROJFILES" message, sent by :class:`DbClient` to request
         file details of all versions of *package*.
         """
-        return list(self.db.get_project_files(package))
+        return self.db.get_project_files(package)
 
     def do_verfiles(self, package, version):
         """
         Handler for "VERFILES" message, sent by :class:`DbClient` to request
         the filenames of all wheels associated with *version* of *package*.
         """
-        return set(self.db.get_version_files(package, version))
+        return self.db.get_version_files(package, version)
 
     def do_getskip(self, package, version):
         """
