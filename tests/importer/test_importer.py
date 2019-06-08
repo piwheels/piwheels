@@ -40,7 +40,7 @@ import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
-from piwheels.importer import main, abi
+from piwheels.importer import main
 
 
 @pytest.fixture()
@@ -86,7 +86,6 @@ def import_queue_name(request, tmpdir):
 def import_queue(request, mock_context, import_queue_name, tmpdir):
     queue = mock_context.socket(transport.REP, protocol=protocols.mr_chase)
     queue.hwm = 1
-    print('bound queue', import_queue_name)
     queue.bind(import_queue_name)
     yield queue
     queue.close()
@@ -136,18 +135,6 @@ def test_abort(mock_wheel):
         assert main([mock_wheel]) == 2
 
 
-def test_abi():
-    config = mock.Mock()
-    config.abi = None
-    builder = mock.MagicMock()
-    builder.files[0].abi_tag = 'none'
-    assert abi(config, builder, 'foo') == 'foo'
-    builder.files[0].abi_tag = 'cp34m'
-    assert abi(config, builder, 'foo') == 'cp34m'
-    config.abi = 'cp35m'
-    assert abi(config, builder, 'foo') == 'cp35m'
-
-
 def test_auto_package_version(mock_wheel, caplog):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = False
@@ -171,7 +158,7 @@ def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_
         with ImportThread(['--import-queue', import_queue_name, mock_wheel]) as thread:
             assert import_queue.recv_msg() == (
                 'IMPORT', [
-                    'cp34m', 'foo', '0.1', True, timedelta(0),
+                    0, 'foo', '0.1', 'cp34m', True, timedelta(0),
                     'Imported manually via piw-import', [
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
@@ -194,7 +181,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
                 mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
             assert import_queue.recv_msg() == (
                 'IMPORT', [
-                    'cp34m', 'foo', '0.1', True, timedelta(0),
+                    0, 'foo', '0.1', 'cp34m', True, timedelta(0),
                     'Imported manually via piw-import', [
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
@@ -217,7 +204,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0),
+                0, 'foo', '0.1', 'cp34m', True, timedelta(0),
                 'Imported manually via piw-import', [
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
@@ -241,7 +228,7 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0),
+                0, 'foo', '0.1', 'cp34m', True, timedelta(0),
                 'Imported manually via piw-import', [
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
@@ -268,7 +255,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0), 'FOO\n', [
+                0, 'foo', '0.1', 'cp34m', True, timedelta(0), 'FOO\n', [
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
@@ -292,7 +279,7 @@ def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, im
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
-                'cp35m', 'foo', '0.1', True, timedelta(0),
+                0, 'foo', '0.1', 'cp35m', True, timedelta(0),
                 'Imported manually via piw-import', [
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
@@ -317,7 +304,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
             mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
-                'cp34m', 'foo', '0.1', True, timedelta(0),
+                0, 'foo', '0.1', 'cp34m', True, timedelta(0),
                 'Imported manually via piw-import', [
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',

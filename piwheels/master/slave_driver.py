@@ -37,7 +37,7 @@ import pickle
 from datetime import datetime, timezone
 
 from .. import const, protocols, tasks, transport
-from .states import SlaveState, FileState
+from ..states import SlaveState, FileState
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 

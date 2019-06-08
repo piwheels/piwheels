@@ -40,7 +40,7 @@ to it.
 import pickle
 
 from .. import const, protocols, transport, tasks
-from .states import BuildState, DownloadState
+from ..states import BuildState, DownloadState
 from .db import Database, ProjectVersionsRow, ProjectFilesRow
 
 

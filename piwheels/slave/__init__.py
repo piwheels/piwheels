@@ -233,7 +233,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.info('Build succeeded')
         else:
             self.logger.warning('Build failed')
-        return 'BUILT', self.builder.as_message[2:]
+        return 'BUILT', self.builder.as_message()[2:]
 
     def do_send(self, filename):
         """

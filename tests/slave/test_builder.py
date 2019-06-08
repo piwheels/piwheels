@@ -288,7 +288,7 @@ def test_builder_init():
 
 def test_builder_as_message():
     b = builder.PiWheelsBuilder('foo', '0.1')
-    assert b.as_message == ['foo', '0.1', False, None, '', []]
+    assert b.as_message() == ['foo', '0.1', False, None, '', []]
 
 
 def test_builder_build_success(mock_archive, mock_systemd, tmpdir):

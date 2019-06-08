@@ -4,7 +4,8 @@ piw-import
 
 The piw-import script is used to inject the specified file(s) manually into the
 piwheels database and file-system. This script must be run on the same node as
-the piw-master script.
+the piw-master script. If multiple files are specified, they are registered
+as produced by a *single* build.
 
 Synopsis
 ========

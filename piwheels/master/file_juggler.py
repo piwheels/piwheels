@@ -47,7 +47,7 @@ import os
 from pathlib import Path
 
 from .. import transport, protocols, tasks
-from .states import TransferState, FileState
+from ..states import TransferState, FileState
 
 
 class TransferError(Exception):

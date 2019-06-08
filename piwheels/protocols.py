@@ -191,15 +191,7 @@ file_juggler_fs = Protocol(recv={
 
 
 mr_chase = Protocol(recv={
-    'IMPORT': ExactSequence([
-        str,             # package
-        str,             # version
-        Any(str, None),  # abi_tag
-        bool,            # status
-        dt.timedelta,    # duration
-        str,             # output
-        [_file_state],   # filename: filestate
-    ]),
+    'IMPORT': _build_state,
     'REMOVE': ExactSequence([str, str, str]),  # package, version, skip-reason
     'REBUILD': Any(
         ExactSequence(['HOME']),

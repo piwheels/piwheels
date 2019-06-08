@@ -33,7 +33,7 @@ Contains the functions that implement the :program:`piw-import` script.
 
 .. autofunction:: main
 
-.. autofunction:: print_builder
+.. autofunction:: print_build
 
 .. autofunction:: abi
 
@@ -48,8 +48,10 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
+from ..format import format_size
+from ..states import FileState, BuildState
 from ..slave import duration
-from ..slave.builder import PiWheelsPackage, PiWheelsBuilder
+from ..slave.builder import PiWheelsPackage
 
 
 def main(args=None):
@@ -66,7 +68,8 @@ def main(args=None):
     parser = terminal.configure_parser("""\
 The piw-import script is used to inject the specified file(s) manually into
 the piwheels database and file-system. This script must be run on the same
-node as the piw-master script.
+node as the piw-master script. If multiple files are specified, they are
+registered as produced by a *single* build.
 """)
     parser.add_argument(
         '--package', default=None,
@@ -115,65 +118,64 @@ node as the piw-master script.
         PiWheelsPackage(Path(filename))
         for filename in config.files
     ]
-    builder = PiWheelsBuilder(
-        config.package if config.package is not None else
-        packages[0].metadata['Name'],
-        config.version if config.version is not None else
-        packages[0].metadata['Version'])
-    builder.duration = config.duration
-    if config.output is not None:
-        builder.output = config.output.read()
-    else:
-        builder.output = 'Imported manually via piw-import'
-    builder.status = True
-    builder.files = packages
+    state = BuildState(
+        slave_id=0,  # ignored
+        package=config.package if config.package is not None else
+            packages[0].metadata['Name'],
+        version=config.version if config.version is not None else
+            packages[0].metadata['Version'],
+        abi_tag=config.abi if config.abi is not None else
+            packages[0].abi_tag if packages[0].abi_tag != 'none' else
+            None,
+        status=True,
+        duration=config.duration,
+        output=config.output.read() if config.output is not None else
+            'Imported manually via piw-import',
+        files={pkg.filename: FileState(*pkg.as_message()) for pkg in packages}
+    )
+    if state.abi_tag is None:
+        raise RuntimeError("couldn't determine builder ABI; re-run with --abi")
     if not config.yes:
-        print_builder(config, builder)
+        print_state(state)
         if not terminal.yes_no_prompt('Proceed?'):
             logging.warning('User aborted import')
             return 2
     logging.info('Connecting to master at %s', config.import_queue)
-    do_import(config, builder)
+    do_import(config, packages, state)
     if config.delete:
-        for package in builder.files:
+        for package in packages:
             package.wheel_file.unlink()
     return 0
 
 
-def print_builder(config, builder):
+def print_state(state):
     """
-    Dumps a human-readable description of the *builder* to the log / console.
+    Dumps a human-readable description of the *state* to the log / console.
 
-    :param config:
-        The configuration generated from the command line argument parser.
-
-    :param PiWheelsBuilder builder:
-        The builder to print the description of.
+    :param BuildState state:
+        The build state to print the description of.
     """
     logging.warning('Preparing to import build')
-    logging.warning('Package:  %s', builder.package)
-    logging.warning('Version:  %s', builder.version)
-    logging.warning('ABI:      %s', abi(config, builder, 'default'))
+    logging.warning('Package:  %s', state.package)
+    logging.warning('Version:  %s', state.version)
+    logging.warning('ABI:      %s', state.abi_tag)
     logging.warning('Status:   successful')
-    logging.warning('Duration: %s', builder.duration)
-    logging.warning('Output:   %d line(s)', len(builder.output.splitlines()))
-    logging.warning('Files:    %d', len(builder.files))
-    for package in builder.files:
+    logging.warning('Duration: %s', state.duration)
+    logging.warning('Output:   %d line(s)', len(state.output.splitlines()))
+    logging.warning('Files:    %d', len(state.files))
+    for wheel in state.files.values():
         logging.warning('')
-        logging.warning('Filename: %s', package.filename)
-        logging.warning('  Size:         %d bytes', package.filesize)
-        logging.warning('  Hash:         %s', package.filehash)
-        logging.warning('  Package tag:  %s', package.package_tag)
-        logging.warning('  Version tag:  %s',
-                        package.package_version_tag)
-        logging.warning('  ABI tag:      %s', package.abi_tag)
-        logging.warning('  Python tag:   %s', package.py_version_tag)
-        logging.warning('  Platform tag: %s', package.platform_tag)
-        if package.build_tag is not None:
-            logging.warning('  Build tag:    %s', package.build_tag)
+        logging.warning('Filename: %s', wheel.filename)
+        logging.warning('  Size:         %s', format_size(wheel.filesize))
+        logging.warning('  Hash:         %s', wheel.filehash)
+        logging.warning('  Package tag:  %s', wheel.package_tag)
+        logging.warning('  Version tag:  %s', wheel.package_version_tag)
+        logging.warning('  ABI tag:      %s', wheel.abi_tag)
+        logging.warning('  Python tag:   %s', wheel.py_version_tag)
+        logging.warning('  Platform tag: %s', wheel.platform_tag)
 
 
-def do_import(config, builder):
+def do_import(config, packages, state):
     """
     Handles constructing and sending the initial "IMPORT" message to
     :class:`..master.mr_chase.MrChase`. If "SEND" is then received, uses
@@ -182,7 +184,11 @@ def do_import(config, builder):
     :param config:
         The configuration obtained from parsing the command line.
 
-    :param PiWheelsBuilder builder:
+    :param list packages:
+        A sequence of :class:`PiWheelsPackage` objects corresponding to files
+        in the *state*.
+
+    :param BuildState state:
         The object representing the state of the build.
     """
     ctx = transport.Context()
@@ -190,13 +196,13 @@ def do_import(config, builder):
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
-        queue.send_msg('IMPORT', [abi(config, builder)] + builder.as_message)
+        queue.send_msg('IMPORT', state.as_message())
         msg, data = queue.recv_msg()
         if msg == 'ERROR':
             raise RuntimeError(data)
         logging.info('Registered build successfully')
         while msg == 'SEND':
-            do_send(builder, data)
+            do_send(packages, data)
             queue.send_msg('SENT')
             msg, data = queue.recv_msg()
         if msg != 'DONE':
@@ -206,26 +212,12 @@ def do_import(config, builder):
         ctx.close()
 
 
-def abi(config, builder, default=None):
-    """
-    Calculate the ABI from the given *config* and the first file contained by
-    the *builder* state. If the configuration contains no ABI override, and
-    the ABI of the first file is 'none', return *default*.
-    """
-    if config.abi is not None:
-        return config.abi
-    elif builder.files[0].abi_tag != 'none':
-        return builder.files[0].abi_tag
-    else:
-        return default
-
-
-def do_send(builder, filename):
+def do_send(packages, filename):
     """
     Handles sending files when requested by :func:`do_import`.
     """
     logging.info('Sending %s to master on localhost', filename)
-    pkg = [f for f in builder.files if f.filename == filename][0]
+    pkg = [p for p in packages if p.filename == filename][0]
     ctx = transport.Context()
     queue = ctx.socket(
         transport.DEALER, protocol=reversed(protocols.file_juggler_files))

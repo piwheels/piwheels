@@ -34,8 +34,8 @@ Defines the :class:`Lumberjack` task; see class for more details.
 """
 
 from .. import protocols, transport, tasks
+from ..states import DownloadState
 from .the_oracle import DbClient
-from .states import DownloadState
 
 
 class Lumberjack(tasks.PauseableTask):

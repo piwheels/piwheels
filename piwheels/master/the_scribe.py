@@ -48,8 +48,8 @@ from chameleon import PageTemplateLoader
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
+from ..states import mkdir_override_symlink
 from .the_oracle import DbClient
-from .states import mkdir_override_symlink
 
 
 class TheScribe(tasks.PauseableTask):

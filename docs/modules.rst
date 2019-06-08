@@ -13,36 +13,6 @@ piwheels.master
 .. automodule:: piwheels.master
 
 
-piwheels.transport
-==================
-
-.. automodule:: piwheels.transport
-
-
-piwheels.protocols
-==================
-
-.. automodule:: piwheels.protocols
-
-
-piwheels.master.tasks
-=====================
-
-.. automodule:: piwheels.master.tasks
-
-
-piwheels.master.states
-======================
-
-.. automodule:: piwheels.master.states
-
-
-piwheels.master.ranges
-======================
-
-.. automodule:: piwheels.master.ranges
-
-
 piwheels.master.db
 ==================
 
@@ -137,3 +107,33 @@ piwheels.remove
 ===============
 
 .. automodule:: piwheels.remove
+
+
+piwheels.transport
+==================
+
+.. automodule:: piwheels.transport
+
+
+piwheels.protocols
+==================
+
+.. automodule:: piwheels.protocols
+
+
+piwheels.tasks
+==============
+
+.. automodule:: piwheels.tasks
+
+
+piwheels.states
+===============
+
+.. automodule:: piwheels.states
+
+
+piwheels.ranges
+===============
+
+.. automodule:: piwheels.ranges
