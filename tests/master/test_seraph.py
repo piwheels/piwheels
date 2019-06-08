@@ -29,9 +29,10 @@
 
 import pickle
 
+import cbor2
 import pytest
 
-from piwheels import const, cbor2, transport
+from piwheels import const, transport
 from piwheels.master.seraph import Seraph
 
 

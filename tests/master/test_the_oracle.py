@@ -30,10 +30,11 @@
 from datetime import datetime, timedelta, timezone
 from operator import itemgetter
 
+import cbor2
 import pytest
 
 from conftest import PIWHEELS_USER
-from piwheels import const, cbor2, transport
+from piwheels import const, transport
 from piwheels.master.db import Database
 from piwheels.master.seraph import Seraph
 from piwheels.master.the_oracle import TheOracle, DbClient

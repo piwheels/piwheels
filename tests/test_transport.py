@@ -32,10 +32,10 @@ import ipaddress as ip
 import datetime as dt
 from unittest import mock
 
+import cbor2
 import pytest
 from voluptuous import Any
 
-from piwheels import cbor2
 from piwheels.protocols import Protocol, NoData
 from piwheels.transport import Context, Socket, PUSH, PULL
 

@@ -34,7 +34,7 @@ from binascii import hexlify
 import zmq
 from voluptuous import Invalid
 
-from . import cbor2
+import cbor2
 from .protocols import Protocol, NoData
 
 
@@ -59,9 +59,7 @@ Again = zmq.error.Again
 
 
 def default_encoder(encoder, value):
-    if isinstance(value, (ip.IPv4Address, ip.IPv6Address)):
-        encoder.encode(cbor2.CBORTag(260, value.packed))
-    elif isinstance(value, dt.timedelta):
+    if isinstance(value, dt.timedelta):
         encoder.encode(
             cbor2.CBORTag(2001, (
                 value.days, value.seconds, value.microseconds)))
@@ -73,12 +71,7 @@ def default_encoder(encoder, value):
 
 
 def default_decoder(decoder, tag, shareable_index=None):
-    if tag.tag == 260:
-        if len(tag.value) == 4:
-            return ip.IPv4Address(tag.value)
-        elif len(tag.value) == 16:
-            return ip.IPv6Address(tag.value)
-    elif tag.tag == 2001:
+    if tag.tag == 2001:
         days, seconds, microseconds = tag.value
         return dt.timedelta(
             days=days, seconds=seconds, microseconds=microseconds)
@@ -118,8 +111,6 @@ class Socket:
         self._logger = logger
         self._socket = socket
         self._protocol = protocol
-        self._encoder = cbor2.CBOREncoder(None, default=default_encoder)
-        self._decoder = cbor2.CBORDecoder(None, tag_hook=default_decoder)
         self._socket.ipv6 = True
 
     def __enter__(self):
@@ -136,7 +127,7 @@ class Socket:
         if data is NoData:
             if schema is not NoData:
                 raise IOError('data must be specified for %s' % msg)
-            return self._encoder.encode_to_bytes(msg)
+            return cbor2.dumps(msg, default=default_encoder)
         else:
             if schema is NoData:
                 raise IOError('no data expected for %s' % msg)
@@ -145,13 +136,13 @@ class Socket:
             except Invalid as e:
                 raise IOError('invalid data for %s: %s' % (msg, e))
             try:
-                return self._encoder.encode_to_bytes((msg, data))
+                return cbor2.dumps((msg, data), default=default_encoder)
             except cbor2.CBOREncodeError as e:
                 raise IOError('unable to serialize data')
 
     def _load_msg(self, buf):
         try:
-            msg = self._decoder.decode_from_bytes(buf)
+            msg = cbor2.loads(buf, tag_hook=default_decoder)
         except cbor2.CBORDecodeError as e:
             raise IOError('unable to deserialize data')
         if isinstance(msg, str):
