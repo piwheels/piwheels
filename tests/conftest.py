@@ -313,7 +313,25 @@ def master_config(request, tmpdir):
 @pytest.fixture(scope='session')
 def zmq_context(request):
     context = transport.Context()
+    old_recv_msg = transport.Socket.recv_msg
+    old_recv_addr_msg = transport.Socket.recv_addr_msg
+    # Monkey-patch Socket so it times out on receive after 2 seconds, because
+    # no receive in the test suite should ever take longer than that
+    def recv_msg(self, flags=0):
+        if not flags:
+            if not self._socket.poll(2000, transport.POLLIN):
+                raise IOError('timed out on receive')
+        return old_recv_msg(self, flags)
+    def recv_addr_msg(self, flags=0):
+        if not flags:
+            if not self._socket.poll(2000, transport.POLLIN):
+                raise IOError('timed out on receive')
+        return old_recv_addr_msg(self, flags)
+    transport.Socket.recv_msg = recv_msg
+    transport.Socket.recv_addr_msg = recv_addr_msg
     yield context
+    transport.Socket.recv_msg = old_recv_msg
+    transport.Socket.recv_addr_msg = old_recv_addr_msg
     context.close()
 
 
