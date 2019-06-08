@@ -54,11 +54,9 @@ def slave_queue(request, zmq_context, master_status_queue):
     SlaveState.status_queue = zmq_context.socket(
         transport.PUSH, protocol=protocols.monitor_stats)
     SlaveState.status_queue.connect(const.INT_STATUS_QUEUE)
-    def fin():
-        SlaveState.status_queue.close()
-        SlaveState.status_queue = None
-    request.addfinalizer(fin)
-    return SlaveState.status_queue
+    yield SlaveState.status_queue
+    SlaveState.status_queue.close()
+    SlaveState.status_queue = None
 
 
 def test_file_state_init(file_state):
