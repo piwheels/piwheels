@@ -75,7 +75,7 @@ __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
 __requires__ = ['configargparse', 'pyzmq', 'voluptuous',
-                'cbor2 @ git+https://github.com/agronholm/cbor2.git@master']
+                'cbor2 @ git+https://github.com/waveform80/cbor2.git@piwheels']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
