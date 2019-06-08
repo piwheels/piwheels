@@ -374,7 +374,7 @@ def master_status_queue(request, zmq_context):
 class MockMessage:
     def __init__(self, action, message, data):
         assert action in ('send', 'recv')
-        if data is NoData:
+        if action == 'recv' and data is NoData:
             data = None
         self.action = action
         self.expect = (message, data)
@@ -461,6 +461,7 @@ class MockTask(Thread):
         assert self.control.recv_msg()[0] == 'OK'
 
     def loop(self, ctx, address):
+        pending = None
         tested = False
         queue = []
         done = []
@@ -495,32 +496,39 @@ class MockTask(Thread):
                         break
                     elif msg == 'SEND':
                         queue.append(MockMessage('send', *data))
+                        print(queue)
                         control.send_msg('OK')
                     elif msg == 'RECV':
                         queue.append(MockMessage('recv', *data))
                         control.send_msg('OK')
                     elif msg == 'TEST':
                         tested = True
-                        try:
-                            timeout = timedelta(seconds=data)
-                            start = datetime.now(tz=UTC)
-                            while queue and datetime.now(tz=UTC) - start < timeout:
-                                socks = dict(poller.poll(10))
-                                handle_queue()
-                            if queue:
-                                assert False, 'Still waiting for %r' % queue[0]
-                            for item in done:
-                                assert item.expect == item.actual
-                        except Exception as exc:
-                            control.send_msg('ERROR', str(exc))
+                        if pending is not None:
+                            control.send_msg('ERROR', str(pending))
                         else:
-                            control.send_msg('OK')
+                            try:
+                                timeout = timedelta(seconds=data)
+                                start = datetime.now(tz=UTC)
+                                while queue and datetime.now(tz=UTC) - start < timeout:
+                                    socks = dict(poller.poll(10))
+                                    handle_queue()
+                                if queue:
+                                    assert False, 'Still waiting for %r' % queue[0]
+                                for item in done:
+                                    assert item.expect == item.actual
+                            except Exception as exc:
+                                control.send_msg('ERROR', str(exc))
+                            else:
+                                control.send_msg('OK')
                     elif msg == 'RESET':
                         queue = []
                         done = []
                         control.send_msg('OK')
                 if queue:
-                    handle_queue()
+                    try:
+                        handle_queue()
+                    except Exception as exc:
+                        pending = exc
         finally:
             control.close()
 
