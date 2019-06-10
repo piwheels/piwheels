@@ -35,6 +35,8 @@ Defines :class:`TheArchitect` task; see class for more details.
 
 from datetime import datetime, timedelta
 
+from psycopg2.extensions import QueryCanceledError
+
 from .. import protocols, tasks, transport
 from .db import Database
 
@@ -55,10 +57,19 @@ class TheArchitect(tasks.Task):
             transport.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.connect(config.builds_queue)
+        self.can_cancel = False
 
     def close(self):
         self.db.close()
         super().close()
+
+    def quit(self):
+        """
+        Overridden to cancel any existing long-running query.
+        """
+        if self.can_cancel:
+            self.db._conn.connection.cancel()
+        super().quit()
 
     def loop(self):
         """
@@ -73,5 +84,12 @@ class TheArchitect(tasks.Task):
         # Leave 60 seconds between each run of the (expensive) builds
         # pending query
         if datetime.utcnow() - self.last_run > timedelta(seconds=60):
-            self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
-            self.last_run = datetime.utcnow()
+            self.can_cancel = True
+            try:
+                self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
+            except QueryCanceledError:
+                self.logger.warning('Cancelled query during shutdown')
+            else:
+                self.last_run = datetime.utcnow()
+            finally:
+                self.can_cancel = False
