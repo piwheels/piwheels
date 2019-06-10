@@ -514,7 +514,6 @@ class MockTask(Thread):
                         break
                     elif msg == 'SEND':
                         queue.append(MockMessage('send', *data))
-                        print(queue)
                         control.send_msg('OK')
                     elif msg == 'RECV':
                         queue.append(MockMessage('recv', *data))

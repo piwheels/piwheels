@@ -70,7 +70,7 @@ class BigBrother(tasks.PauseableTask):
             'downloads_last_month':  0,
             'downloads_all':         0,
         }
-        self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
+        self.last_run = datetime.now(tz=UTC) - timedelta(seconds=40)
         stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
@@ -104,13 +104,12 @@ class BigBrother(tasks.PauseableTask):
                 self.stats['builds_pending'] = sum(data.values())
             elif msg == 'HOME':
                 # Forced rebuild from Mr. Chase
-                self.timestamp = datetime.now(tz=UTC) - timedelta(seconds=40)
+                self.last_run = datetime.now(tz=UTC) - timedelta(seconds=40)
 
     def loop(self):
-        # The big brother task is not reactive; it just pumps out stats
-        # every 30 seconds (at most)
-        if datetime.now(tz=UTC) - self.timestamp > timedelta(seconds=30):
-            self.timestamp = datetime.now(tz=UTC)
+        # Leave 30 seconds between each run of the stats and (expensive) search
+        # index queries
+        if datetime.now(tz=UTC) - self.last_run > timedelta(seconds=30):
             rec = self.db.get_statistics()
             # Rename a couple of columns
             rec['builds_last_hour'] = rec.pop('builds_count_last_hour')
@@ -119,3 +118,4 @@ class BigBrother(tasks.PauseableTask):
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)
             self.web_queue.send_msg('SEARCH', self.db.get_search_index())
+            self.last_run = datetime.now(tz=UTC)
