@@ -30,6 +30,33 @@ $sql$;
 REVOKE ALL ON FUNCTION delete_build(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION delete_build(TEXT, TEXT) TO {username};
 
+DROP FUNCTION skip_package(TEXT, TEXT);
+CREATE FUNCTION skip_package(pkg TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE packages SET skip = reason WHERE package = pkg;
+$sql$;
+REVOKE ALL ON FUNCTION skip_package(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package(TEXT, TEXT) TO {username};
+
+DROP FUNCTION skip_package_version(TEXT, TEXT, TEXT);
+CREATE FUNCTION skip_package_version(pkg TEXT, ver TEXT, reason TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE versions SET skip = reason
+    WHERE package = pkg AND version = ver;
+$sql$;
+REVOKE ALL ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) TO {username};
+
 CREATE FUNCTION get_pypi_serial()
     RETURNS BIGINT
     LANGUAGE SQL

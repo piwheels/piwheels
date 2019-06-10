@@ -451,14 +451,14 @@ GRANT EXECUTE ON FUNCTION add_new_package_version(
 -- Sets the "skip" field on the specified row in "packages" to the given value.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION skip_package(package TEXT, reason TEXT)
+CREATE FUNCTION skip_package(pkg TEXT, reason TEXT)
     RETURNS VOID
     LANGUAGE SQL
     CALLED ON NULL INPUT
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    UPDATE packages SET skip = reason WHERE package = package;
+    UPDATE packages SET skip = reason WHERE package = pkg;
 $sql$;
 
 REVOKE ALL ON FUNCTION skip_package(TEXT, TEXT) FROM PUBLIC;
@@ -469,7 +469,7 @@ GRANT EXECUTE ON FUNCTION skip_package(TEXT, TEXT) TO {username};
 -- Sets the "skip" field on the specified row in "versions" to the given value.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION skip_package_version(package TEXT, version TEXT, reason TEXT)
+CREATE FUNCTION skip_package_version(pkg TEXT, ver TEXT, reason TEXT)
     RETURNS VOID
     LANGUAGE SQL
     CALLED ON NULL INPUT
@@ -477,7 +477,7 @@ CREATE FUNCTION skip_package_version(package TEXT, version TEXT, reason TEXT)
     SET search_path = public, pg_temp
 AS $sql$
     UPDATE versions SET skip = reason
-    WHERE package = package AND version = version;
+    WHERE package = pkg AND version = ver;
 $sql$;
 
 REVOKE ALL ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) FROM PUBLIC;
