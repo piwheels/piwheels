@@ -70,7 +70,7 @@ def default_encoder(encoder, value):
             'cannot serialize type %s' % value.__class__.__name__)
 
 
-def default_decoder(decoder, tag, shareable_index=None):
+def default_decoder(decoder, tag):
     if tag.tag == 2001:
         days, seconds, microseconds = tag.value
         return dt.timedelta(
