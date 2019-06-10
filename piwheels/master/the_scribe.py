@@ -36,7 +36,6 @@ Defines the :class:`TheScribe` task; see class for more details.
 import re
 import io
 import os
-import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -45,6 +44,10 @@ from itertools import zip_longest
 
 import pkg_resources
 from chameleon import PageTemplateLoader
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
