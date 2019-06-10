@@ -40,11 +40,22 @@ master.
     :members:
 """
 
+import ctypes as ct
 import logging
 from threading import Thread
 from fnmatch import fnmatch
 
 from . import transport, protocols
+
+
+# Grab the prctl(2) function from libc; the prototype is actually a lie, but
+# it's correct for our purposes
+libc = ct.CDLL("libc.so.6")
+prctl = libc.prctl
+prctl.argtypes = [ct.c_int, ct.c_char_p, ct.c_ulong, ct.c_ulong, ct.c_ulong]
+prctl.restype = ct.c_int
+# From include/linux/prctl.h
+PR_SET_NAME = 15
 
 
 class TaskQuit(Exception):
@@ -220,8 +231,13 @@ class Task(Thread):
         any finalization required.
         """
         self.logger.info('starting')
+        # Set the thread's name to self.name (well, the first 15 chars anyway);
+        # this helps with debugging as htop and top can show custom thread
+        # names (given the right settings)
+        prctl(PR_SET_NAME, self.name.encode('ascii')[:15], 0, 0, 0)
         try:
             self.once()
+            self.logger.info('started')
             while True:
                 self.loop()
                 self.poll()
