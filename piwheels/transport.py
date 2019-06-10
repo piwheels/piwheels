@@ -177,6 +177,14 @@ class Socket:
     def hwm(self, value):
         self._socket.hwm = value
 
+    @property
+    def mandatory(self):
+        return self._socket.getsockopt(zmq.ROUTER_MANDATORY)
+
+    @mandatory.setter
+    def mandatory(self, value):
+        self._socket.setsockopt(zmq.ROUTER_MANDATORY, value)
+
     def bind(self, address):
         return self._socket.bind(address)
 
