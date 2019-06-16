@@ -78,12 +78,16 @@ class TheSecretary(tasks.PauseableTask):
 
     def loop(self):
         now = datetime.now(tz=UTC)
-        while self.buffer:
+        count = 0
+        # Process up to 10 items from the queue; this limit is in place to
+        # ensure we still poll the incoming queue as reasonably short intervals
+        while self.buffer and count < 10:
             first = self.buffer[0]
             if now - first.timestamp > self.timeout:
                 self.buffer.popleft()
                 message = self.commands.pop(first.package)
                 self.output.send_msg(message, first.package)
+                count += 1
             else:
                 break
 
