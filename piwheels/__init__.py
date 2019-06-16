@@ -79,7 +79,7 @@ __requires__ = ['configargparse', 'pyzmq', 'voluptuous',
 
 __extra_requires__ = {
     'monitor': ['urwid'],
-    'master':  ['sqlalchemy', 'psycopg2', 'chameleon'],
+    'master':  ['requests', 'sqlalchemy', 'psycopg2', 'chameleon'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
     'logger':  ['lars'],
     'test':    ['pytest', 'coverage'],

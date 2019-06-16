@@ -36,6 +36,8 @@ import xmlrpc.client
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
+import requests
+
 from .. import __version__
 
 
@@ -46,9 +48,42 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
 class PiWheelsTransport(xmlrpc.client.SafeTransport):
-    # A Transport for the xmlrpc ServerProxy with a custom UA string (so
-    # PyPI can identify our requests more easily in case we're being naughty!)
+    """
+    Drop in Transport for xmlrpc.client that uses a custom User-Agent string
+    (so PyPI can identify our requests more easily in case we're being
+    naughty!) and which uses requests for good TLS support and timeouts.
+    """
     user_agent = 'piwheels/%s' % __version__
+
+    def __init__(self, use_https=True, cert=None, verify=None, timeout=10,
+                 *args, **kwargs):
+        self.cert = cert
+        self.verify = verify
+        self.use_https = use_https
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def request(self, host, handler, request_body, verbose):
+        headers = {
+            'User-Agent': self.user_agent,
+            'Content-Type': 'text/xml',
+        }
+        url = self._build_url(host, handler)
+        resp = requests.post(url, data=request_body, headers=headers,
+                             stream=True, cert=self.cert, verify=self.verify,
+                             timeout=self.timeout)
+        try:
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise xmlrpc.client.ProtocolError(url, resp.status_code,
+                                              str(exc), resp.headers)
+        else:
+            self.verbose = verbose
+            return self.parse_response(resp.raw)
+
+    def _build_url(self, host, handler):
+        scheme = 'https' if self.use_https else 'http'
+        return '%s://%s/%s' % (scheme, host, handler)
 
 
 class PyPIEvents:
