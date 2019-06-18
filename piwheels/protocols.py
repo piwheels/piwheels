@@ -251,6 +251,8 @@ the_oracle = Protocol(recv={
     'GETSTATS':    NoData,
     'GETSEARCH':   NoData,
     'FILEDEPS':    str,                        # filename
+    'SAVERWP':     [ExactSequence([str, dt.datetime, str])],
+    'LOADRWP':     NoData,
 }, send={
     'OK':          Extra,  # result XXX refine this? Would mean separate returns...
     'ERROR':       str,    # message

@@ -94,6 +94,20 @@ $sql$;
 REVOKE ALL ON FUNCTION test_package_version(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION test_package_version(TEXT, TEXT) TO {username};
 
+CREATE TABLE rewrites_pending (
+    package        VARCHAR(200) NOT NULL,
+    added_at       TIMESTAMP NOT NULL,
+    command        VARCHAR(8) NOT NULL,
+
+    CONSTRAINT rewrites_pending_pk PRIMARY KEY (package),
+    CONSTRAINT rewrites_pending_package_fk FOREIGN KEY (package)
+        REFERENCES packages (package) ON DELETE CASCADE,
+    CONSTRAINT rewrites_pending_command_ck CHECK
+        (command IN ('PKGPROJ', 'PKGBOTH'))
+);
+CREATE INDEX rewrites_pending_added ON rewrites_pending(added_at);
+GRANT SELECT ON rewrites_pending TO {username};
+
 DROP VIEW builds_pending;
 CREATE VIEW builds_pending AS
 -- Finally, because I can't write this in order due to postgres' annoying
@@ -406,5 +420,42 @@ AS $sql$
 $sql$;
 REVOKE ALL ON FUNCTION get_file_dependencies(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_file_dependencies(TEXT) TO {username};
+
+CREATE FUNCTION save_rewrites_pending(data rewrites_pending ARRAY)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    DELETE FROM rewrites_pending;
+    INSERT INTO rewrites_pending
+        SELECT
+            d.package,
+            d.added_at,
+            d.command
+        FROM
+            UNNEST(data) AS d;
+$sql$;
+REVOKE ALL ON FUNCTION save_rewrites_pending(rewrites_pending ARRAY) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION save_rewrites_pending(rewrites_pending ARRAY) TO {username};
+
+CREATE FUNCTION load_rewrites_pending()
+    RETURNS TABLE(
+        package rewrites_pending.package%TYPE,
+        added_at rewrites_pending.added_at%TYPE,
+        command rewrites_pending.command%TYPE
+    )
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT package, added_at, command
+    FROM rewrites_pending
+    ORDER BY added_at;
+$sql$;
+REVOKE ALL ON FUNCTION load_rewrites_pending() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION load_rewrites_pending() TO {username};
 
 COMMIT;

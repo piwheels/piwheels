@@ -51,10 +51,17 @@ def scribe_queue(request, zmq_context):
 
 
 @pytest.fixture()
-def task(request, zmq_context, master_config, scribe_queue):
+def task(request, zmq_context, master_config, scribe_queue, db_queue):
     task = TheSecretary(master_config)
+    db_queue.expect('LOADRWP')
+    db_queue.send('OK', [])
+    task.once()
+    db_queue.check()
     yield task
+    db_queue.expect('SAVERWP', [])
+    db_queue.send('OK', None)
     task.close()
+    db_queue.check()
 
 
 @pytest.fixture()
@@ -85,7 +92,7 @@ def stats_dict(request):
     }
 
 
-def test_pass_through(task, web_queue, scribe_queue, stats_dict):
+def test_pass_through(task, web_queue, scribe_queue, stats_dict, db_queue):
     web_queue.send_msg('HOME', stats_dict)
     task.poll()
     assert scribe_queue.recv_msg() == ('HOME', stats_dict)

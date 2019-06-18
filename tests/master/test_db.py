@@ -28,12 +28,15 @@
 
 
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from operator import itemgetter
 
 import pytest
 
-from piwheels.master.db import Database
+from piwheels.master.db import Database, RewritePendingRow
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -301,3 +304,15 @@ def test_delete_build(db_intf, db, with_files, build_state_hacked):
         "SELECT COUNT(*) FROM output").first() == (0,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
+
+
+def test_store_rewrites_pending(db_intf, db, with_package):
+    state = [
+        RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PKGPROJ'),
+    ]
+    assert db.execute(
+        "SELECT COUNT(*) FROM rewrites_pending").first() == (0,)
+    db_intf.save_rewrites_pending(state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM rewrites_pending").first() == (1,)
+    assert db_intf.load_rewrites_pending() == state

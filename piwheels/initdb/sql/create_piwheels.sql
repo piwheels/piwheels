@@ -247,6 +247,29 @@ CREATE INDEX searches_package ON searches(package);
 CREATE INDEX searches_accessed_at ON searches(accessed_at DESC);
 GRANT SELECT ON searches TO {username};
 
+-- rewrites_pending
+-------------------------------------------------------------------------------
+-- The "rewrites_pending" table stores the state of the_secretary's queue
+-- between runs of the master. Under ordinary circumstances the table is empty,
+-- but when the master terminates, the task stores the state of its internal
+-- buffer in this table, restoring it (and emptying the table) on restart.
+-------------------------------------------------------------------------------
+
+CREATE TABLE rewrites_pending (
+    package        VARCHAR(200) NOT NULL,
+    added_at       TIMESTAMP NOT NULL,
+    command        VARCHAR(8) NOT NULL,
+
+    CONSTRAINT rewrites_pending_pk PRIMARY KEY (package),
+    CONSTRAINT rewrites_pending_package_fk FOREIGN KEY (package)
+        REFERENCES packages (package) ON DELETE CASCADE,
+    CONSTRAINT rewrites_pending_command_ck CHECK
+        (command IN ('PKGPROJ', 'PKGBOTH'))
+);
+
+CREATE INDEX rewrites_pending_added ON rewrites_pending(added_at);
+GRANT SELECT ON rewrites_pending TO {username};
+
 -- builds_pending
 -------------------------------------------------------------------------------
 -- The "builds_pending" view is the basis of the build queue in the master. The
@@ -1018,5 +1041,56 @@ $sql$;
 
 REVOKE ALL ON FUNCTION get_file_dependencies(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_file_dependencies(TEXT) TO {username};
+
+-- save_rewrites_pending(...)
+-------------------------------------------------------------------------------
+-- Saves the state of the_secretary task's internal buffer in the
+-- rewrites_pending table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION save_rewrites_pending(data rewrites_pending ARRAY)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    DELETE FROM rewrites_pending;
+    INSERT INTO rewrites_pending
+        SELECT
+            d.package,
+            d.added_at,
+            d.command
+        FROM
+            UNNEST(data) AS d;
+$sql$;
+
+REVOKE ALL ON FUNCTION save_rewrites_pending(rewrites_pending ARRAY) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION save_rewrites_pending(rewrites_pending ARRAY) TO {username};
+
+-- load_rewrites_pending()
+-------------------------------------------------------------------------------
+-- Loads the state of the_secretary's internal buffer from the rewrites_pending
+-- table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION load_rewrites_pending()
+    RETURNS TABLE(
+        package rewrites_pending.package%TYPE,
+        added_at rewrites_pending.added_at%TYPE,
+        command rewrites_pending.command%TYPE
+    )
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT package, added_at, command
+    FROM rewrites_pending
+    ORDER BY added_at;
+$sql$;
+
+REVOKE ALL ON FUNCTION load_rewrites_pending() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION load_rewrites_pending() TO {username};
 
 COMMIT;

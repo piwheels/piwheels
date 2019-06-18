@@ -63,6 +63,8 @@ ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
     'version', 'skipped', 'builds_succeeded', 'builds_failed'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
     'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
+RewritePendingRow = namedtuple('RewritePendingRow', (
+    'package', 'added_at', 'command'))
 
 
 def sanitize(s):
@@ -443,3 +445,40 @@ class Database:
         with self._conn.begin():
             self._conn.execute(
                 "VALUES (delete_build(%s, %s))", (package, version))
+
+    def save_rewrites_pending(self, queue):
+        """
+        Save the rewrites-pending queue (the internal state of
+        :class:`TheSecretary`) in the database. The *queue* parameter is
+        expected to be a list of :class:`RewritePendingRow` tuples.
+        """
+        # NOTE: the double list below works around a conflict between
+        # SQLAlchemy's execution modes and our parameter types. SA treats
+        # .execute(sql_text, [(), (), (), ...]) as an attempt to execute
+        # sql_text multiple times, binding each set of parameters in turn.
+        # However, in our case we want to execute it once with a fat ARRAY
+        # parameter. Hence, we use .execute(sql_text, [[(), (), (), ...]]) to
+        # work around this
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (save_rewrites_pending("
+                "CAST(%s AS rewrites_pending ARRAY)"
+                "))", ([[
+                    # Re-pack with tuples
+                    (package, added_at, command)
+                    for (package, added_at, command) in queue
+                ]],))
+
+    def load_rewrites_pending(self):
+        """
+        Loads the rewrites-pending queue (the internal state of
+        :class:`TheSecretary`) from the database.
+        """
+        with self._conn.begin():
+            return [
+                RewritePendingRow(row.package, row.added_at.replace(tzinfo=UTC), row.command)
+                for row in self._conn.execute(
+                    "SELECT package, added_at, command "
+                    "FROM load_rewrites_pending()"
+                )
+            ]

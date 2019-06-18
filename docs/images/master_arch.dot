@@ -130,6 +130,7 @@ digraph piwheels {
     SlaveDriver->TheSecretary;
     SlaveDriver->BigBrother;
     FileJuggler->BigBrother;
+    TheSecretary->Seraph [dir=both];
     TheScribe->Seraph [dir=both];
     BigBrother->Seraph [dir=both];
     SlaveDriver->FileJuggler [dir=both];

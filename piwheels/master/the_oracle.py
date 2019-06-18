@@ -41,7 +41,7 @@ import pickle
 
 from .. import const, protocols, transport, tasks
 from ..states import BuildState, DownloadState
-from .db import Database, ProjectVersionsRow, ProjectFilesRow
+from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
 
 
 class TheOracle(tasks.Task):
@@ -116,6 +116,8 @@ class TheOracle(tasks.Task):
                 'GETSTATS':    lambda: self.do_getstats(),
                 'GETSEARCH':   lambda: self.do_getsearch(),
                 'FILEDEPS':    lambda: self.do_filedeps(data),
+                'SAVERWP':     lambda: self.do_saverwp(data),
+                'LOADRWP':     lambda: self.do_loadrwp(),
             }[msg]
             result = handler()
         except Exception as exc:
@@ -284,6 +286,20 @@ class TheOracle(tasks.Task):
         """
         return self.db.get_file_dependencies(filename)
 
+    def do_saverwp(self, queue):
+        """
+        Handler for "SAVERWP" message, sent by :class:`DbClient` to request
+        that *queue* is saved to the ``rewrites_pending`` table.
+        """
+        return self.db.save_rewrites_pending(queue)
+
+    def do_loadrwp(self):
+        """
+        Handler for "LOADRWP" message, sent by :class:`DbClient` to request
+        the content of the ``rewrites_pending`` table.
+        """
+        return self.db.load_rewrites_pending()
+
 
 class DbClient:
     """
@@ -448,3 +464,18 @@ class DbClient:
         See :meth:`.db.Database.delete_build`.
         """
         self._execute('DELBUILD', [package, version])
+
+    def save_rewrites_pending(self, queue):
+        """
+        See :meth:`.db.Database.save_rewrites_pending`.
+        """
+        self._execute('SAVERWP', queue)
+
+    def load_rewrites_pending(self):
+        """
+        See :meth:`.db.Database.load_rewrites_pending`.
+        """
+        return [
+            RewritePendingRow(*row)
+            for row in self._execute('LOADRWP')
+        ]

@@ -37,7 +37,7 @@ from conftest import PIWHEELS_USER
 from piwheels import const, transport
 from piwheels.master.db import Database
 from piwheels.master.seraph import Seraph
-from piwheels.master.the_oracle import TheOracle, DbClient
+from piwheels.master.the_oracle import TheOracle, DbClient, RewritePendingRow
 
 
 UTC = timezone.utc
@@ -276,6 +276,14 @@ def test_get_statistics(db_client, db, with_files):
 @pytest.mark.xfail(reason="downloads_recent view needs fixing")
 def test_get_downloads_recent(db_client, db, with_downloads):
     assert db_client.get_downloads_recent() == {'foo': 0}
+
+
+def test_store_rewrites_pending(db_client, db, with_package):
+    state = [
+        ('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PKGPROJ'),
+    ]
+    db_client.save_rewrites_pending(state)
+    assert db_client.load_rewrites_pending() == state
 
 
 def test_bogus_request(db_client, db):

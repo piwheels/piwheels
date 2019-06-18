@@ -37,6 +37,7 @@ from datetime import datetime, timedelta, timezone
 from collections import deque, namedtuple
 
 from .. import const, protocols, tasks, transport
+from .the_oracle import DbClient
 
 
 UTC = timezone.utc
@@ -75,6 +76,25 @@ class TheSecretary(tasks.PauseableTask):
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.connect(const.SCRIBE_QUEUE)
+        self.db = DbClient(config, self.logger)
+
+    def close(self):
+        # Store the internal buffer in the database ...
+        self.logger.info('storing queued jobs')
+        self.db.save_rewrites_pending([
+            (package, added_at, self.commands[package])
+            for package, added_at in self.buffer
+        ])
+        self.db.close()
+        super().close()
+
+    def once(self):
+        # ... and re-load it when we next start up
+        self.logger.info('loading queued jobs')
+        queue = self.db.load_rewrites_pending()
+        for item in queue:
+            self.buffer.append(IndexTask(item.package, item.added_at))
+            self.commands[item.package] = item.command
 
     def loop(self):
         now = datetime.now(tz=UTC)
