@@ -1,11 +1,10 @@
 ---
-name: Broken package
-about: Let us know about a package that's broken in piwheels
+name: Other package issue
+about: Let us know about another issue that's related to a particular package in piwheels
 
 ---
 
 Package name: example
-Issue type: Broken package
 Link to PyPI page: https://pypi.org/project/example
 Link to piwheels page: https://www.piwheels.org/project/example
 Version: e.g. 1.2.3 or all
