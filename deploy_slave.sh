@@ -2,8 +2,6 @@
 
 set -eu
 
-# temporary hack for unreleased debian version (has no version id)
-VERSION_ID=10
 source /etc/os-release
 
 LIBXLST=libxslt-dev
