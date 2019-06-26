@@ -79,7 +79,7 @@ passwd -d piwheels
 if [ -d piwheels ]; then
     cd piwheels
     git pull
-    pip uninstall -y piwheels
+    pip3 uninstall -y piwheels
 else
     git clone https://github.com/bennuttall/piwheels
     cd piwheels
