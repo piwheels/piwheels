@@ -612,7 +612,7 @@ BEGIN
         )
         RETURNING build_id
         INTO new_build_id;
-    INSERT INTO output VALUES (new_build_id, output);
+    INSERT INTO output (build_id, output) VALUES (new_build_id, output);
     -- We delete the existing entries from files rather than using INSERT..ON
     -- CONFLICT UPDATE because we need to delete dependencies associated with
     -- those files too. This is considerably simpler than a multi-layered
@@ -620,7 +620,17 @@ BEGIN
     DELETE FROM files f
         USING UNNEST(build_files) AS b
         WHERE f.filename = b.filename;
-    INSERT INTO files
+    INSERT INTO files (
+        filename,
+        build_id,
+        filesize,
+        filehash,
+        package_tag,
+        package_version_tag,
+        py_version_tag,
+        abi_tag,
+        platform_tag
+    )
         SELECT
             b.filename,
             new_build_id,
@@ -633,7 +643,11 @@ BEGIN
             b.platform_tag
         FROM
             UNNEST(build_files) AS b;
-    INSERT INTO dependencies
+    INSERT INTO dependencies (
+        filename,
+        tool,
+        dependency
+    )
         SELECT
             d.filename,
             d.tool,
@@ -679,7 +693,7 @@ BEGIN
         )
         RETURNING build_id
         INTO new_build_id;
-    INSERT INTO output VALUES (new_build_id, output);
+    INSERT INTO output (build_id, output) VALUES (new_build_id, output);
     RETURN new_build_id;
 END;
 $sql$;
@@ -822,7 +836,7 @@ AS $sql$
     build_latest AS (
         SELECT COUNT(*) AS builds_count_last_hour
         FROM builds
-        WHERE built_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+        WHERE built_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
     ),
     file_count AS (
         SELECT
@@ -841,7 +855,7 @@ AS $sql$
     download_stats AS (
         SELECT
             COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
             ) AS downloads_last_month,
             COUNT(*) AS downloads_all
         FROM downloads
@@ -887,7 +901,7 @@ AS $sql$
     SELECT
         p.package,
         CAST(COALESCE(COUNT(d.filename) FILTER (
-            WHERE d.accessed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            WHERE d.accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
         ), 0) AS INTEGER) AS downloads_recent,
         CAST(COALESCE(COUNT(d.filename), 0) AS INTEGER) AS downloads_all
     FROM
@@ -1056,7 +1070,11 @@ CREATE FUNCTION save_rewrites_pending(data rewrites_pending ARRAY)
     SET search_path = public, pg_temp
 AS $sql$
     DELETE FROM rewrites_pending;
-    INSERT INTO rewrites_pending
+    INSERT INTO rewrites_pending (
+        package,
+        added_at,
+        command
+    )
         SELECT
             d.package,
             d.added_at,
