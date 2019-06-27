@@ -274,9 +274,12 @@ class BuildState:
         Convert the :class:`BuildState`, and its nested :class:`FileState`
         objects into simpler lists for serialization and transport.
         """
+        # XXX Horrid hack: we only sort the file entries to make tests
+        # predictable
         return [
-            v if i != 7 else [f.as_message() for f in v.values()]
-            for i, v in enumerate(self[:-1])  # never include build_id
+            value if index != 7 else
+            [value[filename].as_message() for filename in sorted(value)]
+            for index, value in enumerate(self[:-1])  # never include build_id
         ]
 
     @classmethod
