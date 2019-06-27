@@ -42,9 +42,13 @@ from time import sleep
 
 from pisense import SenseHAT, StickEvent, array
 from colorzero import Color
+from dateutil import tz
 
 from .. import terminal, const, protocols, transport, tasks
 from .renderers import MainRenderer, StatusRenderer, QuitRenderer
+
+
+LOCAL = tz.tzlocal()
 
 
 class PiWheelsSense:
@@ -118,7 +122,13 @@ class StickTask(Thread):
             while not self._quit:
                 event = self.stick.read(0.1)
                 if event is not None and event.pressed:
-                    self.stick_queue.send_msg('EVENT', event)
+                    self.stick_queue.send_msg('EVENT', (
+                        event.timestamp.replace(tzinfo=LOCAL),
+                        event.direction,
+                        event.pressed,
+                        event.held,
+                    ))
+
         finally:
             self.stick_queue.close()
 
@@ -127,7 +137,7 @@ class ScreenTask(tasks.Task):
     name = "screen"
 
     def __init__(self, config, hat):
-        super().__init__()
+        super().__init__(config)
         self.screen = hat.screen
         self.renderers = {}
         self.renderers['main'] = MainRenderer()

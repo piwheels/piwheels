@@ -84,7 +84,7 @@ __extra_requires__ = {
     'logger':  ['lars'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
-    'sense':   ['pisense'],
+    'sense':   ['pisense', 'python-dateutil'],
 }
 
 __classifiers__ = [
