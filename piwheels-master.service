@@ -10,6 +10,7 @@ NoNewPrivileges=true
 TimeoutStartSec=3m
 TimeoutStopSec=5m
 ExecStart=/usr/local/bin/piw-master -v
+ExecStartPost=-chmod g+w /tmp/piw-status /tmp/piw-control
 
 [Install]
 WantedBy=multi-user.target

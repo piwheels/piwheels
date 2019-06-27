@@ -106,7 +106,7 @@ class MainRenderer(Renderer):
         self.status = {}
         self.position = (0, 3)
         self.limits = (0, 3, 7, 7)
-        self.last_message = datetime(1970, 1, 1)
+        self.last_message = datetime(1970, 1, 1, tzinfo=UTC)
         self.blue_grad = list(Color('blue').gradient(Color('white'), 32))
 
     def message(self, msg, data):
@@ -240,10 +240,6 @@ class StatusRenderer(Renderer):
         self.update_text()
 
     def move(self, event, task):
-        if event.direction == 'enter' and self.position[0] == 4:
-            task.ctrl_queue.send_pyobj(['QUIT'])
-        if event.direction == 'enter' and self.position[0] >= 4:
-            signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
         if event.direction == 'down':
             task.renderer = self.main
@@ -362,7 +358,7 @@ class QuitRenderer(Renderer):
 
     def move(self, event, task):
         if event.direction == 'enter' and self.position[0] == 1:
-            task.ctrl_queue.send_pyobj(['QUIT'])
+            task.ctrl_queue.send_msg('QUIT')
         if event.direction == 'enter':
             signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
