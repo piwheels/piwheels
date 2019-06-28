@@ -215,7 +215,6 @@ class PiWheelsPackage:
                         if is_elf:
                             libs.add(wheel.extract(info, path=tempdir))
             for lib in libs:
-                self.systemd.watchdog_ping()
                 p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
                 try:
                     out, errs = p.communicate(timeout=10)
@@ -240,6 +239,7 @@ class PiWheelsPackage:
                                 deps['apt'].add(providers.pop())
                             except KeyError:
                                 deps[''].add(lib_path)
+                            self.systemd.watchdog_ping()
         return {tool: sorted(deps) for tool, deps in deps.items()}
 
     @property
