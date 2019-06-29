@@ -70,7 +70,8 @@ class BigBrother(tasks.PauseableTask):
             'downloads_last_month':  0,
             'downloads_all':         0,
         }
-        self.last_run = datetime.now(tz=UTC) - timedelta(seconds=40)
+        self.last_stats_run = self.last_search_run = (
+            datetime.now(tz=UTC) - timedelta(minutes=10))
         stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
         stats_queue.hwm = 10
@@ -104,12 +105,11 @@ class BigBrother(tasks.PauseableTask):
                 self.stats['builds_pending'] = sum(data.values())
             elif msg == 'HOME':
                 # Forced rebuild from Mr. Chase
-                self.last_run = datetime.now(tz=UTC) - timedelta(seconds=40)
+                self.last_search_run = datetime.now(tz=UTC) - timedelta(minutes=10)
 
     def loop(self):
-        # Leave 30 seconds between each run of the stats and (expensive) search
-        # index queries
-        if datetime.now(tz=UTC) - self.last_run > timedelta(seconds=30):
+        # Leave 15 seconds between each run of the stats
+        if datetime.now(tz=UTC) - self.last_stats_run > timedelta(seconds=30):
             rec = self.db.get_statistics()
             # Rename a couple of columns
             rec['builds_last_hour'] = rec.pop('builds_count_last_hour')
@@ -117,5 +117,8 @@ class BigBrother(tasks.PauseableTask):
             self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)
+            self.last_stats_run = datetime.now(tz=UTC)
+        # Leave 5 minutes between each run of the (expensive) search index query
+        if datetime.now(tz=UTC) - self.last_search_run > timedelta(minutes=5):
             self.web_queue.send_msg('SEARCH', self.db.get_search_index())
-            self.last_run = datetime.now(tz=UTC)
+            self.last_search_run = datetime.now(tz=UTC)
