@@ -310,6 +310,12 @@ def master_config(request, tmpdir):
     return config
 
 
+@pytest.fixture(scope='function')
+def dev_mode(request, master_config):
+    master_config.dev_mode = True
+    return master_config
+
+
 @pytest.fixture(scope='session')
 def zmq_context(request):
     context = transport.Context()

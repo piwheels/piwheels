@@ -68,29 +68,41 @@ class CloudGazer(tasks.PauseableTask):
         self.logger.info('querying upstream')
 
     def loop(self):
-        for package, version, timestamp, source in self.pypi:
-            if package not in self.packages:
-                self.packages.add(package)
-                if self.db.add_new_package(package, skip=self.skip_default):
-                    self.logger.info('added package %s', package)
-                    self.web_queue.send_msg('PKGBOTH', package)
-            if version is not None:
-                if self.db.add_new_package_version(
-                        package, version, timestamp,
-                        skip='' if source else 'binary only'):
+        for package, version, timestamp, action in self.pypi:
+            if action == 'remove':
+                if version is None:
                     self.logger.info(
-                        'added package %s version %s', package, version)
-                    if not source:
+                        'disabled package %s (deleted)', package)
+                    self.db.skip_package(package, 'deleted')
+                    self.packages.discard(package)
+                else:
+                    self.logger.info(
+                        'disabled package %s version %s (deleted)',
+                        package, version)
+                    self.db.skip_package_version(package, version, 'deleted')
+            else:
+                if package not in self.packages:
+                    self.packages.add(package)
+                    if self.db.add_new_package(package, skip=self.skip_default):
+                        self.logger.info('added package %s', package)
+                        self.web_queue.send_msg('PKGBOTH', package)
+                if version is not None:
+                    if self.db.add_new_package_version(
+                            package, version, timestamp,
+                            skip='' if action == 'source' else 'binary only'):
                         self.logger.info(
-                            'disabled package %s version %s (binary only)',
-                            package, version)
-                    self.web_queue.send_msg('PKGPROJ', package)
-                elif source and self.db.get_version_skip(
-                        package, version) == 'binary only':
-                    self.db.skip_package_version(package, version, '')
-                    self.logger.info(
-                        'enabled package %s version %s', package, version)
-                    self.web_queue.send_msg('PKGPROJ', package)
+                            'added package %s version %s', package, version)
+                        if action != 'source':
+                            self.logger.info(
+                                'disabled package %s version %s (binary only)',
+                                package, version)
+                        self.web_queue.send_msg('PKGPROJ', package)
+                    elif action == 'source' and self.db.get_version_skip(
+                            package, version) == 'binary only':
+                        self.db.skip_package_version(package, version, '')
+                        self.logger.info(
+                            'enabled package %s version %s', package, version)
+                        self.web_queue.send_msg('PKGPROJ', package)
             self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial

@@ -89,11 +89,11 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
 class PyPIEvents:
     """
     When treated as an iterator, this class yields (package, version,
-    timestamp, source) tuples indicating new packages or package versions
-    registered on PyPI. A small attempt is made to avoid duplicate reports, but
-    we don't attempt to avoid reporting stuff already in the database (it's
-    simpler to just start from the beginning of PyPI's log and work through
-    it).
+    timestamp, action) tuples indicating new packages or package versions
+    registered on PyPI where action is one of 'create', 'source', or 'remove'.
+    A small attempt is made to avoid duplicate reports, but we don't attempt to
+    avoid reporting stuff already in the database (it's simpler to just start
+    from the beginning of PyPI's log and work through it).
 
     The iterator only retrieves a small batch of entries at a time as PyPI
     (very sensibly) limits the number of entries in a single query (to 50,000
@@ -117,7 +117,8 @@ class PyPIEvents:
     """
     # pylint: disable=too-few-public-methods
     add_file_re = re.compile(r'^add ([^ ]+) file')
-    create_pkg_re = re.compile(r'^create')
+    create_re = re.compile(r'^create$')
+    remove_re = re.compile(r'^remove$')
 
     def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
                  serial=0, retries=3, cache_size=1000):
@@ -134,15 +135,14 @@ class PyPIEvents:
     def _get_events(self):
         # On rare occasions we get some form of HTTP improper state, or DNS
         # lookups fail. In this case just return an empty list and try again
-        # later
+        # later. If we get a protocol error with error 5xx it's a server-side
+        # problem, so we again return an empty list and try later
         try:
             return self.client.changelog_since_serial(self.serial)
         except (OSError, http.client.ImproperConnectionState):
             return []
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
-                # Server error; something upstream has broken (gateway,
-                # PyPI itself, whatever) so back off for a bit
                 return []
             else:
                 raise
@@ -157,24 +157,32 @@ class PyPIEvents:
                     timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
                     match = self.add_file_re.search(action)
                     if match is not None:
-                        source = match.group(1) == 'source'
+                        action = (
+                            'source' if match.group(1) == 'source' else
+                            'create')
                         try:
                             self.cache.move_to_end((package, version))
                         except KeyError:
-                            self.cache[(package, version)] = (timestamp, source)
-                            yield (package, version, timestamp, source)
+                            self.cache[(package, version)] = (timestamp, action)
+                            yield (package, version, timestamp, action)
                         else:
-                            (last_timestamp, last_source
+                            (last_timestamp, last_action
                                 ) = self.cache[(package, version)]
-                            timestamp = min(last_timestamp, timestamp)
-                            source = last_source or source
-                            if not last_source and source:
-                                yield (package, version, timestamp, source)
-                            self.cache[(package, version)] = (timestamp, source)
+                            if (last_action, action) == ('create', 'source'):
+                                self.cache[(package, version)] = (
+                                    last_timestamp, action)
+                                yield (package, version, last_timestamp, action)
                         while len(self.cache) > self.cache_size:
                             self.cache.popitem(last=False)
-                    elif self.create_pkg_re.search(action) is not None:
-                        yield (package, None, timestamp, None)
+                    elif self.create_re.search(action) is not None:
+                        yield (package, None, timestamp, 'create')
+                    elif self.remove_re.search(action) is not None:
+                        # If version is None here, indicating package deletion
+                        # we could search and remove all corresponding versions
+                        # from the cache but, frankly, it's not worth it
+                        if version is not None:
+                            self.cache.pop((package, version), None)
+                        yield (package, version, timestamp, 'remove')
                     self.serial = serial
             else:
                 # If the read is empty we've reached the end of the event log
