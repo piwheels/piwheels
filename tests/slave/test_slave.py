@@ -62,7 +62,13 @@ def mock_file_juggler(request, zmq_context, tmpdir):
 
 
 @pytest.fixture()
-def slave_thread(request, mock_context, mock_systemd, tmpdir):
+def mock_signal(request):
+    with mock.patch('signal.signal') as signal:
+        yield signal
+
+
+@pytest.fixture()
+def slave_thread(request, mock_context, mock_systemd, mock_signal, tmpdir):
     main = PiWheelsSlave()
     slave_thread = Thread(daemon=True, target=main, args=([],))
     yield slave_thread
