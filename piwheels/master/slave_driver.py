@@ -66,6 +66,7 @@ class SlaveDriver(tasks.Task):
         super().__init__(config, control_protocol=protocols.master_control)
         self.paused = False
         self.abi_queues = {}
+        self.recent_builds = {}
         slave_queue = self.socket(
             transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
@@ -179,19 +180,32 @@ class SlaveDriver(tasks.Task):
         queue query will return these packages again, and if no build slaves
         are actively working on them at that time they will then be retried.
         """
-        active_builds = set(self.active_builds())
         try:
-            msg, data = queue.recv_msg()
+            msg, new_queues = queue.recv_msg()
         except IOError as e:
             self.logger.error(str(e))
         else:
+            now = datetime.now(tz=UTC)
+            # Prune expired entries from the recent_builds buffer and add empty
+            # dicts for new ABIs
+            for abi in new_queues:
+                if abi in self.recent_builds:
+                    self.recent_builds[abi] = {
+                        key: expires
+                        for key, expires in self.recent_builds[abi].items()
+                        if expires > now
+                    }
+                else:
+                    self.recent_builds[abi] = {}
+            # Set up the new queues without recent builds (and converting
+            # list-pairs into tuples)
             self.abi_queues = {
                 abi: [
-                    (package, version)
-                    for package, version in build_queue
-                    if (abi, package, version) not in active_builds
-                ][::-1]  # reversed to simplify popping stuff off the "front"
-                for abi, build_queue in data.items()
+                    (package, version) for package, version in new_queue
+                    if (package, version) not in recent_builds
+                ]
+                for abi, new_queue in new_queues.items()
+                for recent_builds in (self.recent_builds[abi],)
             }
             self.stats_queue.send_msg('STATBQ', {
                 abi: len(queue) for (abi, queue) in self.abi_queues.items()
@@ -302,23 +316,28 @@ class SlaveDriver(tasks.Task):
             return 'SLEEP', protocols.NoData
         else:
             try:
-                package, version = self.abi_queues[slave.native_abi].pop()
-            except (KeyError, IndexError) as e:
-                pass
-            else:
-                if (package, version) not in self.active_builds():
-                    self.logger.info(
-                        'slave %d: build %s %s',
-                        slave.slave_id, package, version)
-                    return 'BUILD', [package, version]
+                abi_queue = self.abi_queues[slave.native_abi]
+                recent_builds = self.recent_builds[slave.native_abi]
+            except KeyError:
+                abi_queue = []
+            try:
+                while abi_queue:
+                    package, version = abi_queue.pop(0)
+                    if (package, version) not in recent_builds:
+                        self.logger.info(
+                            'slave %d (%s): build %s %s',
+                            slave.slave_id, slave.label, package, version)
+                        recent_builds[(package, version)] = (
+                            datetime.now(tz=UTC) + slave.timeout)
+                        return 'BUILD', [package, version]
+                self.logger.info(
+                    'slave %d (%s): sleeping because no builds',
+                    slave.slave_id, slave.label)
+                return 'SLEEP', protocols.NoData
             finally:
                 self.stats_queue.send_msg('STATBQ', {
                     abi: len(queue) for (abi, queue) in self.abi_queues.items()
                 })
-            self.logger.info(
-                'slave %d (%s): sleeping because no builds',
-                slave.slave_id, slave.label)
-            return 'SLEEP', protocols.NoData
 
     def do_built(self, slave):
         """
@@ -398,17 +417,6 @@ class SlaveDriver(tasks.Task):
                              slave.slave_id, slave.label,
                              slave.build.next_file)
             return 'SEND', slave.build.next_file
-
-    def active_builds(self):
-        """
-        Generator method which yields all (abi, package, version) tuples
-        currently being built by build slaves.
-        """
-        for slave in self.slaves.values():
-            if slave.reply is not None and slave.reply[0] == 'BUILD':
-                if slave.last_seen + slave.timeout > datetime.now(tz=UTC):
-                    msg, (package, version) = slave.reply
-                    yield (slave.native_abi, package, version)
 
 
 def build_armv6l_hack(build):

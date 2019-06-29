@@ -123,7 +123,8 @@ def task(request, master_config):
 def test_gen_skip(master_status_queue, web_queue, task):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
-        task.last_run = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
         task.loop()  # crank the handle once
         with pytest.raises(transport.Error):
             master_status_queue.recv_msg(flags=transport.NOBLOCK)
@@ -135,7 +136,22 @@ def test_gen_stats(db_queue, master_status_queue, web_queue, task,
                    stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_run = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', stats_result)
+        task.loop()  # crank the handle once
+        db_queue.check()
+        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
+        assert web_queue.recv_msg() == ('HOME', stats_dict)
+
+
+def test_gen_stats_and_search(db_queue, master_status_queue, web_queue, task,
+                              stats_result, stats_dict):
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 20, 40, tzinfo=UTC))
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
         db_queue.expect('GETSEARCH')
@@ -151,7 +167,8 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
                         stats_queue, stats_result, stats_dict, stats_disk):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_run = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
         stats_queue.send_msg('STATFS', stats_disk)
         while task.stats['disk_free'] == 0:
             task.poll()
@@ -160,20 +177,18 @@ def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
         stats_dict['disk_size'] = frsize * blocks
         db_queue.expect('GETSTATS')
         db_queue.send('OK', stats_result)
-        db_queue.expect('GETSEARCH')
-        db_queue.send('OK', {'foo': (10, 100)})
         task.loop()
         db_queue.check()
         assert web_queue.recv_msg() == ('HOME', stats_dict)
         assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
 
 
 def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
                          stats_queue, stats_result, stats_dict):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_run = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 20, 40, tzinfo=UTC))
         stats_queue.send_msg('STATBQ', {'cp34m': 1, 'cp35m': 0})
         while task.stats['builds_pending'] == 0:
             task.poll()
@@ -194,7 +209,8 @@ def test_bad_stats(db_queue, master_status_queue, web_queue, task,
     task.logger = mock.Mock()
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_run = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.last_stats_run = task.last_search_run = (
+            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
         stats_queue.send(b'FOO')
         task.poll()
         assert task.logger.error.call_args == mock.call(
