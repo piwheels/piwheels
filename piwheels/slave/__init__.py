@@ -40,6 +40,7 @@ entry-point for the :program:`piw-slave` script.
 
 import os
 import sys
+import signal
 import logging
 import socket
 from datetime import datetime
@@ -111,6 +112,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.error('Slave must not be run as root')
             return 1
         self.systemd = get_systemd()
+        signal.signal(signal.SIGTERM, sig_term)
         ctx = transport.Context()
         queue = None
         try:
@@ -123,11 +125,21 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     master=self.config.master))
                 self.systemd.ready()
                 try:
+                    self.slave_id = None
                     self.main_loop(queue)
                 except MasterTimeout:
+                    print('except MasterTimeout')
                     self.systemd.reloading()
                     self.logger.warning('Resetting connection')
                     queue.close(linger=1)
+                finally:
+                    print('finally1')
+                    if self.builder:
+                        self.logger.warning('Discarding current build')
+                        self.builder.clean()
+                        self.builder = None
+        except SystemExit:
+            self.logger.warning('Shutting down on SIGTERM')
         finally:
             self.systemd.stopping()
             queue.send_msg('BYE')
@@ -169,11 +181,6 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     break
                 elif time() - start > timeout:
                     self.logger.warning('Timed out waiting for master')
-                    if self.builder:
-                        self.logger.warning('Discarding current build')
-                        self.builder.clean()
-                        self.builder = None
-                    self.slave_id = None
                     raise MasterTimeout()
 
     def handle_reply(self, msg, data):
@@ -295,6 +302,15 @@ def duration(s):
         dateutil.parser.parse(s, default=datetime(1, 1, 1)) -
         datetime(1, 1, 1)
     )
+
+
+def sig_term(signo, stack_frame):
+    """
+    Handler for the SIGTERM signal; raises :exc:`SystemExit` which will cause
+    the :meth:`PiWheelsSlave.main_loop` method to terminate.
+    """
+    # pylint: disable=unused-argument
+    raise SystemExit(0)
 
 
 main = PiWheelsSlave()  # pylint: disable=invalid-name
