@@ -52,10 +52,10 @@ def test_pypi_read_normal():
         ]
         events = PyPIEvents()
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), False),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
         ]
 
 
@@ -71,10 +71,10 @@ def test_pypi_ignore_other_events():
         ]
         events = PyPIEvents()
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), False),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
         ]
 
 
@@ -88,10 +88,10 @@ def test_pypi_cache_expunge():
         ]
         events = PyPIEvents(cache_size=1)
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), False),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
         ]
         assert ('foo', '0.1') not in events.cache
         assert ('bar', '1.0') in events.cache
@@ -110,10 +110,10 @@ def test_pypi_ignore_dupes():
         ]
         events = PyPIEvents()
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), True),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source'),
         ]
 
 
@@ -130,13 +130,43 @@ def test_pypi_promote_binary_to_source():
         ]
         events = PyPIEvents()
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:10'), False),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:10'), 'create'),
             # Note the timestamp doesn't alter as the release time is the
             # earliest release
-            ('bar', '1.0', dt('2018-07-11 16:43:10'), True),
+            ('bar', '1.0', dt('2018-07-11 16:43:10'), 'source'),
+        ]
+
+
+def test_pypi_remove_version():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = [
+            ('foo', '0.1', 1531327388, 'create', 0),
+            ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
+            ('foo', '0.1', 1531327388, 'remove', 2),
+        ]
+        events = PyPIEvents()
+        assert list(events) == [
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'remove'),
+        ]
+
+
+def test_pypi_remove_package():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = [
+            ('foo', '0.1', 1531327388, 'create', 0),
+            ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
+            ('foo', None,  1531327388, 'remove', 2),
+        ]
+        events = PyPIEvents()
+        assert list(events) == [
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'remove'),
         ]
 
 
@@ -150,10 +180,10 @@ def test_pypi_backoff():
         ]
         events = PyPIEvents()
         assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), None),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), True),
-            ('bar', None,  dt('2018-07-11 16:43:09'), None),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), False),
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
         ]
         proxy().changelog_since_serial.return_value = []
         assert list(events) == []
