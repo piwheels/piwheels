@@ -13,7 +13,9 @@ TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
 
 if [ $ID = raspbian ]; then
+    PIP="pip"
     if [ $VERSION_ID -eq 8 ]; then
+        PIP="pip==18.1"
         LIBPNG_DEV=libpng12-dev
         LIBMYSQL_DEV=libmysqlclient-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
@@ -65,7 +67,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
     libavfilter-dev libavutil-dev lsb-release
 
 pip3 install setuptools --upgrade
-pip3 install pip --upgrade
+pip3 install $PIP --upgrade
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build \
