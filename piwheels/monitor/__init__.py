@@ -38,7 +38,6 @@ that are having issues (e.g. excessive resource consumption from a huge build)
 or terminate the master itself.
 """
 
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from time import sleep
@@ -116,7 +115,7 @@ class PiWheelsMonitor:
             self.loop.run()
         finally:
             ctx.close()
-            os.system('stty sane')
+            sys.stdout.flush()
 
     def build_ui(self):
         """
