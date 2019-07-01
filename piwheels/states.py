@@ -455,7 +455,7 @@ class SlaveState:
                 ]
             ]
         )
-        if self._reply is not None and self._reply[0] != 'HELLO':
+        if self._reply is not None:
             # Replay the last reply for the sake of monitors that have just
             # connected to the master
             msg, data = self._reply
@@ -553,7 +553,7 @@ class SlaveState:
         msg, data = value
         if msg == 'DONE':
             self._build = None
-        if msg == 'HELLO':
+        if msg == 'ACK':
             self.hello()
         else:
             SlaveState.status_queue.send_msg(
