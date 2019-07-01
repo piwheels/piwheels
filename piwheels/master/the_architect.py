@@ -86,7 +86,8 @@ class TheArchitect(tasks.Task):
         if datetime.utcnow() - self.last_run > timedelta(seconds=60):
             self.can_cancel = True
             try:
-                self.builds_queue.send_msg('QUEUE', self.db.get_build_queue())
+                self.builds_queue.send_msg(
+                    'QUEUE', self.db.get_build_queue(100000))
             except QueryCanceledError:
                 self.logger.warning('Cancelled query during shutdown')
             else:
