@@ -198,7 +198,13 @@ def test_slave_commits_suicide(task, slave_queue, master_status_queue,
         assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.now.return_value, 'ACK', [1, 'https://pypi.org/simple']
+                1, dt.now.return_value, 'HELLO',
+                [timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1']
+            ]
+        )
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.now.return_value, 'ACK', [1, master_config.pypi_simple]
             ]
         )
         assert task.slaves
@@ -230,19 +236,21 @@ def test_master_lists_slaves(task, slave_queue, master_config,
             1, master_config.pypi_simple])
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.now.return_value, 'ACK', [
-                    1, 'https://pypi.org/simple'
-                ]
+                1, dt.now.return_value, 'HELLO',
+                [timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1']
+            ]
+        )
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.now.return_value, 'ACK', [1, master_config.pypi_simple]
             ]
         )
         task.list_slaves()
         task.poll()
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.now.return_value, 'HELLO', [
-                    timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l',
-                    'piwheels1'
-                ]
+                1, dt.now.return_value, 'HELLO',
+                [timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1']
             ]
         )
 
@@ -258,8 +266,13 @@ def test_slave_remove_expired(task, slave_queue, master_config,
         assert len(task.slaves) == 1
         assert master_status_queue.recv_msg() == (
             'SLAVE', [
-                1, dt.now.return_value, 'ACK',
-                [1, 'https://pypi.org/simple']
+                1, dt.now.return_value, 'HELLO',
+                [timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1']
+            ]
+        )
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [
+                1, dt.now.return_value, 'ACK', [1, master_config.pypi_simple]
             ]
         )
         old_now = dt.now.return_value
