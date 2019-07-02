@@ -237,7 +237,14 @@ write access to the output directory.
             self.logger.info('stopping tasks')
             for task in reversed(self.tasks):
                 task.quit()
-                task.join()
+                while True:
+                    task.join(1)
+                    if not task.is_alive():
+                        break
+                    # Continue draining the incoming status queue to prevent
+                    # any tasks from blocking while trying to update status
+                    while self.int_status_queue.poll(0):
+                        self.broadcast_status()
                 systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
             self.control_queue.close()
@@ -257,26 +264,37 @@ write access to the output directory.
         poller = transport.Poller()
         poller.register(self.control_queue, transport.POLLIN)
         poller.register(self.int_status_queue, transport.POLLIN)
-        while True:
-            systemd.watchdog_ping()
-            socks = poller.poll(5)
-            if self.int_status_queue in socks:
-                msg, data = self.int_status_queue.recv_msg()
-                self.ext_status_queue.send_msg(msg, data)
-            if self.control_queue in socks:
-                try:
-                    msg, data = self.control_queue.recv_msg()
-                except IOError as exc:
-                    self.logger.error(str(exc))
-                else:
-                    handler = {
-                        'QUIT': self.do_quit,
-                        'KILL': lambda: self.do_kill(data),
-                        'HELLO': self.do_hello,
-                        'PAUSE': self.do_pause,
-                        'RESUME': self.do_resume,
-                    }[msg]
-                    handler()
+        try:
+            while True:
+                systemd.watchdog_ping()
+                socks = poller.poll(5)
+                if self.int_status_queue in socks:
+                    self.broadcast_status()
+                if self.control_queue in socks:
+                    try:
+                        msg, data = self.control_queue.recv_msg()
+                    except IOError as exc:
+                        self.logger.error(str(exc))
+                    else:
+                        handler = {
+                            'QUIT': self.do_quit,
+                            'KILL': lambda: self.do_kill(data),
+                            'HELLO': self.do_hello,
+                            'PAUSE': self.do_pause,
+                            'RESUME': self.do_resume,
+                        }[msg]
+                        handler()
+        finally:
+            poller.unregister(self.int_status_queue)
+            poller.unregister(self.control_queue)
+
+    def broadcast_status(self):
+        """
+        Publish messages from the internal status queue to the external
+        status queue, in case any monitors are attached.
+        """
+        msg, data = self.int_status_queue.recv_msg()
+        self.ext_status_queue.send_msg(msg, data)
 
     def do_quit(self):
         """

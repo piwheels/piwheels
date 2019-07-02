@@ -87,7 +87,6 @@ class SlaveDriver(tasks.Task):
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
-        self.stats_queue.hwm = 10
         self.stats_queue.connect(config.stats_queue)
         self.db = DbClient(config, self.logger)
         self.fs = FsClient(config, self.logger)

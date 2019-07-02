@@ -74,7 +74,6 @@ class BigBrother(tasks.PauseableTask):
             datetime.now(tz=UTC) - timedelta(minutes=10))
         stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
-        stats_queue.hwm = 10
         stats_queue.bind(config.stats_queue)
         self.register(stats_queue, self.handle_stats)
         self.status_queue = self.socket(
