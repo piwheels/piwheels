@@ -126,8 +126,8 @@ class SlaveDriver(tasks.Task):
             if slave.expired
         }
         for address, slave in expired.items():
-            self.logger.warning('slave %d (%s): timed out',
-                                slave.slave_id, slave.label)
+            self.logger.warning('slave %d (%s): timed out; last reply %r',
+                                slave.slave_id, slave.label, slave.reply)
             # Send a fake BYE message to the status queue so that listening
             # monitors know to remove the entry
             slave.reply = ('BYE', None)
