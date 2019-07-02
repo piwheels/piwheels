@@ -40,6 +40,7 @@ entry-point for the :program:`piw-master` script.
 
 import os
 import sys
+import stat
 import signal
 import logging
 
@@ -190,6 +191,10 @@ write access to the output directory.
             logger=self.logger)
         self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
+        # Ensure that the control and external status queues can be written to
+        # by the owning group (for remote monitors)
+        fix_ipc_mode(config.control_queue)
+        fix_ipc_mode(config.status_queue)
 
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
@@ -328,6 +333,13 @@ def sig_term(signo, stack_frame):
     """
     # pylint: disable=unused-argument
     raise SystemExit(0)
+
+
+def fix_ipc_mode(address):
+    if address.startswith('ipc://'):
+        path = address[len('ipc://'):]
+        # Add group write privileges
+        os.chmod(path, os.stat(path).st_mode | stat.S_IWGRP)
 
 
 main = PiWheelsMaster()  # pylint: disable=invalid-name
