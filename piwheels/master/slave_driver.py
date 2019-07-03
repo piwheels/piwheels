@@ -125,8 +125,16 @@ class SlaveDriver(tasks.Task):
             if slave.expired
         }
         for address, slave in expired.items():
-            self.logger.warning('slave %d (%s): timed out; last reply %r',
-                                slave.slave_id, slave.label, slave.reply)
+            if slave.reply[0] == 'BUILD':
+                package, version = slave.reply[1]
+                self.logger.warning(
+                    'slave %d (%s): timed out while building %s %s for %s',
+                    slave.slave_id, slave.label, package, version,
+                    slave.native_abi)
+            else:
+                self.logger.warning(
+                    'slave %d (%s): timed out during %s',
+                    slave.slave_id, slave.label, slave.reply[0])
             # Send a fake BYE message to the status queue so that listening
             # monitors know to remove the entry
             slave.reply = ('BYE', None)
@@ -149,7 +157,6 @@ class SlaveDriver(tasks.Task):
         """
         msg, data = queue.recv_msg()
         if msg == 'QUIT':
-            # TODO Kill all slaves...
             raise tasks.TaskQuit
         elif msg == 'PAUSE':
             self.paused = True
