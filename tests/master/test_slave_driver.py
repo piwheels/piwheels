@@ -470,10 +470,9 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
     db_queue.check()
 
 
-def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
-                                    builds_queue, web_queue, stats_queue,
-                                    master_config, file_state,
-                                    file_state_hacked):
+def test_slave_says_built_succeeded(task, fs_queue, slave_queue, builds_queue,
+                                    web_queue, stats_queue, master_config,
+                                    file_state, file_state_hacked):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', [
         timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1'])
@@ -489,22 +488,11 @@ def test_slave_says_built_succeeded(task, db_queue, fs_queue, slave_queue,
     slave_queue.send_msg('BUILT', [
         True, timedelta(seconds=5), 'Woohoo!', [file_state.as_message()]
     ])
-    db_queue.expect(
-        'LOGBUILD', BuildState(
-            1, 'foo', '0.1', 'cp34m', True, timedelta(seconds=5), 'Woohoo!',
-            {
-                file_state.filename: file_state,
-                file_state_hacked.filename: file_state_hacked
-            }
-        ).as_message()
-    )
-    db_queue.send('OK', 1)
     fs_queue.expect('EXPECT', [1, file_state.as_message()])
     fs_queue.send('OK', None)
     task.poll()
     assert task.logger.info.call_count == 3
     assert slave_queue.recv_msg() == ('SEND', file_state.filename)
-    db_queue.check()
     fs_queue.check()
 
 
@@ -520,8 +508,8 @@ def test_slave_says_sent_invalid(task, slave_queue, master_config):
     assert slave_queue.recv_msg() == ('DIE', None)
 
 
-def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
-                                builds_queue, stats_queue, master_config,
+def test_slave_says_sent_failed(task, fs_queue, slave_queue, builds_queue,
+                                stats_queue, master_config,
                                 build_state_hacked):
     bs = build_state_hacked
     fs1 = [f for f in bs.files.values() if not f.transferred][0]
@@ -540,8 +528,6 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
     slave_queue.send_msg('BUILT', [
         bs.status, bs.duration, bs.output, [fs1.as_message()]
     ])
-    db_queue.expect('LOGBUILD', bs.as_message())
-    db_queue.send('OK', 1)
     fs_queue.expect('EXPECT', [1, fs1.as_message()])
     fs_queue.send('OK', None)
     task.poll()
@@ -551,7 +537,6 @@ def test_slave_says_sent_failed(task, db_queue, fs_queue, slave_queue,
     fs_queue.send('ERROR', '')
     task.poll()
     assert slave_queue.recv_msg() == ('SEND', fs1.filename)
-    db_queue.check()
     fs_queue.check()
 
 
@@ -575,8 +560,6 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     slave_queue.send_msg('BUILT', [
         bs.status, bs.duration, bs.output, [fs1.as_message()]
     ])
-    db_queue.expect('LOGBUILD', bs.as_message())
-    db_queue.send('OK', 1)
     fs_queue.expect('EXPECT', [1, fs1.as_message()])
     fs_queue.send('OK', None)
     task.poll()
@@ -584,6 +567,8 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     slave_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [1, bs.package])
     fs_queue.send('OK', None)
+    db_queue.expect('LOGBUILD', bs.as_message())
+    db_queue.send('OK', 1)
     task.poll()
     assert web_queue.recv_msg() == ('PKGBOTH', bs.package)
     assert slave_queue.recv_msg() == ('DONE', None)
@@ -591,7 +576,7 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     fs_queue.check()
 
 
-def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
+def test_slave_says_sent_succeeded_more(task, fs_queue, slave_queue,
                                         builds_queue, web_queue, stats_queue,
                                         master_config, build_state_hacked):
     bs = build_state_hacked
@@ -613,8 +598,6 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
         bs.status, bs.duration, bs.output,
         [f.as_message() for f in bs.files.values()]
     ])
-    db_queue.expect('LOGBUILD', bs.as_message())
-    db_queue.send('OK', 1)
     fs_queue.expect('EXPECT', [1, fs2.as_message()])
     fs_queue.send('OK', None)
     task.poll()
@@ -626,5 +609,4 @@ def test_slave_says_sent_succeeded_more(task, db_queue, fs_queue, slave_queue,
     fs_queue.send('OK', None)
     task.poll()
     assert slave_queue.recv_msg() == ('SEND', fs1.filename)
-    db_queue.check()
     fs_queue.check()

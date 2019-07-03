@@ -366,7 +366,6 @@ class SlaveDriver(tasks.Task):
             return 'DIE', protocols.NoData
         else:
             build_armv6l_hack(slave.build)
-            self.db.log_build(slave.build)
             if slave.build.status and not slave.build.transfers_done:
                 self.logger.info('slave %d (%s): build succeeded',
                                  slave.slave_id, slave.label)
@@ -379,6 +378,7 @@ class SlaveDriver(tasks.Task):
             else:
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
+                self.db.log_build(slave.build)
                 self.web_queue.send_msg('PKGPROJ', slave.build.package)
                 return 'DONE', protocols.NoData
 
@@ -409,6 +409,7 @@ class SlaveDriver(tasks.Task):
                 'slave %d (%s): verified transfer of %s',
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
+                self.db.log_build(slave.build)
                 self.web_queue.send_msg('PKGBOTH', slave.build.package)
                 return 'DONE', protocols.NoData
             else:
