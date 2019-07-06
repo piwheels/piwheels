@@ -3,6 +3,10 @@
     var packageInput = $("form input");
     var packagesOutput = $("#packages");
     var status = $("#status");
+    
+    function numberWithCommas(n) {
+      return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
 
     function item(pkg) {
         const li = document.createElement('li');
@@ -50,6 +54,6 @@
         .done(function(data) {
             packages = data;
             packageInput.removeAttr("disabled");
-            status.text("Loaded package list (" + packages.length + " items)");
+            status.text("Loaded package list (" + numberWithCommas(packages.length) + " items)");
         });
 })();
