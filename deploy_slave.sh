@@ -11,9 +11,9 @@ LIBMYSQL_DEV=libmariadbclient-dev
 LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
 TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
+PIP=pip
 
 if [ $ID = raspbian ]; then
-    PIP="pip"
     if [ $VERSION_ID -eq 8 ]; then
         PIP="pip==18.1"
         LIBPNG_DEV=libpng12-dev
