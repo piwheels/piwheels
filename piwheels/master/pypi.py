@@ -87,7 +87,7 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
 
     def _build_url(self, host, handler):
         scheme = 'https' if self.use_https else 'http'
-        return '%s://%s/%s' % (scheme, host, handler)
+        return '%s://%s/%s' % (scheme, host, handler.lstrip('/'))
 
 
 class PyPIEvents:

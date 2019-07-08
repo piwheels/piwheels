@@ -28,12 +28,14 @@
 
 
 import sys
+import logging
 from unittest import mock
 
 import pytest
 import configargparse
 
 from piwheels.terminal import (
+    _CONSOLE,
     configure_parser,
     configure_logging,
     error_handler,
@@ -55,15 +57,27 @@ def test_configure_parser():
     assert c.configuration is None
 
 
-def test_configure_parser_with_logging():
+def test_configure_parser_with_logging(tmpdir):
     p = configure_parser('foo', log_params=True)
     assert p.description == 'foo'
     with pytest.raises(SystemExit):
         p.parse_args(['--version'])
     with pytest.raises(SystemExit):
         p.parse_args(['-h'])
-    c = p.parse_args(['--log-file', 'foo.log'])
-    assert c.log_file == 'foo.log'
+    c = p.parse_args(['--log-file', str(tmpdir.join('/foo.log'))])
+    assert c.log_level == logging.WARNING
+    assert c.log_file == str(tmpdir.join('/foo.log'))
+    mock_logger = logging.getLogger('mock')
+    with mock.patch('logging.getLogger') as m:
+        m.return_value = mock_logger
+        configure_logging(c.log_level, c.log_file)
+        assert len(m.return_value.handlers) == 2
+        assert m.return_value.handlers[0] is _CONSOLE
+        assert m.return_value.handlers[0].level == logging.WARNING
+        assert isinstance(m.return_value.handlers[1], logging.FileHandler)
+        assert m.return_value.handlers[1].baseFilename == str(tmpdir.join('/foo.log'))
+        assert m.return_value.handlers[1].level == logging.INFO
+        assert m.return_value.level == logging.INFO
 
 
 def test_error_handler():

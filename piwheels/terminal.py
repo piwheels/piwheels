@@ -127,6 +127,9 @@ def configure_logging(log_level, log_filename=None, console_name=False):
     _CONSOLE.setLevel(log_level)
     _CONSOLE.setFormatter(WidthFormatter(
         '%(name)s: %(message)s' if console_name else '%(message)s'))
+    # Yes, this is redundant with the call above but Logger.addHandler checks
+    # for (and ignores) dupes
+    logging.getLogger().addHandler(_CONSOLE)
     if log_filename is not None:
         log_file = logging.FileHandler(log_filename)
         log_file.setFormatter(WidthFormatter(
