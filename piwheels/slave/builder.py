@@ -315,7 +315,7 @@ class PiWheelsBuilder:
         ]
 
     def build(self, timeout=timedelta(minutes=5),
-              pypi_index='https://pypi.python.org/simple'):
+              pypi_index='https://pypi.python.org/simple', dir=None):
         """
         Attempt to build the package within the specified *timeout*.
 
@@ -327,7 +327,7 @@ class PiWheelsBuilder:
             The URL of the :pep:`503` compliant repository from which to fetch
             packages for building.
         """
-        self.wheel_dir = tempfile.TemporaryDirectory()
+        self.wheel_dir = tempfile.TemporaryDirectory(dir=dir)
         with tempfile.NamedTemporaryFile('w+', dir=self.wheel_dir.name,
                                          suffix='.log',
                                          encoding='utf-8') as log_file:
@@ -368,7 +368,7 @@ class PiWheelsBuilder:
                 # If the build times out attempt to kill it with SIGTERM; if
                 # that hasn't worked after 10 seconds, resort to SIGKILL.
                 # Builds frequently exceed the watchdog timeout (2 minutes) so
-                # ping every 60 seconds
+                # ping every 10 seconds
                 while True:
                     self.systemd.watchdog_ping()
                     try:

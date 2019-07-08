@@ -65,7 +65,7 @@ import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from collections import namedtuple
+from collections import namedtuple, deque
 
 from .ranges import exclude, intersect
 
@@ -458,19 +458,25 @@ class SlaveState:
     status_queue = None
 
     def __init__(self, address, timeout, native_py_version, native_abi,
-                 native_platform, label):
+                 native_platform, label, os_name, os_version, board_revision,
+                 board_serial):
         SlaveState.counter += 1
         self._address = address
         self._slave_id = SlaveState.counter
-        self._label = label
         self._timeout = timeout
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
+        self._label = label
+        self._os_name = os_name
+        self._os_version = os_version
+        self._board_revision = board_revision
+        self._board_serial = board_serial
         self._first_seen = self._last_seen = datetime.now(tz=UTC)
         self._request = None
         self._reply = None
         self._build = None
+        self._stats = deque(maxlen=100)
         self._terminated = False
 
     def __repr__(self):
@@ -491,8 +497,9 @@ class SlaveState:
         SlaveState.status_queue.send_msg(
             'SLAVE', [
                 self._slave_id, self._first_seen, 'HELLO', [
-                     self._timeout, self._native_py_version, self._native_abi,
-                     self._native_platform, self._label
+                    self._timeout, self._native_py_version, self._native_abi,
+                    self._native_platform, self._label, self._os_name,
+                    self._os_version, self._board_revision, self._board_serial,
                 ]
             ]
         )
@@ -539,6 +546,22 @@ class SlaveState:
         return self._native_py_version
 
     @property
+    def os_name(self):
+        return self._os_name
+
+    @property
+    def os_version(self):
+        return self._os_version
+
+    @property
+    def board_revision(self):
+        return self._board_revision
+
+    @property
+    def board_serial(self):
+        return self._board_serial
+
+    @property
     def first_seen(self):
         return self._first_seen
 
@@ -555,6 +578,10 @@ class SlaveState:
     @property
     def build(self):
         return self._build
+
+    @property
+    def stats(self):
+        return self._stats
 
     @property
     def request(self):
@@ -583,6 +610,8 @@ class SlaveState:
             else:
                 logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
+        elif msg == 'IDLE':
+            self._stats.append(SlaveStats(datetime.now(tz=UTC), *data))
 
     @property
     def reply(self):
@@ -738,6 +767,25 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+class SlaveStats(namedtuple('SlaveStats', (
+    'timestamp',
+    'disk_size',
+    'disk_free',
+    'mem_size',
+    'mem_free',
+    'load_average',
+    'cpu_temp',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
 
 
 class DownloadState(namedtuple('DownloadState', (

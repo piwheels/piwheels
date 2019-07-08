@@ -79,7 +79,7 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
         return Protocol(self.send, self.recv)
 
 
-_statistics = {      # statistics
+_master_stats = {      # statistics
     'packages_built':        int,
     'builds_count':          int,
     'builds_last_hour':      int,
@@ -93,6 +93,29 @@ _statistics = {      # statistics
     'downloads_last_month':  int,
     'downloads_all':         int,
 }
+
+
+_slave_hello = ExactSequence([
+    dt.timedelta,   # timeout
+    str,            # python version
+    str,            # native abi
+    str,            # native platform
+    str,            # label (default: hostname)
+    str,            # os name
+    str,            # os version
+    str,            # board revision
+    str,            # board serial
+])
+
+
+_slave_stats = ExactSequence([
+    int,            # disk size (for build dir)
+    int,            # disk free (for build dir)
+    int,            # mem size
+    int,            # mem free
+    float,          # load average (for 1-min)
+    float,          # board temperature (C)
+])
 
 
 _file_state = ExactSequence([
@@ -208,7 +231,7 @@ big_brother = Protocol(recv={
 the_scribe = Protocol(recv={
     'PKGBOTH': str,  # package name
     'PKGPROJ': str,  # package name
-    'HOME':    _statistics,  # statistics
+    'HOME':    _master_stats,  # statistics
     'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
 })
 
@@ -261,9 +284,9 @@ lumberjack = Protocol(recv={
 
 
 slave_driver = Protocol(recv={
-    'HELLO': ExactSequence([dt.timedelta, str, str, str, str]), # timeout, py-version, abi, platform, label
+    'HELLO': _slave_hello,
     'BYE':   NoData,
-    'IDLE':  NoData,
+    'IDLE':  _slave_stats,
     'BUILT': ExactSequence([bool, dt.timedelta, str, [_file_state]]),
     'SENT':  NoData,
 }, send={
@@ -314,7 +337,7 @@ the_oracle = Protocol(recv={
 
 
 monitor_stats = Protocol(send={
-    'STATS': _statistics,
+    'STATS': _master_stats,
     'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
 })
 

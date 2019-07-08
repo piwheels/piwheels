@@ -43,13 +43,14 @@ import sys
 import signal
 import logging
 import socket
-from datetime import datetime, timezone
+import tempfile
 from time import time, sleep
+from datetime import datetime, timezone
 from random import randint
 
 import dateutil.parser
 
-from .. import __version__, terminal, transport, protocols, platform
+from .. import __version__, terminal, transport, protocols, info, platform
 from ..systemd import get_systemd
 from .builder import PiWheelsBuilder, PiWheelsPackage
 
@@ -75,7 +76,6 @@ class PiWheelsSlave:
     """
     def __init__(self):
         self.logger = logging.getLogger('slave')
-        self.label = socket.gethostname()
         self.config = None
         self.slave_id = None
         self.builder = None
@@ -103,6 +103,14 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             default='3h', type=duration,
             help="The time to wait before assuming a build has failed "
             "(default: %(default)s)")
+        parser.add_argument(
+            '-d', '--dir', metavar='DIR', default=tempfile.gettempdir(),
+            help="The temporary directory to use when building wheels "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '-L', '--label', metavar='STR', default=socket.gethostname(),
+            help="The label to transmit to the master identifying this "
+            "build slave (default: %(default)s)")
         self.config = parser.parse_args(args)
         if self.config.debug:
             self.config.log_level = logging.DEBUG
@@ -168,10 +176,13 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         from the master and raises :exc:`MasterTimeout` if *timeout* seconds
         are exceeded.
         """
+        os_name, os_version = info.get_os_name_version()
         msg, data = 'HELLO', [
             self.config.timeout,
             platform.get_impl_ver(), platform.get_abi_tag(),
-            platform.get_platform(), self.label
+            platform.get_platform(), self.config.label
+            os_name, os_version,
+            info.get_board_revision(), info.get_board_serial(),
         ]
         while True:
             queue.send_msg(msg, data)
@@ -200,6 +211,17 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         }[msg]
         return handler()
 
+    def get_idle_stats(self):
+        """
+        Returns the set of statistics required by the master when reporting
+        that we're idle again.
+        """
+        return (
+            list(info.get_disk_stats(self.config.dir)) +
+            list(info.get_mem_stats()) +
+            [os.getloadavg()[0], info.get_cpu_temp()]
+        )
+
     def do_ack(self, new_id, pypi_url):
         """
         In response to our initial "HELLO" (detailing our various :pep:`425`
@@ -215,7 +237,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         self.pypi_url = pypi_url
         self.logger = logging.getLogger('slave-%d' % self.slave_id)
         self.logger.info('Connected to master')
-        return 'IDLE', protocols.NoData
+        return 'IDLE', self.get_idle_stats()
 
     def do_sleep(self):
         """
@@ -226,7 +248,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.slave_id is not None, 'SLEEP before ACK'
         self.logger.info('No available jobs; sleeping')
         sleep(randint(5, 15))
-        return 'IDLE', protocols.NoData
+        return 'IDLE', self.get_idle_stats()
 
     def do_build(self, package, version):
         """
@@ -239,7 +261,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
         self.builder = PiWheelsBuilder(package, version)
-        if self.builder.build(self.config.timeout, self.pypi_url):
+        if self.builder.build(
+                self.config.timeout, self.pypi_url, self.config.dir):
             self.logger.info('Build succeeded')
         else:
             self.logger.warning('Build failed')
@@ -281,7 +304,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         self.logger.info('Removing temporary build directories')
         self.builder.clean()
         self.builder = None
-        return 'IDLE', protocols.NoData
+        return 'IDLE', self.get_idle_stats()
 
     def do_die(self):
         """
