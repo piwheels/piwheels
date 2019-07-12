@@ -96,7 +96,8 @@ _master_stats = {      # statistics
 
 
 _slave_hello = ExactSequence([
-    dt.timedelta,   # timeout
+    dt.timedelta,   # build timeout
+    dt.timedelta,   # busy timeout
     str,            # python version
     str,            # native abi
     str,            # native platform
@@ -288,12 +289,14 @@ slave_driver = Protocol(recv={
     'BYE':   NoData,
     'IDLE':  _slave_stats,
     'BUILT': ExactSequence([bool, dt.timedelta, str, [_file_state]]),
+    'BUSY':  _slave_stats,
     'SENT':  NoData,
 }, send={
     'ACK':   ExactSequence([int, str]),  # slave ID, PyPI URL
     'DIE':   NoData,
     'SLEEP': NoData,
     'BUILD': ExactSequence([str, str]),  # package, version
+    'CONT':  NoData,
     'SEND':  str,                        # filename
     'DONE':  NoData,
 })

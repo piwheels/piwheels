@@ -5,12 +5,14 @@ digraph slave {
     IDLE;
     BUILT;
     SENT;
+    BUSY;
     BYE [label="BYE"];
 
     /* Received messages */
     node [shape=invhouse, fontname=Sans, fontsize=10, style=filled, fillcolor="#aaffaa", penwidth=0];
     ACK [label="ACK"];
     BUILD;
+    CONT;
     SEND;
     DONE;
     SLEEP;
@@ -24,6 +26,11 @@ digraph slave {
     IDLE->SLEEP;
     IDLE->DIE;
     SLEEP->IDLE;
+    BUILD->BUSY;
+    BUSY->CONT;
+    BUSY->DONE;
+    CONT->BUSY;
+    CONT->BUILT [label="[status,\nduration\noutput,\n..."];
     BUILD->BUILT [label="[status,\nduration,\noutput,\n..."];
     BUILT->DONE;
     BUILT->SEND [label="filename"];

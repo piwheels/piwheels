@@ -178,7 +178,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with ImportThread(['--import-queue', import_queue_name, mock_wheel]) as thread, \
-                mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+                mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
             assert import_queue.recv_msg() == (
                 'IMPORT', [
                     0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -201,7 +201,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
 def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -225,7 +225,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
 def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -252,7 +252,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
     output = tmpdir.join('foo_output.txt')
     output.write('FOO\n')
     with ImportThread(['-y', '--output', str(output), '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0), 'FOO\n', [
@@ -276,7 +276,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
 def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--abi', 'cp35m', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp35m', True, timedelta(0),
@@ -301,7 +301,7 @@ def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, im
 def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),

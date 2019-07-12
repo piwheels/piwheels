@@ -34,12 +34,16 @@ from unittest import mock
 from threading import Thread
 from subprocess import DEVNULL
 from itertools import chain, cycle
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
 from piwheels.slave import PiWheelsSlave, MasterTimeout
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -133,8 +137,16 @@ def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
 
 
 def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplog):
-    with mock.patch('piwheels.slave.time') as time_mock:
-        time_mock.side_effect = chain([1.0, 401.0, 402.0], cycle([403.0]))
+    with mock.patch('piwheels.slave.datetime') as time_mock:
+        start = datetime.now(tz=UTC)
+        time_mock.side_effect = datetime
+        time_mock.now.side_effect = chain([
+            start,
+            start + timedelta(seconds=400),
+            start + timedelta(seconds=401),
+        ], cycle([
+            start + timedelta(seconds=403),
+        ]))
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
@@ -197,8 +209,9 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
 
 
 def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplog):
-    with mock.patch('piwheels.slave.builder.Popen') as popen_mock:
-        popen_mock().returncode = 1
+    with mock.patch('piwheels.slave.Builder') as builder_mock:
+        builder_mock().is_alive.return_value = False
+        builder_mock().status = False
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
@@ -208,25 +221,22 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         assert msg == 'IDLE'
         mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
         addr, msg, data = mock_slave_driver.recv_addr_msg()
-        assert msg == 'BUILT'
-        assert popen_mock.call_args == mock.call([
-            'pip3', 'wheel', '--index-url=https://pypi.org/pypi', mock.ANY,
-            mock.ANY, '--no-deps', '--no-cache-dir', '--no-binary=:all:',
-            '--exists-action=w', '--disable-pip-version-check', 'foo==1.0'],
-            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
-        )
+        assert msg == 'BUSY'
         mock_slave_driver.send_addr_msg(addr, 'DIE')
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, message='Build failed')
 
 
 def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_driver, caplog):
-    with mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-            mock.patch('piwheels.slave.time') as time_mock:
-        time_mock.side_effect = cycle([1.0])
+    with mock.patch('piwheels.slave.datetime') as time_mock, \
+            mock.patch('piwheels.slave.Builder') as builder_mock:
+        builder_mock().is_alive.return_value = False
+        builder_mock().status = False
+        start = datetime.now(tz=UTC)
+        time_mock.side_effect = datetime
+        time_mock.now.side_effect = cycle([start])
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
@@ -236,8 +246,12 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         assert msg == 'IDLE'
         mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
         addr, msg, data = mock_slave_driver.recv_addr_msg()
-        assert msg == 'BUILT'
-        time_mock.side_effect = chain([400.0], cycle([800.0]))
+        assert msg == 'BUSY'
+        time_mock.now.side_effect = chain([
+            start + timedelta(seconds=400),
+        ], cycle([
+            start + timedelta(seconds=800),
+        ]))
         # Allow timeout (time_mock takes care of faking this)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'HELLO'
@@ -246,19 +260,22 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
-    assert find_message(caplog.records, message='Build failed')
+    assert find_message(caplog.records, message='Removing temporary build directories')
     assert find_message(caplog.records, message='Timed out waiting for master')
 
 
-def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tmpdir, caplog):
-    with mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage._calculate_apt_dependencies') as apt_mock, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock, \
-            mock.patch('piwheels.slave.builder.tempfile.TemporaryDirectory') as tmpdir_mock:
-        popen_mock().returncode = 0
-        apt_mock.return_value = {}
-        tmpdir_mock().name = str(tmpdir)
-        tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').ensure()
+def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver,
+                               file_state, tmpdir, caplog):
+    with mock.patch('piwheels.slave.Builder') as builder_mock:
+        builder_mock().is_alive.return_value = False
+        builder_mock().as_message.return_value = [
+            'foo', '1.0', True, timedelta(seconds=6), '',
+            [tuple(file_state)[:-1]]
+        ]
+        wheel_mock = mock.Mock()
+        wheel_mock.filename = file_state.filename
+        builder_mock().wheels = [wheel_mock]
+        builder_mock().status = True
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
@@ -268,13 +285,10 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
         assert msg == 'IDLE'
         mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
         addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUSY'
+        mock_slave_driver.send_addr_msg(addr, 'CONT')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BUILT'
-        assert popen_mock.call_args == mock.call([
-            'pip3', 'wheel', '--index-url=https://pypi.org/pypi', mock.ANY,
-            mock.ANY, '--no-deps', '--no-cache-dir', '--no-binary=:all:',
-            '--exists-action=w', '--disable-pip-version-check', 'foo==1.0'],
-            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
-        )
         mock_slave_driver.send_addr_msg(addr, 'SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'SENT'

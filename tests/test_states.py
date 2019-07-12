@@ -62,9 +62,9 @@ def slave_queue(request, zmq_context, master_status_queue):
 @pytest.fixture()
 def slave_state(slave_queue):
     return SlaveState(
-        '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
-        'piwheels2', 'Raspbian GNU/Linux', '9 (stretch)', 'a020d3',
-        '12345678')
+        '10.0.0.2', timedelta(hours=3), timedelta(minutes=2),
+        '34', 'cp34m', 'linux_armv7l', 'piwheels2',
+        'Raspbian GNU/Linux', '9 (stretch)', 'a020d3', '12345678')
 
 
 def test_file_state_init(file_state):
@@ -130,13 +130,14 @@ def test_slave_state_init():
     with mock.patch('piwheels.states.datetime') as dt:
         dt.now.return_value = now
         slave_state = SlaveState(
-            '10.0.0.2', timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
-            'piwheels2', 'Raspbian GNU/Linux', '9 (stretch)', 'a020d3',
-            '12345678')
+            '10.0.0.2', timedelta(hours=3), timedelta(minutes=2),
+            '34', 'cp34m', 'linux_armv7l', 'piwheels2',
+            'Raspbian GNU/Linux', '9 (stretch)', 'a020d3', '12345678')
         assert slave_state.slave_id == 1
         assert slave_state.address == '10.0.0.2'
         assert slave_state.label == 'piwheels2'
-        assert slave_state.timeout == timedelta(hours=3)
+        assert slave_state.build_timeout == timedelta(hours=3)
+        assert slave_state.busy_timeout == timedelta(minutes=2)
         assert slave_state.native_py_version == '34'
         assert slave_state.native_abi == 'cp34m'
         assert slave_state.native_platform == 'linux_armv7l'
@@ -161,7 +162,7 @@ def test_slave_state_kill(slave_state):
 def test_slave_state_expired(slave_state):
     slave_state._first_seen = datetime.now(tz=UTC) - timedelta(hours=5)
     assert not slave_state.expired
-    slave_state._last_seen = datetime.now(tz=UTC) - timedelta(hours=4)
+    slave_state._last_seen = datetime.now(tz=UTC) - timedelta(minutes=5)
     assert slave_state.expired
 
 
@@ -169,9 +170,10 @@ def test_slave_state_hello(master_status_queue, slave_state):
     slave_state.reply = ('ACK', [slave_state.slave_id, const.PYPI_XMLRPC])
     assert master_status_queue.recv_msg() == ('SLAVE', [
         slave_state.slave_id, mock.ANY, 'HELLO', [
-            timedelta(hours=3), slave_state.native_py_version,
-            slave_state.native_abi, slave_state.native_platform,
-            slave_state.label, slave_state.os_name, slave_state.os_version,
+            timedelta(hours=3), timedelta(minutes=2),
+            slave_state.native_py_version, slave_state.native_abi,
+            slave_state.native_platform, slave_state.label,
+            slave_state.os_name, slave_state.os_version,
             slave_state.board_revision, slave_state.board_serial,
         ]
     ])
@@ -236,9 +238,9 @@ def test_slave_state_recv_hello(master_status_queue, slave_state):
         slave_state.hello()
         assert master_status_queue.recv_msg() == ('SLAVE', [
             slave_state.slave_id, mock.ANY, 'HELLO', [
-                timedelta(hours=3), '34', 'cp34m', 'linux_armv7l',
-                'piwheels2', 'Raspbian GNU/Linux', '9 (stretch)', 'a020d3',
-                '12345678'
+                timedelta(hours=3), timedelta(minutes=2),
+                '34', 'cp34m', 'linux_armv7l', 'piwheels2',
+                'Raspbian GNU/Linux', '9 (stretch)', 'a020d3', '12345678'
             ]
         ])
         assert master_status_queue.recv_msg() == ('SLAVE', [

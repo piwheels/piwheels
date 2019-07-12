@@ -106,7 +106,8 @@ def slave2_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def hello_data(request):
     return [
-        timedelta(seconds=300), 'cp34', 'cp34m', 'linux_armv7l', 'piwheels1',
+        timedelta(hours=3), timedelta(seconds=300),
+        'cp34', 'cp34m', 'linux_armv7l', 'piwheels1',
         'Raspbian GNU/Linux', '9 (stretch)', 'a020d3', '12345678'
     ]
 
@@ -277,7 +278,8 @@ def test_slave_says_hello(task, slave_queue, hello_data):
     task.poll()
     for state in task.slaves.values():
         assert state.slave_id == 1
-        assert state.timeout == timedelta(minutes=5)
+        assert state.build_timeout == timedelta(hours=3)
+        assert state.busy_timeout == timedelta(minutes=5)
         assert state.label == 'piwheels1'
         assert state.native_abi == 'cp34m'
         assert state.native_py_version == 'cp34'

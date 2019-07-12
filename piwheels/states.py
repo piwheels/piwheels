@@ -457,13 +457,14 @@ class SlaveState:
     counter = 0
     status_queue = None
 
-    def __init__(self, address, timeout, native_py_version, native_abi,
-                 native_platform, label, os_name, os_version, board_revision,
-                 board_serial):
+    def __init__(self, address, build_timeout, busy_timeout, native_py_version,
+                 native_abi, native_platform, label, os_name, os_version,
+                 board_revision, board_serial):
         SlaveState.counter += 1
         self._address = address
         self._slave_id = SlaveState.counter
-        self._timeout = timeout
+        self._build_timeout = build_timeout
+        self._busy_timeout = busy_timeout
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
@@ -497,7 +498,8 @@ class SlaveState:
         SlaveState.status_queue.send_msg(
             'SLAVE', [
                 self._slave_id, self._first_seen, 'HELLO', [
-                    self._timeout, self._native_py_version, self._native_abi,
+                    self._build_timeout, self._busy_timeout,
+                    self._native_py_version, self._native_abi,
                     self._native_platform, self._label, self._os_name,
                     self._os_version, self._board_revision, self._board_serial,
                 ]
@@ -530,8 +532,12 @@ class SlaveState:
         return self._label
 
     @property
-    def timeout(self):
-        return self._timeout
+    def build_timeout(self):
+        return self._build_timeout
+
+    @property
+    def busy_timeout(self):
+        return self._busy_timeout
 
     @property
     def native_platform(self):
@@ -571,9 +577,7 @@ class SlaveState:
 
     @property
     def expired(self):
-        # There's a fudge factor of 10% here to allow slaves a little extra
-        # time before we expire and forget them
-        return (datetime.now(tz=UTC) - self._last_seen) > (self._timeout * 1.1)
+        return (datetime.now(tz=UTC) - self._last_seen) > self._busy_timeout
 
     @property
     def build(self):

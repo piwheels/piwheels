@@ -250,6 +250,7 @@ class SlaveDriver(tasks.Task):
             'HELLO': self.do_hello,
             'BYE': self.do_bye,
             'IDLE': self.do_idle,
+            'BUSY': self.do_busy,
             'BUILT': self.do_built,
             'SENT': self.do_sent,
         }[msg]
@@ -272,9 +273,13 @@ class SlaveDriver(tasks.Task):
             The object representing the current status of the build slave.
         """
         self.logger.warning(
-            'slave %d: hello (timeout=%s, abi=%s, platform=%s, label=%s)',
-            slave.slave_id, slave.timeout, slave.native_abi,
-            slave.native_platform, slave.label)
+            'slave %d (%s): hello (build_timeout=%s, busy_timeout=%s, abi=%s, '
+            'platform=%s, os_name=%s, os_version=%s, board_revision=%s, '
+            'board_serial=%s)',
+            slave.slave_id, slave.label, slave.build_timeout,
+            slave.busy_timeout, slave.native_abi, slave.native_platform,
+            slave.os_name, slave.os_version, slave.board_revision,
+            slave.board_serial)
         self.slaves[slave.address] = slave
         return 'ACK', [slave.slave_id, self.pypi_simple]
 
@@ -334,7 +339,7 @@ class SlaveDriver(tasks.Task):
                             'slave %d (%s): build %s %s',
                             slave.slave_id, slave.label, package, version)
                         recent_builds[(package, version)] = (
-                            datetime.now(tz=UTC) + slave.timeout)
+                            datetime.now(tz=UTC) + slave.build_timeout)
                         return 'BUILD', [package, version]
                 self.logger.info(
                     'slave %d (%s): sleeping because no builds',
@@ -344,6 +349,23 @@ class SlaveDriver(tasks.Task):
                 self.stats_queue.send_msg('STATBQ', {
                     abi: len(queue) for (abi, queue) in self.abi_queues.items()
                 })
+
+    def do_busy(self, slave):
+        """
+        Handler for the build slave's "BUSY" message, which is sent
+        periodically during package builds. If the slave fails to respond with
+        a BUSY ping for a duration longer than :attr:`SlaveState.busy_timeout`
+        then the master will assume the slave has died and remove it from the
+        internal state mapping (if the slave happens to resurrect itself later
+        the master will simply treat it as a new build slave).
+
+        In response to "BUSY" the master can respond "CONT" to indicate the
+        build should continue processing, or "DONE" to indicate that the build
+        slave should immediately terminate and discard the build and return to
+        "IDLE" state.
+        """
+        # TODO Return "DONE" when slave terminated or pausing master
+        return 'CONT', protocols.NoData
 
     def do_built(self, slave):
         """
