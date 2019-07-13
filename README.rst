@@ -8,20 +8,24 @@ piwheels is a project for automating building Raspberry Pi platform wheels
 .. _PyPI: https://pypi.org/
 
 `piwheels.org`_ is a Python package repository providing Raspberry Pi wheels
-built by the project. See the repository homepage for usage and more information
-about the service.
+built by the project. See the homepage for usage and more information about the
+service.
 
 .. _piwheels.org: https://www.piwheels.org/
 
 Issues
 ------
 
-If you find any issues with packages installed from piwheels, please open a new
-issue on `GitHub`_, providing as much detail as possible. Please use the
-**Broken package** and **Missing package** `issue templates`_ as appropriate.
+If you have an issue with the piwheels project (i.e. related to the source code
+here, not the packages hosted on piwheels.org) on the `piwheels/piwheels`_ issue
+tracker.
 
-.. _GitHub: https://github.com/bennuttall/piwheels/issues
-.. _issue templates: https://github.com/bennuttall/piwheels/issues/new/choose
+If you have an issue with a specific package found on piwheels.org, please use
+the `piwheels/packages`_ issue tracker, using the links on the package's
+[project page] on piwheels.org.
+
+.. piwheels/piwheels: https://github.com/piwheels/piwheels/issues
+.. piwheels/packages: https://github.com/piwheels/packages/issues
 
 Development
 -----------

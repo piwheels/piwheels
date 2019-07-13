@@ -4,7 +4,7 @@ Development
 
 The main GitHub repository for the project can be found at:
 
-    https://github.com/bennuttall/piwheels
+    https://github.com/piwheels/piwheels
 
 After cloning, we recommend you set up a virtualenv for development and then
 execute ``make develop`` within that virtualenv. This should install all

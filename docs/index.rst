@@ -14,7 +14,9 @@ at first, but hopefully they'll provide some answers to anyone who gets
 confused wandering through the code (although much of the documentation is
 derived from the code) and some starting points for those that want to get
 involved. For reference, the `piwheels code`_ is available from GitHub
-(naturally) which also hosts the `issue tracker`_.
+(naturally) which also hosts the `issue tracker`_. Note there is a separate
+issue tracker for reporting issues with packages built by piwheels.org, which
+can be found at `piwheels/packages`_.
 
 
 Table of Contents
@@ -47,5 +49,6 @@ Indexes and Tables
 
 
 .. _piwheels homepage: https://www.piwheels.org/
-.. _piwheels code: https://github.com/bennuttall/piwheels
-.. _issue tracker: https://github.com/bennuttall/piwheels/issues
+.. _piwheels code: https://github.com/piwheels/piwheels
+.. _issue tracker: https://github.com/piwheels/piwheels/issues
+.. _piwheels/packages: https://github.com/piwheels/packages/issues

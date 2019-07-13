@@ -97,18 +97,18 @@ sudo pip3 install ${package}</pre>
         <h3>Issues with this package?</h3>
         <h4>Package/version missing?</h4>
         <ul>
-          <li>Check if there's an <a href="https://github.com/bennuttall/piwheels/issues?utf8=%E2%9C%93&q=is%3Aissue+missing+package+${package}">issue</a> already</li>
-          <li>If not, open a <a href="https://github.com/bennuttall/piwheels/issues/new?template=missing-package.md&title=Missing+package:+${package}">"missing package" issue</a></li>
+          <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+missing+package+${package}">issue</a> already</li>
+          <li>If not, open a <a href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${package}">"missing package" issue</a></li>
         </ul>
         <h4>Package broken?</h4>
         <ul>
-          <li>Check if there's an <a href="https://github.com/bennuttall/piwheels/issues?utf8=%E2%9C%93&q=is%3Aissue+broken+package+${package}">issue</a> already</li>
-          <li>If not, open a <a href="https://github.com/bennuttall/piwheels/issues/new?template=broken-package.md&title=Broken+package:+${package}">"broken package" issue</a></li>
+          <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+broken+package+${package}">issue</a> already</li>
+          <li>If not, open a <a href="https://github.com/piwheels/packages/issues/new?template=broken-package.md&title=Broken+package:+${package}">"broken package" issue</a></li>
         </ul>
         <h4>Something else</h4>
         <ul>
-          <li>Check if there's an <a href="https://github.com/bennuttall/piwheels/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}">issue</a> already</li>
-          <li>If not, open a <a href="https://github.com/bennuttall/piwheels/issues/new?template=package.md&title=${package}">new issue</a></li>
+          <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}">issue</a> already</li>
+          <li>If not, open a <a href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${package}">new issue</a></li>
         </ul>
 
         <p class="small"><small>Page last updated ${timestamp}</small></p>

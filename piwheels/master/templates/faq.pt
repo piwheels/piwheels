@@ -128,7 +128,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               &lt;package&gt;. If you find you are able to successfully build
               the package (for example, by installing some build dependencies),
               please <a
-              href="https://github.com/bennuttall/piwheels/issues/new?template=missing-package.md">open
+              href="https://github.com/piwheels/packages/issues/new?template=missing-package.md">open
               an issue on github</a> and we'll try to resolve it. Also see the
               following answer.</p>
             </div>
@@ -145,7 +145,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               on the <a href="https://www.piwheels.org/packages.html">package
               list page</a>. If you maintain the package or otherwise have a
               solution for the build, please <a
-              href="https://github.com/bennuttall/piwheels/issues/new?template=missing-package.md">open
+              href="https://github.com/piwheels/packages/issues/new?template=missing-package.md">open
               an issue on github</a> and we'll try to resolve it.</p>
             </div>
           </div>
@@ -222,7 +222,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               <code>matplotlib</code> without <code>pyqt</code>.</p>
 
               <p>If you find an issue with a package installed from piwheels,
-              please <a href="https://github.com/bennuttall/piwheels/issues/new?template=broken-package.md">submit
+              please <a href="https://github.com/piwheels/packages/issues/new?template=broken-package.md">submit
               an issue on github</a>.</p>
             </div>
           </div>
@@ -252,7 +252,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
             <div class="accordion-content" data-tab-content>
             <p>The source code for the piwheels project can be found on GitHub
-            at <a href="https://github.com/bennuttall/piwheels">github.com/bennuttall/piwheels</a>.</p>
+            at <a href="https://github.com/piwheels/piwheels">github.com/piwheels/piwheels</a>.</p>
             </div>
           </div>
 
@@ -324,7 +324,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
               system, Raspbian, does not currently build for aarch64. Since
               piwheels.org only builds wheels on Raspbian, no aarch64 (armv8l)
               wheels are provided. Other projects may wish to use the <a
-              href="https://github.com/bennuttall/piwheels">piwheels project
+              href="https://github.com/piwheels/piwheels">piwheels project
               source code</a> to run an aarch64 wheel repository for other
               distributions.</p>
             </div>
@@ -415,7 +415,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
             <div class="accordion-content" data-tab-content>
               <p><a
-              href="https://github.com/bennuttall/piwheels/issues/new?template=package.md">Open
+              href="https://github.com/piwheels/packages/issues/new?template=package.md">Open
               an issue on github</a> and we'll endeavour to remove it as soon
               as we can. In cases where it's not obvious that the requester
               owns the package to be removed, we may require further evidence

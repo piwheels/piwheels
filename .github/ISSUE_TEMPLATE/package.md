@@ -4,19 +4,6 @@ about: Let us know about another issue that's related to a particular package in
 
 ---
 
-Package name: example
-Link to PyPI page: https://pypi.org/project/example
-Link to piwheels page: https://www.piwheels.org/project/example
-Version: e.g. 1.2.3 or all
-Python version: e.g. 3.5 or all
-More information:
+We have moved package issues to a new repository.
 
-Please use code blocks where appropriate:
-
-```bash
-command line commands here
-```
-
-```python
-print("code here")
-```
+Please open an issue at https://github.com/piwheels/packages/issues/choose

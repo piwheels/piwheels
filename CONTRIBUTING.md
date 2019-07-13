@@ -6,30 +6,20 @@ some code, please read the relevant section.
 
 ## Issues
 
-Please report any issues you have with documentation, the code or the project
-itself on [GitHub]. Ensure multiple issues are filed separately where
-appropriate.
+If you have an issue with the piwheels project (i.e. related to the source code
+here, not the packages hosted on piwheels.org) on the [piwheels/piwheels] issue
+tracker.
 
-If you have an issue with a specific package, please consider whether this is
-an issue with the package itself, or with the piwheels project. If the package
-generally works on Raspberry Pi by installing from pip or building from source,
-but fails to work when installed from piwheels, please open an issue and
-provide as much information as possible. If the package simply does not work on
-Raspberry Pi, please take this up with the package maintainer.
+If you have an issue with a specific package found on piwheels.org, please use
+the [piwheels/packages] issue tracker, using the links on the package's [project
+page] on piwheels.org.
 
-## Pull requests
+[piwheels/piwheels]: https://github.com/piwheels/piwheels/issues
+[piwheels/packages]: https://github.com/piwheels/packages/issues
 
-Please [open an issue] before starting non-trivial work on the codebase. When
-creating a pull request, please group changes together or split into multiple
-pull requests as appropriate. Please update the tests if necessary and try to
-explain the purpose and effect of your changes.
+## Development
 
-## Code
+If you're interested in developing on the piwheels project, or running your own
+instance, see the project documentation at [piwheels.readthedocs.org].
 
-The Python code in this project is Python 3 only. Please observe [PEP-8]
-guidelines (not strict) and try to adhere to the coding style as observed.
-
-
-[GitHub]: https://github.com/bennuttall/piwheels/issues
-[open an issue]: https://github.com/bennuttall/piwheels/issues/new/
-[PEP-8]: https://www.python.org/dev/peps/pep-0008/
+[piwheels.readthedocs.org](https://piwheels.readthedocs.org/)

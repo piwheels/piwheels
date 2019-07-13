@@ -83,7 +83,7 @@ if [ -d piwheels ]; then
     git pull
     pip3 uninstall -y piwheels
 else
-    git clone https://github.com/bennuttall/piwheels
+    git clone https://github.com/piwheels/piwheels
     cd piwheels
 fi
 
