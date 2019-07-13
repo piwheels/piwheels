@@ -22,10 +22,11 @@ tracker.
 
 If you have an issue with a specific package found on piwheels.org, please use
 the `piwheels/packages`_ issue tracker, using the links on the package's
-[project page] on piwheels.org.
+`project page`_ on piwheels.org.
 
 .. _piwheels/piwheels: https://github.com/piwheels/piwheels/issues
 .. _piwheels/packages: https://github.com/piwheels/packages/issues
+.. _project page: https://www.piwheels.org/packages.html
 
 Development
 -----------
