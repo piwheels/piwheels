@@ -24,8 +24,8 @@ If you have an issue with a specific package found on piwheels.org, please use
 the `piwheels/packages`_ issue tracker, using the links on the package's
 [project page] on piwheels.org.
 
-.. piwheels/piwheels: https://github.com/piwheels/piwheels/issues
-.. piwheels/packages: https://github.com/piwheels/packages/issues
+.. _piwheels/piwheels: https://github.com/piwheels/piwheels/issues
+.. _piwheels/packages: https://github.com/piwheels/packages/issues
 
 Development
 -----------
