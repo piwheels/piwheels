@@ -6,4 +6,4 @@ about: Let us know about another issue that's related to a particular package in
 
 We have moved package issues to a new repository.
 
-Please open an issue at https://github.com/piwheels/packages/issues/choose
+Please open an issue at https://github.com/piwheels/packages/issues/new/choose
