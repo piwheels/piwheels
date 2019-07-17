@@ -145,9 +145,6 @@ class Socket:
             try:
                 data = schema(data)
             except Invalid as e:
-                if msg == 'BUILT':
-                    print(repr(schema))
-                    print(repr(data))
                 raise IOError('invalid data for %s: %s' % (msg, e))
             try:
                 return cbor2.dumps((msg, data), default=default_encoder)
