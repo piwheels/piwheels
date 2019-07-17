@@ -262,8 +262,6 @@ class Builder(Thread):
     def __init__(self, package, version, timeout=timedelta(minutes=5),
                  pypi_index='https://pypi.python.org/simple', dir=None):
         super().__init__()
-        if Builder.apt_cache is None:
-            Builder.apt_cache = apt.cache.Cache()
         self._wheel_dir = tempfile.TemporaryDirectory(dir=dir)
         self._package = package
         self._version = version
@@ -394,11 +392,53 @@ class Builder(Thread):
             '{}=={}'.format(self.package, self.version),
         ]
 
+    def build_wheel(self, log_file):
+        """
+        Call pip and attempt to build the wheel; handle killing the subprocess
+        if termination is requested, and watch the clock for a build timeout.
+        """
+        # Ensure stdin is /dev/null; this causes anything stupid enough
+        # to use input() in its setup.py to fail immediately. Also
+        # ignore all output
+        proc = Popen(
+            self.build_command(log_file),
+            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL,
+            env=self.build_environment(),
+        )
+
+        def stop_proc():
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except TimeoutExpired:
+                proc.kill()
+
+        start = datetime.utcnow()
+        try:
+            while True:
+                try:
+                    if self._stopped:
+                        raise BuildTerminated('Build terminated by master')
+                    proc.wait(1)
+                except BuildTerminated:
+                    stop_proc()
+                    raise
+                except TimeoutExpired:
+                    if datetime.utcnow() - start > self._timeout:
+                        stop_proc()
+                        raise
+                else:
+                    break
+        finally:
+            self._duration = datetime.utcnow() - start
+            self._status = proc.returncode == 0
+
     def build_dependencies(self, wheel):
         """
         Calculate the apt dependencies of *wheel* (which is a :class:`Wheel`
         instance representing a built wheel).
         """
+        apt_cache = apt.cache.Cache()
         find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
         deps = defaultdict(set)
         libs = set()
@@ -413,11 +453,12 @@ class Builder(Thread):
             for lib in libs:
                 p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
                 try:
-                    out, errs = p.communicate(timeout=10)
+                    out, errs = p.communicate(timeout=30)
                 except TimeoutExpired:
                     p.kill()
-                    out, errs = p.communicate()
-                finally:
+                    out, errs = p.communicate(timeout=10)
+                    raise
+                else:
                     out = out.decode('ascii', 'replace')
                     for line in out.splitlines():
                         match = find_re.search(line)
@@ -427,7 +468,7 @@ class Builder(Thread):
                             except FileNotFoundError:
                                 continue
                             providers = {
-                                pkg.name for pkg in Builder.apt_cache
+                                pkg.name for pkg in apt_cache
                                 if pkg.installed is not None
                                 and lib_path in pkg.installed_files}
                             assert len(providers) <= 1
@@ -435,7 +476,7 @@ class Builder(Thread):
                                 deps['apt'].add(providers.pop())
                             except KeyError:
                                 deps[''].add(lib_path)
-                            if self.stop:
+                            if self._stopped:
                                 raise BuildTerminated('Build terminated by master')
         wheel._dependencies = {
             tool: sorted(deps)
@@ -449,50 +490,23 @@ class Builder(Thread):
         with tempfile.NamedTemporaryFile('w+', dir=self._wheel_dir.name,
                                          suffix='.log',
                                          encoding='utf-8') as log_file:
-            start = datetime.utcnow()
             try:
-                # Ensure stdin is /dev/null; this causes anything stupid enough
-                # to use input() in its setup.py to fail immediately. Also
-                # ignore all output
-                proc = Popen(
-                    self.build_command(log_file),
-                    stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL,
-                    env=self.build_environment(),
-                )
-                while True:
-                    try:
-                        if self._stopped:
-                            raise BuildTerminated('Build terminated by master')
-                        proc.wait(10)
-                    except (BuildTerminated, TimeoutExpired):
-                        if datetime.utcnow() - start > self._timeout:
-                            proc.terminate()
-                            try:
-                                proc.wait(10)
-                            except TimeoutExpired:
-                                proc.kill()
-                            raise
-                    else:
-                        break
+                self.build_wheel(log_file)
             except Exception as exc:
                 log_file.seek(0, os.SEEK_END)
                 log_file.write('\n' + str(exc))
                 self._status = False
-            else:
-                self._status = proc.returncode == 0
-            # The duration is the time taken to build the package, excluding
-            # dependency calculation (as users of pip who compile manually
-            # wouldn't normally be spending time doing that)
-            self._duration = datetime.utcnow() - start
             if self._status:
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
-                        pkg = Wheel(path)
-                        self.build_dependencies(pkg)
-                        self._wheels.append(pkg)
-                except BuildTerminated as exc:
+                        wheel = Wheel(path)
+                        self.build_dependencies(wheel)
+                        self._wheels.append(wheel)
+                except (TimeoutExpired, BuildTerminated) as exc:
                     log_file.seek(0, os.SEEK_END)
                     log_file.write('\n' + str(exc))
                     self._status = False
+                    self._wheels.clear()
             log_file.seek(0)
-            self._output = log_file.read()
+            # Replace NUL characters because ... sometimes we get them?!
+            self._output = log_file.read().replace('\0', '\N{REPLACEMENT CHARACTER}')

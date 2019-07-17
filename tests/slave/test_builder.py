@@ -158,78 +158,6 @@ def test_package_metadata(mock_package):
     assert pkg.metadata['Version'] == '0.1'
 
 
-#def test_package_dependencies(mock_package, tmpdir):
-#    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-#            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-#            mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
-#            mock.patch('piwheels.slave.builder.apt') as apt_mock:
-#        tmpdir_mock().__enter__.return_value = str(tmpdir)
-#        popen_mock().communicate.return_value = (b"""\
-#        linux-vdso.so.1 =>  (0x00007ffd48669000)
-#        libblas.so.3 => /usr/lib/libblas.so.3 (0x00007f711a958000)
-#        libm.so.6 => /lib/arm-linux-gnueabihf/libm.so.6 (0x00007f711a64f000)
-#        libpthread.so.0 => /lib/arm-linux-gnueabihf/libpthread.so.0 (0x00007f711a432000)
-#        libc.so.6 => /lib/arm-linux-gnueabihf/libc.so.6 (0x00007f711a068000)
-#        /lib64/ld-linux-x86-64.so.2 (0x00007f711af48000)
-#        libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)
-#        libgfortran.so.3 => /usr/lib/arm-linux-gnueabihf/libgfortran.so.3 (0x00007f7117ca9000)
-#        libquadmath.so.0 => /usr/lib/arm-linux-gnueabihf/libquadmath.so.0 (0x00007f7117a6a000)
-#        libgcc_s.so.1 => /lib/arm-linux-gnueabihf/libgcc_s.so.1 (0x00007f7117854000)
-#""", b"")
-#        popen_mock().returncode = 0
-#        def pkg(name, files):
-#            m = mock.Mock()
-#            m.name = name
-#            m.installed = True
-#            m.installed_files = files
-#            return m
-#        apt_mock.cache.Cache.return_value = [
-#            pkg('libc6', [
-#                '/lib/arm-linux-gnueabihf/libc.so.6',
-#                '/lib/arm-linux-gnueabihf/libm.so.6',
-#                '/lib/arm-linux-gnueabihf/libpthread.so.0',
-#            ]),
-#            pkg('libopenblas-base', [
-#                '/usr/lib/libblas.so.3',
-#                '/usr/lib/libopenblas.so.0',
-#            ]),
-#            pkg('libgcc1', ['/lib/arm-linux-gnueabihf/libgcc_s.so.1']),
-#            pkg('libgfortran3', ['/usr/lib/arm-linux-gnueabihf/libgfortran.so.3']),
-#        ]
-#        path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
-#        pkg = builder.Wheel(path)
-#        assert pkg.dependencies == {
-#            'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
-#            '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
-#        }
-#
-#
-#def test_package_dependencies_missing(mock_package, tmpdir):
-#    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-#            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-#            mock.patch('piwheels.slave.builder.Path.resolve', side_effect=FileNotFoundError()), \
-#            mock.patch('piwheels.slave.builder.apt') as apt_mock:
-#        tmpdir_mock().__enter__.return_value = str(tmpdir)
-#        popen_mock().communicate.return_value = (
-#            b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
-#        popen_mock().returncode = 0
-#        path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
-#        pkg = builder.Wheel(path)
-#        assert pkg.dependencies == {}
-#
-#
-#def test_package_dependencies_failed(mock_package, tmpdir):
-#    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-#            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
-#            mock.patch('piwheels.slave.builder.apt') as apt_mock:
-#        tmpdir_mock().__enter__.return_value = str(tmpdir)
-#        popen_mock().communicate.side_effect = [
-#            TimeoutExpired('ldd', 10), (b"", b"")]
-#        path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
-#        pkg = builder.Wheel(path)
-#        assert pkg.dependencies == {}
-
-
 def test_package_transfer(mock_archive, mock_package, transfer_thread):
     filesize, filehash = mock_package
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
@@ -265,6 +193,7 @@ def test_builder_init(tmpdir):
     assert b.output == ''
     assert b.wheels == []
     assert b.status is False
+    assert b.timeout == timedelta(minutes=5)
 
 
 def test_builder_as_message():
@@ -316,6 +245,26 @@ def test_builder_build_timeout(tmpdir):
         assert popen_mock().kill.call_count == 1
 
 
+def test_builder_build_stop(tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.datetime') as time_mock:
+        tmpdir_mock().name = str(tmpdir)
+        popen_mock().wait.side_effect = TimeoutExpired('pip3', 300)
+        popen_mock().returncode = None
+        time_mock.utcnow.return_value = datetime.utcnow()
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.stop()
+        b.join(1)
+        assert not b.is_alive()
+        assert not b.status
+        assert b.output.endswith('Build terminated by master')
+        assert len(b.wheels) == 0
+        assert popen_mock().terminate.call_count == 1
+        assert popen_mock().kill.call_count == 1
+
+
 def test_builder_build_close(tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.Popen') as popen_mock:
@@ -329,3 +278,123 @@ def test_builder_build_close(tmpdir):
         assert b.status
         b.close()
         assert tmpdir_mock().cleanup.call_args == mock.call()
+
+
+def test_builder_build_dependencies(mock_archive, tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
+            mock.patch('piwheels.slave.builder.apt') as apt_mock:
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
+        def wait(timeout):
+            with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
+                f.write(mock_archive)
+        popen_mock().returncode = 0
+        popen_mock().wait.side_effect = wait
+        popen_mock().communicate.return_value = (b"""\
+        linux-vdso.so.1 =>  (0x00007ffd48669000)
+        libblas.so.3 => /usr/lib/libblas.so.3 (0x00007f711a958000)
+        libm.so.6 => /lib/arm-linux-gnueabihf/libm.so.6 (0x00007f711a64f000)
+        libpthread.so.0 => /lib/arm-linux-gnueabihf/libpthread.so.0 (0x00007f711a432000)
+        libc.so.6 => /lib/arm-linux-gnueabihf/libc.so.6 (0x00007f711a068000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f711af48000)
+        libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)
+        libgfortran.so.3 => /usr/lib/arm-linux-gnueabihf/libgfortran.so.3 (0x00007f7117ca9000)
+        libquadmath.so.0 => /usr/lib/arm-linux-gnueabihf/libquadmath.so.0 (0x00007f7117a6a000)
+        libgcc_s.so.1 => /lib/arm-linux-gnueabihf/libgcc_s.so.1 (0x00007f7117854000)
+""", b"")
+        def pkg(name, files):
+            m = mock.Mock()
+            m.name = name
+            m.installed = True
+            m.installed_files = files
+            return m
+        apt_mock.cache.Cache.return_value = [
+            pkg('libc6', [
+                '/lib/arm-linux-gnueabihf/libc.so.6',
+                '/lib/arm-linux-gnueabihf/libm.so.6',
+                '/lib/arm-linux-gnueabihf/libpthread.so.0',
+            ]),
+            pkg('libopenblas-base', [
+                '/usr/lib/libblas.so.3',
+                '/usr/lib/libopenblas.so.0',
+            ]),
+            pkg('libgcc1', ['/lib/arm-linux-gnueabihf/libgcc_s.so.1']),
+            pkg('libgfortran3', ['/usr/lib/arm-linux-gnueabihf/libgfortran.so.3']),
+        ]
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.join(1)
+        assert not b.is_alive()
+        assert b.status
+        assert b.wheels[0].dependencies == {
+            'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
+            '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
+        }
+
+
+def test_builder_dependencies_missing(mock_archive, tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.Path.resolve', side_effect=FileNotFoundError()), \
+            mock.patch('piwheels.slave.builder.apt') as apt_mock:
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
+        def wait(timeout):
+            with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
+                f.write(mock_archive)
+        popen_mock().returncode = 0
+        popen_mock().wait.side_effect = wait
+        popen_mock().communicate.return_value = (
+            b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.join(1)
+        assert not b.is_alive()
+        assert b.status
+        assert b.wheels[0].dependencies == {}
+
+
+def test_builder_dependencies_failed(mock_archive, tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.apt') as apt_mock:
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
+        def wait(timeout):
+            with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
+                f.write(mock_archive)
+        popen_mock().returncode = 0
+        popen_mock().wait.side_effect = wait
+        popen_mock().communicate.side_effect = [
+            TimeoutExpired('ldd', 10), (b"", b"")]
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.join(1)
+        assert not b.is_alive()
+        assert not b.status
+        assert not b.wheels
+
+
+def test_builder_dependencies_stopped(mock_archive, tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.apt') as apt_mock:
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
+        def wait(timeout):
+            with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
+                f.write(mock_archive)
+        def stop(timeout):
+            b.stop()
+            return (b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
+        popen_mock().returncode = 0
+        popen_mock().wait.side_effect = wait
+        popen_mock().communicate.side_effect = stop
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.join(1)
+        assert not b.is_alive()
+        assert not b.status
+        assert b.output.endswith('Build terminated by master')
