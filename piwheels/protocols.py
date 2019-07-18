@@ -92,6 +92,10 @@ _master_stats = {      # statistics
     'disk_size':             int,
     'downloads_last_month':  int,
     'downloads_all':         int,
+    'mem_free':              int,
+    'mem_size':              int,
+    'temperature':           float,
+    'load_average':          float,
 }
 
 
@@ -223,7 +227,7 @@ master_control = Protocol(recv={
 
 
 big_brother = Protocol(recv={
-    'STATFS': ExactSequence([int, int, int]),  # frsize, bavail, blocks
+    'STATFS': ExactSequence([int, int]),  # disk-size, disk-free
     'STATBQ': {str: int},  # abi: queue-size
     'HOME':   NoData,
 })

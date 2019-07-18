@@ -614,7 +614,7 @@ class SlaveState:
             else:
                 logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
-        elif msg == 'IDLE':
+        elif msg in ('IDLE', 'BUSY'):
             self._stats.append(SlaveStats(datetime.now(tz=UTC), *data))
 
     @property

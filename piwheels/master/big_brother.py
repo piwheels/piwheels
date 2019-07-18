@@ -33,9 +33,11 @@ Defines the :class:`BigBrother` task; see class for more details.
     :members:
 """
 
+import os
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from .. import const, protocols, transport, tasks
+from .. import const, protocols, transport, tasks, info
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 
@@ -56,6 +58,7 @@ class BigBrother(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
+        self.history = deque(maxlen=100)
         self.stats = {
             'packages_built':        0,
             'builds_count':          0,
@@ -69,8 +72,12 @@ class BigBrother(tasks.PauseableTask):
             'disk_size':             1,
             'downloads_last_month':  0,
             'downloads_all':         0,
+            'mem_free':              0,
+            'mem_size':              0,
+            'temperature':           0.0,
+            'load_average':          0.0,
         }
-        self.last_stats_run = self.last_search_run = (
+        self.last_info_run = self.last_stats_run = self.last_search_run = (
             datetime.now(tz=UTC) - timedelta(minutes=10))
         stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
@@ -97,9 +104,9 @@ class BigBrother(tasks.PauseableTask):
             self.logger.error(str(e))
         else:
             if msg == 'STATFS':
-                f_frsize, f_bavail, f_blocks = data
-                self.stats['disk_free'] = f_frsize * f_bavail
-                self.stats['disk_size'] = f_frsize * f_blocks
+                disk_size, disk_free = data
+                self.stats['disk_free'] = disk_free
+                self.stats['disk_size'] = disk_size
             elif msg == 'STATBQ':
                 self.stats['builds_pending'] = data
             elif msg == 'HOME':
@@ -107,14 +114,23 @@ class BigBrother(tasks.PauseableTask):
                 self.last_search_run = datetime.now(tz=UTC) - timedelta(minutes=10)
 
     def loop(self):
-        # Leave 15 seconds between each run of the stats
+        # Leave 10 seconds between each run of mem/temp stats
+        if datetime.now(tz=UTC) - self.last_info_run > timedelta(seconds=10):
+            mem_size, mem_free = info.get_mem_stats()
+            self.stats['mem_size'] = mem_size
+            self.stats['mem_free'] = mem_free
+            self.stats['temperature'] = info.get_cpu_temp()
+            self.stats['load_average'] = os.getloadavg()[0]
+            self.history.append(self.stats.copy())
+            self.status_queue.send_msg('STATS', self.stats)
+            self.last_info_run = datetime.now(tz=UTC)
+        # Leave 30 seconds between each run of the db stats
         if datetime.now(tz=UTC) - self.last_stats_run > timedelta(seconds=30):
             rec = self.db.get_statistics()
             self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
-            self.status_queue.send_msg('STATS', self.stats)
             self.last_stats_run = datetime.now(tz=UTC)
-        # Leave 5 minutes between each run of the (expensive) search index query
+        # Leave 5 minutes between each run of the (expensive) search index
         if datetime.now(tz=UTC) - self.last_search_run > timedelta(minutes=5):
             self.web_queue.send_msg('SEARCH', self.db.get_search_index())
             self.last_search_run = datetime.now(tz=UTC)

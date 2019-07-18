@@ -43,10 +43,9 @@ for interacting with it.
     :members:
 """
 
-import os
 from pathlib import Path
 
-from .. import transport, protocols, tasks
+from .. import transport, protocols, tasks, info
 from ..states import TransferState, FileState
 
 
@@ -112,9 +111,8 @@ class FileJuggler(tasks.Task):
         self.complete = {}  # keyed by slave_id
 
     def once(self):
-        stats = os.statvfs(str(self.output_path))
         self.stats_queue.send_msg(
-            'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
+            'STATFS', info.get_disk_stats(str(self.output_path)))
 
     def handle_fs_request(self, queue):
         """
@@ -181,9 +179,8 @@ class FileJuggler(tasks.Task):
         else:
             transfer.commit(package)
             self.logger.info('verified: %s', transfer.file_state.filename)
-            stats = os.statvfs(str(self.output_path))
             self.stats_queue.send_msg(
-                'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
+                'STATFS', info.get_disk_stats(str(self.output_path)))
 
     def do_remove(self, package, filename):
         """
@@ -204,9 +201,8 @@ class FileJuggler(tasks.Task):
             self.logger.warning('remove failed (not found): %s', path)
         else:
             self.logger.info('removed: %s', path)
-            stats = os.statvfs(str(self.output_path))
             self.stats_queue.send_msg(
-                'STATFS', (stats.f_frsize, stats.f_bavail, stats.f_blocks))
+                'STATFS', info.get_disk_stats(str(self.output_path)))
 
     def handle_file(self, queue):
         """
