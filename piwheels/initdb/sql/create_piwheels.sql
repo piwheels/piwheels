@@ -1117,8 +1117,8 @@ CREATE FUNCTION get_statistics()
     RETURNS TABLE(
         packages_built         INTEGER,
         builds_count           INTEGER,
-        builds_count_success   INTEGER,
-        builds_count_last_hour INTEGER,
+        builds_success         INTEGER,
+        builds_last_hour       INTEGER,
         builds_time            INTERVAL,
         files_count            INTEGER,
         builds_size            BIGINT,

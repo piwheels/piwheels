@@ -214,7 +214,8 @@ class SlaveDriver(tasks.Task):
                 for recent_builds in (self.recent_builds[abi],)
             }
             self.stats_queue.send_msg('STATBQ', {
-                abi: len(queue) for (abi, queue) in self.abi_queues.items()
+                abi: len(queue)
+                for (abi, queue) in self.abi_queues.items()
             })
 
     def handle_slave(self, queue):
@@ -346,9 +347,13 @@ class SlaveDriver(tasks.Task):
                     slave.slave_id, slave.label)
                 return 'SLEEP', protocols.NoData
             finally:
-                self.stats_queue.send_msg('STATBQ', {
-                    abi: len(queue) for (abi, queue) in self.abi_queues.items()
-                })
+                # Only push queue stats if there's space in the stats_queue
+                # (it's not essential; just a nice-to-have)
+                if self.stats_queue.poll(0, transport.POLLOUT):
+                    self.stats_queue.send_msg('STATBQ', {
+                        abi: len(queue)
+                        for (abi, queue) in self.abi_queues.items()
+                    })
 
     def do_busy(self, slave):
         """

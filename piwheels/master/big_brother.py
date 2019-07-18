@@ -101,7 +101,7 @@ class BigBrother(tasks.PauseableTask):
                 self.stats['disk_free'] = f_frsize * f_bavail
                 self.stats['disk_size'] = f_frsize * f_blocks
             elif msg == 'STATBQ':
-                self.stats['builds_pending'] = sum(data.values())
+                self.stats['builds_pending'] = data
             elif msg == 'HOME':
                 # Forced rebuild from Mr. Chase
                 self.last_search_run = datetime.now(tz=UTC) - timedelta(minutes=10)
@@ -110,9 +110,6 @@ class BigBrother(tasks.PauseableTask):
         # Leave 15 seconds between each run of the stats
         if datetime.now(tz=UTC) - self.last_stats_run > timedelta(seconds=30):
             rec = self.db.get_statistics()
-            # Rename a couple of columns
-            rec['builds_last_hour'] = rec.pop('builds_count_last_hour')
-            rec['builds_success'] = rec.pop('builds_count_success')
             self.stats.update(rec)
             self.web_queue.send_msg('HOME', self.stats)
             self.status_queue.send_msg('STATS', self.stats)
