@@ -16,7 +16,6 @@ CREATE INDEX preinstalled_apt_packages_abi_tag ON preinstalled_apt_packages(abi_
 GRANT SELECT ON preinstalled_apt_packages TO {username};
 
 DROP FUNCTION get_file_dependencies(TEXT);
-
 CREATE FUNCTION get_file_apt_dependencies(fn TEXT)
     RETURNS TABLE(
         dependency dependencies.dependency%TYPE
@@ -70,3 +69,84 @@ $sql$;
 
 REVOKE ALL ON FUNCTION get_project_description(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_description(TEXT) TO {username};
+
+DROP FUNCTION get_statistics();
+CREATE FUNCTION get_statistics()
+    RETURNS TABLE(
+        packages_built         INTEGER,
+        builds_count           INTEGER,
+        builds_success         INTEGER,
+        builds_last_hour       INTEGER,
+        builds_time            INTERVAL,
+        files_count            INTEGER,
+        builds_size            BIGINT,
+        downloads_last_month   INTEGER,
+        downloads_all          INTEGER
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    WITH build_stats AS (
+        SELECT
+            COUNT(*) AS builds_count,
+            COUNT(*) FILTER (WHERE status) AS builds_count_success,
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
+        FROM
+            builds
+    ),
+    build_latest AS (
+        SELECT COUNT(*) AS builds_count_last_hour
+        FROM builds
+        WHERE built_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    ),
+    file_count AS (
+        SELECT
+            COUNT(*) AS files_count,
+            COUNT(DISTINCT package_tag) AS packages_built
+        FROM files
+    ),
+    file_stats AS (
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
+        SELECT COALESCE(SUM(filesize), 0) AS builds_size
+        FROM files
+        WHERE platform_tag <> 'linux_armv6l'
+    ),
+    download_stats AS (
+        SELECT
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+            ) AS downloads_last_month,
+            COUNT(*) AS downloads_all
+        FROM downloads
+    )
+    SELECT
+        CAST(fc.packages_built AS INTEGER),
+        CAST(bs.builds_count AS INTEGER),
+        CAST(bs.builds_count_success AS INTEGER),
+        CAST(bl.builds_count_last_hour AS INTEGER),
+        bs.builds_time,
+        CAST(fc.files_count AS INTEGER),
+        fs.builds_size,
+        CAST(dl.downloads_last_month AS INTEGER),
+        CAST(dl.downloads_all AS INTEGER)
+    FROM
+        build_stats bs,
+        build_latest bl,
+        file_count fc,
+        file_stats fs,
+        download_stats dl;
+$sql$;
+
+REVOKE ALL ON FUNCTION get_statistics() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_statistics() TO {username};
