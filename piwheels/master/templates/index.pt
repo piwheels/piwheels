@@ -61,7 +61,7 @@ $ rm -rf testpip/</pre>
         Pi 2, Pi 1 and Pi Zero). Wheels are provided for Raspbian Jessie
         (Python 3.4), Raspbian Stretch (Python 3.5) and Raspbian Buster
         (Python 3.7). See each package's
-        <a href="https://www.piwheels.org/packages.html">project page</a>
+        <a href="/packages.html">project page</a>
         for information on available wheels.</p>
 
         <p class="small"><small>Page last updated ${timestamp}</small></p>
