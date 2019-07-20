@@ -40,6 +40,9 @@ from psycopg2.extensions import QueryCanceledError
 UTC = timezone.utc
 
 
+UTC = timezone.utc
+
+
 @pytest.fixture(scope='function')
 def builds_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(

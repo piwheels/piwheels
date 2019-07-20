@@ -53,9 +53,6 @@ class CounterTask(tasks.PauseableTask):
     def poll(self, timeout=0.1):
         return super().poll(timeout)
 
-    def foo(self):
-        pass
-
 
 class SimpleTask(tasks.Task):
     name = 'simple'

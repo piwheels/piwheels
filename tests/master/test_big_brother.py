@@ -215,22 +215,6 @@ def test_gen_homepage(db_queue, db_result, web_queue, task, stats_queue,
         assert web_queue.recv_msg() == ('HOME', stats_data.as_message())
 
 
-def test_gen_homepage(db_queue, web_queue, task, stats_queue):
-    with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC))
-        stats_queue.send_msg('HOME')
-        stats_queue.send_msg('STATBQ', {'cp34m': 1, 'cp35m': 0})
-        while task.stats['builds_pending'] == 0:
-            task.poll()
-        db_queue.expect('GETSEARCH')
-        db_queue.send('OK', {'foo': (10, 100)})
-        task.loop()
-        db_queue.check()
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
-
-
 def test_bad_stats(task, stats_queue):
     task.logger = mock.Mock()
     with mock.patch('piwheels.tasks.datetime') as dt:
