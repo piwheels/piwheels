@@ -100,7 +100,7 @@ def test_new_pkg(pypi_proxy, db_queue, task, pypi_json):
     db_queue.send('OK', None)
     db_queue.expect('SETPYPI', 1)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 1
@@ -126,7 +126,7 @@ def test_dev_mode(dev_mode, pypi_proxy, db_queue, task, pypi_json):
     db_queue.send('OK', True)
     db_queue.expect('SETPYPI', 1)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 1
@@ -149,7 +149,7 @@ def test_existing_ver(pypi_proxy, db_queue, task):
     db_queue.send('OK', False)
     db_queue.expect('SETPYPI', 1)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 1
@@ -177,7 +177,7 @@ def test_new_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.send('OK', True)
     db_queue.expect('SETPYPI', 6)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo", "bar"}
     assert task.serial == 6
@@ -207,7 +207,7 @@ def test_remove_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.send('OK', True)
     db_queue.expect('SETPYPI', 5)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo", "bar"}
     assert task.serial == 5
@@ -237,7 +237,7 @@ def test_remove_pkg(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.send('OK', True)
     db_queue.expect('SETPYPI', 5)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 5
@@ -269,7 +269,7 @@ def test_enable_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.send('OK', None)
     db_queue.expect('SETPYPI', 6)
     db_queue.send('OK', None)
-    task.loop()
+    task.poll(0)
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 6

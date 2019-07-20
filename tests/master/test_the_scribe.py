@@ -35,13 +35,18 @@ from time import time, sleep
 from collections import namedtuple, OrderedDict
 from html.parser import HTMLParser
 from threading import Event
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pkg_resources import resource_listdir
 
 from piwheels import const, protocols, transport
+from piwheels.states import MasterStats
 from piwheels.master.the_oracle import ProjectFilesRow, ProjectVersionsRow
 from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -59,6 +64,29 @@ def scribe_queue(request, zmq_context):
     queue.connect(const.SCRIBE_QUEUE)
     yield queue
     queue.close()
+
+
+@pytest.fixture()
+def stats_data(request):
+    return MasterStats(**{
+        'timestamp':             datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC),
+        'packages_built':        123,
+        'builds_last_hour':      {},
+        'builds_time':           timedelta(0),
+        'builds_size':           0,
+        'builds_pending':        {},
+        'new_last_hour':         0,
+        'files_count':           234,
+        'downloads_last_hour':   12,
+        'downloads_last_month':  345,
+        'downloads_all':         123456,
+        'disk_free':             0,
+        'disk_size':             0,
+        'mem_free':              0,
+        'mem_size':              0,
+        'cpu_temp':              0.0,
+        'load_average':          0.0,
+    })
 
 
 class ContainsParser(HTMLParser):
@@ -165,38 +193,21 @@ def test_bad_request(db_queue, task, scribe_queue, master_config):
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     assert e.wait(1)
     assert task.logger.error.call_args('invalid scribe_queue message: %s', 'FOO')
 
 
-def test_write_homepage(db_queue, task, scribe_queue, master_config):
+def test_write_homepage(db_queue, task, scribe_queue, master_config, stats_data):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('HOME', {
-        'packages_built': 123,
-        'files_count': 234,
-        'downloads_last_month': 345,
-        'downloads_all': 123456,
-    })
+    scribe_queue.send_msg('HOME', stats_data.as_message())
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     assert (root / 'index.html').exists() and (root / 'index.html').is_file()
-
-
-def test_write_homepage_fails(db_queue, task, scribe_queue, master_config):
-    db_queue.expect('ALLPKGS')
-    db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('HOME', {})
-    task.once()
-    with pytest.raises(NameError):
-        task.poll()
-    db_queue.check()
-    root = Path(master_config.output_path)
-    assert not (root / 'index.html').exists()
 
 
 def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
@@ -226,7 +237,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('GETPROJDESC', 'foo')
     db_queue.send('OK', 'Some description')
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
@@ -254,7 +265,7 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config)
     db_queue.expect('GETPROJDESC', 'foo')
     db_queue.send('OK', 'Some description')
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
@@ -286,7 +297,7 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     db_queue.expect('GETPROJDESC', 'foo')
     db_queue.send('OK', 'Some description')
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
@@ -328,7 +339,7 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
     db_queue.expect('GETPROJDESC', 'foo')
     db_queue.send('OK', 'Some description')
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     index = root / 'simple' / 'foo' / 'index.html'
@@ -377,7 +388,7 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('GETPROJDESC', 'bar')
     db_queue.send('OK', 'Some description')
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     root_index = root / 'simple' / 'index.html'
@@ -404,7 +415,7 @@ def test_write_search_index(db_queue, task, scribe_queue, master_config):
     }
     scribe_queue.send_msg('SEARCH', search_index)
     task.once()
-    task.poll()
+    task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
     packages_json = root / 'packages.json'

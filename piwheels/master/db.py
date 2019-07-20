@@ -422,11 +422,18 @@ class Database:
         Return various build related statistics from the database.
         """
         with self._conn.begin():
-            return dict(
+            stats = dict(
                 self._conn.execute(
                     "SELECT * FROM get_statistics()"
                 ).first().items()
             )
+            stats['builds_last_hour'] = {
+                row.abi_tag: row.builds
+                for row in self._conn.execute(
+                    "SELECT * FROM get_builds_last_hour()"
+                )
+            }
+            return stats
 
     def get_search_index(self):
         """

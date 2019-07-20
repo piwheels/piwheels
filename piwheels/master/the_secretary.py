@@ -76,6 +76,7 @@ class TheSecretary(tasks.PauseableTask):
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.output.hwm = 100
         self.output.connect(const.SCRIBE_QUEUE)
+        self.every(timedelta(seconds=1), self.handle_output)
         self.db = DbClient(config, self.logger)
 
     def close(self):
@@ -96,18 +97,17 @@ class TheSecretary(tasks.PauseableTask):
             self.buffer.append(IndexTask(item.package, item.added_at))
             self.commands[item.package] = item.command
 
-    def loop(self):
+    def handle_output(self):
+        # Process items until the output queue is out of space; this ensures
+        # we don't block for any significant period so we can still process
+        # control commands
         now = datetime.now(tz=UTC)
-        count = 0
-        # Process up to 10 items from the queue; this limit is in place to
-        # ensure we still poll the incoming queue as reasonably short intervals
-        while self.buffer and count < 10:
+        while self.buffer and self.output.poll(0, transport.POLLOUT):
             first = self.buffer[0]
             if now - first.timestamp > self.timeout:
                 self.buffer.popleft()
                 message = self.commands.pop(first.package)
                 self.output.send_msg(message, first.package)
-                count += 1
             else:
                 break
 

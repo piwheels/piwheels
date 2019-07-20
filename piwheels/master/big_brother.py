@@ -37,7 +37,7 @@ import os
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from .. import const, protocols, transport, tasks, info
+from .. import const, protocols, transport, tasks, info, states
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 
@@ -59,26 +59,25 @@ class BigBrother(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.history = deque(maxlen=100)
-        self.stats = {
+        self.stats = states.MasterStats(**{
+            'timestamp':             datetime.now(tz=UTC),
             'packages_built':        0,
-            'builds_count':          0,
-            'builds_last_hour':      0,
-            'builds_success':        0,
+            'builds_last_hour':      {},
             'builds_time':           timedelta(0),
             'builds_size':           0,
-            'builds_pending':        0,
+            'builds_pending':        {},
+            'new_last_hour':         0,
             'files_count':           0,
-            'disk_free':             0,
-            'disk_size':             1,
+            'downloads_last_hour':   0,
             'downloads_last_month':  0,
             'downloads_all':         0,
+            'disk_free':             0,
+            'disk_size':             0,
             'mem_free':              0,
             'mem_size':              0,
-            'temperature':           0.0,
+            'cpu_temp':              0.0,
             'load_average':          0.0,
-        }
-        self.last_info_run = self.last_stats_run = self.last_search_run = (
-            datetime.now(tz=UTC) - timedelta(minutes=10))
+        })
         stats_queue = self.socket(
             transport.PULL, protocol=protocols.big_brother)
         stats_queue.bind(config.stats_queue)
@@ -91,6 +90,9 @@ class BigBrother(tasks.PauseableTask):
             transport.PUSH, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
+        self.every(timedelta(minutes=5), self.update_search_index)
+        self.every(timedelta(seconds=30), self.update_homepage)
+        self.every(timedelta(seconds=10), self.update_stats)
         self.db = DbClient(config, self.logger)
 
     def close(self):
@@ -105,32 +107,28 @@ class BigBrother(tasks.PauseableTask):
         else:
             if msg == 'STATFS':
                 disk_size, disk_free = data
-                self.stats['disk_free'] = disk_free
-                self.stats['disk_size'] = disk_size
+                self.stats = self.stats._replace(
+                    disk_free=disk_free, disk_size=disk_size)
             elif msg == 'STATBQ':
-                self.stats['builds_pending'] = data
+                self.stats = self.stats._replace(builds_pending=data)
             elif msg == 'HOME':
                 # Forced rebuild from Mr. Chase
-                self.last_search_run = datetime.now(tz=UTC) - timedelta(minutes=10)
+                self.force(self.update_search_index)
+                self.force(self.update_homepage)
 
-    def loop(self):
-        # Leave 10 seconds between each run of mem/temp stats
-        if datetime.now(tz=UTC) - self.last_info_run > timedelta(seconds=10):
-            mem_size, mem_free = info.get_mem_stats()
-            self.stats['mem_size'] = mem_size
-            self.stats['mem_free'] = mem_free
-            self.stats['temperature'] = info.get_cpu_temp()
-            self.stats['load_average'] = os.getloadavg()[0]
-            self.history.append(self.stats.copy())
-            self.status_queue.send_msg('STATS', self.stats)
-            self.last_info_run = datetime.now(tz=UTC)
-        # Leave 30 seconds between each run of the db stats
-        if datetime.now(tz=UTC) - self.last_stats_run > timedelta(seconds=30):
-            rec = self.db.get_statistics()
-            self.stats.update(rec)
-            self.web_queue.send_msg('HOME', self.stats)
-            self.last_stats_run = datetime.now(tz=UTC)
-        # Leave 5 minutes between each run of the (expensive) search index
-        if datetime.now(tz=UTC) - self.last_search_run > timedelta(minutes=5):
-            self.web_queue.send_msg('SEARCH', self.db.get_search_index())
-            self.last_search_run = datetime.now(tz=UTC)
+    def update_search_index(self):
+        self.web_queue.send_msg('SEARCH', self.db.get_search_index())
+
+    def update_homepage(self):
+        self.stats = self.stats._replace(
+            timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
+        self.web_queue.send_msg('HOME', self.stats.as_message())
+
+    def update_stats(self):
+        mem_size, mem_free = info.get_mem_stats()
+        self.stats = self.stats._replace(
+            timestamp=datetime.now(tz=UTC), mem_size=mem_size,
+            mem_free=mem_free, cpu_temp=info.get_cpu_temp(),
+            load_average=os.getloadavg()[0])
+        self.history.append(self.stats)
+        self.status_queue.send_msg('STATS', self.stats.as_message())

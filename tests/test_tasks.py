@@ -28,6 +28,7 @@
 
 
 from unittest import mock
+from datetime import timedelta
 from time import sleep
 
 import pytest
@@ -41,75 +42,101 @@ class CounterTask(tasks.PauseableTask):
 
     def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__(config, control_protocol)
+        self.every(timedelta(microseconds=1), self.loop)
         self.count = 0
 
     def loop(self):
         self.count += 1
 
-    def poll(self):
-        super().poll(1)
+
+class BrokenTask(tasks.Task):
+    # A trivial task which instantly breaks
+    def __init__(self, config, control_protocol=protocols.task_control):
+        super().__init__(config, control_protocol)
+        self.every(timedelta(microseconds=1), self.loop)
+
+    def loop(self):
+        raise Exception("Don't panic!")
 
 
 def test_task_quits(master_config, master_control_queue):
     task = tasks.Task(master_config)
-    task.start()
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
+    try:
+        task.start()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+    finally:
+        task.close()
 
 
 def test_task_runs(master_config, master_control_queue):
     task = CounterTask(master_config)
-    task.start()
-    task.quit()
-    task.join(10)
-    assert task.count > 0
+    try:
+        task.start()
+        task.quit()
+        task.join(10)
+        assert task.count > 0
+    finally:
+        task.close()
 
 
 def test_task_pause(master_config, master_control_queue):
     task = CounterTask(master_config)
-    task.start()
-    task.pause()
-    sleep(0.01)
-    current = task.count
-    sleep(0.01)
-    assert task.count == current
-    task.resume()
-    task.quit()
-    task.join(10)
-    assert task.count > current
+    try:
+        task.start()
+        task.pause()
+        sleep(0.01)
+        current = task.count
+        sleep(0.01)
+        assert task.count == current
+        task.resume()
+        task.quit()
+        task.join(10)
+        assert task.count > current
+    finally:
+        task.close()
 
 
 def test_task_pause_resume_idempotent(master_config, master_control_queue):
     task = CounterTask(master_config)
-    task.start()
-    task.pause()
-    task.pause()
-    task.resume()
-    task.resume()
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
+    try:
+        task.start()
+        task.pause()
+        task.pause()
+        task.resume()
+        task.resume()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+    finally:
+        task.close()
 
 
 def test_task_quit_while_paused(master_config, master_control_queue):
     task = CounterTask(master_config)
-    task.start()
-    task.pause()
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
+    try:
+        task.start()
+        task.pause()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+    finally:
+        task.close()
 
 
 def test_task_resume_while_not_paused(master_config, master_control_queue):
     task = CounterTask(master_config)
-    task.logger = mock.Mock()
-    task.start()
-    task.resume()
-    task.quit()
-    task.join(10)
-    assert not task.is_alive()
-    assert task.logger.warning.call_count == 1
+    try:
+        task.logger = mock.Mock()
+        task.start()
+        task.resume()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+        assert task.logger.warning.call_count == 1
+    finally:
+        task.close()
 
 
 def test_broken_control(master_config, master_control_queue):
@@ -118,21 +145,24 @@ def test_broken_control(master_config, master_control_queue):
         'QUIT': protocols.NoData,
     })
     task = CounterTask(master_config, control_protocol=protocol)
-    task.start()
-    task._ctrl('FOO')
-    task.join(10)
-    assert not task.is_alive()
-    # Ensure the broken task tells the master to quit
-    assert master_control_queue.recv_msg() == ('QUIT', None)
+    try:
+        task.start()
+        task._ctrl('FOO')
+        task.join(10)
+        assert not task.is_alive()
+        # Ensure the broken task tells the master to quit
+        assert master_control_queue.recv_msg() == ('QUIT', None)
+    finally:
+        task.close()
 
 
 def test_broken_task_quits(master_config, master_control_queue):
-    class BrokenTask(tasks.Task):
-        def loop(self):
-            raise Exception("Don't panic!")
     task = BrokenTask(master_config)
-    task.start()
-    task.join(10)
-    assert not task.is_alive()
-    # Ensure the broken task tells the master to quit
-    assert master_control_queue.recv_msg() == ('QUIT', None)
+    try:
+        task.start()
+        task.join(10)
+        assert not task.is_alive()
+        # Ensure the broken task tells the master to quit
+        assert master_control_queue.recv_msg() == ('QUIT', None)
+    finally:
+        task.close()

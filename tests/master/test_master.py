@@ -35,6 +35,7 @@ import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
+from piwheels.states import MasterStats
 from piwheels.master import main, const
 
 
@@ -176,15 +177,16 @@ def test_status_passthru(tmpdir, mock_context, mock_systemd, master_thread):
         # SUB queue working
         msg, data = ext_status.recv_msg()
         assert msg == 'STATS'
-        data['builds_count'] = 12345
+        data = MasterStats.from_message(data)
+        data = data._replace(new_last_hour=83)
         int_status.connect(const.INT_STATUS_QUEUE)
-        int_status.send_msg('STATS', data)
+        int_status.send_msg('STATS', data.as_message())
         # Try several times to read the passed-thru message; other messages
         # (like stats from BigBrother) will be sent to ext-status too
         for i in range(3):
             msg, copy = ext_status.recv_msg()
             if msg == 'STATS':
-                assert copy == data
+                assert MasterStats.from_message(copy) == data
                 break
         else:
             assert False, "Didn't see modified STATS passed-thru"

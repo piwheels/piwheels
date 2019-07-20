@@ -79,24 +79,25 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
         return Protocol(self.send, self.recv)
 
 
-_master_stats = {      # statistics
-    'packages_built':        int,
-    'builds_count':          int,
-    'builds_last_hour':      int,
-    'builds_success':        int,
-    'builds_time':           dt.timedelta,
-    'builds_size':           int,
-    'builds_pending':        int,
-    'files_count':           int,
-    'disk_free':             int,
-    'disk_size':             int,
-    'downloads_last_month':  int,
-    'downloads_all':         int,
-    'mem_free':              int,
-    'mem_size':              int,
-    'temperature':           float,
-    'load_average':          float,
-}
+_master_stats = ExactSequence([
+    dt.datetime,  # timestamp
+    int,          # packages built
+    {str: int},   # builds last hour (map of abi: count)
+    dt.timedelta, # builds time
+    int,          # builds size
+    {str: int},   # builds pending (map of abi: count)
+    int,          # new last hour
+    int,          # files count
+    int,          # downloads last hour
+    int,          # downloads last month
+    int,          # downloads all
+    int,          # disk free (for output dir)
+    int,          # disk size (for output dir)
+    int,          # mem free
+    int,          # mem size
+    float,        # load average
+    float,        # board temperature (C)
+])
 
 
 _slave_hello = ExactSequence([
@@ -114,6 +115,7 @@ _slave_hello = ExactSequence([
 
 
 _slave_stats = ExactSequence([
+    dt.datetime,    # timestamp
     int,            # disk size (for build dir)
     int,            # disk free (for build dir)
     int,            # mem size

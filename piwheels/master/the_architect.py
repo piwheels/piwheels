@@ -33,7 +33,7 @@ Defines :class:`TheArchitect` task; see class for more details.
     :members:
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from psycopg2.extensions import QueryCanceledError
 
@@ -52,11 +52,11 @@ class TheArchitect(tasks.Task):
     def __init__(self, config):
         super().__init__(config)
         self.db = Database(config.dsn)
-        self.last_run = datetime(1970, 1, 1)
         self.builds_queue = self.socket(
             transport.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.connect(config.builds_queue)
+        self.every(timedelta(minutes=1), self.update_build_queue)
         self.can_cancel = False
 
     def close(self):
@@ -71,26 +71,20 @@ class TheArchitect(tasks.Task):
             self.db._conn.connection.cancel()
         super().quit()
 
-    def loop(self):
+    def update_build_queue(self):
         """
         The architect simply runs the build queue query repeatedly, with a
-        break of 60 seconds between each execution. The query is limited (in
-        :class:`~.db.Database`) to 1000 entries per build ABI.
+        break of a minute between each execution.
 
         All entries found within this limit are sorted into per-ABI queues and
         pushed to :class:`~.slave_driver.SlaveDriver` which queues and
         dispatches jobs to build ABI-matched slaves as they become available.
         """
-        # Leave 60 seconds between each run of the (expensive) builds
-        # pending query
-        if datetime.utcnow() - self.last_run > timedelta(seconds=60):
-            self.can_cancel = True
-            try:
-                self.builds_queue.send_msg(
-                    'QUEUE', self.db.get_build_queue(100000))
-            except QueryCanceledError:
-                self.logger.warning('Cancelled query during shutdown')
-            else:
-                self.last_run = datetime.utcnow()
-            finally:
-                self.can_cancel = False
+        self.can_cancel = True
+        try:
+            self.builds_queue.send_msg(
+                'QUEUE', self.db.get_build_queue(100000))
+        except QueryCanceledError:
+            self.logger.warning('Cancelled query during shutdown')
+        finally:
+            self.can_cancel = False

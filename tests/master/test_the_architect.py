@@ -27,12 +27,15 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from piwheels import protocols, transport
 from piwheels.master.the_architect import TheArchitect
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture(scope='function')
@@ -52,17 +55,12 @@ def task(request, builds_queue, master_config):
 
 
 def test_architect_queue(db, with_build, task, builds_queue):
-    with mock.patch('piwheels.master.the_architect.datetime') as dtmock:
-        now = datetime.utcnow()
-        dtmock.utcnow.side_effect = [
-            now,
-            now,
-            now + timedelta(seconds=300),
-            now + timedelta(seconds=300),
-        ]
-        task.loop()
+    with mock.patch('piwheels.tasks.datetime') as dt:
+        dt.now.return_value = datetime.now(tz=UTC)
+        task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
         with db.begin():
             db.execute("DELETE FROM builds")
-        task.loop()
+        dt.now.return_value += timedelta(minutes=3)
+        task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})

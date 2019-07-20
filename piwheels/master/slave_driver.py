@@ -34,7 +34,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
 """
 
 import pickle
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .. import const, protocols, tasks, transport
 from ..states import SlaveState, FileState
@@ -92,6 +92,7 @@ class SlaveDriver(tasks.Task):
         self.fs = FsClient(config, self.logger)
         self.slaves = {}
         self.pypi_simple = config.pypi_simple
+        self.every(timedelta(seconds=10), self.remove_expired)
 
     def close(self):
         self.fs.close()
@@ -115,7 +116,7 @@ class SlaveDriver(tasks.Task):
         """
         self._ctrl('KILL', slave_id)
 
-    def loop(self):
+    def remove_expired(self):
         """
         Remove slaves which have exceeded their timeout.
         """

@@ -56,7 +56,7 @@ def test_log_valid_download(db_queue, log_queue, download_state, task):
     log_queue.send_msg('LOGDOWNLOAD', list(download_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
     db_queue.send('OK', None)
-    task.poll()
+    task.poll(0)
     assert task.logger.info.call_args == mock.call(
         'logging download of %s from %s',
         download_state.filename, download_state.host)
@@ -109,5 +109,5 @@ def test_log_valid_webpage_hit(db_queue, log_queue, page_state, task):
 
 def test_log_invalid(db_queue, log_queue, task):
     log_queue.send(b'FOO')
-    task.poll()
+    task.poll(0)
     assert task.logger.error.call_count == 1

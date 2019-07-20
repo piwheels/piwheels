@@ -615,7 +615,7 @@ class SlaveState:
                 logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
         elif msg in ('IDLE', 'BUSY'):
-            self._stats.append(SlaveStats(datetime.now(tz=UTC), *data))
+            self._stats.append(SlaveStats.from_message(data))
 
     @property
     def reply(self):
@@ -771,6 +771,35 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+class MasterStats(namedtuple('MasterStats', (
+    'timestamp',
+    'packages_built',
+    'builds_last_hour',
+    'builds_time',
+    'builds_size',
+    'builds_pending',
+    'new_last_hour',
+    'files_count',
+    'downloads_last_hour',
+    'downloads_last_month',
+    'downloads_all',
+    'disk_free',
+    'disk_size',
+    'mem_free',
+    'mem_size',
+    'load_average',
+    'cpu_temp',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
 
 
 class SlaveStats(namedtuple('SlaveStats', (

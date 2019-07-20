@@ -187,8 +187,8 @@ def test_slave_recv_request(build_state, slave_state, file_state):
     with mock.patch('piwheels.states.datetime') as dt:
         now = datetime.now(tz=UTC)
         dt.now.return_value = now
-        slave_state.request = ('IDLE', [1000, 900, 1000, 900, 1.0, 60.0])
-        assert slave_state.request == ('IDLE', [1000, 900, 1000, 900, 1.0, 60.0])
+        slave_state.request = ('IDLE', [now, 1000, 900, 1000, 900, 1.0, 60.0])
+        assert slave_state.request == ('IDLE', [now, 1000, 900, 1000, 900, 1.0, 60.0])
         assert slave_state.last_seen == now
         assert slave_state.build is None
         now = datetime.now(tz=UTC)

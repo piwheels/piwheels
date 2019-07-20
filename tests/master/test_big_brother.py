@@ -35,6 +35,7 @@ import pytest
 
 from conftest import MockTask
 from piwheels import const, protocols, transport
+from piwheels.states import MasterStats
 from piwheels.master.big_brother import BigBrother
 
 
@@ -42,36 +43,41 @@ UTC = timezone.utc
 
 
 @pytest.fixture()
-def stats_result(request):
+def db_result(request):
     return {
-        'packages_built':         0,
-        'builds_count':           0,
-        'builds_count_success':   0,
-        'builds_count_last_hour': 0,
         'builds_time':            timedelta(0),
-        'files_count':            0,
         'builds_size':            0,
-        'downloads_last_month':   10,
-        'downloads_all':          100,
+        'packages_built':         0,
+        'files_count':            0,
+        'new_last_hour':          0,
+        'downloads_last_hour':    0,
+        'downloads_last_month':   0,
+        'downloads_all':          0,
+        'builds_last_hour':       {},
     }
 
 
 @pytest.fixture()
-def stats_dict(request):
-    return {
-        'packages_built': 0,
-        'builds_count':   0,
-        'builds_last_hour': 0,
-        'builds_success': 0,
-        'builds_time': timedelta(0),
-        'builds_size': 0,
-        'builds_pending': 0,
-        'files_count': 0,
-        'disk_free': 0,
-        'disk_size': 1,
-        'downloads_last_month': 10,
-        'downloads_all': 100,
-    }
+def stats_data(request):
+    return MasterStats(**{
+        'timestamp':             datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC),
+        'packages_built':        0,
+        'builds_last_hour':      {},
+        'builds_time':           timedelta(0),
+        'builds_size':           0,
+        'builds_pending':        {},
+        'new_last_hour':         0,
+        'files_count':           0,
+        'downloads_last_hour':   0,
+        'downloads_last_month':  0,
+        'downloads_all':         0,
+        'disk_free':             0,
+        'disk_size':             0,
+        'mem_free':              0,
+        'mem_size':              0,
+        'cpu_temp':              0.0,
+        'load_average':          0.0,
+    })
 
 
 StatVFS = namedtuple('StatVFS', (
@@ -86,11 +92,6 @@ StatVFS = namedtuple('StatVFS', (
     'f_flag',
     'f_namemax',
 ))
-
-
-@pytest.fixture()
-def stats_disk(request):
-    return (4096, 40000, 1000000)
 
 
 @pytest.fixture()
@@ -120,114 +121,102 @@ def task(request, master_config):
     task.close()
 
 
-def test_gen_skip(master_status_queue, web_queue, task):
-    with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
-        task.loop()  # crank the handle once
-        with pytest.raises(transport.Error):
-            master_status_queue.recv_msg(flags=transport.NOBLOCK)
-        with pytest.raises(transport.Error):
-            web_queue.recv_msg(flags=transport.NOBLOCK)
-
-
-def test_gen_stats(db_queue, master_status_queue, web_queue, task,
-                   stats_result, stats_dict):
+def test_update_homepage(db_queue, web_queue, task, db_result, stats_data):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
+        db_result['builds_last_hour'] = {'cp34m': 0, 'cp35m': 0}
+        db_result['downloads_all'] = 1000
+        db_result['downloads_last_month'] = 100
         db_queue.expect('GETSTATS')
-        db_queue.send('OK', stats_result)
-        task.loop()  # crank the handle once
+        db_queue.send('OK', db_result)
+        task.update_homepage()
         db_queue.check()
-        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('HOME', stats_dict)
+        stats_data = stats_data._replace(
+            builds_last_hour={'cp34m': 0, 'cp35m': 0},
+            downloads_all=1000,
+            downloads_last_month=100,
+        )
+        assert web_queue.recv_msg() == ('HOME', stats_data.as_message())
 
 
-def test_gen_stats_and_search(db_queue, master_status_queue, web_queue, task,
-                              stats_result, stats_dict):
+def test_update_search_index(db_queue, web_queue, task):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 20, 40, tzinfo=UTC))
-        db_queue.expect('GETSTATS')
-        db_queue.send('OK', stats_result)
         db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
-        task.loop()  # crank the handle once
+        task.update_search_index()
         db_queue.check()
-        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('HOME', stats_dict)
         assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
 
 
-def test_gen_disk_stats(db_queue, master_status_queue, web_queue, task,
-                        stats_queue, stats_result, stats_dict, stats_disk):
-    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+def test_update_stats(master_status_queue, task, stats_data):
+    with mock.patch('piwheels.master.big_brother.datetime') as dt, \
+            mock.patch('piwheels.info.get_mem_stats') as mem, \
+            mock.patch('piwheels.info.get_cpu_temp') as cpu, \
+            mock.patch('os.getloadavg') as load:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
-        stats_queue.send_msg('STATFS', stats_disk)
-        while task.stats['disk_free'] == 0:
-            task.poll()
-        frsize, bavail, blocks = stats_disk
-        stats_dict['disk_free'] = frsize * bavail
-        stats_dict['disk_size'] = frsize * blocks
-        db_queue.expect('GETSTATS')
-        db_queue.send('OK', stats_result)
-        task.loop()
-        db_queue.check()
-        assert web_queue.recv_msg() == ('HOME', stats_dict)
-        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
+        mem.return_value = (1, 2)
+        cpu.return_value = 56.0
+        load.return_value = (1.3, 2.5, 3.9)
+        task.update_stats()
+        stats_data = stats_data._replace(
+            mem_size=1, mem_free=2, cpu_temp=56.0, load_average=1.3)
+        assert master_status_queue.recv_msg() == (
+            'STATS', stats_data.as_message())
 
 
-def test_gen_queue_stats(db_queue, master_status_queue, web_queue, task,
-                         stats_queue, stats_result, stats_dict):
+def test_gen_disk_stats(task, stats_queue):
+    task.intervals.clear()
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 20, 40, tzinfo=UTC))
+        stats_queue.send_msg('STATFS', [4, 3])
+        task.poll(0)
+        assert task.stats.disk_size == 4
+        assert task.stats.disk_free == 3
+
+
+def test_gen_queue_stats(task, stats_queue):
+    task.intervals.clear()
+    with mock.patch('piwheels.master.big_brother.datetime') as dt:
         stats_queue.send_msg('STATBQ', {'cp34m': 1, 'cp35m': 0})
-        while task.stats['builds_pending'] == 0:
-            task.poll()
-        stats_dict['builds_pending'] = 1
-        db_queue.expect('GETSTATS')
-        db_queue.send('OK', stats_result)
-        db_queue.expect('GETSEARCH')
-        db_queue.send('OK', {'foo': (10, 100)})
-        task.loop()
-        db_queue.check()
-        assert web_queue.recv_msg() == ('HOME', stats_dict)
-        assert master_status_queue.recv_msg() == ('STATS', stats_dict)
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
+        task.poll(0)
+        assert task.stats.builds_pending == {'cp34m': 1, 'cp35m': 0}
 
 
-def test_gen_homepage(db_queue, web_queue, task, stats_queue):
-    with mock.patch('piwheels.master.big_brother.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC))
+def test_gen_homepage(db_queue, db_result, web_queue, task, stats_queue,
+                      stats_data):
+    with mock.patch('piwheels.tasks.datetime') as dt1, \
+            mock.patch('piwheels.master.big_brother.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
+        for subtask in task.intervals:
+            subtask.last_run = dt1.now.return_value
         stats_queue.send_msg('HOME')
-        stats_queue.send_msg('STATBQ', {'cp34m': 1, 'cp35m': 0})
-        while task.stats['builds_pending'] == 0:
-            task.poll()
+        db_result['builds_last_hour'] = {'cp34m': 5, 'cp35m': 0}
+        db_result['downloads_last_month'] = 100
+        db_result['downloads_last_hour'] = 1
         db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
-        task.loop()
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', db_result)
+        # Crank the handle once (handles HOME message) but no periodic tasks
+        task.poll(0)
+        # Crank it again to run the forced periodic tasks
+        task.poll(0)
         db_queue.check()
+        stats_data = stats_data._replace(
+            builds_last_hour={'cp34m': 5, 'cp35m': 0},
+            downloads_last_month=100, downloads_last_hour=1
+        )
         assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
+        assert web_queue.recv_msg() == ('HOME', stats_data.as_message())
 
 
-def test_bad_stats(db_queue, master_status_queue, web_queue, task,
-                         stats_queue, stats_result, stats_dict):
+def test_bad_stats(task, stats_queue):
     task.logger = mock.Mock()
-    with mock.patch('piwheels.master.big_brother.datetime') as dt:
+    with mock.patch('piwheels.tasks.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        task.last_stats_run = task.last_search_run = (
-            datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC))
+        for subtask in task.intervals:
+            subtask.last_run = dt.now.return_value
         stats_queue.send(b'FOO')
-        task.poll()
+        task.poll(0)
         assert task.logger.error.call_args == mock.call(
             'unable to deserialize data')

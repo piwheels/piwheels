@@ -35,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from piwheels import const, protocols, transport
+from piwheels.states import MasterStats
 from piwheels.master.the_secretary import TheSecretary
 
 
@@ -75,29 +76,34 @@ def web_queue(request, zmq_context, task, master_config):
 
 
 @pytest.fixture()
-def stats_dict(request):
-    return {
-        'packages_built': 0,
-        'builds_count':   0,
-        'builds_last_hour': 0,
-        'builds_success': 0,
-        'builds_time': timedelta(0),
-        'builds_size': 0,
-        'builds_pending': 0,
-        'files_count': 0,
-        'disk_free': 0,
-        'disk_size': 1,
-        'downloads_last_month': 10,
-        'downloads_all': 100,
-    }
+def stats_data(request):
+    return MasterStats(**{
+        'timestamp':             datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC),
+        'packages_built':        0,
+        'builds_last_hour':      {},
+        'builds_time':           timedelta(0),
+        'builds_size':           0,
+        'builds_pending':        {},
+        'new_last_hour':         0,
+        'files_count':           0,
+        'downloads_last_hour':   1,
+        'downloads_last_month':  10,
+        'downloads_all':         100,
+        'disk_free':             0,
+        'disk_size':             0,
+        'mem_free':              0,
+        'mem_size':              0,
+        'cpu_temp':              0.0,
+        'load_average':          0.0,
+    })
 
 
-def test_pass_through(task, web_queue, scribe_queue, stats_dict, db_queue):
-    web_queue.send_msg('HOME', stats_dict)
-    task.poll()
-    assert scribe_queue.recv_msg() == ('HOME', stats_dict)
+def test_pass_through(task, web_queue, scribe_queue, stats_data, db_queue):
+    web_queue.send_msg('HOME', stats_data.as_message())
+    task.poll(0)
+    assert scribe_queue.recv_msg() == ('HOME', stats_data.as_message())
     web_queue.send_msg('SEARCH', {'foo': (0, 1)})
-    task.poll()
+    task.poll(0)
     assert scribe_queue.recv_msg() == ('SEARCH', {'foo': [0, 1]})
 
 
@@ -106,45 +112,44 @@ def test_bad_request(task, web_queue):
     e = Event()
     task.logger = mock.Mock()
     task.logger.error.side_effect = lambda *args: e.set()
-    task.poll()
+    task.poll(0)
     assert e.wait(1)
     assert task.logger.error.call_args('invalid web_queue message: %s', 'FOO')
 
 
 def test_buffer(task, web_queue, scribe_queue):
-    with mock.patch('piwheels.master.the_secretary.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
-        task.loop()
+    with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
+            mock.patch('piwheels.tasks.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.force(task.handle_output)
+        task.poll(0)
         web_queue.send_msg('PKGPROJ', 'foo')
-        task.poll()
-        task.loop()
+        task.poll(0)
         with pytest.raises(transport.Again):
             scribe_queue.recv_msg(flags=transport.NOBLOCK)
-        dt.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
-        task.loop()
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
+        task.poll(0)
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
 
 
 def test_upgrade(task, web_queue, scribe_queue):
-    with mock.patch('piwheels.master.the_secretary.datetime') as dt:
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
-        task.loop()
+    with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
+            mock.patch('piwheels.tasks.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        task.force(task.handle_output)
+        task.poll(0)
         web_queue.send_msg('PKGPROJ', 'foo')
-        task.poll()
-        task.loop()
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 30, tzinfo=UTC)
+        task.poll(0)
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 30, tzinfo=UTC)
         web_queue.send_msg('PKGBOTH', 'foo')
-        task.poll()
-        task.loop()
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 31, tzinfo=UTC)
+        task.poll(0)
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 31, tzinfo=UTC)
         web_queue.send_msg('PKGPROJ', 'bar')
-        task.poll()
-        task.loop()
-        dt.now.return_value = datetime(2018, 1, 1, 12, 30, 32, tzinfo=UTC)
+        task.poll(0)
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 32, tzinfo=UTC)
         web_queue.send_msg('PKGPROJ', 'bar')
-        task.poll()
-        task.loop()
-        dt.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
-        task.loop()
+        task.poll(0)
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
+        task.poll(0)
         assert scribe_queue.recv_msg() == ('PKGBOTH', 'foo')
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'bar')
