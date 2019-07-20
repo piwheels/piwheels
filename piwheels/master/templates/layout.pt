@@ -62,8 +62,8 @@
     </footer>
 
     <script src="//code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script src="what-input.min.js"></script>
-    <script src="foundation.min.js"></script>
+    <script src="/what-input.min.js"></script>
+    <script src="/foundation.min.js"></script>
     <script>$(document).foundation();</script>
     <div metal:define-slot="scripts" />
   </body>
