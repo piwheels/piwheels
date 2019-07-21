@@ -168,6 +168,11 @@ class SlaveDriver(tasks.Task):
                 if slave.slave_id == data:
                     slave.kill()
                     break
+        elif msg == 'SKIP':
+            for slave in self.slaves.values():
+                if slave.slave_id == data:
+                    slave.skip()
+                    break
         elif msg == 'HELLO':
             for slave in self.slaves.values():
                 slave.hello()
@@ -370,8 +375,10 @@ class SlaveDriver(tasks.Task):
         slave should immediately terminate and discard the build and return to
         "IDLE" state.
         """
-        # TODO Return "DONE" when slave terminated or pausing master
-        return 'CONT', protocols.NoData
+        if self.paused or slave.skipped:
+            return 'DONE', protocols.NoData
+        else:
+            return 'CONT', protocols.NoData
 
     def do_built(self, slave):
         """

@@ -279,6 +279,7 @@ write access to the output directory.
                         handler = {
                             'QUIT': self.do_quit,
                             'KILL': lambda: self.do_kill(data),
+                            'SKIP': lambda: self.do_skip(data),
                             'HELLO': self.do_hello,
                             'PAUSE': self.do_pause,
                             'RESUME': self.do_resume,
@@ -306,8 +307,18 @@ write access to the output directory.
 
     def do_kill(self, slave_id):
         """
-        Handler for the KILL message; this terminates the specified build slave
-        by its master id.
+        Handler for the KILL message; this tells the specified build slave to
+        terminate next time it contacts the master.
+        """
+        self.logger.warning('killing slave %d', slave_id)
+        for task in self.tasks:
+            if isinstance(task, SlaveDriver):
+                task.kill_slave(slave_id)
+
+    def do_skip(self, slave_id):
+        """
+        Handler for the SKIP message; this tells the specified build slave to
+        skip its current build next time it contacts the master.
         """
         self.logger.warning('killing slave %d', slave_id)
         for task in self.tasks:

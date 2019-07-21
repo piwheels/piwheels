@@ -224,6 +224,7 @@ master_control = Protocol(recv={
     'PAUSE':  NoData,  # pause all operations on the master
     'RESUME': NoData,  # resume all operations on the master
     'KILL':   int,     # kill the specified slave
+    'SKIP':   int,     # skip the specified slave
     'QUIT':   NoData,  # terminate the master
 })
 

@@ -479,6 +479,7 @@ class SlaveState:
         self._build = None
         self._stats = deque(maxlen=100)
         self._terminated = False
+        self._skipped = False
 
     def __repr__(self):
         return (
@@ -515,9 +516,16 @@ class SlaveState:
     def kill(self):
         self._terminated = True
 
+    def skip(self):
+        self._skipped = True
+
     @property
     def terminated(self):
         return self._terminated
+
+    @property
+    def skipped(self):
+        return self._terminated or self._skipped
 
     @property
     def address(self):
@@ -627,6 +635,7 @@ class SlaveState:
         msg, data = value
         if msg == 'DONE':
             self._build = None
+            self._skipped = False
         if msg == 'ACK':
             self.hello()
         else:
