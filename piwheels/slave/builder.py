@@ -508,5 +508,4 @@ class Builder(Thread):
                     self._status = False
                     self._wheels.clear()
             log_file.seek(0)
-            # Replace NUL characters because ... sometimes we get them?!
-            self._output = log_file.read().replace('\0', '\N{REPLACEMENT CHARACTER}')
+            self._output = log_file.read()

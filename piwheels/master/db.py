@@ -50,7 +50,7 @@ from .. import __version__
 
 UTC = timezone.utc
 CONTROL_CHARS = {
-    c: '?'
+    c: '\N{REPLACEMENT CHARACTER}'
     for c in chain(
         range(0x00, 0x09),
         range(0x0e, 0x20),
@@ -317,7 +317,7 @@ class Database:
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        build.output,
+                        sanitize(build.output),
                         [(
                             file.filename,
                             None,
@@ -348,7 +348,7 @@ class Database:
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        build.output,
+                        sanitize(build.output),
                     )).scalar()
             build.logged(build_id)
 
