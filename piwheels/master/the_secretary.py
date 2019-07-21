@@ -44,7 +44,7 @@ UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
-class TheSecretary(tasks.PauseableTask):
+class TheSecretary(tasks.Task):
     """
     This task buffers requests for the scribe, for the purpose of consolidating
     multiple consecutive (duplicate) requests.
@@ -61,6 +61,7 @@ class TheSecretary(tasks.PauseableTask):
 
     def __init__(self, config):
         super().__init__(config)
+        self.paused = False
         self.buffer = deque()
         self.commands = {}
         if config.dev_mode:
@@ -97,29 +98,46 @@ class TheSecretary(tasks.PauseableTask):
             self.buffer.append(IndexTask(item.package, item.added_at))
             self.commands[item.package] = item.command
 
-    def handle_output(self):
-        # Process items until the output queue is out of space; this ensures
-        # we don't block for any significant period so we can still process
-        # control commands
-        now = datetime.now(tz=UTC)
-        while self.buffer and self.output.poll(0, transport.POLLOUT):
-            first = self.buffer[0]
-            if now - first.timestamp > self.timeout:
-                self.buffer.popleft()
-                message = self.commands.pop(first.package)
-                self.output.send_msg(message, first.package)
-            else:
-                break
+    def handle_control(self, queue):
+        """
+        Handle incoming requests to the internal control queue.
+
+        Whilst :class:`TheSecretary` task is "pauseable", it can't simply stop
+        responding to requests from other components. Instead, its pause is
+        implemented as an internal flag. While paused it continues to accept
+        incoming requests to its internal buffer, but doesn't send anything
+        downstream to :class:`TheScribe`.
+        """
+        msg, data = queue.recv_msg()
+        if msg == 'QUIT':
+            raise tasks.TaskQuit
+        elif msg == 'PAUSE':
+            self.paused = True
+        elif msg == 'RESUME':
+            self.paused = False
 
     def handle_input(self, queue):
+        """
+        Handle incoming write requests with buffering and de-dupe.
+
+        Some incoming requests (current "HOME" and "SEARCH") are passed
+        directly through to :class:`TheScribe` as these are sufficiently rare
+        that no benefit is gained by buffering them.
+
+        For other requests ("PKGPROJ" and "PKGBOTH"), requests can come thick
+        and fast in the case of multiple file registrations picked up by
+        :class:`CloudGazer`. In this case, requests are buffered for a minute
+        and de-duplicated; e.g. if several requests are made to re-write the
+        project page for package "foo" within that period, they will be
+        combined into a single request. After the minute of buffering, the
+        request is passed downstream to :class:`TheScribe`.
+        """
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
             self.logger.error(str(e))
         else:
             if msg in ['HOME', 'SEARCH']:
-                # HOME and SEARCH messages pass-thru immediately without
-                # alteration or buffering as they're sufficiently rare
                 self.output.send_msg(msg, data)
             elif msg in ['PKGPROJ', 'PKGBOTH']:
                 package = data
@@ -131,3 +149,25 @@ class TheSecretary(tasks.PauseableTask):
                 else:
                     self.buffer.append(IndexTask(package, datetime.now(tz=UTC)))
                     self.commands[package] = msg
+
+    def handle_output(self):
+        """
+        Passes buffered requests downstream.
+
+        This sub-task runs periodically to pluck things from the internal
+        buffer that have reached the minute delay, and passes them downstream
+        to :class:`TheScribe`. The process stops when either we run out of
+        things that have expired or the downstream queue is filled.
+        """
+        now = datetime.now(tz=UTC)
+        while (
+                not self.paused and
+                self.buffer and
+                self.output.poll(0, transport.POLLOUT)
+        ):
+            if now - self.buffer[0].timestamp > self.timeout:
+                package = self.buffer.popleft().package
+                message = self.commands.pop(package)
+                self.output.send_msg(message, package)
+            else:
+                break
