@@ -40,6 +40,7 @@ import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
+from piwheels.states import BuildState
 from piwheels.slave import PiWheelsSlave, MasterTimeout
 
 
@@ -212,6 +213,9 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
     with mock.patch('piwheels.slave.Builder') as builder_mock:
         builder_mock().is_alive.return_value = False
         builder_mock().status = False
+        builder_mock().as_message.return_value = [
+            'foo', '1.0', False, timedelta(seconds=2), 'It all went wrong!', []
+        ]
         slave_thread.start()
         assert mock_systemd._ready.wait(10)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
@@ -222,6 +226,10 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BUSY'
+        mock_slave_driver.send_addr_msg(addr, 'CONT')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUILT'
+        assert not data[0] # status
         mock_slave_driver.send_addr_msg(addr, 'DIE')
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BYE'
@@ -262,6 +270,64 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         assert not slave_thread.is_alive()
     assert find_message(caplog.records, message='Removing temporary build directories')
     assert find_message(caplog.records, message='Timed out waiting for master')
+
+
+def test_slave_build_stopped(mock_systemd, slave_thread, mock_slave_driver,
+                             caplog):
+    with mock.patch('piwheels.slave.Builder') as builder_mock:
+        builder_mock().is_alive.return_value = True
+        slave_thread.start()
+        assert mock_systemd._ready.wait(10)
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUSY'
+        mock_slave_driver.send_addr_msg(addr, 'CONT')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUSY'
+        def mock_stop():
+            builder_mock().is_alive.return_value = False
+        builder_mock().stop.side_effect = mock_stop
+        mock_slave_driver.send_addr_msg(addr, 'DONE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'DIE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
+        slave_thread.join(10)
+        assert not slave_thread.is_alive()
+    assert find_message(caplog.records, message='Terminating current build')
+    assert find_message(caplog.records, message='Removing temporary build directories')
+
+
+def test_slave_build_stop_failed(mock_systemd, slave_thread, mock_slave_driver,
+                                 caplog):
+    with mock.patch('piwheels.slave.Builder') as builder_mock:
+        builder_mock().is_alive.return_value = True
+        slave_thread.start()
+        assert mock_systemd._ready.wait(10)
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'HELLO'
+        mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'IDLE'
+        mock_slave_driver.send_addr_msg(addr, 'BUILD', ['foo', '1.0'])
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUSY'
+        mock_slave_driver.send_addr_msg(addr, 'CONT')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BUSY'
+        mock_slave_driver.send_addr_msg(addr, 'DONE')
+        addr, msg, data = mock_slave_driver.recv_addr_msg()
+        assert msg == 'BYE'
+        slave_thread.join(10)
+        assert not slave_thread.is_alive()
+    assert find_message(caplog.records, message='Terminating current build')
+    assert find_message(caplog.records, message='Build failed to terminate')
 
 
 def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver,

@@ -36,6 +36,7 @@ import pytest
 
 from piwheels import const, protocols, transport
 from piwheels.states import MasterStats
+from piwheels.master.db import RewritePendingRow
 from piwheels.master.the_secretary import TheSecretary
 
 
@@ -153,3 +154,23 @@ def test_upgrade(task, web_queue, scribe_queue):
         task.poll(0)
         assert scribe_queue.recv_msg() == ('PKGBOTH', 'foo')
         assert scribe_queue.recv_msg() == ('PKGPROJ', 'bar')
+
+
+def test_persistence(zmq_context, master_config, scribe_queue, db_queue):
+    task = TheSecretary(master_config)
+    try:
+        db_queue.expect('LOADRWP')
+        db_queue.send('OK', [
+            RewritePendingRow('foo', datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC), 'PKGPROJ'),
+            RewritePendingRow('bar', datetime(2018, 1, 1, 12, 30, 5, tzinfo=UTC), 'PKGBOTH'),
+        ])
+        task.once()
+        db_queue.check()
+        task.poll(0)
+        assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
+        assert scribe_queue.recv_msg() == ('PKGBOTH', 'bar')
+    finally:
+        db_queue.expect('SAVERWP', [])
+        db_queue.send('OK', None)
+        task.close()
+        db_queue.check()
