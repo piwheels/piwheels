@@ -210,10 +210,9 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BUILT'
         assert popen_mock.call_args == mock.call([
-            'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
-            mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
-            '--exists-action=w', '--disable-pip-version-check',
-            'foo==1.0'],
+            'pip3', 'wheel', '--index-url=https://pypi.org/pypi', mock.ANY,
+            mock.ANY, '--no-deps', '--no-cache-dir', '--no-binary=:all:',
+            '--exists-action=w', '--disable-pip-version-check', 'foo==1.0'],
             stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
         )
         mock_slave_driver.send_addr_msg(addr, 'DIE')
@@ -271,10 +270,9 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver, tm
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'BUILT'
         assert popen_mock.call_args == mock.call([
-            'pip3', 'wheel', '--index-url=https://pypi.org/pypi',
-            mock.ANY, mock.ANY, '--no-deps', '--no-cache-dir',
-            '--exists-action=w', '--disable-pip-version-check',
-            'foo==1.0'],
+            'pip3', 'wheel', '--index-url=https://pypi.org/pypi', mock.ANY,
+            mock.ANY, '--no-deps', '--no-cache-dir', '--no-binary=:all:',
+            '--exists-action=w', '--disable-pip-version-check', 'foo==1.0'],
             stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, env=mock.ANY
         )
         mock_slave_driver.send_addr_msg(addr, 'SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')

@@ -343,6 +343,7 @@ class PiWheelsBuilder:
                 '--log={}'.format(log_file.name),
                 '--no-deps',                    # don't build dependencies
                 '--no-cache-dir',               # disable the cache directory
+                '--no-binary=:all:',            # never get binary wheels
                 '--exists-action=w',            # wipe existing paths
                 '--disable-pip-version-check',  # don't check for new pip
                 '{}=={}'.format(self.package, self.version),
