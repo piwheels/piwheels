@@ -43,7 +43,7 @@ import sys
 import signal
 import logging
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from time import time, sleep
 from random import randint
 
@@ -53,6 +53,9 @@ from wheel import pep425tags
 from .. import __version__, terminal, transport, protocols
 from ..systemd import get_systemd
 from .builder import PiWheelsBuilder, PiWheelsPackage
+
+
+UTC = timezone.utc
 
 
 class MasterTimeout(IOError):
@@ -109,7 +112,10 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
 
         self.logger.info('PiWheels Slave version %s', __version__)
         if os.geteuid() == 0:
-            self.logger.error('Slave must not be run as root')
+            self.logger.fatal('Slave must not be run as root')
+            return 1
+        if datetime.now(tz=UTC) < datetime(2019, 1, 1, tzinfo=UTC):
+            self.logger.fatal('System clock is far in the past')
             return 1
         self.systemd = get_systemd()
         signal.signal(signal.SIGTERM, sig_term)

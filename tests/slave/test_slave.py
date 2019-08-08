@@ -29,6 +29,7 @@
 
 import os
 import pickle
+from datetime import datetime, timezone
 from unittest import mock
 from threading import Thread
 from subprocess import DEVNULL
@@ -97,6 +98,15 @@ def test_no_root(caplog):
         geteuid.return_value = 0
         assert main([]) != 0
     assert find_message(caplog.records, message='Slave must not be run as root')
+
+
+def test_bad_clock(caplog):
+    main = PiWheelsSlave()
+    with mock.patch('piwheels.slave.datetime') as dt:
+        dt.side_effect = datetime
+        dt.now.return_value = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        assert main([]) != 0
+    assert find_message(caplog.records, message='System clock is far in the past')
 
 
 def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
