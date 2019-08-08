@@ -189,7 +189,7 @@ def test_remove_ver(pypi_proxy, db_queue, web_queue, task):
         ('bar', '1.0', 1531327389, 'create', 2),
         ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 3),
         ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
-        ('bar', '1.0', 1531327392, 'remove', 5),
+        ('bar', '1.0', 1531327392, 'remove release', 5),
     ])
     db_queue.expect('NEWPKG', ['bar', ''])
     db_queue.send('OK', True)
@@ -217,7 +217,7 @@ def test_remove_pkg(pypi_proxy, db_queue, web_queue, task):
         ('bar', '1.0', 1531327389, 'create', 2),
         ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 3),
         ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
-        ('bar', None, 1531327392, 'remove', 5),
+        ('bar', None, 1531327392, 'remove package', 5),
     ])
     db_queue.expect('NEWPKG', ['bar', ''])
     db_queue.send('OK', True)
