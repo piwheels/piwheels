@@ -204,17 +204,70 @@ def test_kill_control(mock_systemd, master_thread, master_control):
         assert kill_slave.call_args == mock.call(1)
 
 
-def test_pause_resume(mock_systemd, master_thread, master_control, caplog):
+def test_kill_all_control(mock_systemd, master_thread, master_control, caplog):
+    with mock.patch('piwheels.master.SlaveDriver.kill_slave') as kill_slave:
+        thread = master_thread()
+        thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_msg('KILL', None)
+        master_control.send_msg('QUIT')
+        thread.join(10)
+        assert not thread.is_alive()
+        assert kill_slave.call_args == mock.call(None)
+        assert find_message(caplog.records, message='killing all slaves')
+
+
+def test_skip_control(mock_systemd, master_thread, master_control):
+    with mock.patch('piwheels.master.SlaveDriver.skip_slave') as skip_slave:
+        thread = master_thread()
+        thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_msg('SKIP', 1)
+        master_control.send_msg('QUIT')
+        thread.join(10)
+        assert not thread.is_alive()
+        assert skip_slave.call_args == mock.call(1)
+
+
+def test_skip_all_control(mock_systemd, master_thread, master_control, caplog):
+    with mock.patch('piwheels.master.SlaveDriver.skip_slave') as skip_slave:
+        thread = master_thread()
+        thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_msg('SKIP', None)
+        master_control.send_msg('QUIT')
+        thread.join(10)
+        assert not thread.is_alive()
+        assert skip_slave.call_args == mock.call(None)
+        assert find_message(caplog.records, message='skipping all slaves')
+
+
+def test_sleep_control(mock_systemd, master_thread, master_control):
+    with mock.patch('piwheels.master.SlaveDriver.sleep_slave') as sleep_slave, \
+            mock.patch('piwheels.master.SlaveDriver.wake_slave') as wake_slave:
+        thread = master_thread()
+        thread.start()
+        assert mock_systemd._ready.wait(10)
+        master_control.send_msg('SLEEP', 1)
+        master_control.send_msg('WAKE', 1)
+        master_control.send_msg('QUIT')
+        thread.join(10)
+        assert not thread.is_alive()
+        assert sleep_slave.call_args == mock.call(1)
+        assert wake_slave.call_args == mock.call(1)
+
+
+def test_sleep_all_control(mock_systemd, master_thread, master_control, caplog):
     thread = master_thread()
     thread.start()
     assert mock_systemd._ready.wait(10)
-    master_control.send_msg('PAUSE')
-    master_control.send_msg('RESUME')
+    master_control.send_msg('SLEEP', None)
+    master_control.send_msg('WAKE', None)
     master_control.send_msg('QUIT')
     thread.join(10)
     assert not thread.is_alive()
-    assert find_message(caplog.records, message='pausing operations')
-    assert find_message(caplog.records, message='resuming operations')
+    assert find_message(caplog.records, message='sleeping all slaves and master')
+    assert find_message(caplog.records, message='waking all slaves and master')
 
 
 def test_new_monitor(mock_systemd, master_thread, master_control, caplog):

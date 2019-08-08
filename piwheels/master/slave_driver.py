@@ -63,7 +63,7 @@ class SlaveDriver(tasks.Task):
     name = 'master.slave_driver'
 
     def __init__(self, config):
-        super().__init__(config, control_protocol=protocols.master_control)
+        super().__init__(config, control_protocol=protocols.slave_driver_control)
         self.paused = False
         self.abi_queues = {}
         self.recent_builds = {}
@@ -111,10 +111,34 @@ class SlaveDriver(tasks.Task):
     def kill_slave(self, slave_id):
         """
         Additional task control method to trigger a "KILL" message to the
-        internal control queue. See :meth:`~.tasks.Task.quit` for more
+        internal control queue. See :meth:`handle_control` for more
         information.
         """
         self._ctrl('KILL', slave_id)
+
+    def sleep_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "SLEEP" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('SLEEP', slave_id)
+
+    def skip_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "SKIP" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('SKIP', slave_id)
+
+    def wake_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "WAKE" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('WAKE', slave_id)
 
     def remove_expired(self):
         """
@@ -152,9 +176,10 @@ class SlaveDriver(tasks.Task):
         otherwise continues servicing requests.
 
         It also understands a couple of extra control messages unique to it,
-        specifically "KILL" to tell a build slave to terminate, and "HELLO"
-        to cause all "HELLO" messages from build slaves to be replayed (for
-        the benefit of a newly attached monitor process).
+        specifically "KILL" to tell a build slave to terminate, "SKIP" to tell
+        a build slave to terminate its current build immmediately, and "HELLO"
+        to cause all "HELLO" messages from build slaves to be replayed (for the
+        benefit of a newly attached monitor process).
         """
         msg, data = queue.recv_msg()
         if msg == 'QUIT':
@@ -163,15 +188,16 @@ class SlaveDriver(tasks.Task):
             self.paused = True
         elif msg == 'RESUME':
             self.paused = False
-        elif msg == 'KILL':
+        elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
             for slave in self.slaves.values():
-                if slave.slave_id == data:
-                    slave.kill()
-                    break
-        elif msg == 'SKIP':
-            for slave in self.slaves.values():
-                if slave.slave_id == data:
-                    slave.skip()
+                if data is None or slave.slave_id == data:
+                    {
+                        'KILL':  slave.kill,
+                        'SLEEP': slave.sleep,
+                        'SKIP':  slave.skip,
+                        'WAKE':  slave.wake,
+                    }[msg]()
+                if data is not None:
                     break
         elif msg == 'HELLO':
             for slave in self.slaves.values():
@@ -325,7 +351,7 @@ class SlaveDriver(tasks.Task):
                 'slave %d (%s): protocol error (IDLE after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
-        elif slave.terminated:
+        elif slave.killed:
             return 'DIE', protocols.NoData
         elif self.paused:
             self.logger.info(
@@ -375,7 +401,7 @@ class SlaveDriver(tasks.Task):
         slave should immediately terminate and discard the build and return to
         "IDLE" state.
         """
-        if self.paused or slave.skipped:
+        if slave.skipped:
             return 'DONE', protocols.NoData
         else:
             return 'CONT', protocols.NoData

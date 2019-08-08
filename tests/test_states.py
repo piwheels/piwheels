@@ -150,13 +150,34 @@ def test_slave_state_init():
         assert slave_state.request is None
         assert slave_state.reply is None
         assert slave_state.build is None
-        assert not slave_state.terminated
+        assert not slave_state.killed
+        assert not slave_state.paused
+        assert not slave_state.skipped
 
 
 def test_slave_state_kill(slave_state):
-    assert not slave_state.terminated
+    assert not slave_state.killed
     slave_state.kill()
-    assert slave_state.terminated
+    assert slave_state.killed
+
+
+def test_slave_state_skip(slave_state):
+    assert not slave_state.skipped
+    slave_state.skip()
+    assert slave_state.skipped
+
+
+def test_slave_state_paused(slave_state):
+    assert not slave_state.paused
+    slave_state.sleep()
+    assert slave_state.paused
+
+
+def test_slave_state_resumed(slave_state):
+    slave_state.sleep()
+    assert slave_state.paused
+    slave_state.wake()
+    assert not slave_state.paused
 
 
 def test_slave_state_expired(slave_state):

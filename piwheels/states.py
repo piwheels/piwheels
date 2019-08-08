@@ -478,8 +478,9 @@ class SlaveState:
         self._reply = None
         self._build = None
         self._stats = deque(maxlen=100)
-        self._terminated = False
+        self._killed = False
         self._skipped = False
+        self._paused = False
 
     def __repr__(self):
         return (
@@ -506,26 +507,35 @@ class SlaveState:
                 ]
             ]
         )
-        if self._reply is not None:
-            # Replay the last reply for the sake of monitors that have just
-            # connected to the master
-            msg, data = self._reply
-            SlaveState.status_queue.send_msg(
-                'SLAVE', [self._slave_id, self._last_seen, msg, data])
+        # Replay the last reply for the sake of monitors that have just
+        # connected to the master
+        msg, data = self._reply
+        SlaveState.status_queue.send_msg(
+            'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
     def kill(self):
-        self._terminated = True
+        self._killed = True
 
     def skip(self):
         self._skipped = True
 
+    def sleep(self):
+        self._paused = True
+
+    def wake(self):
+        self._killed, self._skipped, self._paused = False, False, False
+
     @property
-    def terminated(self):
-        return self._terminated
+    def killed(self):
+        return self._killed
 
     @property
     def skipped(self):
-        return self._terminated or self._skipped
+        return self._skipped
+
+    @property
+    def paused(self):
+        return self._paused
 
     @property
     def address(self):
@@ -605,7 +615,7 @@ class SlaveState:
         self._request = value
         msg, data = value
         if msg == 'BUILT':
-            if self._reply[0] == 'BUILD':
+            if self._reply[0] in ('BUILD', 'CONT'):
                 try:
                     status, duration, output, files = data
                     files = [FileState.from_message(f) for f in files]
@@ -624,6 +634,8 @@ class SlaveState:
                 self._build = None
         elif msg in ('IDLE', 'BUSY'):
             self._stats.append(SlaveStats.from_message(data))
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, 'STATS', data])
 
     @property
     def reply(self):
@@ -638,7 +650,7 @@ class SlaveState:
             self._skipped = False
         if msg == 'ACK':
             self.hello()
-        else:
+        elif msg != 'CONT':
             SlaveState.status_queue.send_msg(
                 'SLAVE', [self._slave_id, self._last_seen, msg, data])
 

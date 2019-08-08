@@ -73,6 +73,7 @@ class PiWheelsMaster:
         self.int_status_queue = None
         self.ext_status_queue = None
         self.tasks = []
+        self.slave_driver = None
 
     @staticmethod
     def configure_parser():
@@ -219,6 +220,8 @@ write access to the output directory.
         ]
         self.logger.info('starting tasks')
         for task in self.tasks:
+            if isinstance(task, SlaveDriver):
+                self.slave_driver = task
             task.start()
         self.logger.info('started all tasks')
         systemd = get_systemd()
@@ -277,12 +280,12 @@ write access to the output directory.
                         self.logger.error(str(exc))
                     else:
                         handler = {
-                            'QUIT': self.do_quit,
-                            'KILL': lambda: self.do_kill(data),
-                            'SKIP': lambda: self.do_skip(data),
                             'HELLO': self.do_hello,
-                            'PAUSE': self.do_pause,
-                            'RESUME': self.do_resume,
+                            'QUIT':  self.do_quit,
+                            'KILL':  lambda: self.do_kill(data),
+                            'SKIP':  lambda: self.do_skip(data),
+                            'SLEEP': lambda: self.do_sleep(data),
+                            'WAKE':  lambda: self.do_wake(data),
                         }[msg]
                         handler()
         finally:
@@ -307,41 +310,53 @@ write access to the output directory.
 
     def do_kill(self, slave_id):
         """
-        Handler for the KILL message; this tells the specified build slave to
-        terminate next time it contacts the master.
+        Handler for the KILL message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to terminate.
         """
-        self.logger.warning('killing slave %d', slave_id)
-        for task in self.tasks:
-            if isinstance(task, SlaveDriver):
-                task.kill_slave(slave_id)
+        if slave_id is None:
+            self.logger.warning('killing all slaves')
+        else:
+            self.logger.warning('killing slave %d', slave_id)
+        self.slave_driver.kill_slave(slave_id)
 
     def do_skip(self, slave_id):
         """
         Handler for the SKIP message; this tells the specified build slave to
         skip its current build next time it contacts the master.
         """
-        self.logger.warning('killing slave %d', slave_id)
-        for task in self.tasks:
-            if isinstance(task, SlaveDriver):
-                task.kill_slave(slave_id)
+        if slave_id is None:
+            self.logger.warning('skipping all slaves')
+        else:
+            self.logger.warning('skipping slave %d', slave_id)
+        self.slave_driver.skip_slave(slave_id)
 
-    def do_pause(self):
+    def do_sleep(self, slave_id):
         """
-        Handler for the PAUSE message; this requests all tasks pause their
+        Handler for the SLEEP message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to pause their
         operations.
         """
-        self.logger.warning('pausing operations')
-        for task in self.tasks:
-            task.pause()
+        if slave_id is None:
+            self.logger.warning('sleeping all slaves and master')
+            for task in self.tasks:
+                task.pause()
+        else:
+            self.logger.warning('sleeping slave %d', slave_id)
+        self.slave_driver.sleep_slave(slave_id)
 
-    def do_resume(self):
+    def do_wake(self, slave_id):
         """
-        Handler for the RESUME message; this requests all tasks resume their
+        Handler for the WAKE message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to resume their
         operations.
         """
-        self.logger.warning('resuming operations')
-        for task in self.tasks:
-            task.resume()
+        if slave_id is None:
+            self.logger.warning('waking all slaves and master')
+            for task in self.tasks:
+                task.resume()
+        else:
+            self.logger.warning('waking slave %d', slave_id)
+        self.slave_driver.wake_slave(slave_id)
 
     def do_hello(self):
         """
@@ -350,9 +365,7 @@ write access to the output directory.
         to it.
         """
         self.logger.warning('sending status to new monitor')
-        for task in self.tasks:
-            if isinstance(task, SlaveDriver):
-                task.list_slaves()
+        self.slave_driver.list_slaves()
 
 
 def sig_term(signo, stack_frame):

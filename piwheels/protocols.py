@@ -26,8 +26,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import ipaddress as ip
 import datetime as dt
+import ipaddress as ip
+from itertools import chain
 from collections import namedtuple
 
 from voluptuous import Schema, ExactSequence, Extra, Any
@@ -220,13 +221,19 @@ task_control = Protocol(recv={
 
 
 master_control = Protocol(recv={
-    'HELLO':  NoData,  # new monitor
-    'PAUSE':  NoData,  # pause all operations on the master
-    'RESUME': NoData,  # resume all operations on the master
-    'KILL':   int,     # kill the specified slave
-    'SKIP':   int,     # skip the specified slave
-    'QUIT':   NoData,  # terminate the master
+    'HELLO':  NoData,          # new monitor
+    'KILL':   Any(int, None),  # kill the specified slave
+    'SLEEP':  Any(int, None),  # pause the specified slave
+    'SKIP':   Any(int, None),  # skip the specified slave
+    'WAKE':   Any(int, None),  # resume the specified slave
+    'QUIT':   NoData,          # terminate the master
 })
+
+
+slave_driver_control = Protocol(recv=dict(chain(
+    task_control.recv.items(),
+    master_control.recv.items(),
+)))
 
 
 big_brother = Protocol(recv={
