@@ -32,12 +32,13 @@
           </div>
           <div class="top-bar-right">
             <ul class="menu">
-              <li><a class="button ${'secondary' if page == 'packages' else ''}" href="/packages.html">Package List</a></li>
+              <li><a class="button ${'secondary' if page == 'packages' else ''}" href="/packages.html">Packages</a></li>
+              <li><a class="button" href="https://github.com/piwheels/packages/issues">Package Issues</a></li>
               <li><a class="button ${'secondary' if page == 'faq' else ''}" href="/faq.html">FAQ</a></li>
               <li><a class="button ${'secondary' if page == 'stats' else ''}" href="/stats.html">Stats</a></li>
               <li><a class="button" href="https://blog.piwheels.org/">Blog</a></li>
               <li><a class="button" href="https://github.com/piwheels">GitHub</a></li>
-              <li><a class="button" href="https://piwheels.readthedocs.io/">Documentation</a></li>
+              <li><a class="button" href="https://piwheels.readthedocs.io/">Docs</a></li>
               <li><a class="button" href="https://twitter.com/piwheels">Twitter</a></li>
             </ul>
           </div>
@@ -62,8 +63,8 @@
     </footer>
 
     <script src="//code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script src="what-input.min.js"></script>
-    <script src="foundation.min.js"></script>
+    <script src="/what-input.min.js"></script>
+    <script src="/foundation.min.js"></script>
     <script>$(document).foundation();</script>
     <div metal:define-slot="scripts" />
   </body>
