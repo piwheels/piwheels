@@ -1,4 +1,33 @@
+# The piwheels project
+#   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
+#   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 import subprocess
+from datetime import datetime, timedelta
 
 
 PIPE = subprocess.PIPE
@@ -27,7 +56,17 @@ class ProcessTerminated(SubprocessError):
         self.output = value
 
 
-def call(args, *posargs, event, timeout=None, **kwargs):
+def _test_term(args, start, timeout, event):
+    # NOTE: This convenience function expects to be called from an exception
+    # handler for the TimeoutExpired exception which it will re-raise if a
+    # timeout has really occurred
+    if timeout is not None and datetime.utcnow() - start > timeout:
+        raise
+    elif event is not None and event.wait(0):
+        raise ProcessTerminated(args, event)
+
+
+def call(args, *posargs, event=None, timeout=None, **kwargs):
     """
     A version of :func:`subprocess.call` which watches *event* for early
     termination.
@@ -41,10 +80,7 @@ def call(args, *posargs, event, timeout=None, **kwargs):
                 try:
                     return p.wait(1)
                 except subprocess.TimeoutExpired:
-                    if datetime.utcnow() - start > timeout:
-                        raise
-                    elif event.wait(0):
-                        raise ProcessTerminated(args, event)
+                    _test_term(args, start, timeout, event)
             except:
                 p.terminate()
                 try:
@@ -63,9 +99,10 @@ def check_call(args, *posargs, **kwargs):
     rc = call(args, *posargs, **kwargs)
     if rc != 0:
         raise subprocess.CalledProcessError(rc, args)
+    return 0
 
 
-def check_output(args, *posargs, event, timeout=None, **kwargs):
+def check_output(args, *posargs, event=None, timeout=None, **kwargs):
     """
     A version of :func:`subprocess.check_output` which watches *event* for
     early termination.
@@ -77,7 +114,7 @@ def check_output(args, *posargs, event, timeout=None, **kwargs):
         def stop_nicely():
             p.terminate()
             try:
-                out, err = p.communicate(timeout=10)
+                out, err = p.communicate(timeout=1)
             except subprocess.TimeoutExpired:
                 p.kill()
                 out, err = p.communicate()
@@ -89,10 +126,7 @@ def check_output(args, *posargs, event, timeout=None, **kwargs):
                 try:
                     out, err = p.communicate(timeout=1)
                 except subprocess.TimeoutExpired:
-                    if datetime.utcnow() - start > timeout:
-                        raise
-                    elif event.wait(0):
-                        raise ProcessTerminated(args, event)
+                    _test_term(args, start, timeout, event)
                 else:
                     break
             except subprocess.TimeoutExpired:
