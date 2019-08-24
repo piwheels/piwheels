@@ -491,7 +491,7 @@ class SlaveState:
                 last_seen=datetime.now(tz=UTC) - self.last_seen,
                 reply='none' if self.reply is None else self.reply[0],
                 alive='killed'
-                if self.terminated else 'expired'
+                if self.killed else 'expired'
                 if self.expired else 'alive'
             )
         )

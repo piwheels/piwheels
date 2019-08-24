@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import re
 import os
 import io
 import zipfile
@@ -34,12 +35,11 @@ from hashlib import sha256
 from unittest import mock
 from pathlib import Path
 from threading import Thread, Event
-from subprocess import TimeoutExpired
 from datetime import datetime, timedelta
 
 import pytest
 
-from piwheels import transport
+from piwheels import transport, proc
 from piwheels.slave import builder
 
 
@@ -203,20 +203,20 @@ def test_builder_as_message():
 
 def test_builder_build_success(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.Builder.build_dependencies') as dep_mock:
         tmpdir_mock().name = str(tmpdir)
-        def wait(timeout):
+        def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
                 f.write(mock_archive)
-        popen_mock().wait.side_effect = wait
-        popen_mock().returncode = 0
+            return 0
+        proc_mock.call.side_effect = call
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        args, kwargs = popen_mock.call_args
+        args, kwargs = proc_mock.call.call_args
         assert args[0][-1] == 'foo==0.1'
         assert len(b.wheels) == 1
         assert b.wheels[0].filename == 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
@@ -224,11 +224,10 @@ def test_builder_build_success(mock_archive, tmpdir):
 
 def test_builder_build_timeout(tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.datetime') as time_mock:
         tmpdir_mock().name = str(tmpdir)
-        popen_mock().wait.side_effect = TimeoutExpired('pip3', 300)
-        popen_mock().returncode = -9
+        proc_mock.call.side_effect = proc.TimeoutExpired(['pip3'], 300)
         now = datetime.utcnow()
         time_mock.utcnow.side_effect = [
             now, now + timedelta(seconds=100), now + timedelta(seconds=1000),
@@ -238,20 +237,20 @@ def test_builder_build_timeout(tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert not b.status
-        args, kwargs = popen_mock.call_args
+        args, kwargs = proc_mock.call.call_args
         assert args[0][-1] == 'foo==0.1'
         assert len(b.wheels) == 0
-        assert popen_mock().terminate.call_count == 1
-        assert popen_mock().kill.call_count == 1
 
 
 def test_builder_build_stop(tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.datetime') as time_mock:
         tmpdir_mock().name = str(tmpdir)
-        popen_mock().wait.side_effect = TimeoutExpired('pip3', 300)
-        popen_mock().returncode = None
+        def call(*args, **kwargs):
+            assert b._stopped.wait(2)
+            raise proc.ProcessTerminated('pip3', b._stopped)
+        proc_mock.call.side_effect = call
         time_mock.utcnow.return_value = datetime.utcnow()
         b = builder.Builder('foo', '0.1')
         b.start()
@@ -259,18 +258,15 @@ def test_builder_build_stop(tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert not b.status
-        assert b.output.endswith('Build terminated by master')
+        assert b.output.endswith("Command 'pip3' was terminated early by event")
         assert len(b.wheels) == 0
-        assert popen_mock().terminate.call_count == 1
-        assert popen_mock().kill.call_count == 1
 
 
 def test_builder_build_close(tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock:
+            mock.patch('piwheels.slave.builder.proc') as proc_mock:
         tmpdir_mock().name = str(tmpdir)
-        popen_mock().wait.side_effect = lambda timeout: None
-        popen_mock().returncode = 0
+        proc_mock.call.return_value = 0
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
@@ -282,17 +278,17 @@ def test_builder_build_close(tmpdir):
 
 def test_builder_build_dependencies(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
         tmpdir_mock().name = str(tmpdir)
         tmpdir_mock().__enter__.return_value = str(tmpdir)
-        def wait(timeout):
+        def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
                 f.write(mock_archive)
-        popen_mock().returncode = 0
-        popen_mock().wait.side_effect = wait
-        popen_mock().communicate.return_value = (b"""\
+            return 0
+        proc_mock.call.side_effect = call
+        proc_mock.check_output.return_value = b"""\
         linux-vdso.so.1 =>  (0x00007ffd48669000)
         libblas.so.3 => /usr/lib/libblas.so.3 (0x00007f711a958000)
         libm.so.6 => /lib/arm-linux-gnueabihf/libm.so.6 (0x00007f711a64f000)
@@ -303,7 +299,7 @@ def test_builder_build_dependencies(mock_archive, tmpdir):
         libgfortran.so.3 => /usr/lib/arm-linux-gnueabihf/libgfortran.so.3 (0x00007f7117ca9000)
         libquadmath.so.0 => /usr/lib/arm-linux-gnueabihf/libquadmath.so.0 (0x00007f7117a6a000)
         libgcc_s.so.1 => /lib/arm-linux-gnueabihf/libgcc_s.so.1 (0x00007f7117854000)
-""", b"")
+"""
         def pkg(name, files):
             m = mock.Mock()
             m.name = name
@@ -336,18 +332,18 @@ def test_builder_build_dependencies(mock_archive, tmpdir):
 
 def test_builder_dependencies_missing(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', side_effect=FileNotFoundError()), \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
         tmpdir_mock().name = str(tmpdir)
         tmpdir_mock().__enter__.return_value = str(tmpdir)
-        def wait(timeout):
+        def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
                 f.write(mock_archive)
-        popen_mock().returncode = 0
-        popen_mock().wait.side_effect = wait
-        popen_mock().communicate.return_value = (
-            b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
+            return 0
+        proc_mock.call.side_effect = call
+        proc_mock.check_output.return_value = (
+            b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)")
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
@@ -358,17 +354,17 @@ def test_builder_dependencies_missing(mock_archive, tmpdir):
 
 def test_builder_dependencies_failed(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc.call') as call_mock, \
+            mock.patch('piwheels.slave.builder.proc.check_output') as output_mock, \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
         tmpdir_mock().name = str(tmpdir)
         tmpdir_mock().__enter__.return_value = str(tmpdir)
-        def wait(timeout):
+        def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
                 f.write(mock_archive)
-        popen_mock().returncode = 0
-        popen_mock().wait.side_effect = wait
-        popen_mock().communicate.side_effect = [
-            TimeoutExpired('ldd', 10), (b"", b"")]
+            return 0
+        call_mock.side_effect = call
+        output_mock.side_effect = proc.TimeoutExpired('ldd', 30)
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
@@ -379,22 +375,23 @@ def test_builder_dependencies_failed(mock_archive, tmpdir):
 
 def test_builder_dependencies_stopped(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
-            mock.patch('piwheels.slave.builder.Popen') as popen_mock, \
+            mock.patch('piwheels.slave.builder.proc.call') as call_mock, \
+            mock.patch('piwheels.slave.builder.proc.check_output') as output_mock, \
             mock.patch('piwheels.slave.builder.apt') as apt_mock:
         tmpdir_mock().name = str(tmpdir)
         tmpdir_mock().__enter__.return_value = str(tmpdir)
-        def wait(timeout):
+        def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
                 f.write(mock_archive)
-        def stop(timeout):
+            return 0
+        def stop(*args, **kwargs):
             b.stop()
-            return (b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)", b"")
-        popen_mock().returncode = 0
-        popen_mock().wait.side_effect = wait
-        popen_mock().communicate.side_effect = stop
+            return b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)"
+        call_mock.side_effect = call
+        output_mock.side_effect = stop
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
         assert not b.is_alive()
         assert not b.status
-        assert b.output.endswith('Build terminated by master')
+        assert re.search(r'Command .* was terminated early by event$', b.output)

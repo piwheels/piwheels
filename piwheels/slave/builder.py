@@ -46,11 +46,12 @@ import warnings
 import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta
-from threading import Thread
-from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
+from threading import Thread, Event
 from collections import defaultdict
 
 import apt
+
+from .. import proc
 
 
 class BuildTerminated(Exception):
@@ -246,7 +247,7 @@ class Builder(Thread):
     :param str version:
         The version of the package to attempt to build.
 
-    :param float timeout:
+    :param datetime.timedelta timeout:
         The number of seconds to wait for ``pip`` to finish before raising
         :exc:`subprocess.TimeoutExpired`.
 
@@ -271,7 +272,7 @@ class Builder(Thread):
         self._output = ''
         self._wheels = []
         self._status = False
-        self._stopped = False
+        self._stopped = Event()
 
     def close(self):
         """
@@ -347,7 +348,7 @@ class Builder(Thread):
         """
         Tell the build to stop prematurely.
         """
-        self._stopped = True
+        self._stopped.set()
 
     def as_message(self):
         """
@@ -399,39 +400,11 @@ class Builder(Thread):
         """
         # Ensure stdin is /dev/null; this causes anything stupid enough
         # to use input() in its setup.py to fail immediately. Also
-        # ignore all output
-        proc = Popen(
+        # ignore all output (goes to log_file instead)
+        return proc.call(
             self.build_command(log_file),
-            stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL,
-            env=self.build_environment(),
-        )
-
-        def stop_proc():
-            proc.terminate()
-            try:
-                proc.wait(10)
-            except TimeoutExpired:
-                proc.kill()
-
-        start = datetime.utcnow()
-        try:
-            while True:
-                try:
-                    if self._stopped:
-                        raise BuildTerminated('Build terminated by master')
-                    proc.wait(1)
-                except BuildTerminated:
-                    stop_proc()
-                    raise
-                except TimeoutExpired:
-                    if datetime.utcnow() - start > self._timeout:
-                        stop_proc()
-                        raise
-                else:
-                    break
-        finally:
-            self._duration = datetime.utcnow() - start
-            self._status = proc.returncode == 0
+            env=self.build_environment(), event=self._stopped,
+            stdin=proc.DEVNULL, stdout=proc.DEVNULL, stderr=proc.DEVNULL)
 
     def build_dependencies(self, wheel):
         """
@@ -441,7 +414,8 @@ class Builder(Thread):
         apt_cache = apt.cache.Cache()
         find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
         deps = defaultdict(set)
-        libs = set()
+        whl_libs = set()
+        dep_libs = set()
         with tempfile.TemporaryDirectory() as tempdir:
             with zipfile.ZipFile(wheel.open()) as zip_dir:
                 for info in zip_dir.infolist():
@@ -449,35 +423,32 @@ class Builder(Thread):
                         with zip_dir.open(info) as testfile:
                             is_elf = testfile.read(4) == b'\x7FELF'
                         if is_elf:
-                            libs.add(zip_dir.extract(info, path=tempdir))
-            for lib in libs:
-                p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
-                try:
-                    out, errs = p.communicate(timeout=30)
-                except TimeoutExpired:
-                    p.kill()
-                    out, errs = p.communicate(timeout=10)
-                    raise
-                else:
-                    out = out.decode('ascii', 'replace')
-                    for line in out.splitlines():
-                        match = find_re.search(line)
-                        if match is not None:
-                            try:
-                                lib_path = str(Path(match.group(2)).resolve())
-                            except FileNotFoundError:
-                                continue
-                            providers = {
-                                pkg.name for pkg in apt_cache
-                                if pkg.installed is not None
-                                and lib_path in pkg.installed_files}
-                            assert len(providers) <= 1
-                            try:
-                                deps['apt'].add(providers.pop())
-                            except KeyError:
-                                deps[''].add(lib_path)
-                            if self._stopped:
-                                raise BuildTerminated('Build terminated by master')
+                            whl_libs.add(zip_dir.extract(info, path=tempdir))
+            for lib in whl_libs:
+                out = proc.check_output(['ldd', lib],
+                                        timeout=30, event=self._stopped)
+                out = out.decode('ascii', 'replace')
+                for line in out.splitlines():
+                    match = find_re.search(line)
+                    if match is not None:
+                        try:
+                            lib_path = str(Path(match.group(2)).resolve())
+                        except FileNotFoundError:
+                            continue
+                        dep_libs.add(lib_path)
+        for lib in dep_libs:
+            providers = {
+                pkg.name for pkg in apt_cache
+                if pkg.installed is not None
+                and lib in pkg.installed_files}
+            assert len(providers) <= 1
+            try:
+                deps['apt'].add(providers.pop())
+            except KeyError:
+                deps[''].add(lib)
+            if self._stopped.wait(0):
+                raise proc.ProcessTerminated(['dpkg', '--search', lib],
+                                             self._stopped)
         wheel._dependencies = {
             tool: sorted(deps)
             for tool, deps in deps.items()
@@ -490,21 +461,33 @@ class Builder(Thread):
         with tempfile.NamedTemporaryFile('w+', dir=self._wheel_dir.name,
                                          suffix='.log',
                                          encoding='utf-8') as log_file:
+            start = datetime.utcnow()
             try:
-                self.build_wheel(log_file)
+                rc = self.build_wheel(log_file)
             except Exception as exc:
                 log_file.seek(0, os.SEEK_END)
                 log_file.write('\n' + str(exc))
                 self._status = False
+            else:
+                self._status = rc == 0
+            finally:
+                # Build duration is purely the time to build the wheel; it
+                # does not include time to calculate the dependencies (which
+                # users wouldn't have to do)
+                self._duration = datetime.utcnow() - start
             if self._status:
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
                         wheel = Wheel(path)
                         self.build_dependencies(wheel)
                         self._wheels.append(wheel)
-                except (TimeoutExpired, BuildTerminated) as exc:
+                except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
                     log_file.seek(0, os.SEEK_END)
-                    log_file.write('\n' + str(exc))
+                    if exc.output is not None:
+                        log_file.write('\n')
+                        log_file.write(exc.output.decode('ascii', 'replace'))
+                    log_file.write('\n')
+                    log_file.write(str(exc))
                     self._status = False
                     self._wheels.clear()
             log_file.seek(0)
