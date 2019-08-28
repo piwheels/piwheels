@@ -91,6 +91,9 @@ cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
 pip3 install .
 
+# temporary workaround for wxPython requiring pathlib2 to build
+pip3 install pathlib2
+
 if ! grep swapfile /etc/rc.local >/dev/null; then
     dd if=/dev/zero of=/swapfile bs=1M count=1024
     chmod 0600 /swapfile
