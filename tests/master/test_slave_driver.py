@@ -295,10 +295,20 @@ def test_slave_remove_expired_build(task, slave_queue, master_config,
         task.poll(0)
         assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
         slave_queue.send_msg(
-            'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+            'IDLE', [dt1.now.return_value, 1000, 900, 1000, 900, 1.0, 60.0])
         task.poll(0)
         assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
         assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [1, dt1.now.return_value, 'STATS', [
+                dt1.now.return_value, 1000, 900, 1000, 900, 1.0, 60.0]])
+        assert master_status_queue.recv_msg() == (
+            'SLAVE', [1, dt1.now.return_value, 'BUILD', ['foo', '0.1']])
+        old_now = dt1.now.return_value
+        dt1.now.return_value = dt2.now.return_value = dt1.now.return_value + timedelta(hours=4)
+        task.poll(0)
+        assert len(task.slaves) == 0
+        assert master_status_queue.recv_msg() == ('SLAVE', [1, old_now, 'BYE', None])
 
 
 def test_slave_says_hello(task, slave_queue, hello_data):
@@ -373,7 +383,7 @@ def test_master_kills_correct_slave(task, slave_queue, master_config,
     assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
-def test_slave_says_idle_no_builds(task, slave_queue, builds_queue,
+def test_slave_idle_with_no_builds(task, slave_queue, builds_queue,
                                    master_config, stats_queue, hello_data):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', hello_data)
@@ -386,8 +396,8 @@ def test_slave_says_idle_no_builds(task, slave_queue, builds_queue,
     assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
-def test_slave_says_idle_with_build(task, slave_queue, builds_queue,
-                                    master_config, stats_queue, hello_data):
+def test_slave_idle_with_build(task, slave_queue, builds_queue, master_config,
+                               stats_queue, hello_data):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)
@@ -406,9 +416,54 @@ def test_slave_says_idle_with_build(task, slave_queue, builds_queue,
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
 
 
-def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
-                                           builds_queue, stats_queue,
-                                           master_config, hello_data):
+def test_slave_cont_with_build(task, slave_queue, builds_queue, master_config,
+                               stats_queue, hello_data):
+    task.logger = mock.Mock()
+    slave_queue.send_msg('HELLO', hello_data)
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')],
+                                    'cp35m': [('bar', '0.1')]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
+    slave_queue.send_msg(
+        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
+    slave_queue.send_msg(
+        'BUSY', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('CONT', None)
+
+
+def test_slave_idle_after_skip(task, slave_queue, builds_queue, master_config,
+                               stats_queue, hello_data):
+    task.logger = mock.Mock()
+    slave_queue.send_msg('HELLO', hello_data)
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
+    task.poll(0)
+    slave_queue.send_msg(
+        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
+    task.skip_slave(1)
+    task.poll(0)
+    slave_queue.send_msg(
+        'BUSY', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('DONE', None)
+
+
+def test_slave_idle_with_other_build(task, slave_queue, slave2_queue,
+                                     builds_queue, stats_queue, master_config,
+                                     hello_data):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)
@@ -434,8 +489,8 @@ def test_slave_says_idle_with_active_build(task, slave_queue, slave2_queue,
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
 
 
-def test_slave_says_idle_when_paused(task, slave_queue, builds_queue,
-                                     master_config, stats_queue, hello_data):
+def test_slave_idle_when_paused(task, slave_queue, builds_queue, master_config,
+                                stats_queue, hello_data):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)

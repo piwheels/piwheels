@@ -197,8 +197,6 @@ class SlaveDriver(tasks.Task):
                         'SKIP':  slave.skip,
                         'WAKE':  slave.wake,
                     }[msg]()
-                if data is not None:
-                    break
         elif msg == 'HELLO':
             for slave in self.slaves.values():
                 slave.hello()
