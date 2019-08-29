@@ -191,7 +191,7 @@ the piwheels repository:
 
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/bennuttall/piwheels/master/piwheels-master.service
+    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/piwheels-master.service
     # cp piwheels-master.service /etc/systemd/system/
     # systemctl daemon-reload
     # systemctl enable piwheels-master

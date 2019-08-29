@@ -70,6 +70,10 @@ class TaskQuit(Exception):
 
 
 class TaskInterval:
+    """
+    Associates *handler*, a method to be periodically called, with *interval*,
+    the period of time to wait between runs.
+    """
     def __init__(self, interval, handler):
         assert isinstance(interval, timedelta)
         self.interval = interval
@@ -92,9 +96,14 @@ class Task(Thread):
     """
     The :class:`Task` class is a :class:`~threading.Thread` derivative which is
     the base for all tasks in the piwheels master. The :meth:`run` method is
-    overridden to perform a simple task loop which calls :meth:`loop` once a
-    cycle, and :meth:`poll` to react to any messages arriving into queues.
+    overridden to perform a simple task loop which calls :meth:`poll` once a
+    cycle to react to any messages arriving into queues, and to dispatch any
+    periodically executed methods.
+
     Queues are associated with handlers via the :meth:`register` method.
+    Periodic methods are associated with an interval via the :meth:`every`
+    method. These should be called during initialization (don't attempt to
+    register handlers from within the thread itself).
     """
     name = 'Task'
 

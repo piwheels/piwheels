@@ -26,6 +26,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""
+This module defines the protocols used by the tasks to talk to each other. A
+:class:`Protocol` consists of two dictionaries mapping send / recv messages to
+schemas for validating their associated data.
+
+.. autoclass:: Protocol
+    :members:
+"""
+
 import datetime as dt
 import ipaddress as ip
 from itertools import chain
@@ -52,11 +61,19 @@ NoData = _NoData()
 
 
 class Protocol(namedtuple('Protocol', ('recv', 'send'))):
-    # Protocols are generally specified from the point of view of the master;
-    # i.e. the recv dictionary contains the messages (and schemas) the master
-    # task expects to recv, and the send dictionary contains the messages it
-    # expects to send. The special __reversed__ method is overridden to allow
-    # client tasks to specify their protocol as reversed(some_protocol)
+    """
+    Represents a socket protocol as two dictionaries, :attr:`recv` and
+    :attr:`send` which map message strings to a voluptuous schema used to
+    validate the data associated with the message.
+
+    Protocols are generally specified from the point of view of the master;
+    i.e. the recv dictionary contains the messages (and schemas) the master
+    task expects to recv, and the send dictionary contains the messages it
+    expects to send.
+
+    The special __reversed__ method is overridden to allow client tasks to
+    specify their protocol as reversed(some_protocol).
+    """
     __slots__ = ()
 
     def __new__(cls, recv=None, send=None):

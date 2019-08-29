@@ -27,14 +27,18 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-This module defines derivatives of the ZMQ socket classes customized for the
-message structures used in piwheels.
+This module augments the classes provided by pyzmq (the 0MQ Python bindings)
+to use CBOR encoding, and voluptuous for message validation. It also tweaks a
+few minor things like using seconds for timeouts.
 
 .. autoclass:: Context
+    :members:
 
 .. autoclass:: Socket
+    :members:
 
 .. autoclass:: Poller
+    :members:
 """
 
 import logging
@@ -109,10 +113,10 @@ class Context:
 
 class Socket:
     """
-    Wrapper for 0MQ :class:`zmq.Socket`. This extends 0MQ's sockets to include
-    a *protocol* which will be used to validate messages that are sent and
-    received (via a voluptuous-based schema), and a *logger* which can be used
-    to debug socket behaviour.
+    Wrapper for :class:`zmq.Socket`. This extends 0MQ's sockets to include a
+    protocol which will be used to validate messages that are sent and received
+    (via a voluptuous schema), and a logger which can be used to debug socket
+    behaviour.
     """
     def __init__(self, socket, protocol=None, logger=None):
         if logger is None:
@@ -183,9 +187,9 @@ class Socket:
     @property
     def hwm(self):
         """
-        Gets or sets the high-water mark of the socket, i.e. the maximum number
-        of queued messages before the socket blocks or drops incoming messages
-        (which depends on the type of the socket).
+        The high-water mark of the socket, i.e. the number of messages that can
+        be queued before the socket blocks (or drops, depending on the socket
+        type) messages.
         """
         return self._socket.hwm
 
@@ -196,8 +200,8 @@ class Socket:
     @property
     def mandatory(self):
         """
-        If set to :data:`True`, specifies that messages for non-existent
-        recipients will be rejected.
+        If True, enforces the restriction that ROUTER type sockets may not
+        silently drop unroutable messages.
         """
         return self._socket.getsockopt(zmq.ROUTER_MANDATORY)
 
@@ -207,97 +211,121 @@ class Socket:
 
     def bind(self, address):
         """
-        Binds the socket to listen on *address* for incoming connections.
+        Binds the socket to listen on the specified *address*.
         """
         return self._socket.bind(address)
 
     def connect(self, address):
         """
-        Connects the socket to one listening on *address*.
+        Connects the socket to the listening socket at *address*.
         """
         return self._socket.connect(address)
 
     def close(self, linger=None):
         """
-        Closes the connection, waiting for *linger* seconds to flush any
-        pending messages.
+        Closes the socket. If *linger* is specified, it is the number of
+        seconds to wait for pending messages to be flushed.
         """
         return self._socket.close(
             linger=linger if linger is None else linger * 1000)
 
     def subscribe(self, topic):
         """
-        Subscribes the SUB end of a PUB/SUB socket to messages with *topic* as
-        a prefix.
+        Subscribes SUB type sockets to the specified *topic* (a string prefix).
         """
         self._socket.setsockopt_string(SUBSCRIBE, topic)
 
     def unsubscribe(self, topic):
         """
-        Unsubscribes the SUB end of a PUB/SUB socket to messages with *topic*
-        as a prefix.
+        Unsubscribes SUB type sockets from the specified *topic* (a string
+        prefix).
         """
         self._socket.setsockopt_string(UNSUBSCRIBE, topic)
 
     def poll(self, timeout=None, flags=POLLIN):
         """
-        Wait for *timeout* seconds for messages to arrive (if *flags* includes
-        :data:`POLLIN`) or for space to enqueue a message (if *flags* includes
-        :data:`POLLOUT`).
+        Polls the socket for pending data (by default, when *flags* is POLLIN).
+        If no data is available after *timeout* seconds, returns False.
+        Otherwise returns True.
+
+        If *flags* is POLLOUT instead, tests whether the socket has available
+        slots for queueing new messages.
         """
         return self._socket.poll(
             timeout if timeout is None else timeout * 1000, flags)
 
     def send(self, buf, flags=0):
         """
-        Send *buf* (a :class:`bytes` string) to the connected socket.
+        Send *buf* (a :class:`bytes` string).
         """
         self._logger.debug('>> %s', buf)
         return self._socket.send(buf, flags)
 
     def recv(self, flags=0):
         """
-        Receive a :class:`bytes` string from the connected socket.
+        Receives the next message as a :class:`bytes` string.
         """
         buf = self._socket.recv(flags)
         self._logger.debug('<< %s', buf)
         return buf
 
     def send_multipart(self, msg_parts, flags=0):
+        """
+        Send *msg_parts*, a list of :class:`bytes` strings as a multi-part
+        message which can be received intact with :meth:`recv_multipart`.
+        """
         self._logger.debug('>>' + (' %s' * len(msg_parts)), *msg_parts)
         return self._socket.send_multipart(msg_parts, flags)
 
     def recv_multipart(self, flags=0):
+        """
+        Receives a multi-part message, returning its content as a list of
+        :class:`bytes` strings.
+        """
         msg_parts = self._socket.recv_multipart(flags)
         self._logger.debug('<<' + (' %s' * len(msg_parts)), *msg_parts)
         return msg_parts
 
     def send_msg(self, msg, data=NoData, flags=0):
         """
-        Send *msg* (a string) with *data* parameters to the connected socket.
+        Send the unicode string *msg* with its associated *data* as a
+        CBOR-encoded message. This is the primary method used in piwheels for
+        sending information between tasks.
+
         The message, and its associated data, must validate against the
-        *protocol* associated with the socket on construction.
+        :attr:`protocol` associated with the socket on construction.
         """
         self._logger.debug('>> %s %r', msg, data)
         return self._socket.send(self._dump_msg(msg, data), flags)
 
     def recv_msg(self, flags=0):
         """
-        Receive a message (and its associated data) from the connected socket.
+        Receive a CBOR-encoded message, returning a tuple of the unicode
+        message string and its associated data. This is the primary method used
+        in piwheels for receving information into a task.
+
         The message, and its associated data, will be validated agains the
-        *protocol* associated with the socket on construction.
+        :attr:`protocol` associated with the socket on construction.
         """
         msg, data = self._load_msg(self._socket.recv(flags))
         self._logger.debug('<< %s %r', msg, data)
         return msg, data
 
     def send_addr_msg(self, addr, msg, data=NoData, flags=0):
+        """
+        Send a CBOR-encoded message (and associated data) to *addr*, a
+        :class:`bytes` string.
+        """
         self._logger.debug('>> %s %s %r',
                            hexlify(addr).decode('ascii'), msg, data)
         self._socket.send_multipart([addr, b'', self._dump_msg(msg, data)],
                                     flags)
 
     def recv_addr_msg(self, flags=0):
+        """
+        Receive a CBOR-encoded message (and associated data) along with the
+        address it came from (represented as a :class:`bytes` string).
+        """
         try:
             addr, empty, buf = self._socket.recv_multipart(flags)
         except ValueError:
@@ -319,6 +347,10 @@ class Poller:
         self._map = {}
 
     def register(self, sock, flags=POLLIN | POLLOUT):
+        """
+        Register *sock* with the poller, watching for events as specified by
+        *flags* (which defaults to POLLIN and POLLOUT events).
+        """
         if isinstance(sock, Socket):
             self._map[sock._socket] = sock
             return self._poller.register(sock._socket, flags)
@@ -326,6 +358,10 @@ class Poller:
             return self._poller.register(sock, flags)
 
     def unregister(self, sock):
+        """
+        Unregister *sock* from the poller. After this, calls to :meth:`poll`
+        will never return references to *sock*.
+        """
         if isinstance(sock, Socket):
             self._poller.unregister(sock._socket)
             del self._map[sock._socket]
@@ -333,6 +369,12 @@ class Poller:
             self._poller.unregister(sock)
 
     def poll(self, timeout=None):
+        """
+        Poll all registered sockets for the events they were registered with,
+        for *timeout* seconds. Returns a dictionary mapping sockets to events
+        or an empty dictinoary if the *timeout* elapsed with no events
+        occurring.
+        """
         return {
             self._map.get(sock, sock): event
             for sock, event in self._poller.poll(

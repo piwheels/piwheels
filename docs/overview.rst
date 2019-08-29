@@ -35,6 +35,9 @@ following components:
 | :doc:`remove`   | A tool for manually removing builds from the      |
 |                 | database and file-system.                         |
 +-----------------+---------------------------------------------------+
+| :doc:`rebuild`  | A tool for regenerating certain elements of the   |
+|                 | piwheels web-site.                                |
++-----------------+---------------------------------------------------+
 | :doc:`logger`   | A tool for transferring download statistics into  |
 |                 | the piwheels database.                            |
 +-----------------+---------------------------------------------------+
