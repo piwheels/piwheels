@@ -197,18 +197,6 @@ class Socket:
     def hwm(self, value):
         self._socket.hwm = value
 
-    @property
-    def mandatory(self):
-        """
-        If True, enforces the restriction that ROUTER type sockets may not
-        silently drop unroutable messages.
-        """
-        return self._socket.getsockopt(zmq.ROUTER_MANDATORY)
-
-    @mandatory.setter
-    def mandatory(self, value):
-        self._socket.setsockopt(zmq.ROUTER_MANDATORY, value)
-
     def bind(self, address):
         """
         Binds the socket to listen on the specified *address*.
