@@ -27,30 +27,44 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import logging
 from unittest import mock
-from datetime import timedelta
+from datetime import datetime, timedelta
 from time import sleep
 
 import pytest
 
-from piwheels import protocols, tasks
+from piwheels import protocols, transport, tasks
 
 
 class CounterTask(tasks.PauseableTask):
     # A trivial task purely for test purposes, with a very rapid poll cycle
     name = 'counter'
 
-    def __init__(self, config, control_protocol=protocols.task_control):
+    def __init__(self, config, control_protocol=protocols.task_control,
+                 delay=timedelta(microseconds=1)):
         super().__init__(config, control_protocol)
-        self.every(timedelta(microseconds=1), self.loop)
+        self.every(delay, self.loop)
         self.count = 0
 
     def loop(self):
         self.count += 1
 
+    def poll(self, timeout=0.1):
+        return super().poll(timeout)
+
+    def foo(self):
+        pass
+
+
+class SimpleTask(tasks.Task):
+    name = 'simple'
+
 
 class BrokenTask(tasks.Task):
     # A trivial task which instantly breaks
+    name = 'broken'
+
     def __init__(self, config, control_protocol=protocols.task_control):
         super().__init__(config, control_protocol)
         self.every(timedelta(microseconds=1), self.loop)
@@ -59,7 +73,7 @@ class BrokenTask(tasks.Task):
         raise Exception("Don't panic!")
 
 
-def test_task_quits(master_config, master_control_queue):
+def test_task_quits(master_config):
     task = tasks.Task(master_config)
     try:
         task.start()
@@ -70,7 +84,7 @@ def test_task_quits(master_config, master_control_queue):
         task.close()
 
 
-def test_task_runs(master_config, master_control_queue):
+def test_task_runs(master_config):
     task = CounterTask(master_config)
     try:
         task.start()
@@ -81,7 +95,29 @@ def test_task_runs(master_config, master_control_queue):
         task.close()
 
 
-def test_task_pause(master_config, master_control_queue):
+def test_task_force(master_config):
+    task = CounterTask(master_config, delay=timedelta(seconds=1))
+    try:
+        task.start()
+        start = datetime.utcnow()
+        while task.count == 0:
+            sleep(0.01)
+        assert datetime.utcnow() - start < timedelta(seconds=1)
+        start = datetime.utcnow()
+        task.force(task.loop)
+        while task.count == 1:
+            sleep(0.01)
+        assert datetime.utcnow() - start < timedelta(seconds=1)
+        task.quit()
+        task.join(10)
+        assert task.count > 0
+        with pytest.raises(ValueError):
+            task.force(task.foo)
+    finally:
+        task.close()
+
+
+def test_task_pause(master_config):
     task = CounterTask(master_config)
     try:
         task.start()
@@ -98,7 +134,7 @@ def test_task_pause(master_config, master_control_queue):
         task.close()
 
 
-def test_task_pause_resume_idempotent(master_config, master_control_queue):
+def test_task_pause_resume_idempotent(master_config):
     task = CounterTask(master_config)
     try:
         task.start()
@@ -113,7 +149,7 @@ def test_task_pause_resume_idempotent(master_config, master_control_queue):
         task.close()
 
 
-def test_task_quit_while_paused(master_config, master_control_queue):
+def test_task_quit_while_paused(master_config):
     task = CounterTask(master_config)
     try:
         task.start()
@@ -125,7 +161,7 @@ def test_task_quit_while_paused(master_config, master_control_queue):
         task.close()
 
 
-def test_task_resume_while_not_paused(master_config, master_control_queue):
+def test_task_resume_while_not_paused(master_config):
     task = CounterTask(master_config)
     try:
         task.logger = mock.Mock()
@@ -139,7 +175,7 @@ def test_task_resume_while_not_paused(master_config, master_control_queue):
         task.close()
 
 
-def test_broken_control(master_config, master_control_queue):
+def test_broken_control(master_config, caplog):
     protocol = protocols.Protocol(recv={
         'FOO': protocols.NoData,
         'QUIT': protocols.NoData,
@@ -148,10 +184,79 @@ def test_broken_control(master_config, master_control_queue):
     try:
         task.start()
         task._ctrl('FOO')
+        task.quit()
         task.join(10)
         assert not task.is_alive()
-        # Ensure the broken task tells the master to quit
-        assert master_control_queue.recv_msg() == ('QUIT', None)
+        assert caplog.record_tuples == [
+            ('counter', logging.INFO, 'starting'),
+            ('counter', logging.INFO, 'started'),
+            ('counter', logging.ERROR, 'missing control handler for FOO'),
+            ('counter', logging.INFO, 'stopping'),
+            ('counter', logging.INFO, 'stopped'),
+        ]
+    finally:
+        task.close()
+    caplog.clear()
+    task = SimpleTask(master_config, control_protocol=protocol)
+    try:
+        task.start()
+        task._ctrl('FOO')
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+        assert caplog.record_tuples == [
+            ('simple', logging.INFO, 'starting'),
+            ('simple', logging.INFO, 'started'),
+            ('simple', logging.ERROR, 'missing control handler for FOO'),
+            ('simple', logging.INFO, 'stopping'),
+            ('simple', logging.INFO, 'stopped'),
+        ]
+    finally:
+        task.close()
+
+
+def test_bad_control(master_config, caplog):
+    task = CounterTask(master_config)
+    try:
+        task.start()
+        sock = task.ctx.socket(
+            transport.PUSH, protocol=reversed(task.control_protocol),
+            logger=task.logger)
+        sock.connect('inproc://ctrl-counter')
+        sock.send(b'FOO')
+        sock.close()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+        assert caplog.record_tuples == [
+            ('counter', logging.INFO, 'starting'),
+            ('counter', logging.INFO, 'started'),
+            ('counter', logging.ERROR, 'unable to deserialize data'),
+            ('counter', logging.INFO, 'stopping'),
+            ('counter', logging.INFO, 'stopped'),
+        ]
+    finally:
+        task.close()
+    caplog.clear()
+    task = SimpleTask(master_config)
+    try:
+        task.start()
+        sock = task.ctx.socket(
+            transport.PUSH, protocol=reversed(task.control_protocol),
+            logger=task.logger)
+        sock.connect('inproc://ctrl-simple')
+        sock.send(b'FOO')
+        sock.close()
+        task.quit()
+        task.join(10)
+        assert not task.is_alive()
+        assert caplog.record_tuples == [
+            ('simple', logging.INFO, 'starting'),
+            ('simple', logging.INFO, 'started'),
+            ('simple', logging.ERROR, 'unable to deserialize data'),
+            ('simple', logging.INFO, 'stopping'),
+            ('simple', logging.INFO, 'stopped'),
+        ]
     finally:
         task.close()
 

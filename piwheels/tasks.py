@@ -235,10 +235,6 @@ class Task(Thread):
         implementation it simply handles the "QUIT" message by raising TaskQuit
         (which the :meth:`run` method will catch and use as a signal to end).
         """
-        # pylint: disable=no-self-use,unused-variable
-        # We deliberately don't catch the IOError that can result from recv_msg
-        # here as this queue is guaranteed to be in-process. If something sends
-        # us an invalid message it's a bug and we should shut down (see run)
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
@@ -312,20 +308,23 @@ class PauseableTask(Task):
     is resumed (or terminated).
     """
     def handle_control(self, queue):
-        # pylint: disable=unused-variable
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise TaskQuit
-        elif msg == 'PAUSE':
-            while True:
-                msg, data = queue.recv_msg()
-                if msg == 'QUIT':
-                    raise TaskQuit
-                elif msg == 'RESUME':
-                    break
-                else:
-                    raise IOError('invalid control message: %s' % msg)
-        elif msg == 'RESUME':
-            self.logger.warning('Task is not paused')
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            raise IOError('invalid control message: %s' % msg)
+            if msg == 'QUIT':
+                raise TaskQuit
+            elif msg == 'PAUSE':
+                while True:
+                    msg, data = queue.recv_msg()
+                    if msg == 'QUIT':
+                        raise TaskQuit
+                    elif msg == 'RESUME':
+                        break
+                    else:
+                        self.logger.error('missing control handler for %s', msg)
+            elif msg == 'RESUME':
+                self.logger.warning('Task is not paused')
+            else:
+                self.logger.error('missing control handler for %s', msg)
