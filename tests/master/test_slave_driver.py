@@ -112,6 +112,12 @@ def hello_data(request):
     ]
 
 
+def stats_data(now=None):
+    if now is None:
+        now = datetime.now(tz=UTC)
+    return [now, 1000, 900, 1000, 900, 1000, 1000, 1.0, 60.0]
+
+
 def test_control_quit(task):
     with pytest.raises(tasks.TaskQuit):
         task.quit()
@@ -171,8 +177,7 @@ def test_slave_invalid_message(task, slave_queue):
 
 def test_slave_invalid_first_message(task, slave_queue):
     task.logger = mock.Mock()
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert not task.slaves
     assert task.logger.error.call_count == 1
@@ -294,14 +299,14 @@ def test_slave_remove_expired_build(task, slave_queue, master_config,
                                         'cp35m': [('bar', '0.1')]})
         task.poll(0)
         assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
-        slave_queue.send_msg(
-            'IDLE', [dt1.now.return_value, 1000, 900, 1000, 900, 1.0, 60.0])
+        slave_queue.send_msg('IDLE', stats_data(dt1.now.return_value))
         task.poll(0)
         assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
         assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
         assert master_status_queue.recv_msg() == (
-            'SLAVE', [1, dt1.now.return_value, 'STATS', [
-                dt1.now.return_value, 1000, 900, 1000, 900, 1.0, 60.0]])
+            'SLAVE', [
+                1, dt1.now.return_value, 'STATS', stats_data(dt1.now.return_value)
+            ])
         assert master_status_queue.recv_msg() == (
             'SLAVE', [1, dt1.now.return_value, 'BUILD', ['foo', '0.1']])
         old_now = dt1.now.return_value
@@ -342,8 +347,7 @@ def test_slave_says_idle_invalid(task, slave_queue, master_config, stats_queue,
     for slave in task.slaves.values():
         slave.reply = ('SEND', 'foo-0.1-py3-none-any.whl')
         break
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert task.logger.error.call_count == 1
     assert slave_queue.recv_msg() == ('DIE', None)
@@ -363,8 +367,7 @@ def test_master_says_idle_when_terminated(task, slave_queue, master_config,
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     task.kill_slave(1)
     task.poll(0)
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('DIE', None)
 
@@ -376,8 +379,7 @@ def test_master_kills_correct_slave(task, slave_queue, master_config,
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     task.kill_slave(2)
     task.poll(0)
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('SLEEP', None)
     assert stats_queue.recv_msg() == ('STATBQ', {})
@@ -389,8 +391,7 @@ def test_slave_idle_with_no_builds(task, slave_queue, builds_queue,
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('SLEEP', None)
     assert stats_queue.recv_msg() == ('STATBQ', {})
@@ -409,8 +410,7 @@ def test_slave_idle_with_build(task, slave_queue, builds_queue, master_config,
                                     'cp35m': [('bar', '0.1')]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
@@ -429,13 +429,11 @@ def test_slave_cont_with_build(task, slave_queue, builds_queue, master_config,
                                     'cp35m': [('bar', '0.1')]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1, 'cp35m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0, 'cp35m': 1})
-    slave_queue.send_msg(
-        'BUSY', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('BUSY', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('CONT', None)
 
@@ -448,15 +446,13 @@ def test_slave_idle_after_skip(task, slave_queue, builds_queue, master_config,
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll(0)
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     task.skip_slave(1)
     task.poll(0)
-    slave_queue.send_msg(
-        'BUSY', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('BUSY', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('DONE', None)
 
@@ -475,15 +471,13 @@ def test_slave_idle_with_other_build(task, slave_queue, slave2_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll(0)
-    slave2_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave2_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave2_queue.recv_msg() == ('SLEEP', None)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -500,14 +494,12 @@ def test_slave_idle_when_paused(task, slave_queue, builds_queue, master_config,
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
     task.pause()
     task.poll(0)
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('SLEEP', None)
     task.resume()
     task.poll(0)
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -534,8 +526,7 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -561,8 +552,7 @@ def test_slave_says_built_succeeded(task, fs_queue, slave_queue, builds_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -600,8 +590,7 @@ def test_slave_says_sent_failed(task, fs_queue, slave_queue, builds_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -633,8 +622,7 @@ def test_slave_says_sent_succeeded(task, db_queue, fs_queue, slave_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
@@ -671,8 +659,7 @@ def test_slave_says_sent_succeeded_more(task, fs_queue, slave_queue,
     builds_queue.send_msg('QUEUE', {'cp34m': [(bs.package, bs.version)]})
     task.poll(0)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
-    slave_queue.send_msg(
-        'IDLE', [datetime.now(tz=UTC), 1000, 900, 1000, 900, 1.0, 60.0])
+    slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('BUILD', [bs.package, bs.version])
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})

@@ -71,10 +71,12 @@ class BigBrother(tasks.PauseableTask):
             'downloads_last_hour':   0,
             'downloads_last_month':  0,
             'downloads_all':         0,
-            'disk_free':             0,
             'disk_size':             0,
-            'mem_free':              0,
+            'disk_free':             0,
             'mem_size':              0,
+            'mem_free':              0,
+            'swap_size':             0,
+            'swap_free':             0,
             'cpu_temp':              0.0,
             'load_average':          0.0,
         })
@@ -126,9 +128,10 @@ class BigBrother(tasks.PauseableTask):
 
     def update_stats(self):
         mem_size, mem_free = info.get_mem_stats()
+        swap_size, swap_free = info.get_swap_stats()
         self.stats = self.stats._replace(
             timestamp=datetime.now(tz=UTC), mem_size=mem_size,
-            mem_free=mem_free, cpu_temp=info.get_cpu_temp(),
-            load_average=os.getloadavg()[0])
+            mem_free=mem_free, swap_size=swap_size, swap_free=swap_free,
+            cpu_temp=info.get_cpu_temp(), load_average=os.getloadavg()[0])
         self.history.append(self.stats)
         self.status_queue.send_msg('STATS', self.stats.as_message())

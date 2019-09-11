@@ -806,10 +806,12 @@ class MasterStats(namedtuple('MasterStats', (
     'downloads_last_hour',
     'downloads_last_month',
     'downloads_all',
-    'disk_free',
     'disk_size',
-    'mem_free',
+    'disk_free',
     'mem_size',
+    'mem_free',
+    'swap_size',
+    'swap_free',
     'load_average',
     'cpu_temp',
 ))):
@@ -829,6 +831,8 @@ class SlaveStats(namedtuple('SlaveStats', (
     'disk_free',
     'mem_size',
     'mem_free',
+    'swap_size',
+    'swap_free',
     'load_average',
     'cpu_temp',
 ))):

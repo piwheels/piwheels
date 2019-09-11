@@ -71,10 +71,12 @@ def stats_data(request):
         'downloads_last_hour':   0,
         'downloads_last_month':  0,
         'downloads_all':         0,
-        'disk_free':             0,
         'disk_size':             0,
-        'mem_free':              0,
+        'disk_free':             0,
         'mem_size':              0,
+        'mem_free':              0,
+        'swap_size':             0,
+        'swap_free':             0,
         'cpu_temp':              0.0,
         'load_average':          0.0,
     })
@@ -152,15 +154,18 @@ def test_update_search_index(db_queue, web_queue, task):
 def test_update_stats(master_status_queue, task, stats_data):
     with mock.patch('piwheels.master.big_brother.datetime') as dt, \
             mock.patch('piwheels.info.get_mem_stats') as mem, \
+            mock.patch('piwheels.info.get_swap_stats') as swap, \
             mock.patch('piwheels.info.get_cpu_temp') as cpu, \
             mock.patch('os.getloadavg') as load:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        mem.return_value = (1, 2)
+        mem.return_value = (2, 1)
+        swap.return_value = (4, 3)
         cpu.return_value = 56.0
         load.return_value = (1.3, 2.5, 3.9)
         task.update_stats()
         stats_data = stats_data._replace(
-            mem_size=1, mem_free=2, cpu_temp=56.0, load_average=1.3)
+            mem_size=2, mem_free=1, swap_size=4, swap_free=3,
+            cpu_temp=56.0, load_average=1.3)
         assert master_status_queue.recv_msg() == (
             'STATS', stats_data.as_message())
 

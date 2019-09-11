@@ -109,10 +109,12 @@ _master_stats = ExactSequence([
     int,          # downloads last hour
     int,          # downloads last month
     int,          # downloads all
-    int,          # disk free (for output dir)
     int,          # disk size (for output dir)
-    int,          # mem free
+    int,          # disk free (for output dir)
     int,          # mem size
+    int,          # mem free
+    int,          # swap size
+    int,          # swap free
     float,        # load average
     float,        # board temperature (C)
 ])
@@ -138,6 +140,8 @@ _slave_stats = ExactSequence([
     int,            # disk free (for build dir)
     int,            # mem size
     int,            # mem free
+    int,            # swap size
+    int,            # swap free
     float,          # load average (for 1-min)
     float,          # board temperature (C)
 ])

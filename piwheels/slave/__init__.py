@@ -240,6 +240,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             [datetime.now(tz=UTC)] +
             list(info.get_disk_stats(self.config.dir)) +
             list(info.get_mem_stats()) +
+            list(info.get_swap_stats()) +
             [os.getloadavg()[0], info.get_cpu_temp()]
         )
 

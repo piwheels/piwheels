@@ -139,6 +139,26 @@ def get_mem_stats():
     raise RuntimeError('unable to determine memory stats')
 
 
+def get_swap_stats():
+    """
+    Returns a tuple of (swap_total, swap_free) measured in bytes.
+    """
+    values = {}
+    labels = {'SwapTotal:', 'SwapFree:'}
+    with io.open('/proc/meminfo', 'r') as f:
+        for line in f:
+            label, value, units = line.split()
+            if label in labels:
+                assert units == 'kB'
+                values[label] = int(value) * 1024
+                if {'SwapTotal:', 'SwapFree:'} == values.keys():
+                    return (
+                        values['SwapTotal:'],
+                        values['SwapFree:']
+                    )
+    raise RuntimeError('unable to determine swap stats')
+
+
 def get_cpu_temp():
     """
     Returns the CPU temperature.
