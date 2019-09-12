@@ -96,8 +96,8 @@ def stats_data(request):
         'mem_free':              0,
         'swap_size':             0,
         'swap_free':             0,
-        'cpu_temp':              0.0,
         'load_average':          0.0,
+        'cpu_temp':              0.0,
     })
 
 
