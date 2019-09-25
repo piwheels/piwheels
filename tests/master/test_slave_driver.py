@@ -275,7 +275,7 @@ def test_slave_remove_expired(task, slave_queue, master_config,
         dt1.now.return_value = dt2.now.return_value = dt1.now.return_value + timedelta(hours=4)
         task.poll(0)
         assert len(task.slaves) == 0
-        assert master_status_queue.recv_msg() == ('SLAVE', [1, old_now, 'BYE', None])
+        assert master_status_queue.recv_msg() == ('SLAVE', [1, old_now, 'DIE', None])
 
 
 def test_slave_remove_expired_build(task, slave_queue, master_config,
@@ -313,7 +313,7 @@ def test_slave_remove_expired_build(task, slave_queue, master_config,
         dt1.now.return_value = dt2.now.return_value = dt1.now.return_value + timedelta(hours=4)
         task.poll(0)
         assert len(task.slaves) == 0
-        assert master_status_queue.recv_msg() == ('SLAVE', [1, old_now, 'BYE', None])
+        assert master_status_queue.recv_msg() == ('SLAVE', [1, old_now, 'DIE', None])
 
 
 def test_slave_says_hello(task, slave_queue, hello_data):

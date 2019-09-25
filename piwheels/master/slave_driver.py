@@ -160,9 +160,9 @@ class SlaveDriver(tasks.Task):
                 self.logger.warning(
                     'slave %d (%s): timed out during %s',
                     slave.slave_id, slave.label, slave.reply[0])
-            # Send a fake BYE message to the status queue so that listening
+            # Send a fake DIE message to the status queue so that listening
             # monitors know to remove the entry
-            slave.reply = ('BYE', None)
+            slave.reply = ('DIE', None)
             del self.slaves[address]
 
     def handle_control(self, queue):
@@ -279,11 +279,11 @@ class SlaveDriver(tasks.Task):
         slave.request = msg, data
         handler = {
             'HELLO': self.do_hello,
-            'BYE': self.do_bye,
-            'IDLE': self.do_idle,
-            'BUSY': self.do_busy,
+            'BYE':   self.do_bye,
+            'IDLE':  self.do_idle,
+            'BUSY':  self.do_busy,
             'BUILT': self.do_built,
-            'SENT': self.do_sent,
+            'SENT':  self.do_sent,
         }[msg]
         msg, data = handler(slave)
         if msg is not None:
