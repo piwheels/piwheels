@@ -205,7 +205,6 @@ write access to the output directory.
         self.ext_status_queue = ctx.socket(
             transport.PUB, protocol=protocols.monitor_stats,
             logger=self.logger)
-        self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
         # Ensure that the control and external status queues can be written to
         # by the owning group (for remote monitors)

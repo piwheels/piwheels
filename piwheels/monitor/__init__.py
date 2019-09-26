@@ -94,7 +94,6 @@ class PiWheelsMonitor:
         ctx = transport.Context()
         self.status_queue = ctx.socket(
             transport.SUB, protocol=reversed(protocols.monitor_stats))
-        self.status_queue.hwm = 10
         self.status_queue.connect(config.status_queue)
         self.status_queue.subscribe('')
         sleep(1)
