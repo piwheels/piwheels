@@ -36,6 +36,7 @@ user interfaces.
 """
 
 from math import log
+from datetime import timedelta
 
 
 def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0 B',
@@ -47,3 +48,7 @@ def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0 B',
     else:
         return template.format(size=size / 2 ** (index * 10),
                                suffix=suffixes[index])
+
+
+def format_timedelta(delta):
+    return str(timedelta(seconds=int(delta.total_seconds())))
