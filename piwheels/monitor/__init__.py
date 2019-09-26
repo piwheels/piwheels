@@ -70,6 +70,7 @@ class PiWheelsMonitor:
         self.slave_list = None     # the list-walker for all build slaves
         self.slave_box = None      # the box displaying stats for build slaves
         self.master_box = None     # the box displaying stats for the master
+        self.status_box = None     # the message box at the bottom
         self.popup_stack = []
         self.master_stats = deque(maxlen=100)
         self.list_header = None
@@ -139,19 +140,24 @@ class PiWheelsMonitor:
             ]),
             'colheader'
         )
-        self.slave_list = SlaveListWalker(
-            header=self.list_header.original_widget,
-            get_footer=lambda: self.get_footer()[0])
-        list_box = widgets.ListBox(self.slave_list)
         self.slave_box = widgets.SlaveStatsBox()
         self.master_box = widgets.MasterStatsBox()
-
+        self.status_box = widgets.Text('Starting up')
+        self.slave_list = SlaveListWalker(
+            header=self.list_header.original_widget,
+            get_box=lambda: self.get_box()[0])
         self.frame = widgets.Frame(
-            list_box,
+            widgets.ListBox(self.slave_list),
             header=self.list_header,
-            footer=None,
-        )
-        return self.frame, widgets.PALETTE
+            footer=None)  # to be set by list_modified
+
+        status_line = widgets.AttrMap(
+            widgets.Filler(self.status_box), 'footer')
+
+        return widgets.Pile([
+            self.frame,
+            (1, status_line),
+        ]), widgets.PALETTE
 
     def status_message(self):
         """
@@ -161,6 +167,8 @@ class PiWheelsMonitor:
         if msg in ('HELLO', 'STATS'):
             slave_id = None
             timestamp = datetime.now(tz=UTC)
+            if msg == 'HELLO':
+                self.status_box.set_text('Connected to master')
         elif msg == 'SLAVE':
             slave_id, timestamp, msg, data = data
         self.slave_list.message(slave_id, timestamp, msg, data)
@@ -209,14 +217,12 @@ class PiWheelsMonitor:
         through to the higher level handler.
         """
         if isinstance(key, str):
-            # there's probably a more elegant way of associating these
-            # hotkeys with the buttons, but I'm being lazy
             try:
                 {
                     # TODO j/k for up/down
-                    # TODO Enter for actions
-                    'h': self.help,
-                    'q': self.quit,
+                    'enter': self.action,
+                    'h':     self.help,
+                    'q':     self.quit,
                 }[key.lower()]()
             except KeyError:
                 return False
@@ -226,7 +232,7 @@ class PiWheelsMonitor:
             # Ignore unhandled mouse events
             return False
 
-    def get_footer(self):
+    def get_box(self):
         try:
             box, options = self.frame.contents['footer']
         except KeyError:
@@ -234,7 +240,7 @@ class PiWheelsMonitor:
         return box, options
 
     def list_modified(self):
-        box, options = self.get_footer()
+        box, options = self.get_box()
         if self.slave_list.focus is None:
             if box is not None:
                 self.frame.contents['footer'] = (None, options)
@@ -244,6 +250,10 @@ class PiWheelsMonitor:
         elif self.slave_list.focus > 0 and box is not self.slave_box:
             self.slave_box.update(self.slave_list.selected_slave)
             self.frame.contents['footer'] = (self.slave_box, options)
+
+    def action(self, widget=None):
+        # TODO
+        raise NotImplementedError()
 
     def help(self, widget=None):
         # TODO
@@ -269,13 +279,14 @@ class SlaveListWalker(widgets.ListWalker):
     :param header:
         The widget forming the header of the main list-box.
 
-    :param get_footer:
-        A callable which will return the current footer of the main list-box.
+    :param get_box:
+        A callable which will return the currently shown master or slave
+        stats-box widget.
     """
-    def __init__(self, header, get_footer):
+    def __init__(self, header, get_box):
         super().__init__()
         self.header = header
-        self.get_footer = get_footer
+        self.get_box = get_box
         self.focus = None
         master_state = MasterState()
         self.slaves = {None: master_state}    # maps slave ID to state object
@@ -353,7 +364,7 @@ class SlaveListWalker(widgets.ListWalker):
                 )
             ]
         self.update()
-        box = self.get_footer()
+        box = self.get_box()
         if (
             # If the subject of the message is the currently selected state,
             # update the current stats box

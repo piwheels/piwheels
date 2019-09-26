@@ -122,7 +122,7 @@ PALETTE = [
     ('done',        'black',           'light gray'),
     ('todo_smooth', 'dark blue',       'light gray'),
     ('header',      'light gray',      'dark blue'),
-    ('footer',      'light gray',      'dark blue'),
+    ('footer',      'dark blue',       'default'),
 
     ('dialog',      'light gray',      'dark blue'),
     ('button',      'light gray',      'dark blue'),
@@ -607,39 +607,39 @@ class MasterStatsBox(WidgetWrap):
                     Columns([
                         (12, Pile([
                             Text('Board'),
-                            Text('Disk'),
-                            Text('Swap'),
-                            Text('Memory'),
-                            Text('Queue'),
-                            Text('Builds/hr'),
-                            Text('Downloads/hr'),
-                        ])),
-                        Pile([
-                            self.board_label,
-                            self.disk_bar,
-                            self.swap_bar,
-                            self.memory_bar,
-                            self.queue_bar,
-                            self.builds_bar,
-                            self.downloads_bar,
-                        ]),
-                        (11, Pile([
                             Text('Serial #'),
                             Text('OS'),
-                            Text('Load Avg'),
-                            Text('Temperature'),
                             Text('Build Size'),
                             Text('Build Time'),
                             Text('File Count'),
+                            Text('Queue'),
                         ])),
                         Pile([
+                            self.board_label,
                             self.serial_label,
                             self.os_label,
-                            self.load_bar,
-                            self.temperature_bar,
                             self.builds_size_label,
                             self.builds_time_label,
                             self.files_count_label,
+                            self.queue_bar,
+                        ]),
+                        (12, Pile([
+                            Text('Temperature'),
+                            Text('Load Avg'),
+                            Text('Disk'),
+                            Text('Swap'),
+                            Text('Memory'),
+                            Text('Downloads/hr'),
+                            Text('Builds/hr'),
+                        ])),
+                        Pile([
+                            self.temperature_bar,
+                            self.load_bar,
+                            self.disk_bar,
+                            self.swap_bar,
+                            self.memory_bar,
+                            self.downloads_bar,
+                            self.builds_bar,
                         ]),
                     ], dividechars=1),
                 ),
@@ -700,33 +700,33 @@ class SlaveStatsBox(WidgetWrap):
             AttrMap(
                 LineBox(
                     Columns([
-                        (6, Pile([
+                        (11, Pile([
                             Text('Board'),
+                            Text('Serial #'),
+                            Text('OS'),
                             Text('Python'),
+                            Text('Clock Delta'),
+                        ])),
+                        Pile([
+                            self.board_label,
+                            self.serial_label,
+                            self.os_label,
+                            self.python_label,
+                            self.clock_label,
+                        ]),
+                        (11, Pile([
+                            Text('Temperature'),
+                            Text('Load Avg'),
                             Text('Disk'),
                             Text('Swap'),
                             Text('Memory'),
                         ])),
                         Pile([
-                            self.board_label,
-                            self.python_label,
+                            self.temperature_bar,
+                            self.load_bar,
                             self.disk_bar,
                             self.swap_bar,
                             self.memory_bar,
-                        ]),
-                        (11, Pile([
-                            Text('Serial #'),
-                            Text('Clock Delta'),
-                            Text('OS'),
-                            Text('Load Avg'),
-                            Text('Temperature'),
-                        ])),
-                        Pile([
-                            self.serial_label,
-                            self.clock_label,
-                            self.os_label,
-                            self.load_bar,
-                            self.temperature_bar,
                         ]),
                     ], dividechars=1)
                 ),
@@ -748,7 +748,7 @@ class SlaveStatsBox(WidgetWrap):
             self.load_bar.update(())
             self.temperature_bar.update(())
         else:
-            self.clock_label.set_text(str(state.clock_skew))
+            self.clock_label.set_text(format_timedelta(state.clock_skew))
             latest = state.stats[-1]
             self.disk_bar.maximum = latest.disk_size
             self.swap_bar.maximum = latest.swap_size
