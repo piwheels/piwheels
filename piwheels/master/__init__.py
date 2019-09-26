@@ -42,9 +42,18 @@ import os
 import sys
 import stat
 import signal
+import socket
 import logging
 
-from .. import __version__, terminal, const, systemd, transport, protocols
+from .. import (
+    __version__,
+    terminal,
+    const,
+    systemd,
+    transport,
+    protocols,
+    info,
+)
 from ..systemd import get_systemd
 from ..tasks import TaskQuit
 from .big_brother import BigBrother
@@ -365,6 +374,10 @@ write access to the output directory.
         to it.
         """
         self.logger.warning('sending status to new monitor')
+        os_name, os_version = info.get_os_name_version()
+        self.ext_status_queue.send_msg('HELLO', (
+            socket.gethostname(), os_name, os_version,
+            info.get_board_revision(), info.get_board_serial()))
         self.slave_driver.list_slaves()
 
 

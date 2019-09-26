@@ -97,6 +97,15 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
         return Protocol(self.send, self.recv)
 
 
+_master_hello = ExactSequence([
+    str,            # label (default: hostname)
+    str,            # os name
+    str,            # os version
+    str,            # board revision
+    str,            # board serial
+])
+
+
 _master_stats = ExactSequence([
     dt.datetime,  # timestamp
     int,          # packages built
@@ -375,6 +384,7 @@ the_oracle = Protocol(recv={
 
 
 monitor_stats = Protocol(send={
+    'HELLO': _master_hello,
     'STATS': _master_stats,
     'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
 })
