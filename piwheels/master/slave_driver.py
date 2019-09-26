@@ -181,25 +181,31 @@ class SlaveDriver(tasks.Task):
         to cause all "HELLO" messages from build slaves to be replayed (for the
         benefit of a newly attached monitor process).
         """
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise tasks.TaskQuit
-        elif msg == 'PAUSE':
-            self.paused = True
-        elif msg == 'RESUME':
-            self.paused = False
-        elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
-            for slave in self.slaves.values():
-                if data is None or slave.slave_id == data:
-                    {
-                        'KILL':  slave.kill,
-                        'SLEEP': slave.sleep,
-                        'SKIP':  slave.skip,
-                        'WAKE':  slave.wake,
-                    }[msg]()
-        elif msg == 'HELLO':
-            for slave in self.slaves.values():
-                slave.hello()
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
+        else:
+            if msg == 'QUIT':
+                raise tasks.TaskQuit
+            elif msg == 'PAUSE':
+                self.paused = True
+            elif msg == 'RESUME':
+                self.paused = False
+            elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
+                for slave in self.slaves.values():
+                    if data is None or slave.slave_id == data:
+                        {
+                            'KILL':  slave.kill,
+                            'SLEEP': slave.sleep,
+                            'SKIP':  slave.skip,
+                            'WAKE':  slave.wake,
+                        }[msg]()
+            elif msg == 'HELLO':
+                for slave in self.slaves.values():
+                    slave.hello()
+            else:
+                self.logger.error('missing control handler for %s', msg)
 
     def handle_build(self, queue):
         """
