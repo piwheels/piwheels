@@ -478,6 +478,7 @@ class SlaveState:
         self._reply = None
         self._build = None
         self._stats = deque(maxlen=100)
+        self._clock_skew = None
         self._killed = False
         self._skipped = False
         self._paused = False
@@ -606,6 +607,10 @@ class SlaveState:
         return self._stats
 
     @property
+    def clock_skew(self):
+        return self._clock_skew
+
+    @property
     def request(self):
         return self._request
 
@@ -634,6 +639,7 @@ class SlaveState:
                 self._build = None
         elif msg in ('IDLE', 'BUSY'):
             self._stats.append(SlaveStats.from_message(data))
+            self._clock_skew = self._last_seen - self._stats[-1].timestamp
             SlaveState.status_queue.send_msg(
                 'SLAVE', [self._slave_id, self._last_seen, 'STATS', data])
 
