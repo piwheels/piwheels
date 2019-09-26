@@ -45,7 +45,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class BigBrother(tasks.PauseableTask):
+class BigBrother(tasks.Task):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the
@@ -57,7 +57,7 @@ class BigBrother(tasks.PauseableTask):
     name = 'master.big_brother'
 
     def __init__(self, config):
-        super().__init__(config)
+        super().__init__(config, control_protocol=protocols.big_brother_control)
         self.history = deque(maxlen=100)
         self.stats = states.MasterStats(**{
             'timestamp':             datetime.now(tz=UTC),
@@ -101,6 +101,38 @@ class BigBrother(tasks.PauseableTask):
         self.db.close()
         super().close()
 
+    def handle_control(self, queue):
+        """
+        Handle incoming requests to the internal control queue.
+
+        This is mostly the same as :meth:`PauseableTask.handle_control` but
+        adds handling for the custom STATS verb to replay the master stats
+        history.
+        """
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
+        else:
+            if msg == 'QUIT':
+                raise tasks.TaskQuit
+            elif msg == 'PAUSE':
+                while True:
+                    msg, data = queue.recv_msg()
+                    if msg == 'QUIT':
+                        raise TaskQuit
+                    elif msg == 'RESUME':
+                        break
+                    else:
+                        self.logger.error('missing control handler for %s', msg)
+            elif msg == 'RESUME':
+                self.logger.warning('Task is not paused')
+            elif msg == 'STATS':
+                for stats in self.history:
+                    self.status_queue.send_msg('STATS', stats.as_message())
+            else:
+                self.logger.error('missing control handler for %s', msg)
+
     def handle_stats(self, queue):
         try:
             msg, data = queue.recv_msg()
@@ -135,3 +167,6 @@ class BigBrother(tasks.PauseableTask):
             cpu_temp=info.get_cpu_temp(), load_average=os.getloadavg()[0])
         self.history.append(self.stats)
         self.status_queue.send_msg('STATS', self.stats.as_message())
+
+    def replay_stats(self):
+        self._ctrl('STATS')

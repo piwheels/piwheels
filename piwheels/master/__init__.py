@@ -88,6 +88,7 @@ class PiWheelsMaster:
         self.ext_status_queue = None
         self.tasks = []
         self.slave_driver = None
+        self.big_brother = None
 
     @staticmethod
     def configure_parser():
@@ -236,6 +237,8 @@ write access to the output directory.
         for task in self.tasks:
             if isinstance(task, SlaveDriver):
                 self.slave_driver = task
+            elif isinstance(task, BigBrother):
+                self.big_brother = task
             task.start()
         self.logger.info('started all tasks')
         systemd = get_systemd()
@@ -375,14 +378,15 @@ write access to the output directory.
     def do_hello(self):
         """
         Handler for the HELLO message; this indicates a new monitor has been
-        attached and would like all the build slave's HELLO messages replayed
-        to it.
+        attached and would like the master's HELLO message and all the build
+        slave's HELLO messages replayed to it.
         """
         self.logger.warning('sending status to new monitor')
         os_name, os_version = info.get_os_name_version()
         self.ext_status_queue.send_msg('HELLO', (
             self.started, socket.gethostname(), os_name, os_version,
             info.get_board_revision(), info.get_board_serial()))
+        self.big_brother.replay_stats()
         self.slave_driver.list_slaves()
 
 

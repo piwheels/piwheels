@@ -508,8 +508,12 @@ class SlaveState:
                 ]
             ]
         )
-        # Replay the last reply for the sake of monitors that have just
-        # connected to the master
+        # Replay the history stats and the last reply for the sake of monitors
+        # that have just connected to the master
+        for stat in self._stats:
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen,
+                          'STATS', stat.as_message()])
         msg, data = self._reply
         SlaveState.status_queue.send_msg(
             'SLAVE', [self._slave_id, self._last_seen, msg, data])

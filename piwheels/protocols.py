@@ -267,6 +267,14 @@ slave_driver_control = Protocol(recv=dict(chain(
 )))
 
 
+big_brother_control = Protocol(recv=dict(chain(
+    task_control.recv.items(),
+    {
+        'STATS': NoData,  # re-send master stats
+    }.items()
+)))
+
+
 big_brother = Protocol(recv={
     'STATFS': ExactSequence([int, int]),  # disk-size, disk-free
     'STATBQ': {str: int},  # abi: queue-size
