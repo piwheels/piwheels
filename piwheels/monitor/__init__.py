@@ -142,22 +142,29 @@ class PiWheelsMonitor:
         )
         self.slave_box = widgets.SlaveStatsBox()
         self.master_box = widgets.MasterStatsBox()
-        self.status_box = widgets.Text('Starting up')
+        self.status_box = widgets.Text('Waiting for connection')
         self.slave_list = SlaveListWalker(
             header=self.list_header.original_widget,
             get_box=lambda: self.get_box()[0])
+        list_box = widgets.ListBox(self.slave_list)
+        # Make the list-box navigation vim-friendly
+        list_box._command_map = list_box._command_map.copy()
+        list_box._command_map['j'] = list_box._command_map['down']
+        list_box._command_map['k'] = list_box._command_map['up']
         self.frame = widgets.Frame(
-            widgets.ListBox(self.slave_list),
+            list_box,
             header=self.list_header,
             footer=None)  # to be set by list_modified
 
         status_line = widgets.AttrMap(
             widgets.Filler(self.status_box), 'footer')
 
-        return widgets.Pile([
-            self.frame,
-            (1, status_line),
-        ]), widgets.PALETTE
+        return widgets.Overlays(
+            widgets.Pile([
+                self.frame,
+                (1, status_line),
+            ])
+        ), widgets.PALETTE
 
     def status_message(self):
         """
@@ -181,36 +188,6 @@ class PiWheelsMonitor:
         self.slave_list.tick()
         self.loop.event_loop.alarm(1, self.tick)
 
-    def show_popup(self, dialog):
-        """
-        Given a *dialog* widget, construct an :class:`Overlay` to allow it to
-        sit on top of the main build slave list, display it centered and give
-        it focus.
-
-        :param widgets.YesNoDialog dialog:
-            The dialog to show.
-        """
-        overlay = widgets.Overlay(
-            widgets.AttrMap(dialog, 'dialog'), self.frame.body,
-            'center', ('relative', 40),
-            'middle', ('relative', 30),
-            min_width=20, min_height=10)
-        overlay.title = dialog.title
-        self.popup_stack.append((self.frame.get_focus(), self.frame.body))
-        self.frame.body = overlay
-        self.frame.set_focus('body')
-
-    def close_popup(self, widget=None):
-        """
-        Close the last dialog to be shown.
-        """
-        # The extraneous widget parameter is to permit this method to be used
-        # as an urwid action callback
-        # pylint: disable=unused-argument
-        focus, body = self.popup_stack.pop()
-        self.frame.body = body
-        self.frame.set_focus(focus)
-
     def unhandled_input(self, key):
         """
         Watch for "h" (for help) and "q" (for quit); pass everything else
@@ -219,7 +196,6 @@ class PiWheelsMonitor:
         if isinstance(key, str):
             try:
                 {
-                    # TODO j/k for up/down
                     'enter': self.action,
                     'h':     self.help,
                     'q':     self.quit,
