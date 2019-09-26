@@ -232,8 +232,7 @@ class PiWheelsMonitor:
         raise NotImplementedError()
 
     def help(self, widget=None):
-        # TODO
-        raise NotImplementedError()
+        self.loop.widget.open_dialog(HelpDialog())
 
     def quit(self, widget=None):
         """
@@ -241,6 +240,68 @@ class PiWheelsMonitor:
         """
         # pylint: disable=unused-argument,no-self-use
         raise widgets.ExitMainLoop()
+
+
+class HelpDialog(widgets.Dialog):
+    def __init__(self):
+        ok_button = widgets.FixedButton('OK')
+        body = widgets.Text([
+            "Welcome to the ", ("bold", "piwheels"), " monitor "
+            "application. When run on the same node as the "
+            "master, this should automatically connect and "
+            "display its status, along with the state of any "
+            "connected build slaves.\n"
+            "\n",
+            "The following keys can be used within the monitor:\n"
+            "\n",
+            ("bold", "j / down"), " - Move down the list of machines\n",
+            ("bold", "k / up"), "   - Move up the list of machines\n",
+            ("bold", "enter"), "    - Perform an action on the selected machine\n",
+            ("bold", "h"), "        - Display this help\n",
+            ("bold", "q"), "        - Quit the application",
+        ])
+        super().__init__(title='Help', body=body, buttons=[ok_button])
+        widgets.connect_signal(ok_button, 'click', lambda btn: self._emit('close'))
+        self.width = ('relative', 50)
+        self.min_width = 60
+        self.height = ('relative', 20)
+        self.min_height = 16
+
+
+class YesNoDialog(widgets.Dialog):
+    def __init__(self, title, message):
+        yes_button = widgets.FixedButton('Yes')
+        no_button = widgets.FixedButton('No')
+        super().__init__(title=title, body=widgets.Text(message),
+                         buttons=[yes_button, no_button])
+        self.result = None
+        widgets.connect_signal(yes_button, 'click', self.yes)
+        widgets.connect_signal(no_button, 'click', self.no)
+        self.width = max(20, len(message) + 6)
+        self.height = 5
+
+    def yes(self, btn=None):
+        self.result = True
+        self._emit('close')
+
+    def no(self, btn=None):
+        self.result = False
+        self._emit('close')
+
+    def keypress(self, size, key):
+        """
+        Respond to "y" or "n" on the keyboard as a short-cut to selecting and
+        clicking the actual buttons.
+        """
+        # Urwid does some amusing things with its widget classes which fools
+        # pylint's static analysis. The super-method *is* callable here.
+        # pylint: disable=not-callable
+        if isinstance(key, str):
+            if key == 'y':
+                return self.yes()
+            elif key == 'n':
+                return self.no()
+        return super().keypress(size, key)
 
 
 TreeMarker = object()

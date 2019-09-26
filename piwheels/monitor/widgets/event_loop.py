@@ -36,6 +36,7 @@ from time import time
 from itertools import count
 from collections import namedtuple
 
+from urwid import ExitMainLoop
 try:
     from urwid import EventLoop
 except ImportError:

@@ -53,7 +53,7 @@ from urwid import (
 
 from .event_loop import ZMQEventLoop
 from .statsbox import MasterStatsBox, SlaveStatsBox
-from .overlay import Overlays, YesNoDialog, SimpleButton, FixedButton
+from .overlay import Overlays, Dialog
 
 
 # Stop the relentless march against nicely aligned code
@@ -78,6 +78,7 @@ PALETTE = [
     ('footer',      'dark blue',       'default'),
 
     ('dialog',      'light gray',      'dark blue'),
+    ('bold',        'white',           'dark blue'),
     ('button',      'light gray',      'dark blue'),
     ('coltrans',    'dark cyan',       'dark blue'),
     ('colheader',   'black',           'dark cyan'),
@@ -87,3 +88,23 @@ PALETTE = [
     ('inv_button',  'black',           'light gray'),
     ('inv_status',  'black',           'light gray'),
 ]
+
+
+class SimpleButton(Button):
+    """
+    Overrides :class:`Button` to enclose the label in [square brackets].
+    """
+    button_left = Text("[")
+    button_right = Text("]")
+
+
+class FixedButton(SimpleButton):
+    """
+    A fixed sized, one-line button derived from :class:`SimpleButton`.
+    """
+    def sizing(self):
+        return frozenset(['fixed'])
+
+    def pack(self, size, focus=False):
+        # pylint: disable=unused-argument
+        return (len(self.get_label()) + 4, 1)
