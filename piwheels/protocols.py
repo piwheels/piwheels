@@ -98,6 +98,7 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
 
 
 _master_hello = ExactSequence([
+    dt.datetime,    # start timestamp
     str,            # label (default: hostname)
     str,            # os name
     str,            # os version

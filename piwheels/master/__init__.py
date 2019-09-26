@@ -44,6 +44,7 @@ import stat
 import signal
 import socket
 import logging
+from datetime import datetime, timezone
 
 from .. import (
     __version__,
@@ -69,6 +70,9 @@ from .mr_chase import MrChase
 from .lumberjack import Lumberjack
 
 
+UTC = timezone.utc
+
+
 class PiWheelsMaster:
     """
     This is the main class for the :program:`piw-master` script. It spawns
@@ -78,6 +82,7 @@ class PiWheelsMaster:
     """
     def __init__(self):
         self.logger = logging.getLogger('master')
+        self.started = datetime.now(tz=UTC)
         self.control_queue = None
         self.int_status_queue = None
         self.ext_status_queue = None
@@ -376,7 +381,7 @@ write access to the output directory.
         self.logger.warning('sending status to new monitor')
         os_name, os_version = info.get_os_name_version()
         self.ext_status_queue.send_msg('HELLO', (
-            socket.gethostname(), os_name, os_version,
+            self.started, socket.gethostname(), os_name, os_version,
             info.get_board_revision(), info.get_board_serial()))
         self.slave_driver.list_slaves()
 
