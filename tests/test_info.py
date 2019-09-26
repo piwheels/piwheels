@@ -40,6 +40,7 @@ from piwheels.info import (
     get_os_name_version,
     get_cpu_count,
     get_disk_stats,
+    get_swap_stats,
     get_mem_stats,
     get_cpu_temp,
 )
@@ -106,6 +107,21 @@ def test_get_disk_stats():
         statvfs.return_value = statvfs_result((
             4096, 4096, 100000, 48000, 48000, 0, 0, 0, 0, 255))
         assert get_disk_stats('/home/pi') == (100000 * 4096, 48000 * 4096)
+
+
+def test_get_swap_stats():
+    with mock.patch('io.open') as m:
+        m.return_value.__enter__.return_value = io.StringIO(
+            "SwapTotal:      1024 kB\n"
+            "SwapFree:       1024 kB\n")
+        assert get_swap_stats() == (1024 * 1024, 1024 * 1024)
+        m.return_value.__enter__.return_value = io.StringIO(
+            "SwapTotal:      1024 kB\n"
+            "SwapFree:         10 kB\n")
+        assert get_swap_stats() == (1024 * 1024, 10 * 1024)
+        m.return_value.__enter__.return_value = io.StringIO()
+        with pytest.raises(RuntimeError):
+            get_swap_stats()
 
 
 def test_get_mem_stats():
