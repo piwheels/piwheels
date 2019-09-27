@@ -37,7 +37,6 @@ from urwid import (
     AttrMap,
     Button,
     Text,
-    SelectableIcon,
     Pile,
     Columns,
     Padding,
@@ -54,40 +53,6 @@ from urwid import (
 from .event_loop import ZMQEventLoop
 from .statsbox import MasterStatsBox, SlaveStatsBox
 from .overlay import Overlays, Dialog
-
-
-# Stop the relentless march against nicely aligned code
-# pylint: disable=bad-whitespace
-
-PALETTE = [
-    ('idle',        'dark gray',       'default'),
-    ('building',    'light green',     'default'),
-    ('sending',     'light blue',      'default'),
-    ('cleaning',    'light magenta',   'default'),
-    ('silent',      'yellow',          'default'),
-    ('dead',        'light red',       'default'),
-
-    ('time',        'light gray',      'default'),
-    ('status',      'light gray',      'default'),
-    ('hotkey',      'light cyan',      'dark blue'),
-    ('normal',      'light gray',      'default'),
-    ('todo',        'white',           'dark blue'),
-    ('done',        'black',           'light gray'),
-    ('todo_smooth', 'dark blue',       'light gray'),
-    ('header',      'light gray',      'dark blue'),
-    ('footer',      'dark blue',       'default'),
-
-    ('dialog',      'light gray',      'dark blue'),
-    ('bold',        'white',           'dark blue'),
-    ('button',      'light gray',      'dark blue'),
-    ('coltrans',    'dark cyan',       'dark blue'),
-    ('colheader',   'black',           'dark cyan'),
-    ('inv_dialog',  'dark blue',       'light gray'),
-    ('inv_normal',  'black',           'light gray'),
-    ('inv_hotkey',  'dark cyan',       'light gray'),
-    ('inv_button',  'black',           'light gray'),
-    ('inv_status',  'black',           'light gray'),
-]
 
 
 class SimpleButton(Button):

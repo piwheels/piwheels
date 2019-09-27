@@ -40,13 +40,11 @@ or terminate the master itself.
 
 import sys
 from time import sleep
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from collections import deque
 
 from .. import terminal, const, protocols, transport
-from ..format import format_timedelta
-from ..states import SlaveStats, MasterStats
-from . import widgets
+from . import widgets, lists, dialogs
 
 
 UTC = timezone.utc
@@ -62,6 +60,38 @@ class PiWheelsMonitor:
     """
     # pylint: disable=too-many-instance-attributes
 
+    # Stop the relentless march against nicely aligned code
+    # pylint: disable=bad-whitespace
+    palette = [
+        ('idle',        'dark gray',       'default'),
+        ('building',    'light green',     'default'),
+        ('sending',     'light blue',      'default'),
+        ('cleaning',    'light magenta',   'default'),
+        ('silent',      'yellow',          'default'),
+        ('dead',        'light red',       'default'),
+
+        ('time',        'light gray',      'default'),
+        ('status',      'light gray',      'default'),
+        ('hotkey',      'light cyan',      'dark blue'),
+        ('normal',      'light gray',      'default'),
+        ('todo',        'white',           'dark blue'),
+        ('done',        'black',           'light gray'),
+        ('todo_smooth', 'dark blue',       'light gray'),
+        ('header',      'light gray',      'dark blue'),
+        ('footer',      'dark blue',       'default'),
+
+        ('dialog',      'light gray',      'dark blue'),
+        ('bold',        'white',           'dark blue'),
+        ('button',      'light gray',      'dark blue'),
+        ('coltrans',    'dark cyan',       'dark blue'),
+        ('colheader',   'black',           'dark cyan'),
+        ('inv_dialog',  'dark blue',       'light gray'),
+        ('inv_normal',  'black',           'light gray'),
+        ('inv_hotkey',  'dark cyan',       'light gray'),
+        ('inv_button',  'black',           'light gray'),
+        ('inv_status',  'black',           'light gray'),
+    ]
+
     def __init__(self):
         self.status_queue = None
         self.ctrl_queue = None
@@ -71,8 +101,6 @@ class PiWheelsMonitor:
         self.slave_box = None      # the box displaying stats for build slaves
         self.master_box = None     # the box displaying stats for the master
         self.status_box = None     # the message box at the bottom
-        self.popup_stack = []
-        self.master_stats = deque(maxlen=100)
         self.list_header = None
 
     def __call__(self, args=None):
@@ -104,7 +132,7 @@ class PiWheelsMonitor:
         self.ctrl_queue.send_msg('HELLO')
         try:
             self.loop = widgets.MainLoop(
-                *self.build_ui(),
+                self.build_ui(), self.palette,
                 event_loop=widgets.ZMQEventLoop(),
                 unhandled_input=self.unhandled_input)
             self.loop.event_loop.watch_queue(self.status_queue,
@@ -143,7 +171,7 @@ class PiWheelsMonitor:
         self.slave_box = widgets.SlaveStatsBox()
         self.master_box = widgets.MasterStatsBox()
         self.status_box = widgets.Text('Waiting for connection')
-        self.slave_list = SlaveListWalker(
+        self.slave_list = lists.SlaveListWalker(
             header=self.list_header.original_widget,
             get_box=lambda: self.get_box()[0])
         list_box = widgets.ListBox(self.slave_list)
@@ -164,7 +192,7 @@ class PiWheelsMonitor:
                 self.frame,
                 (1, status_line),
             ])
-        ), widgets.PALETTE
+        )
 
     def status_message(self):
         """
@@ -232,7 +260,7 @@ class PiWheelsMonitor:
         raise NotImplementedError()
 
     def help(self, widget=None):
-        self.loop.widget.open_dialog(HelpDialog())
+        self.loop.widget.open_dialog(dialogs.HelpDialog())
 
     def quit(self, widget=None):
         """
@@ -240,460 +268,6 @@ class PiWheelsMonitor:
         """
         # pylint: disable=unused-argument,no-self-use
         raise widgets.ExitMainLoop()
-
-
-class HelpDialog(widgets.Dialog):
-    def __init__(self):
-        ok_button = widgets.FixedButton('OK')
-        body = widgets.Text([
-            "Welcome to the ", ("bold", "piwheels"), " monitor "
-            "application. When run on the same node as the "
-            "master, this should automatically connect and "
-            "display its status, along with the state of any "
-            "connected build slaves.\n"
-            "\n",
-            "The following keys can be used within the monitor:\n"
-            "\n",
-            ("bold", "j / down"), " - Move down the list of machines\n",
-            ("bold", "k / up"), "   - Move up the list of machines\n",
-            ("bold", "enter"), "    - Perform an action on the selected machine\n",
-            ("bold", "h"), "        - Display this help\n",
-            ("bold", "q"), "        - Quit the application",
-        ])
-        super().__init__(title='Help', body=body, buttons=[ok_button])
-        widgets.connect_signal(ok_button, 'click', lambda btn: self._emit('close'))
-        self.width = ('relative', 50)
-        self.min_width = 60
-        self.height = ('relative', 20)
-        self.min_height = 16
-
-
-class YesNoDialog(widgets.Dialog):
-    def __init__(self, title, message):
-        yes_button = widgets.FixedButton('Yes')
-        no_button = widgets.FixedButton('No')
-        super().__init__(title=title, body=widgets.Text(message),
-                         buttons=[yes_button, no_button])
-        self.result = None
-        widgets.connect_signal(yes_button, 'click', self.yes)
-        widgets.connect_signal(no_button, 'click', self.no)
-        self.width = max(20, len(message) + 6)
-        self.height = 5
-
-    def yes(self, btn=None):
-        self.result = True
-        self._emit('close')
-
-    def no(self, btn=None):
-        self.result = False
-        self._emit('close')
-
-    def keypress(self, size, key):
-        """
-        Respond to "y" or "n" on the keyboard as a short-cut to selecting and
-        clicking the actual buttons.
-        """
-        # Urwid does some amusing things with its widget classes which fools
-        # pylint's static analysis. The super-method *is* callable here.
-        # pylint: disable=not-callable
-        if isinstance(key, str):
-            if key == 'y':
-                return self.yes()
-            elif key == 'n':
-                return self.no()
-        return super().keypress(size, key)
-
-
-TreeMarker = object()
-
-
-class SlaveListWalker(widgets.ListWalker):
-    """
-    A :class:`ListWalker` that tracks the active set of build slaves currently
-    known by the master. Provides methods to update the state of the list based
-    on messages received on the external status queue.
-
-    :param header:
-        The widget forming the header of the main list-box.
-
-    :param get_box:
-        A callable which will return the currently shown master or slave
-        stats-box widget.
-    """
-    def __init__(self, header, get_box):
-        super().__init__()
-        self.header = header
-        self.get_box = get_box
-        self.focus = None
-        master_state = MasterState()
-        self.slaves = {None: master_state}    # maps slave ID to state object
-        self.widgets = [master_state.widget]  # list of widget objects in display order
-
-    @property
-    def selected_slave(self):
-        try:
-            widget = self.widgets[self.focus]
-        except TypeError:
-            return None
-        for slave in self.slaves.values():
-            if slave.widget is widget:
-                return slave
-
-    def __getitem__(self, position):
-        return self.widgets[position]
-
-    def next_position(self, position):
-        """
-        Return valid list position after *position*.
-        """
-        if position >= len(self.widgets) - 1:
-            raise IndexError
-        return position + 1
-
-    def prev_position(self, position):
-        """
-        Return valid list position before *position*.
-        """
-        # pylint: disable=no-self-use
-        if position <= 0:
-            raise IndexError
-        return position - 1
-
-    def set_focus(self, position):
-        """
-        Set the list focus to *position*, if valid.
-        """
-        if not 0 <= position < len(self.widgets):
-            raise IndexError
-        self.focus = position
-        self._modified()
-
-    def message(self, slave_id, timestamp, msg, data):
-        """
-        Update the list with a message from the external status queue.
-
-        :param int slave_id:
-            The id of the slave the message was originally sent to, or None
-            if it's a message about the master.
-
-        :param datetime.datetime timestamp:
-            The timestamp when the message was originally sent.
-
-        :param str msg:
-            The reply that was sent to the build slave (or master).
-
-        :param data:
-            Any data that went with the message.
-        """
-        try:
-            state = self.slaves[slave_id]
-        except KeyError:
-            state = SlaveState(slave_id)
-            self.slaves[slave_id] = state
-            self.widgets.append(state.widget)
-        state.update(timestamp, msg, data)
-        if msg == 'HELLO':
-            # ABI and/or label of a slave have potentially changed; time to
-            # re-sort the widget list
-            self.widgets = [
-                state.widget for state in sorted(
-                    self.slaves.values(), key=lambda state: state.sort_key
-                )
-            ]
-        self.update()
-        box = self.get_box()
-        if (
-            # If the subject of the message is the currently selected state,
-            # update the current stats box
-            box is not None and self.focus is not None and
-            self.widgets[self.focus] is state.widget
-        ):
-            box.update(state)
-
-    def tick(self):
-        """
-        Typically called once a second to update the various timers in the
-        list. Also handles removing terminated slaves after a short delay (to
-        let the user see the terminated state).
-        """
-        # Remove killed slaves
-        now = datetime.now(tz=UTC)
-        for slave_id, state in list(self.slaves.items()):
-            if state.killed and (now - state.last_seen > timedelta(seconds=5)):
-                # TODO Don't remove the master widget
-                # Be careful not to change the sort-order here...
-                self.widgets.remove(state.widget)
-                del self.slaves[slave_id]
-        if self.widgets:
-            self.focus = min(self.focus or 0, len(self.widgets) - 1)
-        else:
-            self.focus = None
-        self.update()
-
-    def tree_columns(self, row, columns):
-        return [
-            (
-                style, (
-                    ('`-' if row == len(self.slaves) - 1 else '+-')
-                    if content is TreeMarker else content
-                )
-            )
-            for style, content in columns
-        ]
-
-    def update(self):
-        """
-        Called to update the list content with calculated column widths.
-        """
-        columns = [
-            self.tree_columns(row, state.columns)
-            for row, state in enumerate(self.slaves.values())
-        ]
-        head_lens = [
-            options[1] if options[0] == 'given' else 0
-            for widget, options in self.header.contents
-        ]
-        row_lens = [
-            [len(content) for style, content in state]
-            for state in columns
-        ]
-        col_lens = zip(*row_lens)  # transpose
-        col_lens = [
-            max(head_len, max(col) + 1)  # add 1 for col spacing
-            for head_len, col in zip(head_lens, col_lens)
-        ]
-        for state, state_cols in zip(self.slaves.values(), columns):
-            state.widget.original_widget.set_text([
-                (style, '%-*s' % (col_len, content))
-                for col_len, (style, content) in zip(col_lens, state_cols)
-            ])
-        for index, (col, col_len) in enumerate(zip(list(self.header.contents), col_lens)):
-            widget, options = col
-            if options[0] == 'given':
-                self.header.contents[index] = (
-                    widget, self.header.options('given', col_len)
-                )
-        self._modified()
-
-
-class MasterState:
-    """
-    Class for tracking the state of the master. :class:`SlaveListWalker` stores
-    an instance of this as the first entry.
-    """
-
-    def __init__(self):
-        self.widget = widgets.AttrMap(
-            widgets.SelectableIcon(''), None,
-            focus_map={'status': 'inv_status'}
-        )
-        self.killed = False
-        self.stats = deque(maxlen=100)
-        self.first_seen = None
-        self.last_seen = None
-        self.status = 'Doing whatever the master does'  # TODO
-        self.label = ''
-        self.os_name = '-'
-        self.os_version = '-'
-        self.board_revision = '-'
-        self.board_serial = '-'
-
-    def update(self, timestamp, msg, data):
-        """
-        Update the master's state from an incoming reply message.
-
-        :param str msg:
-            The message itself.
-
-        :param data:
-            Any data sent with the message.
-        """
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            (
-                self.first_seen,
-                self.label,
-                self.os_name,
-                self.os_version,
-                self.board_revision,
-                self.board_serial,
-            ) = data
-            self.stats.clear()
-        elif msg == 'STATS':
-            self.stats.append(MasterStats.from_message(data))
-        else:
-            assert False, 'unexpected message'
-
-    @property
-    def sort_key(self):
-        return ('', '')
-
-    @property
-    def state(self):
-        if self.first_seen is not None:
-            if datetime.now(tz=UTC) - self.last_seen > timedelta(seconds=30):
-                return 'silent'
-        if self.killed:
-            return 'dead'
-        return 'okay'
-
-    @property
-    def columns(self):
-        return [
-            (self.state, '*'),
-            ('status', ''),
-            ('status', ''),
-            ('status', self.label),
-            ('status', ''),
-            ('status', since(self.first_seen)),
-            ('status', since(self.last_seen)),
-            ('status', self.status),
-        ]
-
-
-class SlaveState:
-    """
-    Class for tracking the state of a single build slave.
-    :class:`SlaveListWalker` stores a list of these in
-    :attr:`~SlaveListWalker.widgets`.
-    """
-    # pylint: disable=too-many-instance-attributes
-
-    def __init__(self, slave_id):
-        self.widget = widgets.AttrMap(
-            widgets.SelectableIcon(''), None,
-            focus_map={'status': 'inv_status'}
-        )
-        self.killed = False
-        self.slave_id = slave_id
-        self.stats = deque(maxlen=100)
-        self.last_msg = ''
-        self.build_timeout = None
-        self.busy_timeout = None
-        self.py_version = '-'
-        self.abi = '-'
-        self.platform = '-'
-        self.label = ''
-        self.os_name = '-'
-        self.os_version = '-'
-        self.board_revision = '-'
-        self.board_serial = '-'
-        self.build_start = None
-        self.first_seen = None
-        self.last_seen = None
-        self.clock_skew = None
-        self.status = ''
-
-    def update(self, timestamp, msg, data):
-        """
-        Update the slave's state from an incoming reply message.
-
-        :param datetime.datetime timestamp:
-            The time at which the master received the message.
-
-        :param str msg:
-            The message itself.
-
-        :param data:
-            Any data sent with the message.
-        """
-        self.last_msg = msg
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            self.status = 'Initializing'
-            self.first_seen = timestamp
-            (
-                self.build_timeout,
-                self.busy_timeout,
-                self.py_version,
-                self.abi,
-                self.platform,
-                self.label,
-                self.os_name,
-                self.os_version,
-                self.board_revision,
-                self.board_serial,
-            ) = data
-            self.stats.clear()
-        elif msg == 'STATS':
-            data = SlaveStats.from_message(data)
-            self.clock_skew = self.last_seen - data.timestamp
-            self.stats.append(data)
-        elif msg == 'SLEEP':
-            self.status = 'Waiting for jobs'
-        elif msg in 'DIE':
-            self.status = 'Terminating'
-            self.killed = True
-        elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(data[0], data[1])
-            self.build_start = timestamp
-        elif msg == 'SEND':
-            self.status = 'Transferring file'
-        elif msg == 'DONE':
-            self.status = 'Cleaning up after build'
-            self.build_start = None
-        elif msg in ('CONT', 'ACK'):
-            pass
-        else:
-            assert False, 'unexpected message'
-
-    @property
-    def sort_key(self):
-        return self.abi, self.label
-
-    @property
-    def state(self):
-        """
-        Calculate a simple state indicator for the slave, used to color the
-        initial "*" on the entry.
-        """
-        now = datetime.now(tz=UTC)
-        if self.first_seen is not None:
-            if now - self.last_seen > self.busy_timeout:
-                return 'dead'
-            elif now - self.last_seen > self.busy_timeout / 2:
-                return 'silent'
-            elif self.last_msg == 'DONE':
-                return 'cleaning'
-            elif self.last_msg == 'SEND':
-                return 'sending'
-            elif self.build_start is not None:
-                return 'building'
-        if self.killed:
-            return 'dead'
-        return 'idle'
-
-    @property
-    def columns(self):
-        """
-        Calculates the state of all columns for the slave's entry. Returns a
-        list of (style, content) tuples. Note that the content is *not* padded
-        for width. The :class:`SlaveListWalker` class handles this.
-        """
-        return [
-            ('status', TreeMarker),
-            (self.state, '*'),
-            ('status', str(self.slave_id)),
-            ('status', self.label),
-            ('status', self.abi),
-            ('status', since(self.first_seen)),
-            ('status', since(self.build_start or self.last_seen)),
-            ('status', self.status),
-        ]
-
-
-def since(timestamp):
-    """
-    Return a nicely formatted string indicating the number of hours minutes and
-    seconds since *timestamp*.
-
-    :param datetime.datetime timestamp:
-        The timestamp from which to measure a duration.
-    """
-    if timestamp is None:
-        return '-'
-    else:
-        return format_timedelta(datetime.now(tz=UTC) - timestamp)
 
 
 main = PiWheelsMonitor()  # pylint: disable=invalid-name
