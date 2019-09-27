@@ -205,7 +205,13 @@ class TrendBar(ur.Widget):
         post_len = clamp(0, bar_len, round(bar_len * (
             (self._maximum - max(self._recent, self._history)) / bar_range)))
         trend_len = bar_len - (pre_len + post_len)
-        assert trend_len >= 0
+        while trend_len < 0:
+            # Can happen by rounding; knock 1 off the first largest value.
+            trend_len += 1
+            if pre_len >= post_len:
+                pre_len -= 1
+            else:
+                post_len -= 1
 
         s = ''.join((
             self.fore * pre_len,

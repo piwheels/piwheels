@@ -34,14 +34,22 @@
 
 from urwid import (
     connect_signal,
+    command_map,
     AttrMap,
     Button,
     Text,
+    Edit,
+    IntEdit,
+    RadioButton,
+    CheckBox,
+    SelectableIcon,
     Pile,
     Columns,
     Padding,
     Filler,
     Divider,
+    SolidFill,
+    BoxAdapter,
     Frame,
     ListBox,
     Overlay,
@@ -52,7 +60,7 @@ from urwid import (
 
 from .event_loop import ZMQEventLoop
 from .statsbox import MasterStatsBox, SlaveStatsBox
-from .overlay import Overlays, Dialog
+from .dialogs import DialogMaster, Dialog
 
 
 class SimpleButton(Button):
@@ -73,3 +81,51 @@ class FixedButton(SimpleButton):
     def pack(self, size, focus=False):
         # pylint: disable=unused-argument
         return (len(self.get_label()) + 4, 1)
+
+
+def format_hotkey(s, default=None, hotkey='hotkey'):
+    """
+    Given a caption *s*, returns an urwid markup list with the first underscore
+    prefixed character transformed into a (*hotkey*, char) tuple, and the rest
+    marked with the *default* attribute (or not marked if *default* is
+    ``None``.
+
+    For example::
+
+        >>> format_hotkey('_Foo')
+        [('hotkey', 'F'), 'oo']
+        >>> format_hotkey('_Foo', 'normal', 'hot')
+        [('hot', 'F'), ('normal', 'oo')]
+        >>> format_hotkey('Pa_use')
+        ['Pa', ('hotkey', 'u'), 'se']
+    """
+    try:
+        i = s.index('_')
+    except ValueError:
+        return [s if default is None else (default, s)]
+    else:
+        if i == len(s) - 1:
+            raise ValueError('Underscore cannot be last char in s')
+        return [
+            chunk for chunk in
+            (
+                s[:i] if default is None else (default, s[:i]),
+                (hotkey, s[i + 1:i + 2]),
+                s[i + 2:] if default is None else (default, s[i + 2:])
+            )
+            if chunk
+        ]
+
+
+def find_hotkey(text, attrs, hotkey='hotkey'):
+    """
+    Given an urwid (text, attr) tuple (as returned by, e.g.
+    :meth:`Text.get_text`), returns the first character of the text matching
+    the *hotkey* attribute, or ``None`` if no character matches.
+    """
+    ix = 0
+    for attr, rl in attrs:
+        if attr == hotkey:
+            return text[ix]
+        ix += rl
+    return None

@@ -120,7 +120,7 @@ class MasterStatsBox(ur.WidgetWrap):
                         ]),
                     ], dividechars=1),
                 ),
-                'header',
+                'dialog',
             )
         )
 
@@ -207,7 +207,7 @@ class SlaveStatsBox(ur.WidgetWrap):
                         ]),
                     ], dividechars=1)
                 ),
-                'header'
+                'dialog'
             )
         )
 

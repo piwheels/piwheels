@@ -33,8 +33,7 @@
 from datetime import datetime, timedelta, timezone
 from collections import deque
 
-import urwid as ur
-
+from . import widgets as wdg
 from ..format import format_timedelta
 from ..states import SlaveStats, MasterStats
 
@@ -57,7 +56,7 @@ def since(timestamp):
         return format_timedelta(datetime.now(tz=UTC) - timestamp)
 
 
-class SlaveListWalker(ur.ListWalker):
+class SlaveListWalker(wdg.ListWalker):
     """
     A :class:`ListWalker` that tracks the active set of build slaves currently
     known by the master. Provides methods to update the state of the list based
@@ -233,8 +232,8 @@ class MasterState:
     """
 
     def __init__(self):
-        self.widget = ur.AttrMap(
-            ur.SelectableIcon(''), None,
+        self.widget = wdg.AttrMap(
+            wdg.SelectableIcon(''), None,
             focus_map={'status': 'inv_status'}
         )
         self.killed = False
@@ -310,8 +309,8 @@ class SlaveState:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, slave_id):
-        self.widget = ur.AttrMap(
-            ur.SelectableIcon(''), None,
+        self.widget = wdg.AttrMap(
+            wdg.SelectableIcon(''), None,
             focus_map={'status': 'inv_status'}
         )
         self.killed = False

@@ -72,24 +72,16 @@ class PiWheelsMonitor:
 
         ('time',        'light gray',      'default'),
         ('status',      'light gray',      'default'),
-        ('hotkey',      'light cyan',      'dark blue'),
-        ('normal',      'light gray',      'default'),
-        ('todo',        'white',           'dark blue'),
-        ('done',        'black',           'light gray'),
-        ('todo_smooth', 'dark blue',       'light gray'),
-        ('header',      'light gray',      'dark blue'),
+        ('inv_status',  'black',           'light gray'),
+        ('header',      'black',           'dark cyan'),
         ('footer',      'dark blue',       'default'),
 
         ('dialog',      'light gray',      'dark blue'),
+        ('hotkey',      'light cyan',      'dark blue'),
+        ('disabled',    'light blue',      'dark blue'),
         ('bold',        'white',           'dark blue'),
         ('button',      'light gray',      'dark blue'),
-        ('coltrans',    'dark cyan',       'dark blue'),
-        ('colheader',   'black',           'dark cyan'),
-        ('inv_dialog',  'dark blue',       'light gray'),
-        ('inv_normal',  'black',           'light gray'),
-        ('inv_hotkey',  'dark cyan',       'light gray'),
         ('inv_button',  'black',           'light gray'),
-        ('inv_status',  'black',           'light gray'),
     ]
 
     def __init__(self):
@@ -166,7 +158,7 @@ class PiWheelsMonitor:
                     'Task'
                 ))
             ]),
-            'colheader'
+            'header'
         )
         self.slave_box = widgets.SlaveStatsBox()
         self.master_box = widgets.MasterStatsBox()
@@ -187,7 +179,7 @@ class PiWheelsMonitor:
         status_line = widgets.AttrMap(
             widgets.Filler(self.status_box), 'footer')
 
-        return widgets.Overlays(
+        return widgets.DialogMaster(
             widgets.Pile([
                 self.frame,
                 (1, status_line),
@@ -227,7 +219,7 @@ class PiWheelsMonitor:
                     'enter': self.action,
                     'h':     self.help,
                     'q':     self.quit,
-                }[key.lower()]()
+                }[key]()
             except KeyError:
                 return False
             else:
@@ -255,10 +247,6 @@ class PiWheelsMonitor:
             self.slave_box.update(self.slave_list.selected_slave)
             self.frame.contents['footer'] = (self.slave_box, options)
 
-    def action(self, widget=None):
-        # TODO
-        raise NotImplementedError()
-
     def help(self, widget=None):
         self.loop.widget.open_dialog(dialogs.HelpDialog())
 
@@ -268,6 +256,45 @@ class PiWheelsMonitor:
         """
         # pylint: disable=unused-argument,no-self-use
         raise widgets.ExitMainLoop()
+
+    def action(self, widget=None):
+        if self.slave_list.focus is not None:
+            if self.slave_list.focus == 0:
+                dialog = dialogs.MasterDialog(self.slave_list.slaves[None])
+                self.loop.widget.open_dialog(dialog, after=self.master_action)
+            elif self.slave_list.focus > 0:
+                dialog = dialogs.SlaveDialog(self.slave_list.selected_slave)
+                self.loop.widget.open_dialog(dialog, after=self.slave_action)
+
+    def master_action(self, dialog):
+        assert isinstance(dialog, dialogs.MasterDialog)
+        if dialog.result is not None:
+            if dialog.result.endswith('_now'):
+                self.ctrl_queue.send_msg('SKIP', None)
+            if dialog.result.startswith('sleep'):
+                self.ctrl_queue.send_msg('SLEEP', None)
+            elif dialog.result == 'wake':
+                self.ctrl_queue.send_msg('WAKE', None)
+            elif dialog.result.startswith('kill_slaves'):
+                self.ctrl_queue.send_msg('KILL', None)
+            elif dialog.result == 'kill_master':
+                self.ctrl_queue.send_msg('QUIT')
+            else:
+                assert False, 'unknown result code'
+
+    def slave_action(self, dialog):
+        assert isinstance(dialog, dialogs.SlaveDialog)
+        if dialog.result is not None:
+            if dialog.result.endswith('_now'):
+                self.ctrl_queue.send_msg('SKIP', dialog.state.slave_id)
+            if dialog.result.startswith('sleep'):
+                self.ctrl_queue.send_msg('SLEEP', dialog.state.slave_id)
+            elif dialog.result == 'wake':
+                self.ctrl_queue.send_msg('WAKE', dialog.state.slave_id)
+            elif dialog.result.startswith('kill_slave'):
+                self.ctrl_queue.send_msg('KILL', dialog.state.slave_id)
+            else:
+                assert False, 'unknown result code'
 
 
 main = PiWheelsMonitor()  # pylint: disable=invalid-name

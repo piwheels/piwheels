@@ -31,7 +31,15 @@
 import urwid as ur
 
 
-class Overlays(ur.WidgetPlaceholder):
+CANCEL_DIALOG = 'cancel dialog'
+TOGGLE_FOCUS = 'toggle focus'
+
+
+ur.command_map['esc'] = CANCEL_DIALOG
+ur.command_map['tab'] = TOGGLE_FOCUS
+
+
+class DialogMaster(ur.WidgetPlaceholder):
     def __init__(self, top):
         super().__init__(top)
         self.dialogs = []
@@ -53,8 +61,8 @@ class Overlays(ur.WidgetPlaceholder):
             after(dialog)
 
     def keypress(self, size, key):
-        if isinstance(key, str) and key == 'esc' and self.dialogs:
-            return self.close_dialog()
+        if self._command_map[key] == CANCEL_DIALOG and self.dialogs:
+            self.close_dialog()
         else:
             return super().keypress(size, key)
 
@@ -63,7 +71,7 @@ class Dialog(ur.WidgetWrap):
     signals = ['close']
 
     def __init__(self, title, body, buttons):
-        buttons = [ur.Text('')] + [
+        buttons = [
             ('pack', ur.AttrMap(btn, 'button', 'inv_button'))
             for btn in buttons
         ]
@@ -72,16 +80,56 @@ class Dialog(ur.WidgetWrap):
                 ur.Pile([
                     ('pack', body),
                     ur.Filler(
-                        ur.Columns(buttons, dividechars=2),
+                        ur.Columns([ur.Text('')] + buttons, dividechars=2),
                         valign='bottom'
                     ),
                 ]),
                 title
             )
         )
+        self._saved_focus = None
         self.width = ('relative', 80)
         self.height = ('relative', 60)
         self.align = 'center'
         self.valign = ('relative', 30)
         self.min_width = 0
         self.min_height = 0
+
+    @property
+    def root(self):
+        return self._w.base_widget
+
+    @property
+    def body(self):
+        return self.root.contents[0][0]
+
+    def _focus_path(self, widget, root=None, path=None):
+        if path is None:
+            path = []
+        if root is widget:
+            return path
+        elif root is None:
+            root = self.root
+        try:
+            for index in root:
+                result = self._focus_path(widget, root[index], path + [index])
+                if result:
+                    return result
+        except TypeError:
+            return
+
+    def set_focus(self, widget):
+        if widget.selectable():
+            self.root.set_focus_path(self._focus_path(widget))
+
+    def keypress(self, size, key):
+        if self._command_map[key] == TOGGLE_FOCUS:
+            current_focus = self.root.get_focus_path()
+            if self._saved_focus and self._saved_focus[0] != current_focus[0]:
+                self.root.set_focus_path(self._saved_focus)
+                self._saved_focus = current_focus
+            elif self.root.contents[1 - current_focus[0]][0].selectable():
+                self._saved_focus = current_focus
+                self.root.set_focus_path([1 - current_focus[0]])
+        else:
+            return super().keypress(size, key)
