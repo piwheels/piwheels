@@ -361,7 +361,7 @@ class SlaveDriver(tasks.Task):
             self.logger.info(
                 'slave %d (%s): sleeping because master is paused',
                 slave.slave_id, slave.label)
-            return 'SLEEP', protocols.NoData
+            return 'SLEEP', True
         else:
             try:
                 abi_queue = self.abi_queues[slave.native_abi]
@@ -381,7 +381,7 @@ class SlaveDriver(tasks.Task):
                 self.logger.info(
                     'slave %d (%s): sleeping because no builds',
                     slave.slave_id, slave.label)
-                return 'SLEEP', protocols.NoData
+                return 'SLEEP', False
             finally:
                 # Only push queue stats if there's space in the stats_queue
                 # (it's not essential; just a nice-to-have)

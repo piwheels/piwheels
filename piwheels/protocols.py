@@ -347,7 +347,7 @@ slave_driver = Protocol(recv={
 }, send={
     'ACK':   ExactSequence([int, str]),  # slave ID, PyPI URL
     'DIE':   NoData,
-    'SLEEP': NoData,
+    'SLEEP': bool,
     'BUILD': ExactSequence([str, str]),  # package, version
     'CONT':  NoData,
     'SEND':  str,                        # filename

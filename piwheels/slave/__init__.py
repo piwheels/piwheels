@@ -222,7 +222,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         """
         handler = {
             'ACK': lambda: self.do_ack(*data),
-            'SLEEP': self.do_sleep,
+            'SLEEP': lambda: self.do_sleep(data),
             'BUILD': lambda: self.do_build(*data),
             'CONT': self.do_cont,
             'SEND': lambda: self.do_send(data),
@@ -261,14 +261,17 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         self.logger.info('Connected to master')
         return 'IDLE', self.get_status()
 
-    def do_sleep(self):
+    def do_sleep(self, paused):
         """
         If, in response to an "IDLE" message we receive "SLEEP" this indicates
         the master has nothing for us to do currently. Sleep for a little while
         then try "IDLE" again.
         """
         assert self.slave_id is not None, 'SLEEP before ACK'
-        self.logger.info('No available jobs; sleeping')
+        if paused:
+            self.logger.info("Sleeping: paused")
+        else:
+            self.logger.info("Sleeping: no available jobs")
         sleep(randint(5, 15))
         return 'IDLE', self.get_status()
 

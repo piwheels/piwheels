@@ -199,7 +199,7 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
         mock_slave_driver.send_addr_msg(addr, 'ACK', [1, 'https://pypi.org/pypi'])
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'IDLE'
-        mock_slave_driver.send_addr_msg(addr, 'SLEEP')
+        mock_slave_driver.send_addr_msg(addr, 'SLEEP', False)
         addr, msg, data = mock_slave_driver.recv_addr_msg()
         assert msg == 'IDLE'
         mock_slave_driver.send_addr_msg(addr, 'DIE')

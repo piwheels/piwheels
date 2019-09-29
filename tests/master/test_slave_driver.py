@@ -381,7 +381,7 @@ def test_master_kills_correct_slave(task, slave_queue, master_config,
     task.poll(0)
     slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
-    assert slave_queue.recv_msg() == ('SLEEP', None)
+    assert slave_queue.recv_msg() == ('SLEEP', False)
     assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
@@ -393,7 +393,7 @@ def test_slave_idle_with_no_builds(task, slave_queue, builds_queue,
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
     slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
-    assert slave_queue.recv_msg() == ('SLEEP', None)
+    assert slave_queue.recv_msg() == ('SLEEP', False)
     assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
@@ -479,7 +479,7 @@ def test_slave_idle_with_other_build(task, slave_queue, slave2_queue,
     task.poll(0)
     slave2_queue.send_msg('IDLE', stats_data())
     task.poll(0)
-    assert slave2_queue.recv_msg() == ('SLEEP', None)
+    assert slave2_queue.recv_msg() == ('SLEEP', False)
     assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
 
 
@@ -496,7 +496,7 @@ def test_slave_idle_when_paused(task, slave_queue, builds_queue, master_config,
     task.poll(0)
     slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
-    assert slave_queue.recv_msg() == ('SLEEP', None)
+    assert slave_queue.recv_msg() == ('SLEEP', True)
     task.resume()
     task.poll(0)
     slave_queue.send_msg('IDLE', stats_data())
