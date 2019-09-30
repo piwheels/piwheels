@@ -58,6 +58,7 @@ class BigBrother(tasks.Task):
 
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.big_brother_control)
+        self.paused = False
         self.history = deque(maxlen=100)
         self.stats = states.MasterStats(**{
             'timestamp':             datetime.now(tz=UTC),
@@ -117,16 +118,12 @@ class BigBrother(tasks.Task):
             if msg == 'QUIT':
                 raise tasks.TaskQuit
             elif msg == 'PAUSE':
-                while True:
-                    msg, data = queue.recv_msg()
-                    if msg == 'QUIT':
-                        raise TaskQuit
-                    elif msg == 'RESUME':
-                        break
-                    else:
-                        self.logger.error('missing control handler for %s', msg)
+                self.paused = True
             elif msg == 'RESUME':
-                self.logger.warning('Task is not paused')
+                if not self.paused:
+                    self.logger.warning('Task is not paused')
+                else:
+                    self.paused = False
             elif msg == 'STATS':
                 for stats in self.history:
                     self.status_queue.send_msg('STATS', stats.as_message())
@@ -151,22 +148,25 @@ class BigBrother(tasks.Task):
                 self.force(self.update_homepage)
 
     def update_search_index(self):
-        self.web_queue.send_msg('SEARCH', self.db.get_search_index())
+        if not self.paused:
+            self.web_queue.send_msg('SEARCH', self.db.get_search_index())
 
     def update_homepage(self):
-        self.stats = self.stats._replace(
-            timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
-        self.web_queue.send_msg('HOME', self.stats.as_message())
+        if not self.paused:
+            self.stats = self.stats._replace(
+                timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
+            self.web_queue.send_msg('HOME', self.stats.as_message())
 
     def update_stats(self):
-        mem_size, mem_free = info.get_mem_stats()
-        swap_size, swap_free = info.get_swap_stats()
-        self.stats = self.stats._replace(
-            timestamp=datetime.now(tz=UTC), mem_size=mem_size,
-            mem_free=mem_free, swap_size=swap_size, swap_free=swap_free,
-            cpu_temp=info.get_cpu_temp(), load_average=os.getloadavg()[0])
-        self.history.append(self.stats)
-        self.status_queue.send_msg('STATS', self.stats.as_message())
+        if not self.paused:
+            mem_size, mem_free = info.get_mem_stats()
+            swap_size, swap_free = info.get_swap_stats()
+            self.stats = self.stats._replace(
+                timestamp=datetime.now(tz=UTC), mem_size=mem_size,
+                mem_free=mem_free, swap_size=swap_size, swap_free=swap_free,
+                cpu_temp=info.get_cpu_temp(), load_average=os.getloadavg()[0])
+            self.history.append(self.stats)
+            self.status_queue.send_msg('STATS', self.stats.as_message())
 
     def replay_stats(self):
         self._ctrl('STATS')
