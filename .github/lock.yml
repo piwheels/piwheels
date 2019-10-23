@@ -16,7 +16,7 @@ lockLabel: false
 # Comment to post before locking. Set to `false` to disable
 lockComment: >
   This thread has been automatically locked. Note that piwheels.org package
-  issues moved to github.com/piwheels/packages/issues.
+  issues moved to [github.com/piwheels/packages/issues](https://github.com/piwheels/packages/issues).
 
 # Assign `resolved` as the reason for locking. Set to `false` to disable
 setLockReason: false
