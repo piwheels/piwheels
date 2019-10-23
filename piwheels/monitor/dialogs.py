@@ -113,6 +113,10 @@ class ActionsDialog(wdg.Dialog):
     def cancel(self, btn=None):
         self._emit('close')
 
+    def default(self, btn=None):
+        # cancel if focused on cancel button, ok otherwise
+        pass
+
     def action_picked(self, radio, new_state, action):
         if new_state:
             self.help_text.set_text(action.help)
@@ -120,7 +124,7 @@ class ActionsDialog(wdg.Dialog):
     def keypress(self, size, key):
         try:
             {
-                'enter': self.ok,
+                'enter': self.default,
                 'o': self.ok,
                 'c': self.cancel,
             }[key]()

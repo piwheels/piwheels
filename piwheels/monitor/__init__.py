@@ -293,6 +293,9 @@ class PiWheelsMonitor:
                 self.ctrl_queue.send_msg('WAKE', dialog.state.slave_id)
             elif dialog.result.startswith('kill_slave'):
                 self.ctrl_queue.send_msg('KILL', dialog.state.slave_id)
+            elif dialog.result.startswith('skip'):
+                # Already done above
+                pass
             else:
                 assert False, 'unknown result code'
 

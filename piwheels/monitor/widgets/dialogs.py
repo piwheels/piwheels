@@ -101,7 +101,7 @@ class Dialog(ur.WidgetWrap):
 
     @property
     def body(self):
-        return self.root.contents[0][0]
+        return self.root[0]
 
     def _focus_path(self, widget, root=None, path=None):
         if path is None:
