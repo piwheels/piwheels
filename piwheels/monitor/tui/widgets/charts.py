@@ -34,7 +34,7 @@ from datetime import timedelta
 
 import urwid as ur
 
-from ...format import format_size, format_timedelta
+from piwheels.format import format_size, format_timedelta
 
 
 class RatioBar(ur.Widget):

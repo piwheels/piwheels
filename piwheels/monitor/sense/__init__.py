@@ -46,7 +46,7 @@ from pisense import SenseHAT, StickEvent, array
 from colorzero import Color
 from dateutil import tz
 
-from .. import terminal, const, protocols, transport, tasks
+from piwheels import terminal, const, protocols, transport, tasks
 from .renderers import MainRenderer, StatusRenderer, QuitRenderer
 
 

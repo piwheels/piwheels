@@ -29,81 +29,32 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Implements the classes for tracking slave states.
+Implements the classes for tracking master and slave states in monitor
+applications.
 
 .. autoclass:: SlaveList
+
+.. autoclass:: MasterState
 
 .. autoclass:: SlaveState
 """
 
-from collections import deque
 from datetime import datetime, timedelta, timezone
+from collections import deque
 
-from colorzero import Color
+from ..states import SlaveStats, MasterStats
 
 
 UTC = timezone.utc
 
 
-class SlaveList:
-    """
-    Tracks the active set of build slaves currently known by the master.
-    Provides methods to update the state of the list based on messages received
-    on the external status queue.
-    """
-    def __init__(self):
-        self.slaves = {None: MasterState()}
-
-    def __len__(self):
-        return len(self.slaves)
-
-    def __getitem__(self, index):
-        return self._sorted_list()[index]
-
-    def __iter__(self):
-        for slave in self._sorted_list():
-            yield slave
-
-    def _sorted_list(self):
-        return sorted(self.slaves.values(),
-                      key=lambda state: state.sort_key)
-
-    def prune(self):
-        now = datetime.now(tz=UTC)
-        for slave in self._sorted_list():
-            if slave.killed and (now - slave.last_seen > timedelta(seconds=5)):
-                # TODO Don't remove the master widget
-                del self.slaves[slave.slave_id]
-
-    def message(self, slave_id, timestamp, msg, data):
-        """
-        Update the list with a message from the external status queue.
-
-        :param int slave_id:
-            The id of the slave the message was originally sent to.
-
-        :param datetime.datetime timestamp:
-            The timestamp when the message was originally sent.
-
-        :param str msg:
-            The reply that was sent to the build slave.
-
-        :param data:
-            Any data that went with the message.
-        """
-        try:
-            state = self.slaves[slave_id]
-        except KeyError:
-            state = SlaveState(slave_id)
-            self.slaves[slave_id] = state
-        state.update(timestamp, msg, data)
-
-
 class MasterState:
     """
-    Class for tracking the state of the master. :class:`SlaveList` stores an
-    instance of this against slave_id ``None``.
+    Class for tracking the state of the master via messages sent over the
+    monitor PUB socket.
     """
+    # pylint: disable=too-many-instance-attributes
+
     def __init__(self):
         self.killed = False
         self.stats = deque(maxlen=100)
@@ -149,31 +100,43 @@ class MasterState:
     def sort_key(self):
         return '', ''
 
+    @property
+    def state(self):
+        if self.first_seen is not None:
+            if datetime.now(tz=UTC) - self.last_seen > timedelta(seconds=30):
+                return 'silent'
+        if self.killed:
+            return 'dead'
+        return 'okay'
+
 
 class SlaveState:
     """
-    Class for tracking the state of a single build slave. :class:`SlaveList`
-    stores instances of this keyed by the *slave_id*.
+    Class for tracking the state of a single build slave via messages sent
+    over the monitor PUB socket.
     """
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, slave_id):
-        self.terminated = False
+        self.killed = False
         self.slave_id = slave_id
-        self.last_msg = '?'
-        self.py_version = '?'
-        self.timeout = timedelta(hours=3)
-        self.abi = '?'
-        self.platform = '?'
+        self.stats = deque(maxlen=100)
+        self.last_msg = ''
+        self.build_timeout = None
+        self.busy_timeout = None
+        self.py_version = '-'
+        self.abi = '-'
+        self.platform = '-'
+        self.label = ''
+        self.os_name = '-'
+        self.os_version = '-'
+        self.board_revision = '-'
+        self.board_serial = '-'
+        self.build_start = None
         self.first_seen = None
         self.last_seen = None
-        self.status = '?'
-        self.label = '???'
-        self._color = Color('red')
-
-    @property
-    def sort_key(self):
-        return self.abi, self.label
+        self.clock_skew = None
+        self.status = ''
 
     def update(self, timestamp, msg, data):
         """
@@ -194,37 +157,62 @@ class SlaveState:
             self.status = 'Initializing'
             self.first_seen = timestamp
             (
-                self.timeout,
+                self.build_timeout,
+                self.busy_timeout,
                 self.py_version,
                 self.abi,
                 self.platform,
-                self.label
+                self.label,
+                self.os_name,
+                self.os_version,
+                self.board_revision,
+                self.board_serial,
             ) = data
+            self.stats.clear()
+        elif msg == 'STATS':
+            data = SlaveStats.from_message(data)
+            self.clock_skew = self.last_seen - data.timestamp
+            self.stats.append(data)
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
-            self._color = Color('#333')
         elif msg == 'BYE':
-            self.terminated = True
             self.status = 'Terminating'
-            self._color = Color('red')
+            self.killed = True
         elif msg == 'BUILD':
             self.status = 'Building {} {}'.format(data[0], data[1])
-            self._color = Color('#060')
+            self.build_start = timestamp
         elif msg == 'SEND':
             self.status = 'Transferring file'
-            self._color = Color('#007')
         elif msg == 'DONE':
             self.status = 'Cleaning up after build'
-            self._color = Color('#707')
+            self.build_start = None
+        elif msg in ('CONT', 'ACK'):
+            pass
+        else:
+            assert False, 'unexpected message'
 
     @property
-    def color(self):
+    def sort_key(self):
+        return self.abi, self.label
+
+    @property
+    def state(self):
         """
-        Calculate a simple color indicator for the slave.
+        Calculate a simple state indicator for the slave, used to color the
+        initial "*" on the entry.
         """
-        if self.last_seen is not None:
-            if datetime.now(tz=UTC) - self.last_seen > timedelta(minutes=15):
-                return Color('#760')  # silent
-            elif datetime.now(tz=UTC) - self.last_seen > self.timeout:
-                return Color('red')  # dead
-        return self._color
+        now = datetime.now(tz=UTC)
+        if self.first_seen is not None:
+            if now - self.last_seen > self.busy_timeout:
+                return 'dead'
+            elif now - self.last_seen > self.busy_timeout / 2:
+                return 'silent'
+            elif self.last_msg == 'DONE':
+                return 'cleaning'
+            elif self.last_msg == 'SEND':
+                return 'sending'
+            elif self.build_start is not None:
+                return 'building'
+        if self.killed:
+            return 'dead'
+        return 'idle'

@@ -100,12 +100,12 @@ __entry_points__ = {
     'console_scripts': [
         'piw-master = piwheels.master:main',
         'piw-slave = piwheels.slave:main',
-        'piw-monitor = piwheels.monitor:main',
         'piw-initdb = piwheels.initdb:main',
         'piw-import = piwheels.importer:main',
         'piw-rebuild = piwheels.rebuild:main',
         'piw-remove = piwheels.remove:main',
         'piw-logger = piwheels.logger:main',
-        'piw-sense = piwheels.sense:main',
+        'piw-monitor = piwheels.monitor.tui:main',
+        'piw-sense = piwheels.monitor.sense:main',
     ],
 }

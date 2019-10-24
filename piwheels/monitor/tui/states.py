@@ -33,9 +33,9 @@
 from datetime import datetime, timedelta, timezone
 from collections import deque
 
+from piwheels.format import format_timedelta
+from .. import states
 from . import widgets as wdg
-from ..format import format_timedelta
-from ..states import SlaveStats, MasterStats
 
 
 UTC = timezone.utc
@@ -225,66 +225,18 @@ class SlaveListWalker(wdg.ListWalker):
         self._modified()
 
 
-class MasterState:
+class MasterState(states.MasterState):
     """
     Class for tracking the state of the master. :class:`SlaveListWalker` stores
     an instance of this as the first entry.
     """
 
     def __init__(self):
+        super().__init__()
         self.widget = wdg.AttrMap(
             wdg.SelectableIcon(''), None,
             focus_map={'status': 'inv_status'}
         )
-        self.killed = False
-        self.stats = deque(maxlen=100)
-        self.first_seen = None
-        self.last_seen = None
-        self.status = 'Doing whatever the master does'  # TODO
-        self.label = ''
-        self.os_name = '-'
-        self.os_version = '-'
-        self.board_revision = '-'
-        self.board_serial = '-'
-
-    def update(self, timestamp, msg, data):
-        """
-        Update the master's state from an incoming reply message.
-
-        :param str msg:
-            The message itself.
-
-        :param data:
-            Any data sent with the message.
-        """
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            (
-                self.first_seen,
-                self.label,
-                self.os_name,
-                self.os_version,
-                self.board_revision,
-                self.board_serial,
-            ) = data
-            self.stats.clear()
-        elif msg == 'STATS':
-            self.stats.append(MasterStats.from_message(data))
-        else:
-            assert False, 'unexpected message'
-
-    @property
-    def sort_key(self):
-        return ('', '')
-
-    @property
-    def state(self):
-        if self.first_seen is not None:
-            if datetime.now(tz=UTC) - self.last_seen > timedelta(seconds=30):
-                return 'silent'
-        if self.killed:
-            return 'dead'
-        return 'okay'
 
     @property
     def columns(self):
@@ -300,117 +252,19 @@ class MasterState:
         ]
 
 
-class SlaveState:
+class SlaveState(states.SlaveState):
     """
     Class for tracking the state of a single build slave.
     :class:`SlaveListWalker` stores a list of these in
     :attr:`~SlaveListWalker.widgets`.
     """
-    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, slave_id):
+        super().__init__(slave_id)
         self.widget = wdg.AttrMap(
             wdg.SelectableIcon(''), None,
             focus_map={'status': 'inv_status'}
         )
-        self.killed = False
-        self.slave_id = slave_id
-        self.stats = deque(maxlen=100)
-        self.last_msg = ''
-        self.build_timeout = None
-        self.busy_timeout = None
-        self.py_version = '-'
-        self.abi = '-'
-        self.platform = '-'
-        self.label = ''
-        self.os_name = '-'
-        self.os_version = '-'
-        self.board_revision = '-'
-        self.board_serial = '-'
-        self.build_start = None
-        self.first_seen = None
-        self.last_seen = None
-        self.clock_skew = None
-        self.status = ''
-
-    def update(self, timestamp, msg, data):
-        """
-        Update the slave's state from an incoming reply message.
-
-        :param datetime.datetime timestamp:
-            The time at which the master received the message.
-
-        :param str msg:
-            The message itself.
-
-        :param data:
-            Any data sent with the message.
-        """
-        self.last_msg = msg
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            self.status = 'Initializing'
-            self.first_seen = timestamp
-            (
-                self.build_timeout,
-                self.busy_timeout,
-                self.py_version,
-                self.abi,
-                self.platform,
-                self.label,
-                self.os_name,
-                self.os_version,
-                self.board_revision,
-                self.board_serial,
-            ) = data
-            self.stats.clear()
-        elif msg == 'STATS':
-            data = SlaveStats.from_message(data)
-            self.clock_skew = self.last_seen - data.timestamp
-            self.stats.append(data)
-        elif msg == 'SLEEP':
-            self.status = 'Waiting for jobs'
-        elif msg in 'DIE':
-            self.status = 'Terminating'
-            self.killed = True
-        elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(data[0], data[1])
-            self.build_start = timestamp
-        elif msg == 'SEND':
-            self.status = 'Transferring file'
-        elif msg == 'DONE':
-            self.status = 'Cleaning up after build'
-            self.build_start = None
-        elif msg in ('CONT', 'ACK'):
-            pass
-        else:
-            assert False, 'unexpected message'
-
-    @property
-    def sort_key(self):
-        return self.abi, self.label
-
-    @property
-    def state(self):
-        """
-        Calculate a simple state indicator for the slave, used to color the
-        initial "*" on the entry.
-        """
-        now = datetime.now(tz=UTC)
-        if self.first_seen is not None:
-            if now - self.last_seen > self.busy_timeout:
-                return 'dead'
-            elif now - self.last_seen > self.busy_timeout / 2:
-                return 'silent'
-            elif self.last_msg == 'DONE':
-                return 'cleaning'
-            elif self.last_msg == 'SEND':
-                return 'sending'
-            elif self.build_start is not None:
-                return 'building'
-        if self.killed:
-            return 'dead'
-        return 'idle'
 
     @property
     def columns(self):

@@ -32,8 +32,8 @@ from operator import attrgetter
 
 import urwid as ur
 
+from piwheels.format import format_size, format_timedelta
 from .charts import TrendBar, RatioBar
-from ...format import format_size, format_timedelta
 
 
 def extract(stats, attr):

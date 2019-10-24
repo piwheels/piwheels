@@ -66,7 +66,7 @@ except ImportError:
         def set_signal_handler(self, signum, handler):
             return signal.signal(signum, handler)
 
-from ... import transport
+from piwheels import transport
 
 
 AlarmTask = namedtuple('AlarmTask', ('due', 'tie_break', 'callback'))
