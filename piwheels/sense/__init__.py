@@ -38,6 +38,8 @@ import sys
 import signal
 from collections import OrderedDict
 from threading import Thread, main_thread
+from datetime import timedelta
+from functools import partial
 from time import sleep
 
 from pisense import SenseHAT, StickEvent, array
@@ -138,15 +140,15 @@ class ScreenTask(tasks.Task):
 
     def __init__(self, config, hat):
         super().__init__(config)
-        self.screen = hat.screen
+        self._renderer = None
+        self._screen = hat.screen
+        self._screen_iter = None
+        self._transition = self._screen.fade_to
         self.renderers = {}
         self.renderers['main'] = MainRenderer()
         self.renderers['quit'] = QuitRenderer(self.renderers['main'])
         self.renderers['status'] = StatusRenderer(self.renderers['main'])
-        self._renderer = None
-        self._screen_iter = None
         self.renderer = self.renderers['main']
-        self.transition = self.screen.fade_to
         stick_queue = self.ctx.socket(
             transport.PULL, protocol=reversed(protocols.sense_stick))
         stick_queue.hwm = 10
@@ -158,27 +160,26 @@ class ScreenTask(tasks.Task):
         status_queue.subscribe('')
         self.register(stick_queue, self.handle_stick)
         self.register(status_queue, self.handle_status)
+        self.every(timedelta(seconds=1/15), self.refresh)
+        # NOTE: The following sleep seems to help the SUB socket get set up
+        # before we ping the control socket with HELLO and get a flood of
+        # data from the master
         sleep(1)
         self.ctrl_queue = self.ctx.socket(
             transport.PUSH, protocol=reversed(protocols.master_control))
         self.ctrl_queue.connect(config.control_queue)
         self.ctrl_queue.send_msg('HELLO')
 
-    def poll(self):
-        super().poll(1 / 15)
+    def refresh(self):
+        self._transition(next(self._screen_iter))
+        self._transition = self._screen.draw
 
-    def loop(self):
-        self.transition(next(self._screen_iter))
-        self.transition = self.screen.draw
+    def poll(self):
+        super().poll(1 / 30)
 
     @property
     def renderer(self):
         return self._renderer
-
-    @renderer.setter
-    def renderer(self, value):
-        self._renderer = value
-        self._screen_iter = iter(value)
 
     def handle_stick(self, queue):
         msg, event = queue.recv_msg()
@@ -189,6 +190,21 @@ class ScreenTask(tasks.Task):
         Handler for messages received from the PUB/SUB external status queue.
         """
         self.renderers['main'].message(*queue.recv_msg())
+
+    def switch_to(self, renderer, *, transition, **kwargs):
+        """
+        Switch the active renderer to *renderer*, with the specified
+        *transition* (one of the strings, "slide", "zoom", "fade", or "draw")
+        which will be performed with any given keyword args.
+        """
+        self._transition = partial({
+            'slide': self._screen.slide_to,
+            'zoom': self._screen.zoom_to,
+            'fade': self._screen.fade_to,
+            'draw': self._screen.draw,
+        }[transition], **kwargs)
+        self._renderer = renderer
+        self._screen_iter = iter(renderer)
 
 
 main = PiWheelsSense()  # pylint: disable=invalid-name

@@ -42,7 +42,6 @@ Implements the screen rendering classes for the Sense HAT monitor.
 
 import signal
 from datetime import datetime, timedelta, timezone
-from functools import partial
 from itertools import cycle, chain
 from threading import main_thread
 
@@ -76,6 +75,9 @@ class Renderer:
         self.position = (0, 0)
         self.limits = (0, 0, 7, 7)
 
+    def __iter__(self):
+        pass
+
     def move(self, event, task):
         x, y = self.position
         x_min, y_min, x_max, y_max = self.limits
@@ -95,10 +97,15 @@ class Renderer:
 class MainRenderer(Renderer):
     """
     The :class:`MainRenderer` is responsible for rendering the main screen in
-    the application (the first screen shown on start). It consists of three
-    simple bar charts at the top of the screen indicating last ping time,
-    remaining disk space, and number of packages left in the queue. The status
-    of each slave is depicted as a single pixel below these three rows.
+    the application (the first screen shown on start).
+
+    It consists of eight small horizontally arranged bar charts at the top of
+    the screen. These indicate, in order: time since last ping, disk used, swap
+    used, memory used, SoC temperature, load average, queue size, and inverted
+    build rate.
+
+    The status of each slave is depicted as a single pixel below these three
+    rows.
     """
     def __init__(self):
         super().__init__()
@@ -138,19 +145,15 @@ class MainRenderer(Renderer):
 
     def move(self, event, task):
         if event.direction == 'up' and self.position[1] == 3:
-            task.renderer = task.renderers['status']
-            task.transition = partial(
-                task.screen.slide_to, direction='down', duration=0.5)
+            task.switch_to(task.renderers['status'], transition='slide',
+                           direction='down', duration=0.5)
         elif event.direction == 'down' and self.position[1] == 7:
-            task.renderer = task.renderers['quit']
-            task.transition = partial(
-                task.screen.slide_to, direction='up', duration=0.5)
+            task.switch_to(task.renderers['quit'], transition='slide',
+                           direction='up', duration=0.5)
         delta = super().move(event, task)
         if event.direction == 'enter' and self.selected is not None:
-            task.renderer = SlaveRenderer(self.selected)
-            task.transition = partial(
-                task.screen.zoom_to, direction='in', center=self.position,
-                duration=0.5)
+            task.switch_to(SlaveRenderer(self.selected), transition='zoom',
+                           direction='in', center=self.position, duration=0.5)
         return delta
 
     def _render_ping(self, buf, pulse):
@@ -242,16 +245,15 @@ class StatusRenderer(Renderer):
     def move(self, event, task):
         delta = super().move(event, task)
         if event.direction == 'down':
-            task.renderer = self.main
-            task.transition = partial(
-                task.screen.slide_to, direction='up', duration=0.5)
+            task.switch_to(self.main, transition='slide', direction='up',
+                           duration=0.5)
         elif delta != (0, 0):
             self.offset = cycle([8])
             self.update_back()
             self.update_text()
-            task.transition = partial(
-                task.screen.slide_to,
-                direction='left' if delta == (1, 0) else 'right', duration=0.5)
+            task.switch_to(self, transition='slide',
+                           direction='left' if delta == (1, 0) else 'right',
+                           duration=0.5)
         return delta
 
     def update_back(self):
@@ -363,14 +365,13 @@ class QuitRenderer(Renderer):
             signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
         if event.direction == 'up':
-            task.renderer = self.main
-            task.transition = partial(
-                task.screen.slide_to, direction='down', duration=0.5)
+            task.switch_to(self.main, transition='slide', direction='down',
+                           duration=0.5)
         elif delta != (0, 0):
             self.update_text()
-            task.transition = partial(
-                task.screen.slide_to,
-                direction='left' if delta == (1, 0) else 'right', duration=0.5)
+            task.switch_to(self, transition='slide',
+                           direction='left' if delta == (1, 0) else 'right',
+                           duration=0.5)
         return delta
 
     def update_text(self):
@@ -411,14 +412,14 @@ class SlaveRenderer(Renderer):
             task.ctrl_queue.send_pyobj(['KILL', self.slave.slave_id])
         delta = super().move(event, task)
         if event.direction == 'enter':
-            task.renderer = task.renderers['main']
-            task.transition = partial(
-                task.screen.zoom_to, direction='out',
-                center=task.renderers['main'].position, duration=0.5)
+            task.switch_to(
+                task.renderers['main'], transition='zoom',
+                direction='out', center=task.renderers['main'].position,
+                duration=0.5)
         elif delta != (0, 0):
             self.update_text()
-            task.transition = partial(
-                task.screen.slide_to,
+            task.switch_to(
+                self, transition='slide',
                 direction='left' if delta == (1, 0) else 'right',
                 duration=0.5)
         return delta
@@ -440,7 +441,6 @@ class SlaveRenderer(Renderer):
         )))
 
     def __iter__(self):
-        now = datetime.now(tz=UTC)
         while True:
             offset = next(self.offset)
             yield self.text[:, offset:offset + 8]

@@ -36,7 +36,7 @@ Implements the classes for tracking slave states.
 .. autoclass:: SlaveState
 """
 
-from collections import OrderedDict
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
 from colorzero import Color
@@ -52,7 +52,7 @@ class SlaveList:
     on the external status queue.
     """
     def __init__(self):
-        self.slaves = {}
+        self.slaves = {None: MasterState()}
 
     def __len__(self):
         return len(self.slaves)
@@ -66,13 +66,13 @@ class SlaveList:
 
     def _sorted_list(self):
         return sorted(self.slaves.values(),
-                      key=lambda slave: (slave.abi, slave.label))
+                      key=lambda state: state.sort_key)
 
     def prune(self):
         now = datetime.now(tz=UTC)
-        for slave in list(self):
-            if slave.terminated and (now - slave.last_seen >
-                                     timedelta(seconds=5)):
+        for slave in self._sorted_list():
+            if slave.killed and (now - slave.last_seen > timedelta(seconds=5)):
+                # TODO Don't remove the master widget
                 del self.slaves[slave.slave_id]
 
     def message(self, slave_id, timestamp, msg, data):
@@ -99,9 +99,61 @@ class SlaveList:
         state.update(timestamp, msg, data)
 
 
+class MasterState:
+    """
+    Class for tracking the state of the master. :class:`SlaveList` stores an
+    instance of this against slave_id ``None``.
+    """
+    def __init__(self):
+        self.killed = False
+        self.stats = deque(maxlen=100)
+        self.first_seen = None
+        self.last_seen = None
+        self.status = 'Doing whatever the master does'  # TODO
+        self.label = ''
+        self.os_name = '-'
+        self.os_version = '-'
+        self.board_revision = '-'
+        self.board_serial = '-'
+
+    def update(self, timestamp, msg, data):
+        """
+        Update the master's state from an incoming status message.
+
+        :param datetime.datetime timestamp:
+            The time at which the message was originally sent.
+
+        :param str msg:
+            The message itself.
+
+        :param data:
+            Any data sent with the message.
+        """
+        self.last_seen = timestamp
+        if msg == 'HELLO':
+            (
+                self.first_seen,
+                self.label,
+                self.os_name,
+                self.os_version,
+                self.board_revision,
+                self.board_serial,
+            ) = data
+            self.stats.clear()
+        elif msg == 'STATS':
+            self.stats.append(MasterStats.from_message(data))
+        else:
+            assert False, 'unexpected message'
+
+    @property
+    def sort_key(self):
+        return '', ''
+
+
 class SlaveState:
     """
-    Class for tracking the state of a single build slave.
+    Class for tracking the state of a single build slave. :class:`SlaveList`
+    stores instances of this keyed by the *slave_id*.
     """
     # pylint: disable=too-many-instance-attributes
 
@@ -119,9 +171,13 @@ class SlaveState:
         self.label = '???'
         self._color = Color('red')
 
+    @property
+    def sort_key(self):
+        return self.abi, self.label
+
     def update(self, timestamp, msg, data):
         """
-        Update the slave's state from an incoming reply message.
+        Update the slave's state from an incoming status message.
 
         :param datetime.datetime timestamp:
             The time at which the message was originally sent.
