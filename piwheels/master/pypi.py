@@ -118,7 +118,7 @@ class PyPIEvents:
     # pylint: disable=too-few-public-methods
     add_file_re = re.compile(r'^add ([^ ]+) file')
     create_re = re.compile(r'^create$')
-    remove_re = re.compile(r'^remove$')
+    remove_re = re.compile(r'^remove(?: (?:package|release))?')
 
     def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
                  serial=0, retries=3, cache_size=1000):

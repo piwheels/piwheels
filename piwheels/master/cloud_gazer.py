@@ -69,7 +69,7 @@ class CloudGazer(tasks.PauseableTask):
 
     def loop(self):
         for package, version, timestamp, action in self.pypi:
-            if action in ('remove', 'remove package', 'remove release'):
+            if action == 'remove':
                 if version is None:
                     self.logger.info(
                         'disabled package %s (deleted)', package)
