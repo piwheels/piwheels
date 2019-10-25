@@ -43,8 +43,8 @@ from time import sleep
 from datetime import datetime, timezone
 from collections import deque
 
-from piwheels import terminal, const, protocols, transport
-from . import widgets, states, dialogs
+from piwheels import terminal, const, protocols, transport, widgets
+from . import states, dialogs, statsbox
 
 
 UTC = timezone.utc
@@ -160,8 +160,8 @@ class PiWheelsMonitor:
             ]),
             'header'
         )
-        self.slave_box = widgets.SlaveStatsBox()
-        self.master_box = widgets.MasterStatsBox()
+        self.slave_box = statsbox.SlaveStatsBox()
+        self.master_box = statsbox.MasterStatsBox()
         self.status_box = widgets.Text('Waiting for connection')
         self.slave_list = states.SlaveListWalker(
             header=self.list_header.original_widget,

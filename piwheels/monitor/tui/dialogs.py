@@ -32,7 +32,7 @@
 
 from collections import namedtuple
 
-from . import widgets as wdg
+from piwheels import widgets as wdg
 
 
 class HelpDialog(wdg.Dialog):

@@ -35,6 +35,8 @@
 from urwid import (
     connect_signal,
     command_map,
+    Widget,
+    WidgetWrap,
     AttrMap,
     Button,
     Text,
@@ -53,14 +55,15 @@ from urwid import (
     Frame,
     ListBox,
     Overlay,
+    LineBox,
     ListWalker,
     MainLoop,
     ExitMainLoop,
 )
 
 from .event_loop import ZMQEventLoop
-from .statsbox import MasterStatsBox, SlaveStatsBox
 from .dialogs import DialogMaster, Dialog
+from .charts import TrendBar, RatioBar
 
 
 class SimpleButton(Button):

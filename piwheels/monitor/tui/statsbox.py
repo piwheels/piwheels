@@ -30,10 +30,8 @@
 
 from operator import attrgetter
 
-import urwid as ur
-
+from piwheels import widgets as wdg
 from piwheels.format import format_size, format_timedelta
-from .charts import TrendBar, RatioBar
 
 
 def extract(stats, attr):
@@ -59,39 +57,39 @@ def invert(stats, attr, size_attr):
     return ((s.timestamp, size(s) - value(s)) for s in stats)
 
 
-class MasterStatsBox(ur.WidgetWrap):
+class MasterStatsBox(wdg.WidgetWrap):
     def __init__(self):
-        self.board_label = ur.Text('-')
-        self.serial_label = ur.Text('-')
-        self.os_label = ur.Text('-')
-        self.load_bar = TrendBar(
+        self.board_label = wdg.Text('-')
+        self.serial_label = wdg.Text('-')
+        self.os_label = wdg.Text('-')
+        self.load_bar = wdg.TrendBar(
             minimum=0.0, format=lambda x: '{:.3g}'.format(x))
-        self.temperature_bar = TrendBar(
+        self.temperature_bar = wdg.TrendBar(
             minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
             show_current=True)
-        self.disk_bar = TrendBar(minimum=0, format=format_size)
-        self.swap_bar = TrendBar(minimum=0, format=format_size)
-        self.memory_bar = TrendBar(minimum=0, format=format_size)
-        self.builds_bar = RatioBar()
-        self.queue_bar = RatioBar()
-        self.downloads_bar = TrendBar(minimum=0)
-        self.builds_size_label = ur.Text('-')
-        self.builds_time_label = ur.Text('-')
-        self.files_count_label = ur.Text('-')
+        self.disk_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.swap_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.memory_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.builds_bar = wdg.RatioBar()
+        self.queue_bar = wdg.RatioBar()
+        self.downloads_bar = wdg.TrendBar(minimum=0)
+        self.builds_size_label = wdg.Text('-')
+        self.builds_time_label = wdg.Text('-')
+        self.files_count_label = wdg.Text('-')
         super().__init__(
-            ur.AttrMap(
-                ur.LineBox(
-                    ur.Columns([
-                        (12, ur.Pile([
-                            ur.Text('Board'),
-                            ur.Text('Serial #'),
-                            ur.Text('OS'),
-                            ur.Text('Build Size'),
-                            ur.Text('Build Time'),
-                            ur.Text('File Count'),
-                            ur.Text('Queue'),
+            wdg.AttrMap(
+                wdg.LineBox(
+                    wdg.Columns([
+                        (12, wdg.Pile([
+                            wdg.Text('Board'),
+                            wdg.Text('Serial #'),
+                            wdg.Text('OS'),
+                            wdg.Text('Build Size'),
+                            wdg.Text('Build Time'),
+                            wdg.Text('File Count'),
+                            wdg.Text('Queue'),
                         ])),
-                        ur.Pile([
+                        wdg.Pile([
                             self.board_label,
                             self.serial_label,
                             self.os_label,
@@ -100,16 +98,16 @@ class MasterStatsBox(ur.WidgetWrap):
                             self.files_count_label,
                             self.queue_bar,
                         ]),
-                        (12, ur.Pile([
-                            ur.Text('Temperature'),
-                            ur.Text('Load Avg'),
-                            ur.Text('Disk'),
-                            ur.Text('Swap'),
-                            ur.Text('Memory'),
-                            ur.Text('Downloads/hr'),
-                            ur.Text('Builds/hr'),
+                        (12, wdg.Pile([
+                            wdg.Text('Temperature'),
+                            wdg.Text('Load Avg'),
+                            wdg.Text('Disk'),
+                            wdg.Text('Swap'),
+                            wdg.Text('Memory'),
+                            wdg.Text('Downloads/hr'),
+                            wdg.Text('Builds/hr'),
                         ])),
-                        ur.Pile([
+                        wdg.Pile([
                             self.temperature_bar,
                             self.load_bar,
                             self.disk_bar,
@@ -158,47 +156,47 @@ class MasterStatsBox(ur.WidgetWrap):
             self.files_count_label.set_text('{:,}'.format(latest.files_count))
 
 
-class SlaveStatsBox(ur.WidgetWrap):
+class SlaveStatsBox(wdg.WidgetWrap):
     def __init__(self):
-        self.board_label = ur.Text('-')
-        self.serial_label = ur.Text('-')
-        self.python_label = ur.Text('-')
-        self.os_label = ur.Text('-')
-        self.clock_label = ur.Text('-')
-        self.load_bar = TrendBar(
+        self.board_label = wdg.Text('-')
+        self.serial_label = wdg.Text('-')
+        self.python_label = wdg.Text('-')
+        self.os_label = wdg.Text('-')
+        self.clock_label = wdg.Text('-')
+        self.load_bar = wdg.TrendBar(
             minimum=0.0, format=lambda x: '{:.3g}'.format(x))
-        self.temperature_bar = TrendBar(
+        self.temperature_bar = wdg.TrendBar(
             minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
             show_current=True)
-        self.disk_bar = TrendBar(minimum=0, format=format_size)
-        self.swap_bar = TrendBar(minimum=0, format=format_size)
-        self.memory_bar = TrendBar(minimum=0, format=format_size)
+        self.disk_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.swap_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.memory_bar = wdg.TrendBar(minimum=0, format=format_size)
         super().__init__(
-            ur.AttrMap(
-                ur.LineBox(
-                    ur.Columns([
-                        (11, ur.Pile([
-                            ur.Text('Board'),
-                            ur.Text('Serial #'),
-                            ur.Text('OS'),
-                            ur.Text('Python'),
-                            ur.Text('Clock Delta'),
+            wdg.AttrMap(
+                wdg.LineBox(
+                    wdg.Columns([
+                        (11, wdg.Pile([
+                            wdg.Text('Board'),
+                            wdg.Text('Serial #'),
+                            wdg.Text('OS'),
+                            wdg.Text('Python'),
+                            wdg.Text('Clock Delta'),
                         ])),
-                        ur.Pile([
+                        wdg.Pile([
                             self.board_label,
                             self.serial_label,
                             self.os_label,
                             self.python_label,
                             self.clock_label,
                         ]),
-                        (11, ur.Pile([
-                            ur.Text('Temperature'),
-                            ur.Text('Load Avg'),
-                            ur.Text('Disk'),
-                            ur.Text('Swap'),
-                            ur.Text('Memory'),
+                        (11, wdg.Pile([
+                            wdg.Text('Temperature'),
+                            wdg.Text('Load Avg'),
+                            wdg.Text('Disk'),
+                            wdg.Text('Swap'),
+                            wdg.Text('Memory'),
                         ])),
-                        ur.Pile([
+                        wdg.Pile([
                             self.temperature_bar,
                             self.load_bar,
                             self.disk_bar,
