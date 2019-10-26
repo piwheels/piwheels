@@ -217,7 +217,7 @@ class MainRenderer(Renderer):
         self.connected = False
         self.slaves = SlaveList()
         self.position = (0, 3)
-        self.limits = (0, 3, 7, 7)
+        self.limits = (0, 2, 7, 7)
         self.status_bars = [
             MainStatBar(last_ping),
             MainStatBar(disk_stat, okay=0.5, fail=0.9),
@@ -228,6 +228,30 @@ class MainRenderer(Renderer):
             MainMasterBar(builds_queue),
             MainMasterBar(builds_done),
         ]
+        self.help_text = None
+        self.help_offset = None
+
+    @staticmethod
+    def _slave_coords(index):
+        return (index // 5, 3 + index % 5)
+
+    @staticmethod
+    def _slave_index(x, y):
+        if y > 2:
+            return (x * 5) + (y - 3)
+        else:
+            return None
+
+    @property
+    def selected(self):
+        x, y = self.position
+        if y > 2:
+            try:
+                return self.slaves[self._slave_index(x, y)]
+            except IndexError:
+                return None
+        else:
+            return None
 
     def message(self, msg, data):
         if msg in ('HELLO', 'STATS'):
@@ -239,41 +263,56 @@ class MainRenderer(Renderer):
             slave_id, timestamp, msg, data = data
         self.slaves.message(slave_id, timestamp, msg, data)
 
-    @staticmethod
-    def _slave_coords(index):
-        return (index // 5, 3 + index % 5)
-
-    @staticmethod
-    def _slave_index(x, y):
-        return (x * 5) + (y - 3)
-
-    @property
-    def selected(self):
-        x, y = self.position
-        if y > 1:
-            try:
-                return self.slaves[self._slave_index(x, y)]
-            except IndexError:
-                return None
-        else:
-            return None
-
     def move(self, event, task):
-        if event.direction == 'up' and self.position[1] == 3:
-            task.switch_to(task.renderers['status'], transition='slide',
-                           direction='down', duration=0.5)
-        elif event.direction == 'down' and self.position[1] == 7:
+        if event.direction == 'down' and self.position[1] == 7:
             task.switch_to(task.renderers['quit'], transition='slide',
                            direction='up', duration=0.5)
         delta = super().move(event, task)
-        if event.direction == 'enter' and self.selected is not None:
-            task.switch_to(SlaveRenderer(self.selected), transition='zoom',
-                           direction='in', center=self.position, duration=0.5)
+        if self.position[1] == 2 and delta != (0, 0):
+            self._update_help()
+        elif event.direction == 'enter' and self.selected is not None:
+            self._switch_to_slave()
         return delta
+
+    def _switch_to_slave(self):
+        if isinstance(self.selected, MasterState):
+            task.switch_to(MasterRenderer(self.selected),
+                           transition='zoom', direction='in',
+                           center=self.position, duration=0.5)
+        else:
+            task.switch_to(SlaveRenderer(self.selected),
+                           transition='zoom', direction='in',
+                           center=self.position, duration=0.5)
+
+    def _update_help(self):
+        x, y = self.position
+        assert y == 2
+        s = [
+            'Ping',
+            'Disk',
+            'Swap',
+            'Memory',
+            'Temperature',
+            'Load Avg',
+            'Builds Queue',
+            'Downloads',
+        ][x]
+        self._help_text = array(
+            draw_text(s, font='small.pil', foreground=Color('gray'),
+                      padding=(8, 3, 8, 0)))
+        self._help_offset = iter(cycle(range(self._help_text.shape[1] - 8)))
 
     def _render_status(self, buf):
         for x, bar in enumerate(self.status_bars):
             buf[0:3, x] = bar.render(self.selected)
+
+    def _render_help(self, buf, pulse):
+        x, y = self.position
+        base = Color(*buf[y, x])
+        grad = list(base.gradient(Color('white'), steps=15))
+        buf[0:3, x] = grad[pulse]
+        offset = next(self._help_offset)
+        buf += self._help_text[:, offset:offset + 8]
 
     def _render_slaves(self, buf, pulse):
         for index, slave in enumerate(self.slaves):
@@ -296,10 +335,14 @@ class MainRenderer(Renderer):
         buf = array(Color('black'))
         pulse = iter(bounce(range(15)))
         while True:
+            x, y = self.position
             self.slaves.prune()
             buf[:] = Color('black')
             self._render_status(buf)
-            self._render_slaves(buf, next(pulse))
+            if y == 2:
+                self._render_help(buf, next(pulse))
+            else:
+                self._render_slaves(buf, next(pulse))
             yield buf
 
 
@@ -326,11 +369,13 @@ class MainStatBar:
         else:
             value = self.calc(state)
             if value is None:
-                return [Color('#533')] * 3
+                return [Color('#535')] * 3
             else:
                 value = min(1, max(0, value))
                 color = self.gradient[int((len(self.gradient) - 1) * value)]
-                value *= 3
+                # Scale the value to a range of 2, with an offset of 1
+                # to ensure that the status line is never totally black
+                value = (value * 2) + 1
                 return [
                     color if y < int(value) else
                     color * Lightness(value - int(value)) if y < value else
@@ -442,19 +487,19 @@ class StatusRenderer(Renderer):
         time -= timedelta(microseconds=time.microseconds)
         ping = datetime.now(tz=UTC) - self.main.last_message
         ping -= timedelta(microseconds=ping.microseconds)
-        text = {
-            0: 'Last Ping: {}s'.format(int(ping.total_seconds())),
-            1: 'Disk Free: {}%'.format(
-                100 * self.main.status.get('disk_free', 0) //
-                self.main.status.get('disk_size', 1)),
-            2: 'Queue Size: {}'.format(
-                self.main.status.get('builds_pending', 0)),
-            3: 'Builds/Hour: {}'.format(
-                self.main.status.get('builds_last_hour', 0)),
-            4: 'Build Time: {}'.format(time),
-            5: 'Build Size: {}'.format(format_size(
-                self.main.status.get('builds_size', 0))),
-        }[x]
+        text = [
+            'Last Ping: {}s'.format(int(ping.total_seconds())),
+            'Disk Free: {}%'.format(
+             100 * self.main.status.get('disk_free', 0) //
+             self.main.status.get('disk_size', 1)),
+            'Queue Size: {}'.format(
+             self.main.status.get('builds_pending', 0)),
+            'Builds/Hour: {}'.format(
+             self.main.status.get('builds_last_hour', 0)),
+            'Build Time: {}'.format(time),
+            'Build Size: {}'.format(format_size(
+             self.main.status.get('builds_size', 0))),
+        ][x]
         self.text = array(
             draw_text(text, foreground=Color('gray'), padding=(8, 0, 8, 1)))
         # Ensure the text doesn't "skip" while we're rendering it by starting
