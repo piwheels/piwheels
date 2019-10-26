@@ -105,6 +105,9 @@ class MasterState(states.MasterState):
     Class for tracking the state of the master. :class:`SlaveList` stores an
     instance of this against slave_id ``None``.
     """
+    @property
+    def color(self):
+        return Color('#033')
 
 
 class SlaveState(states.SlaveState):
@@ -118,10 +121,10 @@ class SlaveState(states.SlaveState):
         Calculate a simple color indicator for the slave.
         """
         return {
-            'idle': Color('#333'),
+            'idle':     Color('#333'),
             'building': Color('#060'),
-            'sending': Color('#007'),
+            'sending':  Color('#007'),
             'cleaning': Color('#707'),
-            'silent': Color('#760'),
-            'dead': Color('red'),
+            'silent':   Color('#760'),
+            'dead':     Color('red'),
         }[self.state]

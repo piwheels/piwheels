@@ -148,7 +148,7 @@ class ScreenTask(tasks.Task):
         self.renderers['main'] = MainRenderer()
         self.renderers['quit'] = QuitRenderer(self.renderers['main'])
         self.renderers['status'] = StatusRenderer(self.renderers['main'])
-        self.renderer = self.renderers['main']
+        self.switch_to(self.renderers['main'], transition='fade')
         stick_queue = self.ctx.socket(
             transport.PULL, protocol=reversed(protocols.sense_stick))
         stick_queue.hwm = 10
