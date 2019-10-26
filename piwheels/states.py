@@ -58,6 +58,14 @@ artifacts (:class:`FileState`) and various loggers.
 
 .. autoclass:: PageState
     :members:
+
+.. autoclass:: SlaveStats
+    :members:
+
+.. autoclass:: MasterStats
+    :members:
+
+.. autofunction:: mkdir_override_symlink
 """
 
 import hashlib

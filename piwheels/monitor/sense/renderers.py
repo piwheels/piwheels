@@ -32,12 +32,25 @@
 Implements the screen rendering classes for the Sense HAT monitor.
 
 .. autoclass:: Renderer
+    :members:
 
 .. autoclass:: MainRenderer
+    :members:
 
-.. autoclass:: StatusRenderer
+.. autoclass:: MasterRenderer
+    :members:
 
 .. autoclass:: SlaveRenderer
+    :members:
+
+.. autoclass:: QuitRenderer
+    :members:
+
+.. autofunction:: bounce
+
+.. autofunction:: clamp
+
+.. autofunction:: gradient
 """
 
 import signal
@@ -60,6 +73,10 @@ UTC = timezone.utc
 def bounce(it):
     # bounce('ABC') -> A B C C B A A B C ...
     return cycle(chain(it, reversed(it)))
+
+
+def clamp(value, minimum=0.0, maximum=1.0):
+    return max(minimum, min(maximum, value))
 
 
 def gradient(okay=0.25, warn=0.75, fail=1.0, count=32):

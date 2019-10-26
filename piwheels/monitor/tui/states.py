@@ -28,7 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Provides the list walker for the master/slave list"
+"""
+Provides the list walker for the master/slave list.
+
+.. autoclass:: SlaveListWalker
+    :members:
+
+.. autoclass:: MasterState
+    :members:
+
+.. autoclass:: SlaveState
+    :members:
+
+.. autofunction:: since
+"""
 
 from datetime import datetime, timedelta, timezone
 from collections import deque

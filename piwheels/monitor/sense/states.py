@@ -32,8 +32,13 @@
 Implements the classes for tracking slave states.
 
 .. autoclass:: SlaveList
+    :members:
+
+.. autoclass:: MasterState
+    :members:
 
 .. autoclass:: SlaveState
+    :members:
 """
 
 from datetime import datetime, timedelta, timezone
