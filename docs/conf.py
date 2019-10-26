@@ -51,6 +51,7 @@ sys.modules['cbor2'] = mock.Mock()
 sys.modules['chameleon'] = mock.Mock()
 sys.modules['psycopg2.extensions'] = mock.Mock()
 sys.modules['psycopg2'] = mock.Mock()
+sys.modules['voluptuous'] = mock.Mock()
 
 # -- General configuration ------------------------------------------------
 
