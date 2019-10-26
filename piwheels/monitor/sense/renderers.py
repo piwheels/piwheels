@@ -41,6 +41,7 @@ Implements the screen rendering classes for the Sense HAT monitor.
 """
 
 import signal
+import subprocess
 from datetime import datetime, timedelta, timezone
 from itertools import cycle, chain
 from threading import main_thread
@@ -533,14 +534,17 @@ class QuitRenderer(Renderer):
     def __init__(self, main):
         super().__init__()
         self.main = main
-        self.limits = (0, 0, 1, 0)
+        self.limits = (0, 0, 2, 0)
         self.text = None
         self.update_text()
 
     def move(self, event, task):
-        if event.direction == 'enter' and self.position[0] == 1:
-            task.ctrl_queue.send_msg('QUIT')
+        x, y = self.position
         if event.direction == 'enter':
+            if x == 1:
+                subprocess.call(['sudo', '-n', 'reboot'])
+            elif x == 2:
+                subprocess.call(['sudo', '-n', 'poweroff'])
             signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
         if event.direction == 'up':
@@ -548,29 +552,24 @@ class QuitRenderer(Renderer):
                            duration=0.5)
         elif delta != (0, 0):
             self.update_text()
-            task.switch_to(self, transition='slide',
-                           direction='left' if delta == (1, 0) else 'right',
-                           duration=0.5)
         return delta
 
     def update_text(self):
         x, y = self.position
         text = {
             0: 'Quit?',
-            1: 'Terminate?',
+            1: 'Reboot?',
+            2: 'Off?',
         }[x]
         self.text = array(
             draw_text(text, foreground=Color('red'), padding=(8, 0, 8, 1)))
-        self.offset = iter(cycle(chain(
-            range(8, self.text.shape[1] - 8), range(8)
-        )))
+        self.offset = iter(cycle(range(self.text.shape[1] - 8)))
 
     def __iter__(self):
         buf = array(Color('black'))
         while True:
             offset = next(self.offset)
-            buf[:self.text.shape[0], :] = self.text[:, offset:offset + 8]
-            yield buf.clip(0, 1)
+            yield self.text[:, offset:offset + 8]
 
 
 class SlaveRenderer(Renderer):
