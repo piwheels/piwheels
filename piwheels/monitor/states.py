@@ -97,6 +97,10 @@ class MasterState:
             assert False, 'unexpected message'
 
     @property
+    def slave_id(self):
+        return None
+
+    @property
     def sort_key(self):
         return '', ''
 
