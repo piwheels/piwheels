@@ -39,7 +39,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import zip_longest
 
 import pkg_resources
@@ -53,6 +53,10 @@ from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink
 from .the_oracle import DbClient
+
+
+UTC = timezone.utc
+dt_format = '%Y-%m-%d %H:%M'
 
 
 class TheScribe(tasks.PauseableTask):
@@ -127,7 +131,7 @@ class TheScribe(tasks.PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt'}
+        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', 'json.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](
@@ -169,9 +173,11 @@ class TheScribe(tasks.PauseableTask):
                     self.write_simple_index()
                 self.write_package_index(package)
                 self.write_project_page(package)
+                self.write_json_file(package)
             elif msg == 'PKGPROJ':
                 package = data
                 self.write_project_page(package)
+                self.write_json_file(package)
             elif msg == 'HOME':
                 status_info = data
                 self.write_homepage(status_info)
@@ -224,7 +230,7 @@ class TheScribe(tasks.PauseableTask):
         """
         self.logger.info('writing sitemap')
 
-        pages = ['index.html', 'packages.html', 'faq.html', 'stats.html']
+        pages = ['index.html', 'packages.html', 'faq.html', 'stats.html', 'json.html']
         with AtomicReplaceFile(self.output_path / 'sitemap0.xml',
                                encoding='utf-8') as page:
             page.file.write(self.templates['sitemap_static'](pages=pages))
@@ -312,39 +318,14 @@ class TheScribe(tasks.PauseableTask):
         :param str package:
             The name of the package to write the project page for
         """
-        versions = sorted(
-            self.db.get_project_versions(package),
-            key=lambda row: pkg_resources.parse_version(row.version),
-            reverse=True)
-        files = sorted(
-            self.db.get_project_files(package),
-            key=lambda row: (
-                pkg_resources.parse_version(row.version),
-                row.filename
-            ), reverse=True)
-        if files:
-            dependencies = self.db.get_file_dependencies(files[0].filename)
-            if 'apt' in dependencies:
-                dependencies['apt'] = dependencies['apt'] - self.default_libs
-        else:
-            dependencies = {}
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
-        dt = datetime.now()
         with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
-                package=package,
-                versions=versions,
-                files=files,
-                dependencies=dependencies,
-                format_size=format_size,
-                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
-                url=lambda filename, filehash:
-                    '/simple/{package}/{filename}#sha256={filehash}'.format(
-                        package=package, filename=filename, filehash=filehash),
-                page='project'))
+                page='project',
+                package=package))
         try:
             # See write_package_index for explanation...
             canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
@@ -352,6 +333,76 @@ class TheScribe(tasks.PauseableTask):
         except FileExistsError:
             pass
 
+    def write_json_file(self, package):
+        """
+        (Re)writes the JSON file for the specified package.
+
+        :param str package:
+            The name of the package to write the JSON file for
+        """
+        self.logger.info('writing json file for %s', package)
+        pkg_dir = self.output_path / 'project' / package / 'json'
+        mkdir_override_symlink(pkg_dir)
+        versions = self.get_project_versions_and_files(package)
+        json_file = pkg_dir / 'index.json'
+        with AtomicReplaceFile(json_file, encoding='utf-8') as index:
+            package_info = {
+                'package': package,
+                'num_versions': get_num_versions(versions),
+                'num_files': get_num_files(versions),
+                'versions': versions,
+                'project_url': 'https://www.piwheels.org/project/{}'.format(package),
+                'simple_url': 'https://www.piwheels.org/simple/{}'.format(package),
+                'updated': datetime.now(tz=UTC).strftime(dt_format),
+            }
+            json.dump(package_info, index.file, check_circular=False,
+                      separators=(',', ':'))
+
+    def get_project_versions_and_files(self, package):
+        """
+        Returns a list of all versions for the specified *package*, including
+        nested details of all files, for the JSON file.
+        """
+        data = self.db.get_project_versions(package)
+        versions = {}
+        for (version, released, build_id, skip, duration, status, filename,
+             filesize, filehash, builder_abi, file_abi_tag, platform_tag,
+             apt_dependencies) in data:
+            if version not in versions:
+                versions[version] = {
+                    'released': released.strftime(dt_format),
+                    'skip': skip,
+                    'builds': {},
+                }
+            if status:
+                if file_abi_tag not in versions[version]['builds']:
+                    versions[version]['builds'][file_abi_tag] = {
+                        'successful_builds': {},
+                        'failed_builds': {},
+                    }
+                versions[version]['builds'][file_abi_tag]['successful_builds'][platform_tag] = {
+                    'build_id': build_id,
+                    'builder_abi': builder_abi,
+                    'filename': filename,
+                    'filesize': filesize,
+                    'filesize_human': format_size(filesize),
+                    'filehash': filehash,
+                    'duration': duration_to_secs(duration),
+                    'duration_adjusted': duration_adjusted(duration, platform_tag),
+                    'apt_dependencies': apt_dependencies,
+                    'url': 'https://www.piwheels.org/simple/{}/{}'.format(package, filename),
+                }
+            elif build_id:
+                if builder_abi not in versions[version]['builds']:
+                    versions[version]['builds'][builder_abi] = {
+                        'successful_builds': {},
+                        'failed_builds': {},
+                    }
+                versions[version]['builds'][builder_abi]['failed_builds'] = {
+                    'build_id': build_id,
+                    'duration': duration_to_secs(duration),
+                }
+        return versions
 
 # From pip/_vendor/packaging/utils.py
 # pylint: disable=invalid-name
@@ -371,6 +422,29 @@ def grouper(iterable, n, fillvalue=None):
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
 
+def get_num_versions(versions):
+    return len([
+        1 for v in versions.values()
+        if get_num_files_for_version(v['builds']) > 0
+    ])
+
+def get_num_files(versions):
+    return sum(
+        get_num_files_for_version(v['builds'])
+        for v in versions.values()
+    )
+
+def get_num_files_for_version(builds):
+    return sum(len(b['successful_builds']) for b in builds.values())
+
+def duration_to_secs(duration):
+    if duration:
+        h, m, s = (float(n) for n in str(duration).split(':'))
+        return h * 60 * 60 + m * 60 + s
+
+def duration_adjusted(duration, platform):
+    if duration:
+        return duration_to_secs(duration) * (6 if platform == 'linux_armv6l' else 1)
 
 class AtomicReplaceFile:
     """

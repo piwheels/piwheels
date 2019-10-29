@@ -60,7 +60,9 @@ CONTROL_CHARS = {
 
 
 ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
+    'version', 'released', 'build_id', 'skip', 'duration', 'status', 'filename',
+    'filesize', 'filehash', 'builder_abi', 'file_abi_tag', 'platform_tag',
+    'apt_dependencies'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
     'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
@@ -390,7 +392,9 @@ class Database:
             return [
                 ProjectVersionsRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, skipped, builds_succeeded, builds_failed "
+                    "SELECT version, released, build_id, skip, duration, status, "
+                    "filename, filesize, filehash, builder_abi, file_abi_tag, "
+                    "platform_tag, apt_dependencies "
                     "FROM get_project_versions(%s)", (package,)
                 )
             ]

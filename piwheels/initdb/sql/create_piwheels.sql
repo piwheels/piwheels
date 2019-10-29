@@ -964,33 +964,43 @@ GRANT EXECUTE ON FUNCTION get_version_files(TEXT, TEXT) TO {username};
 
 -- get_project_versions(package)
 -------------------------------------------------------------------------------
--- Returns the versions registered to a package, along with the skipped state
--- of each version, and arrays detailing the ABIs that have been attempted
+-- Returns all information about versions and files for *package*, including
+-- all successful builds and failed build attempts
 -------------------------------------------------------------------------------
 
 CREATE FUNCTION get_project_versions(pkg TEXT)
     RETURNS TABLE(
         version versions.version%TYPE,
-        skipped versions.skip%TYPE,
-        builds_succeeded TEXT,
-        builds_failed TEXT
+        released TIMESTAMP WITH TIME ZONE,
+        build_id builds.build_id%TYPE,
+        skip versions.skip%TYPE,
+        duration builds.duration%TYPE,
+        status builds.status%TYPE,
+        filename files.filename%TYPE,
+        filesize files.filesize%TYPE,
+        filehash files.filehash%TYPE,
+        builder_abi builds.abi_tag%TYPE,
+        file_abi_tag files.abi_tag%TYPE,
+        platform_tag files.platform_tag%TYPE,
+        apt_dependencies TEXT
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    SELECT
-        v.version,
-        COALESCE(NULLIF(v.skip, ''), p.skip) AS skipped,
-        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE b.status), '') AS builds_succeeded,
-        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE NOT b.status), '') AS builds_failed
-    FROM
-        packages p
-        JOIN versions v USING (package)
-        LEFT JOIN builds b USING (package, version)
+    SELECT version, released AT TIME ZONE 'UTC', build_id, skip, duration,
+    status, f.filename, filesize, filehash, b.abi_tag builder_abi,
+    f.abi_tag file_abi_tag, platform_tag,
+    string_agg(dependency, ' ') apt_dependencies
+    FROM versions v
+    LEFT JOIN builds b USING (package, version)
+    LEFT JOIN files f USING (build_id)
+    LEFT JOIN dependencies d ON f.filename = d.filename AND d.tool = 'apt'
     WHERE v.package = pkg
-    GROUP BY version, skipped;
+    GROUP BY version, released, build_id, skip, duration, status, f.filename,
+    filesize, filehash, builder_abi, file_abi_tag, platform_tag
+    ORDER BY released DESC, built_at DESC;
 $sql$;
 
 REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
