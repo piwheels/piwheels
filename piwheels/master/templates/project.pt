@@ -6,7 +6,7 @@
   <div metal:fill-slot="content">
     <script>
     window.onload = function() {
-    showDownloads('${package}');
+      showContents('${package}');
     };
     </script>
 
@@ -23,12 +23,16 @@
             <td><a href="https://pypi.org/project/${package}">pypi.org/project/${package}</a></td>
           </tr>
           <tr>
+            <th>JSON</th>
+            <td><a href="/project/${package}/json">piwheels.org/project/${package}/json</a></td>
+          </tr>
+          <tr>
             <th>Versions</th>
-            <td>${'{:,}'.format(len(versions))}</td>
+            <td id="num-versions">loading...</td>
           </tr>
           <tr>
             <th>Files</th>
-            <td>${'{:,}'.format(len(files))}</td>
+            <td id="num-files">loading...</td>
           </tr>
           <tr>
             <th>Downloads (all time)</th>
@@ -44,30 +48,16 @@
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Install</h3>
-        <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
-sudo pip3 install ${package}</pre>
-        <pre tal:condition="not dependencies">sudo pip3 install ${package}</pre>
+        <h3 id="install-header">Install</h3>
+        <pre id="install">sudo pip3 install ${package}</pre>
       </div>
     </div>
 
     <div class="row">
       <div class="small-12 columns">
         <h3>Versions</h3>
-        <table id="versions" tal:condition="versions">
-          <tr><th>Version</th><th>Successful builds</th><th>Failed builds</th><th>Skip</th></tr>
-          <span tal:repeat="row versions" tal:omit-tag="True">
-            <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
-              <td>${row.version}</td>
-              <td>${row.builds_succeeded}</td>
-              <td>${row.builds_failed}</td>
-              <td>${row.skipped}</td>
-            </tr>
-          </span>
-          <tr tal:condition="len(versions) > 5" id="show-hidden-versions" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-version')">Show more versions</a></td></tr>
-        </table>
-        <table tal:condition="not:versions" class="empty">
-          <tr><th>No versions</th></tr>
+        <table id="versions">
+          <tr><th>loading...</th></tr>
         </table>
       </div>
     </div>
@@ -75,20 +65,8 @@ sudo pip3 install ${package}</pre>
     <div class="row">
       <div class="small-12 columns">
         <h3>Files</h3>
-        <table tal:condition="files">
-          <tr><th>Version</th><th>ABI</th><th>Filename</th><th>Size</th></tr>
-          <span tal:repeat="row files" tal:omit-tag="True">
-            <tr class="${'hidden-file' if repeat.row.number > 5 else ''}">
-              <td>${row.version}</td>
-              <td>${row.abi_tag}</td>
-              <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
-              <td>${format_size(row.filesize)}</td>
-            </tr>
-          </span>
-          <tr tal:condition="len(files) > 5" id="show-hidden-files" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-file')">Show more files</a></td></tr>
-        </table>
-        <table tal:condition="not:files" class="empty">
-          <tr><th>No files</th></tr>
+        <table id="files">
+          <tr><th>loading...</th></tr>
         </table>
       </div>
     </div>
@@ -102,7 +80,7 @@ sudo pip3 install ${package}</pre>
           <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${package}">New issue</a></td></tr>
         </table>
 
-        <p class="small"><small>Page last updated ${timestamp}</small></p>
+        <p class="small"><small>Page last updated: <span id="updated">loading...</span></small></p>
       </div>
     </div>
   </div>

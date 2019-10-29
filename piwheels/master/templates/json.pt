@@ -1,0 +1,76 @@
+<div metal:use-macro="layout">
+  <div metal:fill-slot="title" tal:omit-tag="1">JSON API</div>
+  <div metal:fill-slot="content">
+    <div class="row">
+      <div class="small-12 medium-8 columns">
+        <h2>JSON API</h2>
+        <p>piwheels.org provides a JSON API for information about packages we host.</p>
+
+        <h3>Package information</h3>
+
+        <p>Package information can be found at <strong>piwheels.org/project/&lt;package&gt;/json</strong>,
+        e.g. <a href="https://www.piwheels.org/project/numpy/json">piwheels.org/project/numpy/json</a>.
+        This data includes information about every released version of the package,
+        the status of any build attempts made by piwheels, which ABIs and platforms
+        we have built files for, and information about these files, including filename,
+        filesize, hash, build duration and any apt dependencies.</p>
+
+        <p>The project pages themselves (e.g. <a href="https://www.piwheels.org/project/numpy">piwheels.org/project/numpy</a>)
+        are made up from the data in this JSON file, but additional data is available
+        to that shown on those pages. It is also useful to be able to access the data
+        for a package in a structured way from within a program, as well as the human
+        readable method via the project page.</p>
+
+        <p>Example usage from a Python script:</p>
+
+        <pre>import requests
+
+url = "https://www.piwheels.org/project/numpy/json"
+package = requests.get(url).json()
+
+for version, info in package.items():
+    print(version, info['released'])</pre>
+
+        <pre>import requests
+
+url = "https://www.piwheels.org/project/numpy/json"
+package = requests.get(url).json()
+
+def any_files(builds):
+    for abi in builds.values():
+        if abi['successful_builds']:
+            return True
+
+for version, info in package['versions'].items():
+    if any_files(info['builds']):
+        print(version, ': YES')
+    else:
+        print(version, ': NO')
+</pre>
+
+        <h3>Download stats</h3>
+
+        <p>Basic package download stats (total, and last 30 days) are provided separately
+        at <a href="https://www.piwheels.org/packages.json">piwheels.org/packages.json</a>.
+        </p>
+
+        <p>Example usage from a Python script:</p>
+
+        <pre>import requests
+
+url = "https://www.piwheels.org/project/packages.json"
+packages = requests.get(url).json()
+packages = {
+    pkg: (d_month, d_all)
+    for pkg, d_month, d_all in packages
+}
+
+package = 'numpy'
+d_month, d_all = packages[package]
+
+print(package, "has had", d_month, "downloads in the last month")
+print(package, "has had", d_all, "downloads in total")</pre>
+      </div>
+    </div>
+  </div>
+</div>
