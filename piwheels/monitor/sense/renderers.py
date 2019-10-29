@@ -197,13 +197,15 @@ class MainRenderer(Renderer):
             self._refresh_stats(self.selected)
 
     def move(self, event, task):
-        if event.direction == 'up' and self.position[1] == 3:
+        if not self.connected:
+            return (0, 0)
+        elif event.direction == 'up' and self.position[1] == 3:
             # Go to HelpRenderer
-            delta = (0, 0)
+            return (0, 0)
         elif event.direction == 'down' and self.position[1] == 7:
             task.switch_to(task.renderers['quit'], transition='slide',
                            direction='up', duration=0.5)
-            delta = (0, 0)
+            return (0, 0)
         else:
             with self.watch_selection():
                 delta = super().move(event, task)
@@ -211,14 +213,14 @@ class MainRenderer(Renderer):
                 if isinstance(self.selected, MasterState):
                     task.switch_to(MasterRenderer(self.selected),
                                    transition='slide', direction='right',
-                                   center=self.position, cover=True, duration=0.5)
+                                   cover=True, duration=0.5)
                 else:
                     task.switch_to(SlaveRenderer(self.selected),
                                    transition='slide', direction='right',
-                                   center=self.position, cover=True, duration=0.5)
-        return delta
+                                   cover=True, duration=0.5)
+            return delta
 
-    def _render_status(self, buf):
+    def _render_stats(self, buf):
         for x, stat in enumerate(self.stats):
             # Scale the value to a range of 2, with an offset of 1
             # to ensure that the status line is never black
@@ -255,7 +257,7 @@ class MainRenderer(Renderer):
             with self.watch_selection():
                 self.slaves.prune()
             buf[:] = Color('black')
-            self._render_status(buf)
+            self._render_stats(buf)
             self._render_slaves(buf, next(pulse))
             yield buf
 
@@ -269,34 +271,109 @@ class MasterRenderer(Renderer):
     """
     def __init__(self, master):
         super().__init__()
+        self.updated = master.last_seen
         self.master = master
         self.position = (0, 1)
         self.limits = (0, 0, 7, 2)
         self.text = None
         self.offset = None
-        self.status = master_stats()
-        self.update_text()
+        self.stats = {
+            (x, y): item
+            for y, row in enumerate([
+                [
+                    stats.NullStat(),
+                    stats.NullStat(),
+                    stats.ActionStat('Pause'),
+                    stats.ActionStat('Halt'),
+                    stats.ActionStat('Resume'),
+                    stats.ActionStat('Stop Slaves'),
+                    stats.ActionStat('Kill Slaves'),
+                    stats.ActionStat('Stop Master'),
+                ],
+                [
+                    stats.ActivityStat(),
+                    stats.HostStat(),
+                    stats.BoardStat(),
+                    stats.SerialStat(),
+                    stats.OSStat(),
+                    stats.UpTimeStat(),
+                    stats.NullStat(),
+                    stats.NullStat(),
+                ],
+                [
+                    stats.LastSeenStat(),
+                    stats.BuildsQueueStat(),
+                    stats.DiskStat(),
+                    stats.SwapStat(),
+                    stats.MemStat(),
+                    stats.CPUTempStat(),
+                    stats.LoadAvgStat(),
+                    stats.BuildsDoneStat(),
+                ],
+            ])
+            for x, item in enumerate(row)
+        }
+        self._update_text()
 
     def move(self, event, task):
-        pass
+        if event.direction == 'down' and self.position[1] == 2:
+            task.switch_to(task.renderers['main'], transition='slide',
+                           direction='left', duration=0.5)
+            return (0, 0)
+        delta = super().move(event, task)
+        if delta != (0, 0):
+            self._update_text()
+        return delta
+
+    def _update_text(self, restart=True):
+        stat = self.stats[self.position]
+        self.text = array(
+            draw_text(stat.label,
+                      font='small.pil',
+                      foreground=stat.color
+                                 if isinstance(stat, stats.ActionStat) else
+                                 Color('white'),
+                      background=Color('black'),
+                      padding=(8, 3, 8, 0)))
+        if restart:
+            last = 0
+        else:
+            # Ensure the text doesn't "skip" while we're rendering it by
+            # starting the offset cycle at the current position of the offset
+            # cycle (unless it's out of range)
+            last = next(self.offset)
+            if last >= self.text.shape[1] - 8:
+                last = 0
+        self.offset = iter(cycle(chain(
+            range(last, self.text.shape[1] - 8), range(last)
+        )))
+
+    def _render_stats(self, buf, pulse):
+        for (x, y), stat in self.stats.items():
+            buf[y, x] = stat.color
+        x, y = self.position
+        base = Color(*buf[y, x])
+        grad = list(base.gradient(Color('white'), steps=15))
+        buf[y, x] = grad[pulse]
+
+    def _render_text(self, buf):
+        offset = next(self.offset)
+        buf += self.text[:, offset:offset + 8]
 
     def __iter__(self):
-        while True:
-            offset = next(self.offset)
-            yield self.text[:, offset:offset + 8]
-        # XXX Intro anim ?
-
         buf = array(Color('black'))
         pulse = iter(bounce(range(15)))
         while True:
             x, y = self.position
             buf[:] = Color('black')
-            self._render_status(buf)
-            if y == 2:
-                self._render_help(buf, next(pulse))
-            else:
-                self._render_slaves(buf, next(pulse))
-            yield buf
+            if self.updated < self.master.last_seen:
+                for stat in self.stats.values():
+                    stat.calc(self.master)
+                self._update_text(restart=False)
+                self.updated = self.master.last_seen
+            self._render_stats(buf, next(pulse))
+            self._render_text(buf)
+            yield buf.clip(0, 1)
 
 
 class SlaveRenderer(Renderer):
@@ -359,9 +436,8 @@ class StatusRenderer(Renderer):
     master status when the user moves "up" to it from the main screen. It
     includes several horizontally scrolled menus displaying several statistics.
     """
-    def __init__(self, main):
+    def __init__(self, master):
         super().__init__()
-        self.main = main
         self.limits = (0, 0, 5, 0)
         self.back = None
         self.text = None
@@ -376,8 +452,8 @@ class StatusRenderer(Renderer):
     def move(self, event, task):
         delta = super().move(event, task)
         if event.direction == 'down':
-            task.switch_to(self.main, transition='slide', direction='up',
-                           duration=0.5)
+            task.switch_to(task.renderers['main'], transition='slide',
+                           direction='up', duration=0.5)
         elif delta != (0, 0):
             self.offset = cycle([8])
             self.update_back()
@@ -482,9 +558,8 @@ class QuitRenderer(Renderer):
     The :class:`QuitRenderer` is responsible for rendering the Quit? and
     Terminate? options which are "below" the main screen.
     """
-    def __init__(self, main):
+    def __init__(self):
         super().__init__()
-        self.main = main
         self.limits = (0, 0, 2, 0)
         self.text = None
         self.update_text()
@@ -499,8 +574,8 @@ class QuitRenderer(Renderer):
             signal.pthread_kill(main_thread().ident, signal.SIGINT)
         delta = super().move(event, task)
         if event.direction == 'up':
-            task.switch_to(self.main, transition='slide', direction='down',
-                           duration=0.5)
+            task.switch_to(task.renderers['main'], transition='slide',
+                           direction='down', duration=0.5)
         elif delta != (0, 0):
             self.update_text()
         return delta
@@ -521,5 +596,3 @@ class QuitRenderer(Renderer):
         while True:
             offset = next(self.offset)
             yield self.text[:, offset:offset + 8]
-
-

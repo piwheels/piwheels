@@ -74,6 +74,7 @@ class PiWheelsSense:
             "(default: %(default)s)")
         parser.add_argument(
             '--control-queue', metavar='ADDR', default=const.CONTROL_QUEUE,
+            dest='master_queue',
             help="The address of the queue a monitor can use to control the "
             "master (default: %(default)s)")
         parser.add_argument(
@@ -82,18 +83,24 @@ class PiWheelsSense:
             "90, 180, or 270")
         try:
             config = parser.parse_args(args)
+            config.control_queue = 'inproc://quit'
         except:  # pylint: disable=bare-except
             return terminal.error_handler(*sys.exc_info())
 
         with SenseHAT() as hat:
             hat.rotation = config.rotate
             ctx = transport.Context()
+            quit_queue = ctx.socket(transport.PULL,
+                                    protocol=protocols.task_control)
+            quit_queue.bind(config.control_queue)
             try:
                 stick = StickTask(config, hat)
                 stick.start()
                 screen = ScreenTask(config, hat)
                 screen.start()
-                signal.sigwait({signal.SIGINT, signal.SIGTERM})
+                msg, data = quit_queue.recv_msg()
+                assert msg == 'QUIT'
+                #signal.sigwait({signal.SIGINT, signal.SIGTERM})
             except KeyboardInterrupt:
                 pass
             finally:
@@ -146,8 +153,7 @@ class ScreenTask(tasks.Task):
         self._transition = self._screen.fade_to
         self.renderers = {}
         self.renderers['main'] = MainRenderer()
-        self.renderers['quit'] = QuitRenderer(self.renderers['main'])
-        self.renderers['status'] = StatusRenderer(self.renderers['main'])
+        self.renderers['quit'] = QuitRenderer()
         self.switch_to(self.renderers['main'], transition='fade')
         stick_queue = self.ctx.socket(
             transport.PULL, protocol=reversed(protocols.sense_stick))
@@ -167,7 +173,7 @@ class ScreenTask(tasks.Task):
         sleep(1)
         self.ctrl_queue = self.ctx.socket(
             transport.PUSH, protocol=reversed(protocols.master_control))
-        self.ctrl_queue.connect(config.control_queue)
+        self.ctrl_queue.connect(config.master_queue)
         self.ctrl_queue.send_msg('HELLO')
 
     def refresh(self):

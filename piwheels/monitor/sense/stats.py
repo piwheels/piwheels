@@ -145,10 +145,24 @@ class Stat:
 
 class NullStat(Stat):
     "Placeholder for no stats."
+    def __init__(self, label=''):
+        super().__init__()
+        self._label = label
+        self._color = Color('#333')
+
     def calc(self, state):
-        self._label = '?'
-        self._value = None
-        super().calc(state)
+        pass
+
+
+class ActionStat(Stat):
+    "Placeholder for user-executable actions."
+    def __init__(self, label='Action'):
+        super().__init__()
+        self._label = label
+        self._color = Color('red')
+
+    def calc(self, state):
+        pass
 
 
 class LastSeenStat(Stat):
