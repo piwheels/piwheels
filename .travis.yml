@@ -1,18 +1,17 @@
-dist: xenial  # required for python >= 3.7
 addons:
     postgresql: "9.4"
 language: python
 python:
     - "3.7"
+      before_install: pip install -r requirements_buster.txt
     - "3.5"
+      before_install: pip install -r requirements_stretch.txt
     - "3.4"
-before_install:
-    - pip install codecov
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then pip install --upgrade setuptools; pip install --upgrade pip; pip install --upgrade "pytest==3.7.1"; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then pip install -r requirements_jessie.txt; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then pip install -r requirements_stretch.txt; fi
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.7' ]]; then pip install -r requirements_buster.txt; fi
-install: "pip install -e .[master,slave,logger,test]"
+      before_install:
+          - pip install --upgrade pip
+          - pip install --upgrade setuptools "pytest==3.7.1"
+          - pip install -r requirements_jessie.txt
+install: "pip install codecov -e .[master,slave,logger,test]"
 before_script:
     - psql -U postgres -c "create user piwheels password 'piwheels'"
     - psql -U postgres -c "create database piwheels_test"
