@@ -37,8 +37,6 @@ to it.
     :members:
 """
 
-import pickle
-
 from .. import const, protocols, transport, tasks
 from ..states import (
     BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)

@@ -28,8 +28,6 @@
 
 
 import os
-import pickle
-from datetime import datetime, timezone
 from unittest import mock
 from threading import Thread
 from subprocess import DEVNULL

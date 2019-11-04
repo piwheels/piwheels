@@ -33,7 +33,6 @@ Defines the :class:`SlaveDriver` task; see class for more details.
     :members:
 """
 
-import pickle
 from datetime import datetime, timedelta, timezone
 
 from .. import const, protocols, tasks, transport

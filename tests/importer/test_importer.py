@@ -28,7 +28,6 @@
 
 
 import os
-import pickle
 import zipfile
 from hashlib import sha256
 from unittest import mock

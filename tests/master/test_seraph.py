@@ -27,8 +27,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import pickle
-
 import cbor2
 import pytest
 
