@@ -47,7 +47,7 @@ from colorzero import Color
 from dateutil import tz
 
 from piwheels import terminal, const, protocols, transport, tasks
-from .renderers import MainRenderer, StatusRenderer, QuitRenderer
+from .renderers import MainRenderer, HelpRenderer, QuitRenderer
 
 
 LOCAL = tz.tzlocal()
@@ -153,6 +153,7 @@ class ScreenTask(tasks.Task):
         self._transition = self._screen.fade_to
         self.renderers = {}
         self.renderers['main'] = MainRenderer()
+        self.renderers['help'] = HelpRenderer()
         self.renderers['quit'] = QuitRenderer()
         self.switch_to(self.renderers['main'], transition='fade')
         stick_queue = self.ctx.socket(
@@ -196,6 +197,12 @@ class ScreenTask(tasks.Task):
         Handler for messages received from the PUB/SUB external status queue.
         """
         self.renderers['main'].message(*queue.recv_msg())
+
+    def send_control(self, msg, data=transport.NoData):
+        """
+        Send *msg* with optional *data* to the master's control queue.
+        """
+        self.ctrl_queue.send_msg(msg, data)
 
     def switch_to(self, renderer, *, transition, **kwargs):
         """

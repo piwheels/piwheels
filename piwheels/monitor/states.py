@@ -179,7 +179,7 @@ class SlaveState:
             self.stats.append(data)
         elif msg == 'SLEEP':
             self.status = 'Waiting for jobs'
-        elif msg == 'BYE':
+        elif msg == 'DIE':
             self.status = 'Terminating'
             self.killed = True
         elif msg == 'BUILD':

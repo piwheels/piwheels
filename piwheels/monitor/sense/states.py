@@ -43,7 +43,7 @@ Implements the classes for tracking slave states.
 
 from datetime import datetime, timedelta, timezone
 
-from colorzero import Color
+from colorzero import Color, Hue
 
 from .. import states
 
@@ -110,9 +110,14 @@ class MasterState(states.MasterState):
     Class for tracking the state of the master. :class:`SlaveList` stores an
     instance of this against slave_id ``None``.
     """
+    def __init__(self):
+        super().__init__()
+        self._color = Color('#700')
+
     @property
     def color(self):
-        return Color('#033')
+        self._color += Hue(deg=5)
+        return self._color
 
 
 class SlaveState(states.SlaveState):

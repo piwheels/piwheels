@@ -61,6 +61,7 @@ from pisense import array, draw_text
 from colorzero import Color, Lightness, ease_out
 
 from piwheels.format import format_size
+from piwheels.transport import NoData
 from .states import SlaveList, MasterState, SlaveState
 from . import stats
 
@@ -104,6 +105,79 @@ class Renderer:
         delta = (x - self.position[0], y - self.position[1])
         self.position = x, y
         return delta
+
+
+class HelpRenderer(Renderer):
+    """
+    The :class:`HelpRenderer` is responsible for rendering help notes for
+    the graphs at the top of the main page. It consists of eight small
+    horizontally arranged blocks at the top of the screen. Each can be
+    individually selected to display a scrolling description below.
+    """
+    def __init__(self):
+        super().__init__()
+        self.offset = None
+        self.text = None
+        self.limits = (0, 0, 7, 0)
+        self.position = (0, 0)
+        self._update_text()
+
+    @property
+    def position(self):
+        return super().position
+
+    @position.setter
+    def position(self, value):
+        with self.watch_selection():
+            # Fugly super-call for property setters...
+            super(HelpRenderer, self.__class__).position.fset(self, value)
+
+    @contextmanager
+    def watch_selection(self):
+        before = self.position
+        yield
+        after = self.position
+        if before != after:
+            self._update_text()
+
+    def _update_text(self):
+        label = [
+            'Last Seen',
+            'Builds Queue/Build Time',
+            'Disk Used',
+            'Swap Used',
+            'Mem Used',
+            'CPU Temperature',
+            'Load Avg',
+            'Builds Done/Clock Skew',
+        ][self.position[0]]
+        self.text = array(
+            draw_text(label,
+                      font='small.pil',
+                      foreground=Color('white'),
+                      background=Color('black'),
+                      padding=(8, 3, 8, 0)))
+        self.offset = iter(cycle(range(self.text.shape[1] - 8)))
+
+    def move(self, event, task):
+        if event.direction == 'down':
+            task.renderers['main'].position = self.position[0], 3
+            task.switch_to(task.renderers['main'], transition='draw')
+            return (0, 0)
+        else:
+            return super().move(event, task)
+
+    def __iter__(self):
+        buf = array(Color('black'))
+        grad = list(Color('darkblue').gradient(Color('white'), steps=15))
+        pulse = iter(bounce(range(len(grad))))
+        while True:
+            offset = next(self.offset)
+            buf[:, :] = self.text[:, offset:offset + 8]
+            buf[:3, :] = Color('darkblue')
+            x, y = self.position
+            buf[:3, x] = grad[next(pulse)]
+            yield buf
 
 
 class MainRenderer(Renderer):
@@ -200,7 +274,8 @@ class MainRenderer(Renderer):
         if not self.connected:
             return (0, 0)
         elif event.direction == 'up' and self.position[1] == 3:
-            # Go to HelpRenderer
+            task.renderers['help'].position = self.position[0], 0
+            task.switch_to(task.renderers['help'], transition='draw')
             return (0, 0)
         elif event.direction == 'down' and self.position[1] == 7:
             task.switch_to(task.renderers['quit'], transition='slide',
@@ -262,7 +337,101 @@ class MainRenderer(Renderer):
             yield buf
 
 
-class MasterRenderer(Renderer):
+class NodeRenderer(Renderer):
+    """
+    The :class:`NodeRenderer` is used to render the full-screen status of the
+    master or slave nodes (when selected from the main menu). Various screens
+    are included, detailing the node's statistics, and providing rudimentary
+    control actions. This is effectively an abstract base class, with
+    :class:`SlaveRenderer` and :class:`MasterRenderer` filling in the
+    :attr:`stats` dictionary.
+    """
+    def __init__(self, node):
+        super().__init__()
+        self.updated = datetime(1970, 1, 1, tzinfo=UTC)
+        self.node = node
+        self.position = (0, 1)
+        self.limits = (0, 0, 7, 2)
+        self.text = None
+        self.offset = None
+
+    def move(self, event, task):
+        if event.pressed:
+            if event.direction == 'down' and self.position[1] == 2:
+                task.switch_to(task.renderers['main'], transition='slide',
+                               cover=True, direction='left', duration=0.5)
+                return (0, 0)
+            elif event.direction == 'enter':
+                actions = self.stats[self.position].actions
+                if actions:
+                    data = self.node.slave_id
+                    if data is None:
+                        data = NoData
+                    for action in actions:
+                        task.send_control(action, data)
+                    task.switch_to(task.renderers['main'], transition='slide',
+                                   cover=True, direction='left', duration=0.5)
+                return (0, 0)
+        delta = super().move(event, task)
+        if delta != (0, 0):
+            self._update_text()
+        return delta
+
+    def _update_text(self, restart=True):
+        stat = self.stats[self.position]
+        self.text = array(
+            draw_text(stat.label,
+                      font='small.pil',
+                      foreground=stat.color
+                                 if isinstance(stat, stats.ActionStat) else
+                                 Color('white'),
+                      background=Color('black'),
+                      padding=(8, 3, 8, 0)))
+        if restart or self.offset is None:
+            last = 0
+        else:
+            # Ensure the text doesn't "skip" while we're rendering it by
+            # starting the offset cycle at the current position of the offset
+            # cycle (unless it's out of range)
+            last = next(self.offset)
+            if last >= self.text.shape[1] - 8:
+                last = 0
+        self.offset = iter(cycle(chain(
+            range(last, self.text.shape[1] - 8), range(last)
+        )))
+
+    def _update_stats(self):
+        if self.updated < self.node.last_seen:
+            for stat in self.stats.values():
+                stat.calc(self.node)
+            self._update_text(restart=False)
+            self.updated = self.node.last_seen
+
+    def _render_stats(self, buf, pulse):
+        for (x, y), stat in self.stats.items():
+            buf[y, x] = stat.color
+        x, y = self.position
+        base = Color(*buf[y, x])
+        grad = list(base.gradient(Color('white'), steps=15))
+        buf[y, x] = grad[pulse]
+
+    def _render_text(self, buf):
+        offset = next(self.offset)
+        buf += self.text[:, offset:offset + 8]
+
+    def __iter__(self):
+        buf = array(Color('black'))
+        pulse = iter(bounce(range(15)))
+        while True:
+            x, y = self.position
+            buf[:] = Color('black')
+            self._update_stats()
+            self._render_stats(buf, next(pulse))
+            self._render_text(buf)
+            yield buf.clip(0, 1)
+
+
+class MasterRenderer(NodeRenderer):
     """
     The :class:`MasterRenderer` is used to render the full-screen status of the
     master node (when selected from the main menu). Various screens are
@@ -270,25 +439,19 @@ class MasterRenderer(Renderer):
     control actions.
     """
     def __init__(self, master):
-        super().__init__()
-        self.updated = master.last_seen
-        self.master = master
-        self.position = (0, 1)
-        self.limits = (0, 0, 7, 2)
-        self.text = None
-        self.offset = None
+        super().__init__(master)
         self.stats = {
             (x, y): item
             for y, row in enumerate([
                 [
                     stats.NullStat(),
                     stats.NullStat(),
-                    stats.ActionStat('Pause'),
-                    stats.ActionStat('Halt'),
-                    stats.ActionStat('Resume'),
-                    stats.ActionStat('Stop Slaves'),
-                    stats.ActionStat('Kill Slaves'),
-                    stats.ActionStat('Stop Master'),
+                    stats.ActionStat('Pause',       actions=['SLEEP']),
+                    stats.ActionStat('Halt',        actions=['SLEEP', 'SKIP']),
+                    stats.ActionStat('Resume',      actions=['WAKE']),
+                    stats.ActionStat('Stop Slaves', actions=['KILL']),
+                    stats.ActionStat('Kill Slaves', actions=['KILL', 'SKIP']),
+                    stats.ActionStat('Stop Master', actions=['QUIT']),
                 ],
                 [
                     stats.ActivityStat(),
@@ -313,70 +476,14 @@ class MasterRenderer(Renderer):
             ])
             for x, item in enumerate(row)
         }
-        self._update_text()
 
-    def move(self, event, task):
-        if event.direction == 'down' and self.position[1] == 2:
-            task.switch_to(task.renderers['main'], transition='slide',
-                           direction='left', duration=0.5)
-            return (0, 0)
-        delta = super().move(event, task)
-        if delta != (0, 0):
-            self._update_text()
-        return delta
-
-    def _update_text(self, restart=True):
-        stat = self.stats[self.position]
-        self.text = array(
-            draw_text(stat.label,
-                      font='small.pil',
-                      foreground=stat.color
-                                 if isinstance(stat, stats.ActionStat) else
-                                 Color('white'),
-                      background=Color('black'),
-                      padding=(8, 3, 8, 0)))
-        if restart:
-            last = 0
-        else:
-            # Ensure the text doesn't "skip" while we're rendering it by
-            # starting the offset cycle at the current position of the offset
-            # cycle (unless it's out of range)
-            last = next(self.offset)
-            if last >= self.text.shape[1] - 8:
-                last = 0
-        self.offset = iter(cycle(chain(
-            range(last, self.text.shape[1] - 8), range(last)
-        )))
-
-    def _render_stats(self, buf, pulse):
-        for (x, y), stat in self.stats.items():
-            buf[y, x] = stat.color
-        x, y = self.position
-        base = Color(*buf[y, x])
-        grad = list(base.gradient(Color('white'), steps=15))
-        buf[y, x] = grad[pulse]
-
-    def _render_text(self, buf):
-        offset = next(self.offset)
-        buf += self.text[:, offset:offset + 8]
-
-    def __iter__(self):
-        buf = array(Color('black'))
-        pulse = iter(bounce(range(15)))
-        while True:
-            x, y = self.position
-            buf[:] = Color('black')
-            if self.updated < self.master.last_seen:
-                for stat in self.stats.values():
-                    stat.calc(self.master)
-                self._update_text(restart=False)
-                self.updated = self.master.last_seen
-            self._render_stats(buf, next(pulse))
-            self._render_text(buf)
-            yield buf.clip(0, 1)
+    def _update_stats(self):
+        self.stats[0, 1].calc(self.node)
+        self.stats[0, 2].calc(self.node)
+        super()._update_stats()
 
 
-class SlaveRenderer(Renderer):
+class SlaveRenderer(NodeRenderer):
     """
     The :class:`SlaveRenderer` is used to render the full-screen status of
     a build slave (when selected from the main menu). Various screens are
@@ -384,173 +491,47 @@ class SlaveRenderer(Renderer):
     control actions.
     """
     def __init__(self, slave):
-        super().__init__()
-        self.slave = slave
-        self.limits = (0, 0, 3, 0)
-        self.text = None
-        self.status = slave_stats()
-        self.update_text()
-
-    def move(self, event, task):
-        if event.direction == 'enter' and self.position[0] == 3:
-            task.ctrl_queue.send_pyobj(['KILL', self.slave.slave_id])
-        delta = super().move(event, task)
-        if event.direction == 'enter':
-            task.switch_to(
-                task.renderers['main'], transition='zoom',
-                direction='out', center=task.renderers['main'].position,
-                duration=0.5)
-        elif delta != (0, 0):
-            self.update_text()
-            task.switch_to(
-                self, transition='slide',
-                direction='left' if delta == (1, 0) else 'right',
-                duration=0.5)
-        return delta
-
-    def update_text(self):
-        x, y = self.position
-        text, fg, bg = {
-            0: (self.slave.label,        'white',  None),
-            1: ('ABI:' + self.slave.abi, 'white',  None),
-            2: (self.slave.status,       'white',  None),
-            3: ('Kill?',                 'red',    'black'),
-        }[x]
-        self.text = array(
-            draw_text(text, foreground=Color(fg),
-                      background=self.slave.color if bg is None else Color(bg),
-                      padding=(8, 0, 8, 1)))
-        self.offset = iter(cycle(chain(
-            range(8, self.text.shape[1] - 8), range(8)
-        )))
-
-    def __iter__(self):
-        while True:
-            offset = next(self.offset)
-            yield self.text[:, offset:offset + 8]
-
-
-class StatusRenderer(Renderer):
-    """
-    The :class:`StatusRenderer` class is responsible for rendering the overall
-    master status when the user moves "up" to it from the main screen. It
-    includes several horizontally scrolled menus displaying several statistics.
-    """
-    def __init__(self, master):
-        super().__init__()
-        self.limits = (0, 0, 5, 0)
-        self.back = None
-        self.text = None
-        self.ping_grad = list(
-            Color('green').gradient(Color('red'), steps=64))
-        self.disk_grad = list(
-            Color('red').gradient(Color('green'), steps=64, easing=ease_out))
-        self.offset = cycle([8])
-        #self.update_back()
-        #self.update_text()
-
-    def move(self, event, task):
-        delta = super().move(event, task)
-        if event.direction == 'down':
-            task.switch_to(task.renderers['main'], transition='slide',
-                           direction='up', duration=0.5)
-        elif delta != (0, 0):
-            self.offset = cycle([8])
-            self.update_back()
-            self.update_text()
-            task.switch_to(self, transition='slide',
-                           direction='left' if delta == (1, 0) else 'right',
-                           duration=0.5)
-        return delta
-
-    def update_back(self):
-        x, y = self.position
-        if x == 0:
-            ping = 64 * max(timedelta(0), min(timedelta(seconds=30),
-                datetime.now(tz=UTC) - self.main.last_message)).total_seconds() / 30
-            self.back = array([
-                c if i <= ping else Color('black')
-                for i in range(64)
-                for c in (self.ping_grad[min(63, int(ping))],)
+        super().__init__(slave)
+        self.stats = {
+            (x, y): item
+            for y, row in enumerate([
+                [
+                    stats.NullStat(),
+                    stats.NullStat(),
+                    stats.ActionStat('Skip',        actions=['SKIP']),
+                    stats.ActionStat('Pause',       actions=['SLEEP']),
+                    stats.ActionStat('Halt',        actions=['SLEEP', 'SKIP']),
+                    stats.ActionStat('Resume',      actions=['WAKE']),
+                    stats.ActionStat('Stop Slave',  actions=['KILL']),
+                    stats.ActionStat('Kill Slave',  actions=['KILL', 'SKIP']),
+                ],
+                [
+                    stats.ActivityStat(),
+                    stats.HostStat(),
+                    stats.BoardStat(),
+                    stats.SerialStat(),
+                    stats.OSStat(),
+                    stats.UpTimeStat(),
+                    stats.ABIStat(),
+                    stats.NullStat(),
+                ],
+                [
+                    stats.LastSeenStat(),
+                    stats.BuildTimeStat(),
+                    stats.DiskStat(),
+                    stats.SwapStat(),
+                    stats.MemStat(),
+                    stats.CPUTempStat(),
+                    stats.LoadAvgStat(),
+                    stats.ClockSkewStat(),
+                ],
             ])
-            self.back = np.flipud(self.back)
-        elif x == 1:
-            disk = (
-                64 * self.main.status.get('disk_free', 0) /
-                self.main.status.get('disk_size', 1))
-            self.back = array([
-                c if i < int(disk) else
-                c * Lightness(disk - int(disk)) if i < disk else
-                Color('black')
-                for i in range(64)
-                for c in (self.disk_grad[min(63, int(disk))],)
-            ])
-            self.back = np.flipud(self.back)
-        elif x == 2:
-            pkgs = min(
-                64, self.main.status.get('builds_pending', 0))
-            self.back = array([
-                Color('blue') if i < pkgs else
-                Color('black')
-                for i in range(64)
-            ])
-            self.back = np.flipud(self.back)
-        elif x == 3:
-            bph = (
-                64 * self.main.status.get('builds_last_hour', 0) /
-                1000)
-            self.back = array([
-                Color('blue') if i < int(bph) else
-                Color('blue') * Lightness(bph - int(bph)) if i < bph else
-                Color('black')
-                for i in range(64)
-            ])
-            self.back = np.flipud(self.back)
-        else:
-            self.back = array(Color('black'))
+            for x, item in enumerate(row)
+        }
 
-    def update_text(self):
-        x, y = self.position
-        time = self.main.status.get('builds_time', timedelta(0))
-        time -= timedelta(microseconds=time.microseconds)
-        ping = datetime.now(tz=UTC) - self.main.last_message
-        ping -= timedelta(microseconds=ping.microseconds)
-        text = [
-            'Last Ping: {}s'.format(int(ping.total_seconds())),
-            'Disk Free: {}%'.format(
-             100 * self.main.status.get('disk_free', 0) //
-             self.main.status.get('disk_size', 1)),
-            'Queue Size: {}'.format(
-             self.main.status.get('builds_pending', 0)),
-            'Builds/Hour: {}'.format(
-             self.main.status.get('builds_last_hour', 0)),
-            'Build Time: {}'.format(time),
-            'Build Size: {}'.format(format_size(
-             self.main.status.get('builds_size', 0))),
-        ][x]
-        self.text = array(
-            draw_text(text, foreground=Color('gray'), padding=(8, 0, 8, 1)))
-        # Ensure the text doesn't "skip" while we're rendering it by starting
-        # the offset cycle at the current position of the offset cycle (unless
-        # it's out of range)
-        last = next(self.offset)
-        if last >= self.text.shape[1] - 8:
-            last = 0
-        self.offset = iter(cycle(chain(
-            range(last, self.text.shape[1] - 8), range(last)
-        )))
-
-    def __iter__(self):
-        now = datetime.now(tz=UTC)
-        while True:
-            if datetime.now(tz=UTC) - now > timedelta(seconds=1):
-                now = datetime.now(tz=UTC)
-                self.update_back()
-                self.update_text()
-            offset = next(self.offset)
-            buf = self.back.copy()
-            buf[:self.text.shape[0], :] += self.text[:, offset:offset + 8]
-            yield buf.clip(0, 1)
+    def _update_stats(self):
+        self.stats[0, 2].calc(self.node)
+        super()._update_stats()
 
 
 class QuitRenderer(Renderer):

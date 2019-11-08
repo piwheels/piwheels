@@ -269,8 +269,6 @@ class PiWheelsMonitor:
     def master_action(self, dialog):
         assert isinstance(dialog, dialogs.MasterDialog)
         if dialog.result is not None:
-            if dialog.result.endswith('_now'):
-                self.ctrl_queue.send_msg('SKIP', None)
             if dialog.result.startswith('sleep'):
                 self.ctrl_queue.send_msg('SLEEP', None)
             elif dialog.result == 'wake':
@@ -281,12 +279,12 @@ class PiWheelsMonitor:
                 self.ctrl_queue.send_msg('QUIT')
             else:
                 assert False, 'unknown result code'
+            if dialog.result.endswith('_now'):
+                self.ctrl_queue.send_msg('SKIP', None)
 
     def slave_action(self, dialog):
         assert isinstance(dialog, dialogs.SlaveDialog)
         if dialog.result is not None:
-            if dialog.result.endswith('_now'):
-                self.ctrl_queue.send_msg('SKIP', dialog.state.slave_id)
             if dialog.result.startswith('sleep'):
                 self.ctrl_queue.send_msg('SLEEP', dialog.state.slave_id)
             elif dialog.result == 'wake':
@@ -298,6 +296,8 @@ class PiWheelsMonitor:
                 pass
             else:
                 assert False, 'unknown result code'
+            if dialog.result.endswith('_now'):
+                self.ctrl_queue.send_msg('SKIP', dialog.state.slave_id)
 
 
 main = PiWheelsMonitor()  # pylint: disable=invalid-name

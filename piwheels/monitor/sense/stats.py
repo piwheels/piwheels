@@ -114,11 +114,14 @@ class Stat:
     gradient for the bar with the :func:`gradient` function. Descendents must
     override the :meth:`calc` method to fill out the instance attributes.
     """
-    def __init__(self, okay=0.25, warn=0.75, fail=1.0):
+    def __init__(self, okay=0.25, warn=0.75, fail=1.0, actions=None):
         self._state = None
         self._value = None
         self._label = None
         self._color = None
+        if actions is None:
+            actions = ()
+        self._actions = tuple(actions)
         self.gradient = list(gradient(okay, warn, fail))
         assert len(self.gradient) == 32
 
@@ -129,6 +132,10 @@ class Stat:
         else:
             self._color = self.gradient[
                 int((len(self.gradient) - 1) * self._value)]
+
+    @property
+    def actions(self):
+        return self._actions
 
     @property
     def value(self):
@@ -156,8 +163,8 @@ class NullStat(Stat):
 
 class ActionStat(Stat):
     "Placeholder for user-executable actions."
-    def __init__(self, label='Action'):
-        super().__init__()
+    def __init__(self, label='Action', actions=None):
+        super().__init__(actions=actions)
         self._label = label
         self._color = Color('red')
 
@@ -188,10 +195,10 @@ class DiskStat(Stat):
             self._value = (
                 1 - (state.stats[-1].disk_free /
                      state.stats[-1].disk_size))
-            self._label = 'Disk Used: {:.1f}%'.format(self._value * 100)
+            self._label = 'Disk: {:.1f}% full'.format(self._value * 100)
         else:
             self._value = None
-            self._label = 'Disk Used: ?'
+            self._label = 'Disk: ? full'
         super().calc(state)
 
 
@@ -205,10 +212,10 @@ class SwapStat(Stat):
             self._value = (
                 1 - (state.stats[-1].swap_free /
                      state.stats[-1].swap_free))
-            self._label = 'Swap Used: {:.1f}%'.format(self._value * 100)
+            self._label = 'Swap: {:.1f}% full'.format(self._value * 100)
         else:
             self._value = None
-            self._label = 'Swap Used: ?'
+            self._label = 'Swap: ? full'
         super().calc(state)
 
 
@@ -219,10 +226,10 @@ class MemStat(Stat):
             self._value = (
                 1 - (state.stats[-1].mem_free /
                      state.stats[-1].mem_free))
-            self._label = 'Mem Used: {:.1f}%'.format(self._value * 100)
+            self._label = 'Mem: {:.1f}% full'.format(self._value * 100)
         else:
             self._value = None
-            self._label = 'Mem Used: ?'
+            self._label = 'Mem: ? full'
         super().calc(state)
 
 
@@ -234,10 +241,10 @@ class CPUTempStat(Stat):
     def calc(self, state):
         if state.stats:
             self._value = clamp(state.stats[-1].cpu_temp / 100)
-            self._label = 'CPU Temp.: {:.1f}°C'.format(state.stats[-1].cpu_temp)
+            self._label = 'CPU: {:.1f}°C'.format(state.stats[-1].cpu_temp)
         else:
             self._value = None
-            self._label = 'CPU Temp: ?'
+            self._label = 'CPU: ?°C'
         super().calc(state)
 
 
@@ -246,10 +253,10 @@ class LoadAvgStat(Stat):
     def calc(self, state):
         if state.stats:
             self._value = clamp(state.stats[-1].load_average / 4.0)
-            self._label = 'Load Avg: {:.1f}'.format(state.stats[-1].load_average)
+            self._label = 'Load: {:.1f}'.format(state.stats[-1].load_average)
         else:
             self._value = None
-            self._label = 'Load Avg: ?'
+            self._label = 'Load: ?'
         super().calc(state)
 
 
@@ -258,11 +265,11 @@ class ClockSkewStat(Stat):
     def calc(self, state):
         if state.clock_skew:
             self._value = clamp(state.clock_skew / timedelta(seconds=4))
-            self._label = 'Clock Skew: {}'.format(
+            self._label = 'Time Skew: {}'.format(
                 format_timedelta(state.clock_skew))
         else:
             self._value = None
-            self._label = 'Clock Skew: ?'
+            self._label = 'Time Skew: ?'
         super().calc(state)
 
 
@@ -320,7 +327,7 @@ class HostStat(Stat):
     "Represents the node's hostname."
     def calc(self, state):
         super().calc(state)
-        self._label = state.label
+        self._label = 'Label: {}'.format(state.label)
         self._color = Color('darkblue')
 
 
@@ -328,7 +335,7 @@ class ABIStat(Stat):
     "Represents the node's ABI and CPython version."
     def calc(self, state):
         super().calc(state)
-        self._label = '{} ({})'.format(state.abi, state.py_version)
+        self._label = 'ABI: {}'.format(state.abi)
         self._color = Color('darkblue')
 
 
@@ -336,7 +343,7 @@ class BoardStat(Stat):
     "Represents the node's board revision and serial #."
     def calc(self, state):
         super().calc(state)
-        self._label = state.board_revision
+        self._label = 'Board: {}'.format(state.board_revision)
         self._color = Color('darkblue')
 
 
@@ -352,7 +359,7 @@ class OSStat(Stat):
     "Represents the node's OS name and version."
     def calc(self, state):
         super().calc(state)
-        self._label = '{} {}'.format(state.os_name, state.os_version)
+        self._label = 'OS: {} {}'.format(state.os_name, state.os_version)
         self._color = Color('darkblue')
 
 
