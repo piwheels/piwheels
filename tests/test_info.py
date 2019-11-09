@@ -149,3 +149,5 @@ def test_get_cpu_temp():
         assert get_cpu_temp() == 60.0
         m.return_value.__enter__.return_value = io.StringIO("76543")
         assert get_cpu_temp() == 76.543
+        m.return_value.__enter__.side_effect = FileNotFoundError
+        assert get_cpu_temp() == 0.0

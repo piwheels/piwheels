@@ -163,5 +163,8 @@ def get_cpu_temp():
     """
     Returns the CPU temperature.
     """
-    with io.open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
-        return int(f.read()) / 1000
+    try:
+        with io.open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            return int(f.read()) / 1000
+    except FileNotFoundError:
+        return 0.0

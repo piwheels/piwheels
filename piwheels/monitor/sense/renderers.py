@@ -63,7 +63,7 @@ from colorzero import Color, Lightness, ease_out
 from piwheels.format import format_size
 from piwheels.transport import NoData
 from .states import SlaveList, MasterState, SlaveState
-from . import stats
+from . import controls
 
 
 UTC = timezone.utc
@@ -119,9 +119,9 @@ class Renderer:
             x, y = self.position
             try:
                 dx, dy = {
-                    'up': (0, -1),
-                    'down': (0, 1),
-                    'left': (-1, 0),
+                    'up':    (0, -1),
+                    'down':  (0, 1),
+                    'left':  (-1, 0),
                     'right': (1, 0),
                 }[event.direction]
             except KeyError:
@@ -222,7 +222,7 @@ class MainRenderer(Renderer):
     def __init__(self):
         super().__init__()
         self.slaves = SlaveList()
-        self.stats = None
+        self.controls = None
         self.connected = False
         self.limits = (0, 3, 7, 7)
         self.position = (0, 3)
@@ -263,35 +263,35 @@ class MainRenderer(Renderer):
 
     def _make_stats(self, state):
         if isinstance(state, MasterState):
-            self.stats = [
-                stats.LastSeenStat(),
-                stats.BuildsQueueStat(),
-                stats.DiskStat(),
-                stats.SwapStat(),
-                stats.MemStat(),
-                stats.CPUTempStat(),
-                stats.LoadAvgStat(),
-                stats.BuildsDoneStat(),
+            self.controls = [
+                controls.LastSeen(),
+                controls.BuildsQueue(),
+                controls.Disk(),
+                controls.Swap(),
+                controls.Mem(),
+                controls.CPUTemp(),
+                controls.LoadAvg(),
+                controls.BuildsDone(),
             ]
         elif isinstance(state, SlaveState):
-            self.stats = [
-                stats.LastSeenStat(),
-                stats.BuildTimeStat(),
-                stats.DiskStat(),
-                stats.SwapStat(),
-                stats.MemStat(),
-                stats.CPUTempStat(),
-                stats.LoadAvgStat(),
-                stats.ClockSkewStat(),
+            self.controls = [
+                controls.LastSeen(),
+                controls.BuildTime(),
+                controls.Disk(),
+                controls.Swap(),
+                controls.Mem(),
+                controls.CPUTemp(),
+                controls.LoadAvg(),
+                controls.ClockSkew(),
             ]
         else:
             assert state is None
-            self.stats = [stats.NullStat()] * 8
+            self.controls = [controls.Placeholder()] * 8
         self._refresh_stats(state)
 
     def _refresh_stats(self, state):
-        for stat in self.stats:
-            stat.calc(state)
+        for control in self.controls:
+            control.update(state)
 
     def message(self, msg, data):
         if msg in ('HELLO', 'STATS'):
@@ -331,7 +331,7 @@ class MainRenderer(Renderer):
             return delta
 
     def _render_stats(self, buf):
-        for x, stat in enumerate(self.stats):
+        for x, stat in enumerate(self.controls):
             # Scale the value to a range of 2, with an offset of 1
             # to ensure that the status line is never black
             value = (stat.value * 2) + 1
@@ -387,41 +387,70 @@ class NodeRenderer(Renderer):
         self.node = node
         self.text = None
         self.offset = None
+        self.graph = None
+        self._mode = 'text'
         self.limits = (0, 0, 7, 2)
         self.position = (0, 1)
+        self.controls = {}
+
+    @property
+    def selected(self):
+        try:
+            return self.controls[self.position]
+        except KeyError:
+            return None
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, value):
+        assert value in {'text', 'graph'}
+        if self._mode != value:
+            self._mode = value
+            {
+                'text': self._update_text,
+                'graph': self._update_graph,
+            }[value]()
 
     def move(self, event, task):
-        if event.pressed:
-            if event.direction == 'down' and self.position[1] == 2:
-                task.switch_to(task.renderers['main'], transition='zoom',
-                               direction='out', duration=0.5,
-                               center=task.renderers['main'].position)
-                return (0, 0)
-            elif event.direction == 'enter':
-                actions = self.stats[self.position].actions
-                if actions:
-                    data = self.node.slave_id
-                    if data is None:
-                        data = NoData
-                    for action in actions:
-                        task.send_control(action, data)
-                    task.switch_to(task.renderers['main'], transition='slide',
-                                   cover=True, direction='left', duration=0.5)
-                return (0, 0)
+        if event.pressed and event.direction == 'enter':
+            self._run_actions(self.selected.activate(), task)
+            return (0, 0)
         delta = super().move(event, task)
         if delta != (0, 0):
-            self._update_text()
+            if not isinstance(self.selected, controls.HistoryStat):
+                self._mode = 'text'
+            {
+                'text': self._update_text,
+                'graph': self._update_graph,
+            }[self.mode]()
         return delta
 
-    def _update_text(self, restart=True):
-        stat = self.stats[self.position]
+    def _run_actions(self, actions, task):
+        data = self.node.slave_id
+        if data is None:
+            data = NoData
+        for action in actions:
+            if action == 'SWITCH':
+                self.mode = {
+                    'text': 'graph',
+                    'graph': 'text',
+                }[self.mode]
+            elif action == 'BACK':
+                task.switch_to(
+                    task.renderers['main'], transition='zoom',
+                    direction='out', duration=0.5,
+                    center=task.renderers['main'].position)
+                break
+            else:
+                task.send_control(action, data)
+
+    def _update_text(self, *, restart=True):
         self.text = array(
-            draw_text(stat.label,
+            draw_text(self.selected.label,
                       font='small.pil',
-                      foreground=stat.color
-                                 if isinstance(stat, stats.ActionStat) else
-                                 Color('white'),
-                      background=Color('black'),
                       padding=(8, 3, 8, 0)))
         if restart or self.offset is None:
             last = 0
@@ -436,15 +465,28 @@ class NodeRenderer(Renderer):
             range(last, self.text.shape[1] - 8), range(last)
         )))
 
+    def _update_graph(self):
+        self.graph = array(shape=(5, 8))
+        for x, stat in zip(reversed(range(8)), self.selected.history()):
+            # Scale the value to the vertical size
+            value = stat.value * self.graph.shape[0]
+            for y in range(5):
+                self.graph[4 - y, x] = (
+                    stat.color if y < int(value) else
+                    stat.color * Lightness(value - int(value)) if y < value else
+                    Color('black')
+                )
+
     def _update_stats(self):
         if self.updated < self.node.last_seen:
-            for stat in self.stats.values():
-                stat.calc(self.node)
+            for control in self.controls.values():
+                control.update(self.node)
             self._update_text(restart=False)
+            self._update_graph()
             self.updated = self.node.last_seen
 
     def _render_stats(self, buf, pulse):
-        for (x, y), stat in self.stats.items():
+        for (x, y), stat in self.controls.items():
             buf[y, x] = stat.color
         x, y = self.position
         base = Color(*buf[y, x])
@@ -455,15 +497,22 @@ class NodeRenderer(Renderer):
         offset = next(self.offset)
         buf += self.text[:, offset:offset + 8]
 
+    def _render_graph(self, buf):
+        buf[3:8, :] += self.graph
+
     def __iter__(self):
         buf = array(Color('black'))
         pulse = iter(bounce(range(15)))
+        render_mode = {
+            'text': self._render_text,
+            'graph': self._render_graph,
+        }
         while True:
             x, y = self.position
             buf[:] = Color('black')
             self._update_stats()
             self._render_stats(buf, next(pulse))
-            self._render_text(buf)
+            render_mode[self.mode](buf)
             yield buf.clip(0, 1)
 
 
@@ -476,46 +525,46 @@ class MasterRenderer(NodeRenderer):
     """
     def __init__(self, master):
         super().__init__(master)
-        self.stats = {
+        self.controls = {
             (x, y): item
             for y, row in enumerate([
                 [
-                    stats.NullStat(),
-                    stats.NullStat(),
-                    stats.ActionStat('Pause',       actions=['SLEEP']),
-                    stats.ActionStat('Halt',        actions=['SLEEP', 'SKIP']),
-                    stats.ActionStat('Resume',      actions=['WAKE']),
-                    stats.ActionStat('Stop Slaves', actions=['KILL']),
-                    stats.ActionStat('Kill Slaves', actions=['KILL', 'SKIP']),
-                    stats.ActionStat('Stop Master', actions=['QUIT']),
+                    controls.Pause(),
+                    controls.Halt(),
+                    controls.Resume(),
+                    controls.StopSlaves(),
+                    controls.KillSlaves(),
+                    controls.StopMaster(),
+                    controls.Placeholder(),
+                    controls.Placeholder(),
                 ],
                 [
-                    stats.ActivityStat(),
-                    stats.HostStat(),
-                    stats.BoardStat(),
-                    stats.SerialStat(),
-                    stats.OSStat(),
-                    stats.UpTimeStat(),
-                    stats.NullStat(),
-                    stats.NullStat(),
+                    controls.Activity(),
+                    controls.Host(),
+                    controls.Board(),
+                    controls.Serial(),
+                    controls.OS(),
+                    controls.UpTime(),
+                    controls.Placeholder(),
+                    controls.Placeholder(),
                 ],
                 [
-                    stats.LastSeenStat(),
-                    stats.BuildsQueueStat(),
-                    stats.DiskStat(),
-                    stats.SwapStat(),
-                    stats.MemStat(),
-                    stats.CPUTempStat(),
-                    stats.LoadAvgStat(),
-                    stats.BuildsDoneStat(),
+                    controls.LastSeen(),
+                    controls.BuildsQueue(),
+                    controls.Disk(),
+                    controls.Swap(),
+                    controls.Mem(),
+                    controls.CPUTemp(),
+                    controls.LoadAvg(),
+                    controls.BuildsDone(),
                 ],
             ])
             for x, item in enumerate(row)
         }
 
     def _update_stats(self):
-        self.stats[0, 1].calc(self.node)
-        self.stats[0, 2].calc(self.node)
+        self.controls[0, 1].update(self.node)
+        self.controls[0, 2].update(self.node)
         super()._update_stats()
 
 
@@ -528,45 +577,45 @@ class SlaveRenderer(NodeRenderer):
     """
     def __init__(self, slave):
         super().__init__(slave)
-        self.stats = {
+        self.controls = {
             (x, y): item
             for y, row in enumerate([
                 [
-                    stats.NullStat(),
-                    stats.NullStat(),
-                    stats.ActionStat('Skip',        actions=['SKIP']),
-                    stats.ActionStat('Pause',       actions=['SLEEP']),
-                    stats.ActionStat('Halt',        actions=['SLEEP', 'SKIP']),
-                    stats.ActionStat('Resume',      actions=['WAKE']),
-                    stats.ActionStat('Stop Slave',  actions=['KILL']),
-                    stats.ActionStat('Kill Slave',  actions=['KILL', 'SKIP']),
+                    controls.Skip(),
+                    controls.Pause(),
+                    controls.Halt(),
+                    controls.Resume(),
+                    controls.StopSlave(),
+                    controls.KillSlave(),
+                    controls.Placeholder(),
+                    controls.Placeholder(),
                 ],
                 [
-                    stats.ActivityStat(),
-                    stats.HostStat(),
-                    stats.BoardStat(),
-                    stats.SerialStat(),
-                    stats.OSStat(),
-                    stats.UpTimeStat(),
-                    stats.ABIStat(),
-                    stats.NullStat(),
+                    controls.Activity(),
+                    controls.Host(),
+                    controls.Board(),
+                    controls.Serial(),
+                    controls.OS(),
+                    controls.UpTime(),
+                    controls.ABI(),
+                    controls.Placeholder(),
                 ],
                 [
-                    stats.LastSeenStat(),
-                    stats.BuildTimeStat(),
-                    stats.DiskStat(),
-                    stats.SwapStat(),
-                    stats.MemStat(),
-                    stats.CPUTempStat(),
-                    stats.LoadAvgStat(),
-                    stats.ClockSkewStat(),
+                    controls.LastSeen(),
+                    controls.BuildTime(),
+                    controls.Disk(),
+                    controls.Swap(),
+                    controls.Mem(),
+                    controls.CPUTemp(),
+                    controls.LoadAvg(),
+                    controls.ClockSkew(),
                 ],
             ])
             for x, item in enumerate(row)
         }
 
     def _update_stats(self):
-        self.stats[0, 2].calc(self.node)
+        self.controls[0, 2].update(self.node)
         super()._update_stats()
 
 

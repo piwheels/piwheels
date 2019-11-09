@@ -83,7 +83,7 @@ UTC = timezone.utc
 # pylint complains about all these classes having too many attributes (and thus
 # their constructors having too many arguments) and about the lack of (entirely
 # pointless) docstrings on the various property getter methods. Most of the
-# classes are tuple-esque; each operates as *mostly* read-only collection of
+# classes are tuple-esque; each operates as a *mostly* read-only collection of
 # attributes but these classes aren't tuples because in each case there's
 # usually one or two fields that can be twiddled (e.g. when a record gets
 # inserted into the database, or a file transferred, etc).
