@@ -85,26 +85,52 @@ class Renderer:
     implementation, and limits its coordinates to a specified boundary.
     """
     def __init__(self):
-        self.position = (0, 0)
-        self.limits = (0, 0, 7, 7)
+        self._limits = (0, 0, 7, 7)
+        self._position = (0, 0)
+
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, value):
+        x, y = value
+        min_x, min_y, max_x, max_y = self.limits
+        x = max(min_x, min(max_x, x))
+        y = max(min_y, min(max_y, y))
+        self._position = x, y
+
+    @property
+    def limits(self):
+        return self._limits
+
+    @limits.setter
+    def limits(self, value):
+        if value != self._limits:
+            self._limits = value
+            # Re-calculate position for new limits
+            self.position = self.position
 
     def __iter__(self):
         pass
 
     def move(self, event, task):
-        x, y = self.position
-        x_min, y_min, x_max, y_max = self.limits
-        if event.direction == 'up':
-            x, y = (x, max(y_min, y - 1))
-        elif event.direction == 'down':
-            x, y = (x, min(y_max, y + 1))
-        elif event.direction == 'left':
-            x, y = (max(x_min, x - 1), y)
-        elif event.direction == 'right':
-            x, y = (min(x_max, x + 1), y)
-        delta = (x - self.position[0], y - self.position[1])
-        self.position = x, y
-        return delta
+        if event.pressed:
+            x, y = self.position
+            try:
+                dx, dy = {
+                    'up': (0, -1),
+                    'down': (0, 1),
+                    'left': (-1, 0),
+                    'right': (1, 0),
+                }[event.direction]
+            except KeyError:
+                pass
+            else:
+                self.position = x + dx, y + dy
+                nx, ny = self.position
+                return nx - x, ny - y
+        return (0, 0)
 
 
 class HelpRenderer(Renderer):
@@ -195,11 +221,11 @@ class MainRenderer(Renderer):
     """
     def __init__(self):
         super().__init__()
-        self.connected = False
-        self.position = (0, 3)
-        self.limits = (0, 3, 7, 7)
         self.slaves = SlaveList()
         self.stats = None
+        self.connected = False
+        self.limits = (0, 3, 7, 7)
+        self.position = (0, 3)
         self._make_stats(self.selected)
 
     @staticmethod
@@ -216,6 +242,16 @@ class MainRenderer(Renderer):
             return self.slaves[self._slave_index(*self.position)]
         except IndexError:
             return None
+
+    @property
+    def position(self):
+        return super().position
+
+    @position.setter
+    def position(self, value):
+        with self.watch_selection():
+            # ... and again
+            super(MainRenderer, self.__class__).position.fset(self, value)
 
     @contextmanager
     def watch_selection(self):
@@ -282,17 +318,16 @@ class MainRenderer(Renderer):
                            direction='up', duration=0.5)
             return (0, 0)
         else:
-            with self.watch_selection():
-                delta = super().move(event, task)
+            delta = super().move(event, task)
             if event.direction == 'enter' and self.selected is not None:
                 if isinstance(self.selected, MasterState):
                     task.switch_to(MasterRenderer(self.selected),
-                                   transition='slide', direction='right',
-                                   cover=True, duration=0.5)
+                                   transition='zoom', direction='in',
+                                   center=self.position, duration=0.5)
                 else:
                     task.switch_to(SlaveRenderer(self.selected),
-                                   transition='slide', direction='right',
-                                   cover=True, duration=0.5)
+                                   transition='zoom', direction='in',
+                                   center=self.position, duration=0.5)
             return delta
 
     def _render_stats(self, buf):
@@ -350,16 +385,17 @@ class NodeRenderer(Renderer):
         super().__init__()
         self.updated = datetime(1970, 1, 1, tzinfo=UTC)
         self.node = node
-        self.position = (0, 1)
-        self.limits = (0, 0, 7, 2)
         self.text = None
         self.offset = None
+        self.limits = (0, 0, 7, 2)
+        self.position = (0, 1)
 
     def move(self, event, task):
         if event.pressed:
             if event.direction == 'down' and self.position[1] == 2:
-                task.switch_to(task.renderers['main'], transition='slide',
-                               cover=True, direction='left', duration=0.5)
+                task.switch_to(task.renderers['main'], transition='zoom',
+                               direction='out', duration=0.5,
+                               center=task.renderers['main'].position)
                 return (0, 0)
             elif event.direction == 'enter':
                 actions = self.stats[self.position].actions
