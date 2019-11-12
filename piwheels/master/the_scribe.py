@@ -39,7 +39,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from itertools import zip_longest
 
 import pkg_resources
@@ -436,12 +436,16 @@ def get_num_files_for_version(builds):
 
 def duration_to_secs(duration):
     if duration:
-        h, m, s = (float(n) for n in str(duration).split(':'))
-        return h * 60 * 60 + m * 60 + s
+        if duration < timedelta(days=1):
+            duration = str(duration)
+            if ':' in duration:
+                h, m, s = (float(n) for n in duration.split(':'))
+                return h * 60 * 60 + m * 60 + s
 
 def duration_adjusted(duration, platform):
+    duration = duration_to_secs(duration)
     if duration:
-        return duration_to_secs(duration) * (6 if platform == 'linux_armv6l' else 1)
+        return duration * (6 if platform == 'linux_armv6l' else 1)
 
 class AtomicReplaceFile:
     """
