@@ -1,6 +1,14 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">Home</div>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/homepage.js"></script>
+  </div>
   <div metal:fill-slot="content">
+    <script>
+    window.onload = function() {
+      showContents();
+    };
+    </script>
     <div class="row">
       <div class="small-12 medium-8 columns">
         <h2>Python Wheels for the Raspberry Pi</h2>
@@ -15,10 +23,10 @@
 
       <div class="small-12 medium-4 columns">
         <table class="stats">
-          <tr><th>Packages</th><td>${'{:,}'.format(packages_built)}</td></tr>
-          <tr><th>Wheels</th><td>${'{:,}'.format(files_count)}</td></tr>
-          <tr><th>Downloads (all time)</th><td>${'{:,}'.format(downloads_all)}</td></tr>
-          <tr><th>Downloads (last 30 days)</th><td>${'{:,}'.format(downloads_last_month)}</td></tr>
+          <tr><th>Packages</th><td id="num-packages">loading...</td></tr>
+          <tr><th>Wheels</th><td id="num-files">loading...</td></tr>
+          <tr><th>Downloads (all time)</th><td id="downloads-all">loading...</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td id="downloads-30">loading...</td></tr>
         </table>
       </div>
     </div>
@@ -64,7 +72,7 @@ $ rm -rf testpip/</pre>
         <a href="/packages.html">project page</a>
         for information on available wheels.</p>
 
-        <p class="small"><small>Page last updated ${timestamp}</small></p>
+        <p class="small"><small>Page last updated: <span id="updated">loading...</span></small></p>
       </div>
     </div>
   </div>

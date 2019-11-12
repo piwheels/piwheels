@@ -131,7 +131,7 @@ class TheScribe(tasks.PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', 'json.pt'}
+        startup_templates = {'index.pt', 'faq.pt', 'packages.pt', 'stats.pt', 'json.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](
@@ -178,31 +178,34 @@ class TheScribe(tasks.PauseableTask):
                 package = data
                 self.write_project_page(package)
                 self.write_json_file(package)
-            elif msg == 'HOME':
+            elif msg == 'HOME': # this doesn't write the homepage anymore
                 status_info = data
-                self.write_homepage(status_info)
+                self.write_statistics_json(status_info)
                 self.write_sitemap()
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
 
-    def write_homepage(self, statistics):
+    def write_statistics_json(self, data):
         """
-        Re-writes the site homepage using the provided statistics in the
-        homepage template (which is effectively a simple Python format string).
+        Re-writes the statistics JSON file, which provides dynamic data to the
+        homepage.
 
-        :param dict statistics:
+        :param dict data:
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
-        dt = datetime.now()
-        with AtomicReplaceFile(self.output_path / 'index.html',
+        with AtomicReplaceFile(self.output_path / 'statistics.json',
                                encoding='utf-8') as index:
-            index.file.write(self.templates['index'](
-                layout=self.templates['layout']['layout'],
-                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
-                page='home',
-                **statistics))
+            statistics = {
+                'num_packages': data['packages_built'],
+                'num_files': data['files_count'],
+                'downloads_all': data['downloads_all'],
+                'downloads_last_month': data['downloads_last_month'],
+                'updated': datetime.now(tz=UTC).strftime(dt_format),
+            }
+            json.dump(statistics, index.file, check_circular=False,
+                      separators=(',', ':'))
 
     def write_search_index(self, search_index):
         """
