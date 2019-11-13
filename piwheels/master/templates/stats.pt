@@ -27,7 +27,6 @@
           <tr><th>Packages</th><td id="num-packages">loading...</td></tr>
           <tr><th>Versions</th><td id="num-versions">loading...</td></tr>
           <tr><th>Wheels</th><td id="num-files">loading...</td></tr>
-          <tr><th>Downloads (last 30 days)</th><td id="downloads-30">loading...</td></tr>
         </table>
 
         <h3>Downloads</h3>
