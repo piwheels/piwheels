@@ -1,10 +1,46 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">Stats</div>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/stats.js"></script>
+  </div>
   <div metal:fill-slot="content">
+    <script>
+    window.onload = function() {
+      showContents();
+    };
+    </script>
     <div class="row">
       <div class="small-12 medium-8 columns">
         <h2>Stats</h2>
+
+        <p>piwheels has been running since November 2017. Since we log the duration
+        of each build, and log details about the request for each file downloaded,
+        we can calculate stats like the number of downloads in any period, the
+        operating systems, distributions and architectures used, and even the
+        amount of time saved by piwheels. Simple stats about specific packages can
+        be found at the package's project page (e.g. <a href="/project/numpy">numpy</a>),
+        and you can also use the <a href="/json.html">JSON API</a>.</p>
+
+        <h3>Packages</h3>
+
+        <table>
+          <tr><th>Packages</th><td id="num-packages">loading...</td></tr>
+          <tr><th>Versions</th><td id="num-versions">loading...</td></tr>
+          <tr><th>Wheels</th><td id="num-files">loading...</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td id="downloads-30">loading...</td></tr>
+        </table>
+
+        <h3>Downloads</h3>
+
+        <table>
+          <tr><th>Downloads (last 24 hours)</th><td id="downloads-day">loading...</td></tr>
+          <tr><th>Downloads (last 7 days)</th><td id="downloads-week">loading...</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td id="downloads-month">loading...</td></tr>
+          <tr><th>Downloads (last 12 months)</th><td id="downloads-year">loading...</td></tr>
+          <tr><th>Downloads (all time)</th><td id="downloads-all">loading...</td></tr>
+        </table>
       </div>
+      <p class="small"><small>Page last updated: <span id="updated">loading...</span></small></p>
     </div>
   </div>
 </div>

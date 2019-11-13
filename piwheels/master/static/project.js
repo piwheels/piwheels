@@ -1,5 +1,5 @@
 function join(arr, sep) {
-  var str = ''
+  var str = '';
   for (var s in arr) {
     str += arr[s] + sep;
   }
