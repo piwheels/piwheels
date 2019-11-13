@@ -28,9 +28,9 @@
       <div class="small-12 medium-4 columns">
         <table class="stats">
           <tr><th>Packages</th><td id="num-packages">loading...</td></tr>
-          <tr><th>Wheels</th><td id="num-files">loading...</td></tr>
+          <tr><th>Wheels</th><td id="num-wheels">loading...</td></tr>
           <tr><th>Downloads (all time)</th><td id="downloads-all">loading...</td></tr>
-          <tr><th>Downloads (last 30 days)</th><td id="downloads-30">loading...</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td id="downloads-month">loading...</td></tr>
         </table>
       </div>
     </div>

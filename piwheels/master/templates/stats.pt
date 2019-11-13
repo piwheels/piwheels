@@ -1,6 +1,7 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">Stats</div>
   <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="/stats.js"></script>
   </div>
   <div metal:fill-slot="content">
@@ -26,7 +27,7 @@
         <table>
           <tr><th>Packages</th><td id="num-packages">loading...</td></tr>
           <tr><th>Versions</th><td id="num-versions">loading...</td></tr>
-          <tr><th>Wheels</th><td id="num-files">loading...</td></tr>
+          <tr><th>Wheels</th><td id="num-wheels">loading...</td></tr>
         </table>
 
         <h3>Downloads</h3>
@@ -38,8 +39,58 @@
           <tr><th>Downloads (last 12 months)</th><td id="downloads-year">loading...</td></tr>
           <tr><th>Downloads (all time)</th><td id="downloads-all">loading...</td></tr>
         </table>
+
+        <h4>Downloads by month</h4>
+
+        <div id="downloads-by-month"></div>
+
+        <h4>Downloads by day</h4>
+
+        <div id="downloads-by-day"></div>
+
+        <h4>Top 10 packages (last 30 days)</h4>
+
+        <table id="top-10-packages-month"></table>
+
+        <h4>Top 30 packages (all time)</h4>
+
+        <table id="top-30-packages-all"></table>
+
+        <h3>Time saved</h3>
+
+        <table>
+          <tr><th>Time saved (last 24 hours)</th><td id="time-saved-day">loading...</td></tr>
+          <tr><th>Time saved (last 7 days)</th><td id="time-saved-week">loading...</td></tr>
+          <tr><th>Time saved (last 30 days)</th><td id="time-saved-month">loading...</td></tr>
+          <tr><th>Time saved (last 12 months)</th><td id="time-saved-year">loading...</td></tr>
+          <tr><th>Time saved (all time)</th><td id="time-saved-all">loading...</td></tr>
+          <tr><th>Energy saved (all time)</th><td id="energy-saved-all">loading...</td></tr>
+        </table>
+
+        <h4>Time saved by month</h4>
+
+        <div id="time-saved-by-month"></div>
+
+        <h3>Usage</h3>
+
+        <h4>Python version use over time</h4>
+
+        <div id="python-versions-by-month"></div>
+
+        <h4>Architecture use over time</h4>
+
+        <div id="arch-by-month"></div>
+
+        <h4>Operating system use over time (graph)</h4>
+
+        <div id="os-by-month"></div>
+
+        <h4>Raspbian version use over time</h4>
+
+        <div id="raspbian-versions-by-month"></div>
+
+        <p class="small"><small>Page last updated: <span id="updated">loading...</span></small></p>
       </div>
-      <p class="small"><small>Page last updated: <span id="updated">loading...</span></small></p>
     </div>
   </div>
 </div>

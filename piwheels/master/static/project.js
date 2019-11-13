@@ -14,7 +14,7 @@ function isEmpty(o) {
   for (var i in o) {
     return false;
   }
-    return true;
+  return true;
 }
 
 function wordCount(str) {
