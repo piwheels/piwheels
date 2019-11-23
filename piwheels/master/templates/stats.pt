@@ -38,6 +38,7 @@
           <tr><th>Downloads (last 30 days)</th><td id="downloads-month">loading...</td></tr>
           <tr><th>Downloads (last 12 months)</th><td id="downloads-year">loading...</td></tr>
           <tr><th>Downloads (all time)</th><td id="downloads-all">loading...</td></tr>
+          <tr><th>Downloads bandwidth (all time)</th><td id="downloads-bandwidth">loading...</td></tr>
         </table>
 
         <h4>Downloads by month</h4>

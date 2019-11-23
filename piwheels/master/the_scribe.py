@@ -173,11 +173,11 @@ class TheScribe(tasks.PauseableTask):
                     self.write_simple_index()
                 self.write_package_index(package)
                 self.write_project_page(package)
-                self.write_json_file(package)
+                self.write_project_json(package)
             elif msg == 'PKGPROJ':
                 package = data
                 self.write_project_page(package)
-                self.write_json_file(package)
+                self.write_project_json(package)
             elif msg == 'HOME': # this doesn't write the homepage anymore
                 status_info = data
                 self.write_statistics_json(status_info)
@@ -206,6 +206,8 @@ class TheScribe(tasks.PauseableTask):
                 'downloads_month': data['downloads_last_month'],
                 'downloads_year': 0,
                 'downloads_all': data['downloads_all'],
+                'downloads_bandwidth_bytes': 10e12,
+                'downloads_bandwidth': '10TB',
                 'time_saved_day': 0,
                 'time_saved_week': 0,
                 'time_saved_month': 0,
@@ -478,7 +480,7 @@ class TheScribe(tasks.PauseableTask):
         except FileExistsError:
             pass
 
-    def write_json_file(self, package):
+    def write_project_json(self, package):
         """
         (Re)writes the JSON file for the specified package.
 
@@ -496,6 +498,9 @@ class TheScribe(tasks.PauseableTask):
                 'num_versions': get_num_versions(versions),
                 'num_files': get_num_files(versions),
                 'versions': versions,
+                'num_downloads': get_num_downloads(package),
+                'num_downloads_30_days': get_num_downloads_30_days(package),
+                'downloads': get_downloads(package),
                 'project_url': 'https://www.piwheels.org/project/{}'.format(package),
                 'simple_url': 'https://www.piwheels.org/simple/{}'.format(package),
                 'updated': datetime.now(tz=UTC).strftime(dt_format),
@@ -568,21 +573,28 @@ def grouper(iterable, n, fillvalue=None):
     return zip_longest(*args, fillvalue=fillvalue)
 
 def get_num_versions(versions):
+    "Return the number of versions we have for a package from its versions dict"
     return len([
         1 for v in versions.values()
         if get_num_files_for_version(v['builds']) > 0
     ])
 
 def get_num_files(versions):
+    "Return the number of files we have for a package from its versions dict"
     return sum(
         get_num_files_for_version(v['builds'])
         for v in versions.values()
     )
 
 def get_num_files_for_version(builds):
+    """
+    Return the number of files we have for a particular version of a package
+    from its builds dict
+    """
     return sum(len(b['successful_builds']) for b in builds.values())
 
 def duration_to_secs(duration):
+    "Convert duration to seconds. If duration is more than a day, return None."
     if duration:
         if duration < timedelta(days=1):
             duration = str(duration)
@@ -591,9 +603,54 @@ def duration_to_secs(duration):
                 return h * 60 * 60 + m * 60 + s
 
 def duration_adjusted(duration, platform):
+    "Return the platform-adjusted duration in seconds (6x for armv6)"
     duration = duration_to_secs(duration)
     if duration:
         return duration * (6 if platform == 'linux_armv6l' else 1)
+
+def get_num_downloads(package):
+    "Return the total number of downloads a package has had"
+    return 0
+
+def get_num_downloads_30_days(package):
+    "Return the number of downloads a package has had in the last 30 days"
+    return 0
+
+def get_downloads(package):
+    "Return a list of (date, num_downloads) tuples for a package"
+    return [
+        ('2019-01-01', 100),
+        ('2019-01-02', 110),
+        ('2019-01-03', 120),
+        ('2019-01-04', 130),
+        ('2019-01-05', 140),
+        ('2019-01-06', 150),
+        ('2019-01-07', 160),
+        ('2019-01-08', 170),
+        ('2019-01-09', 100),
+        ('2019-01-10', 110),
+        ('2019-01-11', 120),
+        ('2019-01-12', 130),
+        ('2019-01-13', 140),
+        ('2019-01-14', 150),
+        ('2019-01-15', 160),
+        ('2019-01-16', 170),
+        ('2019-01-17', 160),
+        ('2019-01-18', 170),
+        ('2019-01-19', 100),
+        ('2019-01-20', 110),
+        ('2019-01-21', 120),
+        ('2019-01-22', 130),
+        ('2019-01-23', 140),
+        ('2019-01-24', 150),
+        ('2019-01-25', 160),
+        ('2019-01-26', 170),
+        ('2019-01-27', 160),
+        ('2019-01-28', 170),
+        ('2019-01-29', 100),
+        ('2019-01-30', 100),
+    ]
+
 
 class AtomicReplaceFile:
     """
