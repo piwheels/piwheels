@@ -8,6 +8,7 @@ function showContents() {
     ['downloads-month', showText, numberWithCommas],
     ['downloads-year', showText, numberWithCommas],
     ['downloads-all', showText, numberWithCommas],
+    ['downloads-bandwidth', showText, doNothing],
     ['top-10-packages-month', showTable, doNothing],
     ['top-30-packages-all', showTable, doNothing],
     ['time-saved-day', showText, doNothing],

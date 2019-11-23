@@ -109,6 +109,7 @@ function showContents(package) {
       updated.textContent = data.updated;
       showVersions(data.versions);
       showFiles(package, data.versions);
+      showDownloadsChart(data.downloads);
     })
   showDownloads(package);
 }
@@ -225,7 +226,7 @@ function showFiles(package, versions) {
   var newTable = document.createElement('table');
   newTable.setAttribute('id', 'files')
   var tbody = document.createElement('tbody');
-  if (isEmpty(versions)) {
+  if (!hasFiles(versions)) {
     newTable.setAttribute('class', 'empty');
     addHeaderRow(tbody, ['No files']);
   }
@@ -287,4 +288,42 @@ function showInstall(package, version, deps, noScroll) {
   if (!noScroll) {
     document.getElementById('install-header').scrollIntoView();
   }
+}
+
+function hasFiles(versions) {
+  for (var v in versions) {
+    var version = versions[v];
+    for (var b in version) {
+      var builds = version[b];
+      for (var a in builds) {
+        var arch = builds[a];
+        if (!isEmpty(arch.successful_builds)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function showDownloadsChart(data) {
+  var downloads = document.getElementById('downloads');
+  var keys = [];
+  var values = [];
+  for (var i in data) {
+    var k = data[i][0];
+    var v = data[i][1];
+    keys.push(k);
+    values.push(v);
+  }
+
+  var chart = [
+    {
+      'x': keys,
+      'y': values,
+      type: 'bar'
+    }
+  ];
+
+  Plotly.newPlot(downloads, chart);
 }

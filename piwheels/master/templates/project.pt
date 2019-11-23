@@ -1,6 +1,7 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">${package}</div>
   <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="/project.js"></script>
   </div>
   <div metal:fill-slot="content">
@@ -68,6 +69,13 @@
         <table id="files">
           <tr><th>loading...</th></tr>
         </table>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="small-12 columns">
+        <h3>Downloads</h3>
+        <div id="downloads"></div>
       </div>
     </div>
 
