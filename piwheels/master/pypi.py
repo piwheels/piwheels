@@ -189,3 +189,13 @@ class PyPIEvents:
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
                 self.next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
+
+
+def get_project_summary(package):
+    "Look up the project summary for ``package`` using PyPI's legacy JSON API"
+    url = 'https://pypi.org/pypi/{}/json'.format(package)
+    try:
+        data = requests.get(url).json()
+        return data['info']['summary']
+    except:
+        return None
