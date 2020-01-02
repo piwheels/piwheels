@@ -1160,12 +1160,102 @@ AS $sql$
         SELECT
             COUNT(*) AS downloads_all,
             COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+            ) AS downloads_last_year,
+            COUNT(*) FILTER (
                 WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
             ) AS downloads_last_month,
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
+            ) AS downloads_last_week,
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
+            ) AS downloads_last_day,
             COUNT(*) FILTER (
                 WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
             ) AS downloads_last_hour
         FROM downloads
+    ),
+    bandwidth_stats AS (
+        SELECT
+            SUM(f.filesize) AS downloads_bandwidth
+        FROM downloads d JOIN files f USING (filename)
+    ),
+    time_saved_stats AS (
+        SELECT
+            JUSTIFY_INTERVAL(SUM(
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END
+            ) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
+            )) AS time_saved_day,
+            JUSTIFY_INTERVAL(SUM(
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END
+            ) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
+            )) AS time_saved_week,
+            JUSTIFY_INTERVAL(SUM(
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END
+            ) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+            )) AS time_saved_month,
+            JUSTIFY_INTERVAL(SUM(
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END
+            ) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+            )) AS time_saved_year,
+            JUSTIFY_INTERVAL(SUM(
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END
+            )) AS time_saved_all
+        FROM
+            downloads d
+            JOIN files f ON d.filename = f.filename
+            JOIN builds b ON b.build_id = f.build_id
+        WHERE f.abi_tag <> 'none'
     ),
     version_stats AS (
         SELECT COUNT(*) AS new_last_hour
