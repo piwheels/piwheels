@@ -1144,8 +1144,8 @@ AS $sql$
     ),
     file_count AS (
         SELECT
-            COUNT(*) AS files_count,
-            COUNT(DISTINCT package_tag) AS packages_built
+            CAST(COUNT(*) AS INTEGER) AS files_count,
+            CAST(COUNT(DISTINCT package_tag) AS INTEGER) AS packages_built
         FROM files
     ),
     file_stats AS (
@@ -1156,106 +1156,249 @@ AS $sql$
         FROM files
         WHERE platform_tag <> 'linux_armv6l'
     ),
-    download_stats AS (
+    days_last_year AS (
         SELECT
-            COUNT(*) AS downloads_all,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
-            ) AS downloads_last_year,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
-            ) AS downloads_last_month,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
-            ) AS downloads_last_week,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
-            ) AS downloads_last_day,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
-            ) AS downloads_last_hour
+            CAST(t.d AS DATE) AS day
+        FROM
+            generate_series(
+                DATE_TRUNC(
+                    'day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'),
+                DATE_TRUNC(
+                    'day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+                INTERVAL '1 day'
+            ) AS t(d)
+    ),
+    months_last_year AS (
+        SELECT
+            CAST(t.d AS DATE) AS month
+        FROM
+            generate_series(
+                DATE_TRUNC(
+                    'month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '11 months'),
+                DATE_TRUNC(
+                    'month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+                INTERVAL '1 month'
+            ) AS t(d)
+    ),
+    download_stats_hour AS (
+        SELECT COUNT(*) AS downloads_last_hour
         FROM downloads
+        WHERE accessed_at >
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    ),
+    downloads_agg AS (
+        SELECT
+            CAST(DATE_TRUNC('day', accessed_at) AS DATE) AS day,
+            COUNT(*) AS downloads
+        FROM downloads
+        GROUP BY day
+    ),
+    download_stats_year AS (
+        SELECT
+            SUM(downloads) AS downloads_all,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+            ) AS downloads_last_year,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+            ) AS downloads_last_month,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
+            ) AS downloads_last_week,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
+            ) AS downloads_last_day
+        FROM downloads_agg
+    ),
+    downloads_by_day AS (
+        SELECT
+            ARRAY_AGG((day, downloads)) AS downloads_by_day
+        FROM (
+            SELECT
+                days.day,
+                COALESCE(agg.downloads, 0) AS downloads
+            FROM
+                days_last_year days LEFT JOIN downloads_agg agg USING (day)
+            WHERE agg.day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+            ORDER BY day
+        ) AS t
+    ),
+    downloads_by_month AS (
+        SELECT
+            ARRAY_AGG((month, downloads)) AS downloads_by_month
+        FROM (
+            SELECT
+                months.month,
+                COALESCE(SUM(agg.downloads), 0) AS downloads
+            FROM
+                months_last_year months
+                LEFT JOIN downloads_agg agg
+                    ON months.month = DATE_TRUNC('month', agg.day)
+            GROUP BY month
+            ORDER BY month
+        ) AS t
+    ),
+    popularity_stats AS (
+        SELECT
+            ARRAY_AGG((package, downloads_last_month)) FILTER (
+                WHERE position_last_month <= 10
+            ) AS top_last_month,
+            ARRAY_AGG((package, downloads_all)) FILTER (
+                WHERE position_all <= 30
+            ) AS top_all
+        FROM (
+            SELECT
+                package_tag AS package,
+                RANK() OVER (ORDER BY COUNT(*) FILTER (
+                    WHERE accessed_at >
+                    CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+                ) DESC) AS position_last_month,
+                RANK() OVER (ORDER BY COUNT(*) DESC) AS position_all,
+                COUNT(*) FILTER (
+                    WHERE accessed_at >
+                    CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+                ) AS downloads_last_month,
+                COUNT(*) AS downloads_all
+            FROM
+                downloads d
+                JOIN files f USING (filename)
+            GROUP BY package_tag
+        ) AS t
     ),
     bandwidth_stats AS (
         SELECT
             SUM(f.filesize) AS downloads_bandwidth
         FROM downloads d JOIN files f USING (filename)
     ),
-    time_saved_stats AS (
+    time_saved_agg AS (
         SELECT
-            JUSTIFY_INTERVAL(SUM(
-                CASE f.platform_tag
-                    WHEN 'linux_armv7l' THEN 1
-                    WHEN 'linux_armv6l' THEN 6
-                    ELSE 0
-                END *
-                CASE
-                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
-                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
-                    ELSE INTERVAL '0'
-                END
-            ) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
-            )) AS time_saved_day,
-            JUSTIFY_INTERVAL(SUM(
-                CASE f.platform_tag
-                    WHEN 'linux_armv7l' THEN 1
-                    WHEN 'linux_armv6l' THEN 6
-                    ELSE 0
-                END *
-                CASE
-                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
-                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
-                    ELSE INTERVAL '0'
-                END
-            ) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
-            )) AS time_saved_week,
-            JUSTIFY_INTERVAL(SUM(
-                CASE f.platform_tag
-                    WHEN 'linux_armv7l' THEN 1
-                    WHEN 'linux_armv6l' THEN 6
-                    ELSE 0
-                END *
-                CASE
-                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
-                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
-                    ELSE INTERVAL '0'
-                END
-            ) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
-            )) AS time_saved_month,
-            JUSTIFY_INTERVAL(SUM(
-                CASE f.platform_tag
-                    WHEN 'linux_armv7l' THEN 1
-                    WHEN 'linux_armv6l' THEN 6
-                    ELSE 0
-                END *
-                CASE
-                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
-                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
-                    ELSE INTERVAL '0'
-                END
-            ) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
-            )) AS time_saved_year,
-            JUSTIFY_INTERVAL(SUM(
-                CASE f.platform_tag
-                    WHEN 'linux_armv7l' THEN 1
-                    WHEN 'linux_armv6l' THEN 6
-                    ELSE 0
-                END *
-                CASE
-                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
-                    WHEN b.duration > INTERVAL '6.7 seconds' THEN b.duration - INTERVAL '6.7 seconds'
-                    ELSE INTERVAL '0'
-                END
-            )) AS time_saved_all
+            CAST(DATE_TRUNC('day', accessed_at) AS DATE) AS day,
+            SUM(CASE f.platform_tag
+                -- Pi0s are about 6x slower than Pi3s on average
+                WHEN 'linux_armv7l' THEN 1
+                WHEN 'linux_armv6l' THEN 6
+                ELSE 0
+            END *
+            CASE
+                WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                WHEN b.duration > INTERVAL '6.7 seconds' THEN
+                    b.duration - INTERVAL '6.7 seconds'
+                ELSE INTERVAL '0'
+            END) AS time_saved
         FROM
             downloads d
-            JOIN files f ON d.filename = f.filename
-            JOIN builds b ON b.build_id = f.build_id
+            JOIN files f USING (filename)
+            JOIN builds b USING (build_id)
         WHERE f.abi_tag <> 'none'
+        GROUP BY day
+    ),
+    time_saved_stats AS (
+        SELECT
+            SUM(time_saved) AS time_saved_all,
+            SUM(time_saved) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+            ) AS time_saved_year,
+            SUM(time_saved) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+            ) AS time_saved_month,
+            SUM(time_saved) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
+            ) AS time_saved_week,
+            SUM(time_saved) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
+            ) AS time_saved_day
+        FROM time_saved_agg
+    ),
+    time_saved_by_month AS (
+        SELECT
+            ARRAY_AGG((month, time_saved)) AS time_saved_by_month
+        FROM (
+            SELECT
+                CAST(DATE_TRUNC('month', day) AS DATE) AS month,
+                SUM(time_saved) AS time_saved
+            FROM time_saved_agg
+            WHERE day >= DATE_TRUNC(
+                'month',
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '11 months')
+            GROUP BY month
+            ORDER BY month
+        ) AS t
+    ),
+    energy_saved_stats AS (
+        SELECT
+            SUM(
+                5 * -- volts
+                CASE f.platform_tag
+                    -- https://www.pidramble.com/wiki/benchmarks/power-consumption
+                    WHEN 'linux_armv7l' THEN 0.220 -- amps
+                    WHEN 'linux_armv6l' THEN 0.080
+                    ELSE 0.0
+                END *
+                CASE f.platform_tag
+                    WHEN 'linux_armv7l' THEN 1
+                    WHEN 'linux_armv6l' THEN 6
+                    ELSE 0
+                END *
+                EXTRACT(EPOCH FROM CASE
+                    WHEN b.duration > INTERVAL '1 week' THEN INTERVAL '0'
+                    WHEN b.duration > INTERVAL '6.7 seconds' THEN
+                        b.duration - INTERVAL '6.7 seconds'
+                    ELSE INTERVAL '0'
+                END) -- seconds
+            ) / 3600000 AS power_saved_kwh
+        FROM
+            downloads d
+            JOIN files f USING (filename)
+            JOIN builds b USING (build_id)
+        WHERE f.abi_tag <> 'none'
+    ),
+    popular_distros AS (
+        SELECT
+            RANK() OVER (ORDER BY COUNT(*) DESC) AS num,
+            distro_name
+        FROM downloads
+        WHERE distro_name IS NOT NULL
+        AND accessed_at >
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+        GROUP BY distro_name
+    ),
+    detail_agg AS (
+        SELECT
+            CASE py_name
+                WHEN 'CPython' THEN
+                    CASE WHEN py_version ~ '^(\d+\.\d+)'
+                        THEN REGEXP_REPLACE(py_version, '^(\d+\.\d+).*$', '\1')
+                        ELSE 'Other'
+                    END
+                ELSE 'Other'
+            END AS python_version,
+            COALESCE(CASE arch
+                WHEN 'x86' THEN 'i686'
+                WHEN 'armv8l' THEN 'aarch64'
+                WHEN 'AMD64' THEN 'x86_64'
+                ELSE arch
+            END, 'Other') AS architecture,
+            COALESCE(p.distro_name, 'Other') AS distribution,
+            CAST(DATE_TRUNC('month', accessed_at) AS DATE) AS month,
+            COUNT(*) AS downloads
+        FROM
+            downloads d
+            LEFT JOIN popular_distros p
+                ON d.distro_name = p.distro_name
+                AND p.num <= 5
+        WHERE accessed_at >= DATE_TRUNC(
+            'month',
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '11 months')
+        GROUP BY python_version, architecture, distribution, month
     ),
     version_stats AS (
         SELECT COUNT(*) AS new_last_hour
@@ -1265,18 +1408,34 @@ AS $sql$
     SELECT
         bs.builds_time,
         fs.builds_size,
-        CAST(fc.packages_built AS INTEGER),
-        CAST(fc.files_count AS INTEGER),
-        CAST(vs.new_last_hour AS INTEGER),
-        CAST(dl.downloads_all AS INTEGER),
-        CAST(dl.downloads_last_month AS INTEGER),
-        CAST(dl.downloads_last_hour AS INTEGER)
+        fc.packages_built                         AS packages_built,
+        fc.files_count                            AS files_count,
+        CAST(vs.new_last_hour AS INTEGER)         AS new_last_hour,
+        CAST(dl.downloads_all AS INTEGER)         AS downloads_all,
+        CAST(dl.downloads_last_year AS INTEGER)   AS downloads_last_year,
+        CAST(dl.downloads_last_month AS INTEGER)  AS downloads_last_month,
+        CAST(dl.downloads_last_week AS INTEGER)   AS downloads_last_week,
+        CAST(dl.downloads_last_day AS INTEGER)    AS downloads_last_day,
+        CAST(dl.downloads_last_hour AS INTEGER)   AS downloads_last_hour,
+        po.top_last_month,
+        po.top_all,
+        bw.downloads_bandwidth,
+        ts.time_saved_all,
+        ts.time_saved_year,
+        ts.time_saved_month,
+        ts.time_saved_week,
+        ts.time_saved_day,
+        es.power_saved_kwh
     FROM
         build_stats bs,
         file_count fc,
         file_stats fs,
         version_stats vs,
-        download_stats dl;
+        download_stats dl,
+        popularity_stats po,
+        bandwidth_stats bw,
+        time_saved_stats ts,
+        energy_saved_stats es
 $sql$;
 
 REVOKE ALL ON FUNCTION get_statistics() FROM PUBLIC;
