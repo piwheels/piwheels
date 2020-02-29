@@ -1,6 +1,18 @@
 <div metal:use-macro="layout">
   <div metal:fill-slot="title" tal:omit-tag="1">Home</div>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/homepage.js"></script>
+    <script src="/blogposts.js"></script>
+  </div>
   <div metal:fill-slot="content">
+    <script>
+    window.onload = function() {
+      showContents();
+      blogUrl = "https://blog.piwheels.org/";
+      numPosts = 5;
+      showBlogPosts(blogUrl, numPosts);
+    };
+    </script>
     <div class="row">
       <div class="small-12 medium-8 columns">
         <h2>Python Wheels for the Raspberry Pi</h2>
@@ -48,6 +60,15 @@ $ source testpip/bin/activate
 ...
 (testpip) $ deactivate
 $ rm -rf testpip/</pre>
+      </div>
+
+      <div class="small-12 medium-4 columns">
+        <table>
+          <tr><th>Latest blog posts</th></tr>
+          <tr><td>
+            <ul id="latest-blog-posts"><li>loading...</li></ul>
+          </td></tr>
+        </table>
       </div>
     </div>
 
