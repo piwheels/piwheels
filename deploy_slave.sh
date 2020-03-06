@@ -12,6 +12,7 @@ LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
 TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
 PIP=pip
+PYBIND=pybind11-dev
 
 if [ $ID = raspbian ]; then
     if [ $VERSION_ID -eq 8 ]; then
@@ -19,6 +20,7 @@ if [ $ID = raspbian ]; then
         LIBPNG_DEV=libpng12-dev
         LIBMYSQL_DEV=libmysqlclient-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
+        PYBIND=""
     elif [ $VERSION_ID -eq 9 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
     elif [ $VERSION_ID -eq 10 ]; then
@@ -64,7 +66,8 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
-    libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release libsnappy-dev
+    libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
+    $PYBIND libsnappy-dev
 
 pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
