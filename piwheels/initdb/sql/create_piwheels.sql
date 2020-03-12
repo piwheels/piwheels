@@ -16,6 +16,7 @@ CREATE TABLE configuration (
     id INTEGER DEFAULT 1 NOT NULL,
     version VARCHAR(16) DEFAULT '0.6' NOT NULL,
     pypi_serial BIGINT DEFAULT 0 NOT NULL,
+    native_distro TEXT DEFAULT 'Raspbian GNU/Linux' NOT NULL,
 
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
@@ -1121,8 +1122,28 @@ CREATE FUNCTION get_statistics()
         files_count            INTEGER,
         new_last_hour          INTEGER,
         downloads_all          INTEGER,
+        downloads_last_year    INTEGER,
         downloads_last_month   INTEGER,
+        downloads_last_week    INTEGER,
+        downloads_last_day     INTEGER,
         downloads_last_hour    INTEGER
+        downloads_bandwith     BIGINT,
+        time_saved_all         INTERVAL,
+        time_saved_year        INTERVAL,
+        time_saved_month       INTERVAL,
+        time_saved_week        INTERVAL,
+        time_saved_day         INTERVAL,
+        power_saved_kwh        DOUBLE PRECISION,
+
+        po.top_last_month,
+        po.top_all,
+        dm.downloads_by_month,
+        dd.downloads_by_day,
+        tm.time_saved_by_month,
+        pm.python_versions_by_month,
+        am.arch_by_month,
+        om.os_by_month,
+        rm.release_by_month
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1216,7 +1237,10 @@ AS $sql$
     ),
     downloads_by_day AS (
         SELECT
-            ARRAY_AGG((day, downloads)) AS downloads_by_day
+            ARRAY_AGG(
+                (day, downloads)
+                ORDER BY day
+            ) AS downloads_by_day
         FROM (
             SELECT
                 days.day,
@@ -1225,12 +1249,14 @@ AS $sql$
                 days_last_year days LEFT JOIN downloads_agg agg USING (day)
             WHERE agg.day >
                 CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
-            ORDER BY day
         ) AS t
     ),
     downloads_by_month AS (
         SELECT
-            ARRAY_AGG((month, downloads)) AS downloads_by_month
+            ARRAY_AGG(
+                (month, downloads)
+                ORDER BY month
+            ) AS downloads_by_month
         FROM (
             SELECT
                 months.month,
@@ -1240,15 +1266,20 @@ AS $sql$
                 LEFT JOIN downloads_agg agg
                     ON months.month = DATE_TRUNC('month', agg.day)
             GROUP BY month
-            ORDER BY month
         ) AS t
     ),
     popularity_stats AS (
         SELECT
-            ARRAY_AGG((package, downloads_last_month)) FILTER (
+            ARRAY_AGG(
+                (package, downloads_last_month)
+                ORDER BY position_last_month
+            ) FILTER (
                 WHERE position_last_month <= 10
             ) AS top_last_month,
-            ARRAY_AGG((package, downloads_all)) FILTER (
+            ARRAY_AGG(
+                (package, downloads_all)
+                ORDER BY position_all
+            ) FILTER (
                 WHERE position_all <= 30
             ) AS top_all
         FROM (
@@ -1320,7 +1351,10 @@ AS $sql$
     ),
     time_saved_by_month AS (
         SELECT
-            ARRAY_AGG((month, time_saved)) AS time_saved_by_month
+            ARRAY_AGG(
+                (month, time_saved)
+                ORDER BY month
+            ) AS time_saved_by_month
         FROM (
             SELECT
                 CAST(DATE_TRUNC('month', day) AS DATE) AS month,
@@ -1330,7 +1364,6 @@ AS $sql$
                 'month',
                 CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '11 months')
             GROUP BY month
-            ORDER BY month
         ) AS t
     ),
     energy_saved_stats AS (
@@ -1388,6 +1421,10 @@ AS $sql$
                 ELSE arch
             END, 'Other') AS architecture,
             COALESCE(p.distro_name, 'Other') AS distribution,
+            CASE
+                WHEN p.distro_name IS NULL THEN 'Other'
+                ELSE d.distro_version
+            END AS release,
             CAST(DATE_TRUNC('month', accessed_at) AS DATE) AS month,
             COUNT(*) AS downloads
         FROM
@@ -1398,7 +1435,61 @@ AS $sql$
         WHERE accessed_at >= DATE_TRUNC(
             'month',
             CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '11 months')
-        GROUP BY python_version, architecture, distribution, month
+        GROUP BY
+            python_version,
+            architecture,
+            distribution,
+            release,
+            month
+    ),
+    python_versions_by_month AS (
+        SELECT
+            ARRAY_AGG(
+                (python_version, month, downloads)
+                ORDER BY python_version, month
+            ) AS python_versions_by_month
+        FROM (
+            SELECT python_version, month, SUM(downloads) AS downloads
+            FROM detail_agg
+            GROUP BY python_version, month
+        ) AS t
+    ),
+    arch_by_month AS (
+        SELECT
+            ARRAY_AGG(
+                (architecture, month, downloads)
+                ORDER BY architecture, month
+            ) AS arch_by_month
+        FROM (
+            SELECT architecture, month, SUM(downloads) AS downloads
+            FROM detail_agg
+            GROUP BY architecture, month
+        ) AS t
+    ),
+    os_by_month AS (
+        SELECT
+            ARRAY_AGG(
+                (distribution, month, downloads)
+                ORDER BY distribution, month
+            ) AS os_by_month
+        FROM (
+            SELECT distribution, month, SUM(downloads) AS downloads
+            FROM detail_agg
+            GROUP BY distribution, month
+        ) AS t
+    ),
+    release_by_month AS (
+        SELECT
+            ARRAY_AGG(
+                (release, month, downloads)
+                ORDER BY release, month
+            ) AS release_by_month
+        FROM (
+            SELECT release, month, SUM(downloads) AS downloads
+            FROM detail_agg
+            -- XXX Limit to configuration.native_distro
+            GROUP BY release, month
+        ) AS t
     ),
     version_stats AS (
         SELECT COUNT(*) AS new_last_hour
@@ -1408,34 +1499,49 @@ AS $sql$
     SELECT
         bs.builds_time,
         fs.builds_size,
-        fc.packages_built                         AS packages_built,
-        fc.files_count                            AS files_count,
+        fc.packages_built,
+        fc.files_count,
         CAST(vs.new_last_hour AS INTEGER)         AS new_last_hour,
         CAST(dl.downloads_all AS INTEGER)         AS downloads_all,
         CAST(dl.downloads_last_year AS INTEGER)   AS downloads_last_year,
         CAST(dl.downloads_last_month AS INTEGER)  AS downloads_last_month,
         CAST(dl.downloads_last_week AS INTEGER)   AS downloads_last_week,
         CAST(dl.downloads_last_day AS INTEGER)    AS downloads_last_day,
-        CAST(dl.downloads_last_hour AS INTEGER)   AS downloads_last_hour,
-        po.top_last_month,
-        po.top_all,
+        CAST(dh.downloads_last_hour AS INTEGER)   AS downloads_last_hour,
         bw.downloads_bandwidth,
         ts.time_saved_all,
         ts.time_saved_year,
         ts.time_saved_month,
         ts.time_saved_week,
         ts.time_saved_day,
-        es.power_saved_kwh
+        CAST(es.power_saved_kwh AS DOUBLE PRECISION) AS power_saved_kwh,
+        po.top_last_month,
+        po.top_all,
+        dm.downloads_by_month,
+        dd.downloads_by_day,
+        tm.time_saved_by_month,
+        pm.python_versions_by_month,
+        am.arch_by_month,
+        om.os_by_month,
+        rm.release_by_month
     FROM
         build_stats bs,
         file_count fc,
         file_stats fs,
         version_stats vs,
-        download_stats dl,
         popularity_stats po,
         bandwidth_stats bw,
         time_saved_stats ts,
-        energy_saved_stats es
+        energy_saved_stats es,
+        download_stats_year dl,
+        download_stats_hour dh,
+        downloads_by_month dm,
+        downloads_by_day dd,
+        time_saved_by_month tm,
+        python_versions_by_month pm,
+        arch_by_month am,
+        os_by_month om,
+        release_by_month rm
 $sql$;
 
 REVOKE ALL ON FUNCTION get_statistics() FROM PUBLIC;
