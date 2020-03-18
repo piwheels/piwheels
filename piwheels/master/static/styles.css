@@ -128,3 +128,7 @@ pre {
 p.small {
   text-align: right;
 }
+
+ul#latest-blog-posts li a {
+  font-weight: bold;
+}
