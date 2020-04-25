@@ -52,7 +52,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
     libgtk2.0-dev libgtk-3-dev libatlas-base-dev python-numpy python3-numpy \
     python-scipy python3-scipy python-matplotlib python3-matplotlib \
-    python-pandas python3-pandas cython cython3 python-yaml python3-yaml \
+    python-pandas python3-pandas python-yaml python3-yaml \
     python-lxml python3-lxml python-cffi python3-cffi python-bs4 python3-bs4 \
     python-click python3-click python-sqlalchemy python3-sqlalchemy \
     python-pil python3-pil python-pymongo python3-pymongo python-django \
@@ -73,7 +73,7 @@ pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
 
-pip3 install pypandoc versioneer kervi scikit-build \
+pip3 install pypandoc versioneer kervi scikit-build cython \
     --extra-index-url https://www.piwheels.org/simple
 
 getent passwd piwheels && userdel -fr piwheels
