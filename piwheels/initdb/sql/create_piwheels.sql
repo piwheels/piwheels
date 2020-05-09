@@ -1109,6 +1109,143 @@ $sql$;
 REVOKE ALL ON FUNCTION get_build_queue(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_build_queue(INTEGER) TO {username};
 
+-- get_basic_statistics()
+-------------------------------------------------------------------------------
+-- Returns a single row with the basic statistics about the system.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_basic_statistics()
+    RETURNS TABLE(
+        builds_time            INTERVAL,
+        builds_size            BIGINT,
+        packages_built         INTEGER,
+        files_count            INTEGER,
+        new_last_hour          INTEGER,
+        downloads_last_hour    INTEGER,
+        downloads_bandwidth    BIGINT
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    WITH build_stats AS (
+        SELECT
+            COALESCE(SUM(CASE
+                -- This guards against including insanely huge durations as
+                -- happens when a builder starts without NTP time sync and
+                -- records a start time of 1970-01-01 and a completion time
+                -- sometime this millenium...
+                WHEN duration < INTERVAL '1 week' THEN duration
+                ELSE INTERVAL '0'
+            END), INTERVAL '0') AS builds_time
+        FROM
+            builds
+    ),
+    file_count AS (
+        SELECT
+            CAST(COUNT(*) AS INTEGER) AS files_count,
+            CAST(COUNT(DISTINCT package_tag) AS INTEGER) AS packages_built
+        FROM files
+    ),
+    file_stats AS (
+        -- Exclude armv6l packages as they're just hard-links to armv7l
+        -- packages and thus don't really count towards space used ... in most
+        -- cases anyway
+        SELECT COALESCE(SUM(filesize), 0) AS builds_size
+        FROM files
+        WHERE platform_tag <> 'linux_armv6l'
+    ),
+    download_stats AS (
+        SELECT CAST(COUNT(*) AS INTEGER) AS downloads_last_hour
+        FROM downloads
+        WHERE accessed_at >
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    ),
+    bandwidth_stats AS (
+        SELECT
+            SUM(f.filesize) AS downloads_bandwidth
+        FROM downloads d JOIN files f USING (filename)
+        WHERE accessed_at >
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    ),
+    version_stats AS (
+        SELECT CAST(COUNT(*) AS INTEGER) AS new_last_hour
+        FROM versions
+        WHERE released > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    )
+    SELECT
+        bs.builds_time,
+        fs.builds_size,
+        fc.packages_built,
+        fc.files_count,
+        ds.downloads_last_hour,
+        vs.new_last_hour AS new_last_hour,
+        bw.downloads_bandwidth
+    FROM
+        build_stats bs,
+        file_count fc,
+        file_stats fs,
+        version_stats vs,
+        download_stats ds,
+        bandwidth_stats bw
+$sql$;
+
+-- get_download_statistics()
+-------------------------------------------------------------------------------
+-- Returns a single row containing the download counts for a variety of
+-- time spans.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_statistics()
+    RETURNS TABLE(
+        downloads_all          INTEGER,
+        downloads_last_year    INTEGER,
+        downloads_last_month   INTEGER,
+        downloads_last_week    INTEGER,
+        downloads_last_day     INTEGER,
+        downloads_last_hour    INTEGER
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    WITH downloads_agg AS (
+        SELECT
+            CAST(DATE_TRUNC('day', accessed_at) AS DATE) AS day,
+            COUNT(*) AS downloads
+        FROM downloads
+        WHERE accessed_at >
+            CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '365 days'
+        GROUP BY day
+    ),
+    download_stats_year AS (
+        SELECT
+            SUM(downloads) AS downloads_last_year,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
+            ) AS downloads_last_month,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '7 days'
+            ) AS downloads_last_week,
+            SUM(downloads) FILTER (
+                WHERE day >
+                CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 day'
+            ) AS downloads_last_day
+        FROM downloads_agg
+    )
+    SELECT
+        dl.downloads_last_year   AS downloads_last_year,
+        dl.downloads_last_month  AS downloads_last_month,
+        dl.downloads_last_week   AS downloads_last_week,
+        dl.downloads_last_day    AS downloads_last_day
+    FROM
+        download_stats_year dl
+$sql$;
+
 -- get_statistics()
 -------------------------------------------------------------------------------
 -- Returns a single row containing a variety of statistics about the system.
