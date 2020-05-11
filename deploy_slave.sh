@@ -13,6 +13,7 @@ TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
 PIP=pip
 PYBIND=pybind11-dev
+LIBZMQ=libzmq5
 
 if [ $ID = raspbian ]; then
     if [ $VERSION_ID -eq 8 ]; then
@@ -21,6 +22,7 @@ if [ $ID = raspbian ]; then
         LIBMYSQL_DEV=libmysqlclient-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
         PYBIND=""
+        LIBZMQ=libzmq3
     elif [ $VERSION_ID -eq 9 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
     elif [ $VERSION_ID -eq 10 ]; then
@@ -60,14 +62,14 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     python3-cherrypy3 python-tornado python3-tornado python-pip python3-pip \
     python-redis python3-redis python-dateutil python3-dateutil python3-apt \
     python-dnspython python3-dnspython python-sphinx python3-sphinx \
-    python-boto python3-boto python-gi python3-gi python-gi-cairo python3-zmq \
+    python-boto python3-boto python-gi python3-gi python-gi-cairo \
     python3-gi-cairo python-cairocffi python3-cairocffi libsdl-image1.2-dev \
     libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev \
     libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
     libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
-    $PYBIND libsnappy-dev libpcap0.8-dev swig
+    $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ
 
 pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
