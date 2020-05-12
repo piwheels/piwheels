@@ -78,7 +78,7 @@ pip3 install $PIP --upgrade
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build cython \
-    --extra-index-url https://www.piwheels.org/simple
+    --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
