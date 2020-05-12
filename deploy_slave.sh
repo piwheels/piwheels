@@ -71,6 +71,8 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
     $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ
 
+apt purge python3-cryptography -y
+
 pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
