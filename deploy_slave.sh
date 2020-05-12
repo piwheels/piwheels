@@ -77,6 +77,12 @@ pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
 
+if [ $ID = raspbian ]; then
+    if [ $VERSION_ID -lt 10 ]; then
+        pip3 install pint==0.9  # requires python issue
+    fi
+fi
+
 pip3 install pypandoc versioneer kervi scikit-build cython \
     --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
