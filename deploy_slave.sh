@@ -12,6 +12,8 @@ LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
 TURBOGEARS=python-turbogears
 SOUNDFONT=musescore-soundfont-gm
 PIP=pip
+PYBIND=pybind11-dev
+LIBZMQ=libzmq5
 
 if [ $ID = raspbian ]; then
     if [ $VERSION_ID -eq 8 ]; then
@@ -19,6 +21,8 @@ if [ $ID = raspbian ]; then
         LIBPNG_DEV=libpng12-dev
         LIBMYSQL_DEV=libmysqlclient-dev
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
+        PYBIND=""
+        LIBZMQ=libzmq3
     elif [ $VERSION_ID -eq 9 ]; then
         POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
     elif [ $VERSION_ID -eq 10 ]; then
@@ -38,7 +42,7 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
+apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython ipython3 git qt4-qmake qt5-qmake python-dev python3-dev \
     $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
     $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
@@ -50,7 +54,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
     libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
     libgtk2.0-dev libgtk-3-dev libatlas-base-dev python-numpy python3-numpy \
     python-scipy python3-scipy python-matplotlib python3-matplotlib \
-    python-pandas python3-pandas cython cython3 python-yaml python3-yaml \
+    python-pandas python3-pandas python-yaml python3-yaml \
     python-lxml python3-lxml python-cffi python3-cffi python-bs4 python3-bs4 \
     python-click python3-click python-sqlalchemy python3-sqlalchemy \
     python-pil python3-pil python-pymongo python3-pymongo python-django \
@@ -58,20 +62,29 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time \
     python3-cherrypy3 python-tornado python3-tornado python-pip python3-pip \
     python-redis python3-redis python-dateutil python3-dateutil python3-apt \
     python-dnspython python3-dnspython python-sphinx python3-sphinx \
-    python-boto python3-boto python-gi python3-gi python-gi-cairo python3-zmq \
+    python-boto python3-boto python-gi python3-gi python-gi-cairo \
     python3-gi-cairo python-cairocffi python3-cairocffi libsdl-image1.2-dev \
     libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev \
     libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
-    libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release
+    libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
+    $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ portaudio19-dev
+
+apt purge python3-cryptography -y
 
 pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
 
-pip3 install pypandoc versioneer kervi scikit-build \
-    --extra-index-url https://www.piwheels.org/simple
+if [ $ID = raspbian ]; then
+    if [ $VERSION_ID -lt 10 ]; then
+        pip3 install pint==0.9  # requires python issue
+    fi
+fi
+
+pip3 install pypandoc versioneer kervi scikit-build cython \
+    --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels

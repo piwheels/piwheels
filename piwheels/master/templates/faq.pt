@@ -85,9 +85,9 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
               <pre>$ sudo pip3 install numpy --no-binary :all:</pre>
 
-              or to use the no-binary option for a single package (e.g. get the
-              tensorflow wheel but force a build of one of its dependencies,
-              grpcio:
+              or to use the <code>--no-binary</code> option for a single package
+              (e.g. get the tensorflow wheel but force a build of one of its
+              dependencies, grpcio):
 
               <pre>$ sudo pip3 install tensorflow --no-binary grpcio</pre>
             </div>
