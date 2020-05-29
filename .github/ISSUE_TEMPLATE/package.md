@@ -1,6 +1,6 @@
 ---
-name: Other package issue
-about: Let us know about another issue that's related to a particular package in piwheels
+name: Package issue
+about: Let us know about an issue that's related to a particular package in piwheels
 
 ---
 
