@@ -127,7 +127,7 @@ class TheScribe(tasks.PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt'}
+        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', '404.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](

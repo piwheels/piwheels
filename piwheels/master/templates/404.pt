@@ -1,0 +1,12 @@
+<div metal:use-macro="layout">
+  <div metal:fill-slot="title" tal:omit-tag="1">404 - file not found</div>
+  <div metal:fill-slot="content">
+    <div class="row">
+      <div class="small-12 columns">
+        <h2>404 &mdash; file not found</h2>
+        <p>No page or file could be found at this location. Please use the navigation bar
+        or the <a href="packages.htm">package search</a> to find what you're looking for.</p>
+      </div>
+    </div>
+  </div>
+</div>
