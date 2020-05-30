@@ -1,0 +1,4 @@
+contact_links:
+  - name: piwheels.org project pages
+    url: https://www.piwheels.org/packages.html
+    about: Please use the issue links in the project page of the package where possible
