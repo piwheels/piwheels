@@ -82,8 +82,8 @@ $ rm -rf testpip/</pre>
         32-bit OS is supported, not 64-bit.</p>
 
         <p>See each package's <a href="/packages.html">project page</a>
-        for information on available wheels, and see the FAQ for more
-        technical details.</p>
+        for information on available wheels, and see the <a href="/faq.html">FAQ</a>
+        for more technical details.</p>
 
         <p class="small"><small>Page last updated ${timestamp}</small></p>
       </div>
