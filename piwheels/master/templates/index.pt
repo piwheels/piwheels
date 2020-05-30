@@ -7,9 +7,8 @@
   <div metal:fill-slot="content">
     <script>
     window.onload = function() {
-      showContents();
-      blogUrl = "https://blog.piwheels.org/";
-      numPosts = 5;
+      var blogUrl = "https://blog.piwheels.org/";
+      var numPosts = 5;
       showBlogPosts(blogUrl, numPosts);
     };
     </script>
