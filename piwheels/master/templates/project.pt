@@ -100,11 +100,6 @@ sudo pip3 install ${package}</pre>
           <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+missing+package+${package}">issue</a> already</li>
           <li>If not, open a <a href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${package}">"missing package" issue</a></li>
         </ul>
-        <h4>Package broken?</h4>
-        <ul>
-          <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+broken+package+${package}">issue</a> already</li>
-          <li>If not, open a <a href="https://github.com/piwheels/packages/issues/new?template=broken-package.md&title=Broken+package:+${package}">"broken package" issue</a></li>
-        </ul>
         <h4>Something else</h4>
         <ul>
           <li>Check if there's an <a href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}">issue</a> already</li>
