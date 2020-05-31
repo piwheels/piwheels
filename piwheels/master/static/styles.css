@@ -34,7 +34,8 @@ header div.top-bar, header div.top-bar ul { background: #444; }
 header .menu-text a { padding: 0; }
 
 .menu .button {
-    font-family: "Roboto Mono", monospace;
+  font-family: "Roboto Mono", monospace;
+  margin-bottom: 3px;
 }
 
 body {
