@@ -132,3 +132,19 @@ p.small {
 ul#latest-blog-posts li a {
   font-weight: bold;
 }
+
+table.package-issues {
+  width: auto;
+  max-width: 100%;
+  border-collapse: separate;
+}
+
+table.package-issues a.button {
+  width: 100px;
+  margin: 0;
+  text-decoration: none;
+}
+
+table.package-issues tbody tr:nth-child(2n) {
+  background-color: #fff;
+}
