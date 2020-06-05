@@ -70,7 +70,7 @@ __project__      = 'piwheels'
 __version__      = '0.15'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
-__author_email__ = 'ben@raspberrypi.org'
+__author_email__ = 'ben@bennuttall.com'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
