@@ -53,6 +53,7 @@ from datetime import datetime, timedelta, timezone
 from collections import namedtuple
 
 from .ranges import exclude, intersect
+from master.the_scribe import canonicalize_name
 
 
 UTC = timezone.utc
@@ -260,7 +261,7 @@ class BuildState:
                  output, files, build_id=None):
         assert abi_tag != 'none'
         self._slave_id = slave_id
-        self._package = package
+        self._package = canonicalize_name(package)
         self._version = version
         self._abi_tag = abi_tag
         self._status = status

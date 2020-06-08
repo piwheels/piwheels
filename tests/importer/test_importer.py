@@ -69,6 +69,56 @@ Classifier: Programming Language :: Python
 
 
 @pytest.fixture()
+def mock_wheel_underscore(request, tmpdir):
+    filename = str(tmpdir.join('foo_bar-0.1-cp34-cp34m-linux_armv7l.whl'))
+    with zipfile.ZipFile(filename, 'w', compression=zipfile.ZIP_STORED) as arc:
+        arc.writestr('foo_bar/__init__.py', b'\x00' * 123456)
+        arc.writestr('foo_bar-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.0
+Name: foo_bar
+Version: 0.1
+Summary: A test package
+Home-page: http://foobar.com/
+Author: Some foo
+Author-email: foobar@foobar.com
+License: BSD
+Platform: any
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+
+""")
+    return filename
+
+
+@pytest.fixture()
+def mock_wheel_hyphen(request, tmpdir):
+    filename = str(tmpdir.join('foo_bar-0.1-cp34-cp34m-linux_armv7l.whl'))
+    with zipfile.ZipFile(filename, 'w', compression=zipfile.ZIP_STORED) as arc:
+        arc.writestr('foo_bar/__init__.py', b'\x00' * 123456)
+        arc.writestr('foo_bar-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.0
+Name: foo-bar
+Version: 0.1
+Summary: A test package
+Home-page: http://foobar.com/
+Author: Some foo
+Author-email: foobar@foobar.com
+License: BSD
+Platform: any
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+
+""")
+    return filename
+
+
+@pytest.fixture()
 def mock_wheel_stats(request, mock_wheel):
     h = sha256()
     with Path(mock_wheel) as p:
@@ -149,6 +199,22 @@ def test_manual_package_version(mock_wheel, caplog):
         main(['--package', 'bar', '--package-version', '0.2', mock_wheel])
     assert find_message(caplog.records, message='Package:  bar')
     assert find_message(caplog.records, message='Version:  0.2')
+
+
+def test_auto_package_with_underscore(mock_wheel, caplog):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = False
+        main([mock_wheel_underscore])
+    assert find_message(caplog.records, message='Package:  foo_bar')
+    assert find_message(caplog.records, message='Version:  0.1')
+
+
+def test_auto_package_with_hyphen(mock_wheel, caplog):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = False
+        main([mock_wheel_hyphen])
+    assert find_message(caplog.records, message='Package:  foo-bar')
+    assert find_message(caplog.records, message='Version:  0.1')
 
 
 def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
