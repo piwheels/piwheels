@@ -29,6 +29,7 @@
 import ipaddress as ip
 import datetime as dt
 from collections import namedtuple
+import re
 
 from voluptuous import Schema, ExactSequence, Extra, Any
 
@@ -77,6 +78,17 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
 
     def __reversed__(self):
         return Protocol(self.send, self.recv)
+
+
+# From pip/_vendor/packaging/utils.py
+# pylint: disable=invalid-name
+_canonicalize_regex = re.compile(r"[-_.]+")
+
+
+def canonicalize_name(name):
+    # pylint: disable=missing-docstring
+    # This is taken from PEP 503.
+    return _canonicalize_regex.sub("-", name).lower()
 
 
 _statistics = {      # statistics

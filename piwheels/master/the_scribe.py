@@ -33,7 +33,6 @@ Defines the :class:`TheScribe` task; see class for more details.
     :members:
 """
 
-import re
 import io
 import os
 import shutil
@@ -351,17 +350,6 @@ class TheScribe(tasks.PauseableTask):
             canon_dir.symlink_to(pkg_dir.name)
         except FileExistsError:
             pass
-
-
-# From pip/_vendor/packaging/utils.py
-# pylint: disable=invalid-name
-_canonicalize_regex = re.compile(r"[-_.]+")
-
-
-def canonicalize_name(name):
-    # pylint: disable=missing-docstring
-    # This is taken from PEP 503.
-    return _canonicalize_regex.sub("-", name).lower()
 
 
 # https://docs.python.org/3/library/itertools.html
