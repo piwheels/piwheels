@@ -53,7 +53,7 @@ from datetime import datetime, timedelta, timezone
 from collections import namedtuple
 
 from .ranges import exclude, intersect
-from master.the_scribe import canonicalize_name
+from .master.the_scribe import canonicalize_name
 
 
 UTC = timezone.utc
