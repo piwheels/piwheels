@@ -127,7 +127,8 @@ def download_state(request, file_state):
     return DownloadState(
         file_state.filename, '123.4.5.6',
         datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
-        'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
+        'Raspbian', '9', 'Linux', '', 'CPython', '3.5',
+        'pip', None, None)
 
 
 @pytest.fixture(scope='session')

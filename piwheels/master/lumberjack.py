@@ -34,8 +34,12 @@ Defines the :class:`Lumberjack` task; see class for more details.
 """
 
 from .. import protocols, transport, tasks
-from ..states import DownloadState
+from ..states import (
+    DownloadState, SearchState, ProjectState, JSONState, PageState)
 from .the_oracle import DbClient
+
+
+LOG_MESSAGES = ('LOGDOWNLOAD', 'LOGSEARCH', 'LOGPROJECT', 'LOGJSON', 'LOGPAGE')
 
 
 class Lumberjack(tasks.PauseableTask):
@@ -71,8 +75,29 @@ class Lumberjack(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            assert msg == 'LOG'
-            download = DownloadState.from_message(data)
-            self.logger.info('logging download of %s from %s',
-                             download.filename, download.host)
-            self.db.log_download(download)
+            assert msg in LOG_MESSAGES
+            if msg == 'LOGDOWNLOAD':
+                download = DownloadState.from_message(data)
+                self.logger.info('logging download of %s from %s',
+                                 download.filename, download.host)
+                self.db.log_download(download)
+            elif msg == 'LOGSEARCH':
+                search = SearchState.from_message(data)
+                self.logger.info('logging search for %s from %s',
+                                 search.package, search.host)
+                self.db.log_search(search)
+            elif msg == 'LOGPROJECT':
+                project = ProjectState.from_message(data)
+                self.logger.info('logging project page hit for %s from %s',
+                                 project.package, project.host)
+                self.db.log_project(project)
+            elif msg == 'LOGJSON':
+                json = JSONState.from_message(data)
+                self.logger.info('logging json page hit for %s from %s',
+                                 json.package, json.host)
+                self.db.log_json(json)
+            elif msg == 'LOGPAGE':
+                page = PageState.from_message(data)
+                self.logger.info('logging page page hit for %s from %s',
+                                 page.page, page.host)
+                self.db.log_page(page)

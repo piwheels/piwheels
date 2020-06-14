@@ -135,6 +135,48 @@ _download_state = ExactSequence([
     Any(str, None),   # os_version
     Any(str, None),   # py_name
     Any(str, None),   # py_version
+    Any(str, None),   # installer_name
+    Any(str, None),   # installer_version
+    Any(str, None),   # setuptools_version
+])
+
+
+_search_state = ExactSequence([
+    str,              # package
+    str,              # host
+    dt.datetime,      # timestamp
+    Any(str, None),   # arch
+    Any(str, None),   # distro_name
+    Any(str, None),   # distro_version
+    Any(str, None),   # os_name
+    Any(str, None),   # os_version
+    Any(str, None),   # py_name
+    Any(str, None),   # py_version
+    Any(str, None),   # installer_name
+    Any(str, None),   # installer_version
+    Any(str, None),   # setuptools_version
+])
+
+
+_project_state = ExactSequence([
+    str,              # package
+    str,              # host
+    dt.datetime,      # timestamp
+])
+
+
+_json_state = ExactSequence([
+    str,              # package
+    str,              # host
+    dt.datetime,      # timestamp
+    str,              # user_agent
+])
+
+
+_page_state = ExactSequence([
+    str,              # page
+    str,              # host
+    dt.datetime,      # timestamp
 ])
 
 
@@ -208,7 +250,11 @@ mr_chase = Protocol(recv={
 
 
 lumberjack = Protocol(recv={
-    'LOG': _download_state,
+    'LOGDOWNLOAD': _download_state,
+    'LOGSEARCH': _search_state,
+    'LOGPROJECT': _project_state,
+    'LOGJSON': _json_state,
+    'LOGPAGE': _page_state,
 })
 
 
@@ -236,6 +282,10 @@ the_oracle = Protocol(recv={
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
     'LOGDOWNLOAD': _download_state,
+    'LOGSEARCH':   _search_state,
+    'LOGPROJECT':  _project_state,
+    'LOGJSON':     _json_state,
+    'LOGPAGE':     _page_state,
     'LOGBUILD':    _build_state,
     'DELBUILD':    ExactSequence([str, str]),  # package, version
     'PKGFILES':    str,                        # package

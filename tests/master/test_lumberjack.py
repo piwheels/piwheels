@@ -53,7 +53,7 @@ def log_queue(request, zmq_context, master_config):
 
 
 def test_log_valid(db_queue, log_queue, download_state, task):
-    log_queue.send_msg('LOG', list(download_state))
+    log_queue.send_msg('LOGDOWNLOAD', list(download_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
     db_queue.send('OK', None)
     task.poll()
