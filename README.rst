@@ -11,12 +11,12 @@ piwheels is a project for automating building Raspberry Pi platform wheels
     :target: https://badge.fury.io/py/piwheels
     :alt: Latest Version
 
-.. image:: https://travis-ci.org/bennuttall/piwheels.svg?branch=master
-    :target: https://travis-ci.org/bennuttall/piwheels
+.. image:: https://travis-ci.org/piwheels/piwheels.svg?branch=master
+    :target: https://travis-ci.org/piwheels/piwheels
     :alt: Build Tests
 
-.. image:: https://img.shields.io/codecov/c/github/bennuttall/piwheels/master.svg?maxAge=2592000
-    :target: https://codecov.io/github/bennuttall/piwheels
+.. image:: https://img.shields.io/codecov/c/github/piwheels/piwheels/master.svg?maxAge=2592000
+    :target: https://codecov.io/github/piwheels/piwheels
     :alt: Code Coverage
 
 `piwheels.org`_ is a Python package repository providing Raspberry Pi wheels
