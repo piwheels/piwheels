@@ -1,4 +1,4 @@
-bots = {
+BOTS = {
     'ArchiveTeam ArchiveBot',
     'BingPreview',
     'Googlebot',
@@ -29,8 +29,6 @@ bots = {
     'http://www.google.com/bot.html',
     'http://www.google.com/mobile/adsbot.html',
     'http://www.opensiteexplorer.org/dotbot',
-    'http://www.opensiteexplorer.org/dotbot',
-    'http://www.semrush.com/bot.html',
     'http://www.semrush.com/bot.html',
     'http://www.similartech.com/smtbot',
     'http://www.sogou.com/docs/help/webmasters.htm',
