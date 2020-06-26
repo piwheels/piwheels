@@ -8,13 +8,14 @@ ALTER TABLE downloads
 ALTER TABLE searches
     ADD COLUMN installer_name      VARCHAR(20) DEFAULT NULL,
     ADD COLUMN installer_version   VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN setuptools_version  VARCHAR(100) DEFAULT NULL;
+    ADD COLUMN setuptools_version  VARCHAR(100) DEFAULT NULL,
+    DROP CONSTRAINT searches_package_fk;
 
 CREATE TABLE project_page_hits (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200),
+    user_agent          VARCHAR(2000),
     bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
@@ -26,7 +27,7 @@ CREATE TABLE package_json_downloads (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200)
+    user_agent          VARCHAR(2000)
 );
 
 CREATE INDEX package_json_downloads_package ON package_json_downloads(package);
@@ -37,7 +38,7 @@ CREATE TABLE web_page_hits (
     page                VARCHAR(30) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200),
+    user_agent          VARCHAR(2000),
     bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
@@ -46,9 +47,9 @@ CREATE INDEX web_page_hits_accessed_at ON web_page_hits(accessed_at DESC);
 GRANT SELECT ON web_page_hits TO {username};
 
 DROP FUNCTION log_download(
-  TEXT, INET, TIMESTAMP, TEXT, INET, TIMESTAMP, TEXT, TEXT, TEXT, TEXT, TEXT,
-  TEXT, TEXT
-)
+  TEXT, INET, TIMESTAMP,
+  TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+);
 
 CREATE FUNCTION log_download(
     filename TEXT,
@@ -207,11 +208,6 @@ GRANT EXECUTE ON FUNCTION log_project(
     TEXT, INET, TIMESTAMP, TEXT
     ) TO {username};
 
--- log_json(package, accessed_by, accessed_at, user_agent)
--------------------------------------------------------------------------------
--- Adds a new entry to the package_json_downloads table.
--------------------------------------------------------------------------------
-
 CREATE FUNCTION log_json(
     package TEXT,
     accessed_by INET,
@@ -244,11 +240,6 @@ REVOKE ALL ON FUNCTION log_json(
 GRANT EXECUTE ON FUNCTION log_json(
     TEXT, INET, TIMESTAMP, TEXT
     ) TO {username};
-
--- log_page(page, accessed_by, accessed_at)
--------------------------------------------------------------------------------
--- Adds a new entry to the web_page_hits table.
--------------------------------------------------------------------------------
 
 CREATE FUNCTION log_page(
     page TEXT,

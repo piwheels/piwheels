@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.15');
+INSERT INTO configuration(id, version) VALUES (1, '0.16');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -259,7 +259,7 @@ CREATE TABLE project_page_hits (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200),
+    user_agent          VARCHAR(2000),
     bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
@@ -277,7 +277,7 @@ CREATE TABLE package_json_downloads (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200)
+    user_agent          VARCHAR(2000)
 );
 
 CREATE INDEX package_json_downloads_package ON package_json_downloads(package);
@@ -293,7 +293,7 @@ CREATE TABLE web_page_hits (
     page                VARCHAR(30) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
-    user_agent          VARCHAR(200),
+    user_agent          VARCHAR(2000),
     bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
