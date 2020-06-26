@@ -67,15 +67,14 @@ scripts are defined:
 # pylint: disable=bad-whitespace
 
 __project__      = 'piwheels'
-__version__      = '0.15'
+__version__      = '0.16'
 __keywords__     = ['raspberrypi', 'pip', 'wheels']
 __author__       = 'Ben Nuttall'
 __author_email__ = 'ben@bennuttall.com'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
-__requires__ = ['configargparse', 'pyzmq', 'voluptuous',
-                'cbor2 @ git+https://github.com/waveform80/cbor2.git@piwheels']
+__requires__ = ['configargparse', 'pyzmq', 'voluptuous', 'cbor2']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
