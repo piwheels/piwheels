@@ -1,21 +1,13 @@
 # vim: set noet sw=4 ts=4 fileencoding=utf-8:
 
 # External utilities
-PYTHON=python
-PIP=pip
-PYTEST=py.test
-COVERAGE=coverage
-TWINE=twine
-PYFLAGS=
-DEST_DIR=/
-
-# Horrid hack to ensure setuptools is installed in our python environment. This
-# is necessary with Python 3.3's venvs which don't install it by default.
-ifeq ($(shell python -c "import setuptools" 2>&1),)
-SETUPTOOLS:=
-else
-SETUPTOOLS:=$(shell wget https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -O - | $(PYTHON))
-endif
+PYTHON ?= python
+PIP ?= pip
+PYTEST ?= pytest
+COVERAGE ?= coverage
+TWINE ?= twine
+PYFLAGS ?=
+DEST_DIR ?= /
 
 # Find the location of python-apt (only packaged for apt, not pip)
 PYTHON_APT:=$(wildcard /usr/lib/python3/dist-packages/apt) \
@@ -163,24 +155,6 @@ $(DIST_ZIP): $(PY_SOURCES) $(SUBDIRS)
 $(DIST_WHEEL): $(PY_SOURCES) $(SUBDIRS)
 	$(PYTHON) $(PYFLAGS) setup.py bdist_wheel
 
-$(DIST_DEB): $(PY_SOURCES) $(SUBDIRS) $(DEB_SOURCES) $(MAN_PAGES)
-	# build the binary package in the parent directory then rename it to
-	# project_version.orig.tar.gz
-	$(PYTHON) $(PYFLAGS) setup.py sdist --dist-dir=../
-	rename -f 's/$(NAME)-(.*)\.tar\.gz/$(NAME)_$$1\.orig\.tar\.gz/' ../*
-	debuild -b
-	mkdir -p dist/
-	for f in $(DIST_DEB); do cp ../$${f##*/} dist/; done
-
-$(DIST_DSC): $(PY_SOURCES) $(SUBDIRS) $(DEB_SOURCES) $(MAN_PAGES)
-	# build the source package in the parent directory then rename it to
-	# project_version.orig.tar.gz
-	$(PYTHON) $(PYFLAGS) setup.py sdist --dist-dir=../
-	rename -f 's/$(NAME)-(.*)\.tar\.gz/$(NAME)_$$1\.orig\.tar\.gz/' ../*
-	debuild -S
-	mkdir -p dist/
-	for f in $(DIST_DSC); do cp ../$${f##*/} dist/; done
-
 changelog: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
 	$(MAKE) clean
 	# ensure there are no current uncommitted changes
@@ -190,18 +164,11 @@ changelog: $(PY_SOURCES) $(DOC_SOURCES) $(DEB_SOURCES)
 	# commit the changes and add a new tag
 	git commit debian/changelog -m "Updated changelog for release $(VER)"
 
-release-pi: $(PY_SOURCES) $(DOC_SOURCES) $(DIST_DEB) $(DIST_DSC)
+release: $(PY_SOURCES) $(DOC_SOURCES) $(DIST_DEB) $(DIST_DSC)
 	git tag -s release-$(VER) -m "Release $(VER)"
 	git push --tags
 	git push
 	# build a source archive and upload to PyPI
 	$(TWINE) upload $(DIST_TAR) $(DIST_WHEEL)
-	# build the deb source archive and upload to Raspbian
-	dput raspberrypi dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
-	dput raspberrypi dist/$(NAME)_$(VER)$(DEB_SUFFIX)_$(DEB_ARCH).changes
-
-release-ubuntu: $(DIST_DEB) $(DIST_DSC)
-	# build the deb source archive and upload to the PPA
-	dput waveform-ppa dist/$(NAME)_$(VER)$(DEB_SUFFIX)_source.changes
 
 .PHONY: all install develop test doc source wheel zip tar deb dist clean tags changelog release-pi release-ubuntu $(SUBDIRS)

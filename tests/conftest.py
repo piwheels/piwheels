@@ -61,6 +61,7 @@ UTC = timezone.utc
 # the names of these entities for use by the test suite.
 
 PIWHEELS_TESTDB = os.environ.get('PIWHEELS_TESTDB', 'piwheels_test')
+PIWHEELS_HOST = os.environ.get('PIWHEELS_HOST', '')
 PIWHEELS_USER = os.environ.get('PIWHEELS_USER', 'piwheels')
 PIWHEELS_PASS = os.environ.get('PIWHEELS_PASS', 'piwheels')
 PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
@@ -177,18 +178,20 @@ def page_state(request):
 
 @pytest.fixture(scope='session')
 def db_url(request):
-    return 'postgres://{username}:{password}@/{db}'.format(
+    return 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
 
 
 @pytest.fixture(scope='session')
 def db_super_url(request):
-    return 'postgres://{username}:{password}@/{db}'.format(
+    return 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_SUPERUSER,
         password=PIWHEELS_SUPERPASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
 
@@ -335,9 +338,10 @@ def master_config(request, tmpdir):
     config.debug = []
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.pypi_simple = 'https://pypi.org/simple'
-    config.dsn = 'postgres://{username}:{password}@/{db}'.format(
+    config.dsn = 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
     config.output_path = str(tmpdir)
