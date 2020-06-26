@@ -246,11 +246,12 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_project(%s, %s, %s))",
+                "VALUES (log_project(%s, %s, %s, %s))",
                 (
                     project.package,
                     project.host,
                     project.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    project.user_agent,
                 ))
 
     def log_json(self, json):
@@ -273,11 +274,12 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_page(%s, %s, %s))",
+                "VALUES (log_page(%s, %s, %s, %s))",
                 (
                     page.page,
                     page.host,
                     page.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    page.user_agent,
                 ))
 
     def log_build(self, build):

@@ -762,6 +762,7 @@ class ProjectState(namedtuple('ProjectState', (
     'package',
     'host',
     'timestamp',
+    'user_agent',
 ))):
     __slots__ = ()
 
@@ -793,6 +794,7 @@ class PageState(namedtuple('PageState', (
     'page',
     'host',
     'timestamp',
+    'user_agent',
 ))):
     __slots__ = ()
 

@@ -39,9 +39,6 @@ from ..states import (
 from .the_oracle import DbClient
 
 
-LOG_MESSAGES = ('LOGDOWNLOAD', 'LOGSEARCH', 'LOGPROJECT', 'LOGJSON', 'LOGPAGE')
-
-
 class Lumberjack(tasks.PauseableTask):
     """
     This task handles incoming log entries from the httpd server, and updates
@@ -75,7 +72,6 @@ class Lumberjack(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            assert msg in LOG_MESSAGES
             if msg == 'LOGDOWNLOAD':
                 download = DownloadState.from_message(data)
                 self.logger.info('logging download of %s from %s',

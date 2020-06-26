@@ -62,119 +62,134 @@ def log_sample():
 2a00:1098:0:80:1000:3b:1:1 - - [11/Oct/2019:06:26:55 +0100] "GET /faq.html HTTP/1.1" 200 6153 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:07:11:29 +0100] "GET / HTTP/1.1" 200 6297 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/ici/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/pyjokes/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P)"
+2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/pyjokes/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 """
-    entries = [
+    entries =[
         ('LOGSEARCH', [
             'markupsafe',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '3.5.3', 'pip', '9.0.1', None
+            'CPython', '3.5.3', 'pip', '9.0.1', None,
         ]),
         ('LOGSEARCH', [
             'certifi',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0'
+            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0',
         ]),
         ('LOGDOWNLOAD', [
             'MarkupSafe-1.1.1-cp35-cp35m-linux_armv7l.whl',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '3.5.3', 'pip', '9.0.1', None
+            'CPython', '3.5.3', 'pip', '9.0.1', None,
         ]),
         ('LOGSEARCH', [
             'asn1crypto',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '2.7.13', 'pip', '9.0.1', None
+            'CPython', '2.7.13', 'pip', '9.0.1', None,
         ]),
         ('LOGSEARCH', [
             'backports-abc',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 57, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0'
+            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0',
         ]),
         ('LOGSEARCH', [
             'pip',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 24, 58, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1'
+            'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1',
         ]),
         ('LOGDOWNLOAD', [
             'PyYAML-3.13-cp35-cp35m-linux_armv7l.whl',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 4, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.19.27-v7+',
-            'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1'
+            'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1',
         ]),
         ('LOGSEARCH', [
             'pip',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 5, tzinfo=UTC),
             'armv6l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.52+',
-            'CPython', '2.7.13', 'pip', '18.0', '40.0.0'
+            'CPython', '2.7.13', 'pip', '18.0', '40.0.0',
         ]),
         ('LOGSEARCH', [
             'lxml',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 6, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.9.93-linuxkit-aufs',
-            'CPython', '3.6.8', 'pip', '19.0.3', '40.8.0'
+            'CPython', '3.6.8', 'pip', '19.0.3', '40.8.0',
         ]),
         ('LOGSEARCH', [
             'cffi',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 6, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '2.7.13', 'pip', '9.0.1', None
+            'CPython', '2.7.13', 'pip', '9.0.1', None,
         ]),
         ('LOGDOWNLOAD', [
             'foo-0.1-cp34-none-any.whl',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 26, tzinfo=UTC),
             None, None, None, None, None,
-            'CPython', None, None, None, None
+            'CPython', None, None, None, None,
         ]),
         ('LOGDOWNLOAD', [
             'foo-0.2-cp34-none-any.whl',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 28, tzinfo=UTC),
             None, None, None, None, None,
-            'CPython', None, None, None, None
+            'CPython', None, None, None, None,
         ]),
         ('LOGJSON', [
             'gpiozero',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2020, 6, 15, 21, 20, 16, tzinfo=UTC),
-            'wget'
+            'wget',
         ]),
         ('LOGJSON', [
             'gpiozero',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2020, 6, 15, 21, 20, 52, tzinfo=UTC),
-            'python-requests'
+            'python-requests',
+        ]),
+        ('LOGPAGE', [
+            'home',
+            '2a00:1098:0:80:1000::14',
+            datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC),
+            'Mythic HTTP monitor check',
         ]),
         ('LOGPAGE', [
             'faq',
             '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC)
+            datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC),
+            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
         ]),
         ('LOGPAGE', [
             'home',
             '2a00:1098:0:82:1000:3b:1:1',
-            datetime(2019, 10, 11, 6, 11, 29, tzinfo=UTC)
+            datetime(2019, 10, 11, 6, 11, 29, tzinfo=UTC),
+            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+        ]),
+        ('LOGPROJECT', [
+            'ici',
+            '2a00:1098:0:82:1000:3b:1:1',
+            datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
+            'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
         ]),
         ('LOGPROJECT', [
             'pyjokes',
             '2a00:1098:0:82:1000:3b:1:1',
-            datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC)
+            datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
+            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
         ]),
     ]
     return log, entries

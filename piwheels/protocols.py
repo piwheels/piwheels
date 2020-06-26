@@ -162,6 +162,7 @@ _project_state = ExactSequence([
     str,              # package
     str,              # host
     dt.datetime,      # timestamp
+    str,              # user_agent
 ])
 
 
@@ -177,6 +178,7 @@ _page_state = ExactSequence([
     str,              # page
     str,              # host
     dt.datetime,      # timestamp
+    str,              # user_agent
 ])
 
 

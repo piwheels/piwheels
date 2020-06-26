@@ -258,7 +258,9 @@ GRANT SELECT ON searches TO {username};
 CREATE TABLE project_page_hits (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
-    accessed_at         TIMESTAMP NOT NULL
+    accessed_at         TIMESTAMP NOT NULL,
+    user_agent          VARCHAR(200),
+    bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
 CREATE INDEX project_page_hits_package ON project_page_hits(package);
@@ -267,7 +269,8 @@ GRANT SELECT ON project_page_hits TO {username};
 
 -- package_json_downloads
 -------------------------------------------------------------------------------
--- The "package_json_downloads" table tracks the downloads of project JSON by users.
+-- The "package_json_downloads" table tracks the downloads of project JSON by
+-- users.
 -------------------------------------------------------------------------------
 
 CREATE TABLE package_json_downloads (
@@ -289,7 +292,9 @@ GRANT SELECT ON package_json_downloads TO {username};
 CREATE TABLE web_page_hits (
     page                VARCHAR(30) NOT NULL,
     accessed_by         INET NOT NULL,
-    accessed_at         TIMESTAMP NOT NULL
+    accessed_at         TIMESTAMP NOT NULL,
+    user_agent          VARCHAR(200),
+    bot                 BOOLEAN DEFAULT false NOT NULL
 );
 
 CREATE INDEX web_page_hits_package ON web_page_hits(page);
@@ -701,7 +706,8 @@ GRANT EXECUTE ON FUNCTION log_search(
 CREATE FUNCTION log_project(
     package TEXT,
     accessed_by INET,
-    accessed_at TIMESTAMP
+    accessed_at TIMESTAMP,
+    user_agent TEXT
 )
     RETURNS VOID
     LANGUAGE SQL
@@ -712,20 +718,22 @@ AS $sql$
     INSERT INTO project_page_hits (
         package,
         accessed_by,
-        accessed_at
+        accessed_at,
+        user_agent
     )
     VALUES (
         package,
         accessed_by,
-        accessed_at
+        accessed_at,
+        user_agent
     );
 $sql$;
 
 REVOKE ALL ON FUNCTION log_project(
-    TEXT, INET, TIMESTAMP
+    TEXT, INET, TIMESTAMP, TEXT
     ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log_project(
-    TEXT, INET, TIMESTAMP
+    TEXT, INET, TIMESTAMP, TEXT
     ) TO {username};
 
 -- log_json(package, accessed_by, accessed_at, user_agent)
@@ -774,7 +782,8 @@ GRANT EXECUTE ON FUNCTION log_json(
 CREATE FUNCTION log_page(
     page TEXT,
     accessed_by INET,
-    accessed_at TIMESTAMP
+    accessed_at TIMESTAMP,
+    user_agent TEXT
 )
     RETURNS VOID
     LANGUAGE SQL
@@ -785,20 +794,22 @@ AS $sql$
     INSERT INTO web_page_hits (
         page,
         accessed_by,
-        accessed_at
+        accessed_at,
+        user_agent
     )
     VALUES (
         page,
         accessed_by,
-        accessed_at
+        accessed_at,
+        user_agent
     );
 $sql$;
 
 REVOKE ALL ON FUNCTION log_page(
-    TEXT, INET, TIMESTAMP
+    TEXT, INET, TIMESTAMP, TEXT
     ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log_page(
-    TEXT, INET, TIMESTAMP
+    TEXT, INET, TIMESTAMP, TEXT
     ) TO {username};
 
 -- log_build_success(package, version, build_by, ...)

@@ -48,7 +48,6 @@ from datetime import timezone
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
 from .. import __version__, terminal, const, protocols, transport
-from .bots import BOTS
 
 
 # Workaround: lars bug; User-Agent instead of User-agent
@@ -71,13 +70,6 @@ get_setuptools_version = lambda ud: ud.get('setuptools_version')
 clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
 get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
 get_user_agent = lambda ua: ua.split('/')[0].lower()
-
-
-def is_bot(user_agent):
-    for bot in BOTS:
-        if bot in user_agent:
-            return True
-    return False
 
 
 def main(args=None):
@@ -192,8 +184,6 @@ def get_log_type(row):
             return 'LOGDOWNLOAD'
         if path.startswith('/simple/'):
             return 'LOGSEARCH'
-    if is_bot(row.req_User_Agent):
-        return
     if path.startswith('/project/'):
         if path.endswith('/json/'):
             return 'LOGJSON'
@@ -267,6 +257,7 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
             get_package_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
+            row.req_User_Agent,
         ]
     if log_type == 'LOGJSON':
         return [
@@ -280,4 +271,5 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
             get_page_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
+            row.req_User_Agent,
         ]
