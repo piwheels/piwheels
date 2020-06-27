@@ -23,16 +23,16 @@ CREATE INDEX project_page_hits_package ON project_page_hits(package);
 CREATE INDEX project_page_hits_accessed_at ON project_page_hits(accessed_at DESC);
 GRANT SELECT ON project_page_hits TO {username};
 
-CREATE TABLE package_json_downloads (
+CREATE TABLE project_json_downloads (
     package             VARCHAR(200) NOT NULL,
     accessed_by         INET NOT NULL,
     accessed_at         TIMESTAMP NOT NULL,
     user_agent          VARCHAR(2000)
 );
 
-CREATE INDEX package_json_downloads_package ON package_json_downloads(package);
-CREATE INDEX package_json_downloads_accessed_at ON package_json_downloads(accessed_at DESC);
-GRANT SELECT ON package_json_downloads TO {username};
+CREATE INDEX project_json_downloads_package ON project_json_downloads(package);
+CREATE INDEX project_json_downloads_accessed_at ON project_json_downloads(accessed_at DESC);
+GRANT SELECT ON project_json_downloads TO {username};
 
 CREATE TABLE web_page_hits (
     page                VARCHAR(30) NOT NULL,
@@ -220,7 +220,7 @@ CREATE FUNCTION log_json(
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    INSERT INTO package_json_downloads (
+    INSERT INTO project_json_downloads (
         package,
         accessed_by,
         accessed_at,
