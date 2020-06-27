@@ -133,12 +133,10 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     self.slave_id = None
                     self.main_loop(queue)
                 except MasterTimeout:
-                    print('except MasterTimeout')
                     self.systemd.reloading()
                     self.logger.warning('Resetting connection')
                     queue.close(linger=1)
                 finally:
-                    print('finally1')
                     if self.builder:
                         self.logger.warning('Discarding current build')
                         self.builder.clean()
