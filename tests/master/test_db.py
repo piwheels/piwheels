@@ -139,6 +139,46 @@ def test_log_download(db_intf, db, with_files, download_state):
         "SELECT filename FROM downloads").first() == (download_state.filename,)
 
 
+def test_log_search(db_intf, db, with_files, search_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM searches").first() == (0,)
+    db_intf.log_search(search_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM searches").first() == (1,)
+    assert db.execute(
+        "SELECT package FROM searches").first() == (search_state.package,)
+
+
+def test_log_project_page_hit(db_intf, db, with_files, project_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM project_page_hits").first() == (0,)
+    db_intf.log_project(project_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM project_page_hits").first() == (1,)
+    assert db.execute(
+        "SELECT package FROM project_page_hits").first() == (project_state.package,)
+
+
+def test_log_project_json_download(db_intf, db, with_files, json_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM project_json_downloads").first() == (0,)
+    db_intf.log_json(json_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM project_json_downloads").first() == (1,)
+    assert db.execute(
+        "SELECT package FROM project_json_downloads").first() == (json_state.package,)
+
+
+def test_log_web_page_hit(db_intf, db, with_files, page_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM web_page_hits").first() == (0,)
+    db_intf.log_page(page_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM web_page_hits").first() == (1,)
+    assert db.execute(
+        "SELECT page FROM web_page_hits").first() == (page_state.page,)
+
+
 def test_log_build(db_intf, db, with_package_version, build_state):
     for file_state in build_state.files.values():
         break
