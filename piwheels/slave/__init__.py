@@ -48,9 +48,8 @@ from time import time, sleep
 from random import randint
 
 import dateutil.parser
-from wheel import pep425tags
 
-from .. import __version__, terminal, transport, protocols
+from .. import __version__, terminal, transport, protocols, platform
 from ..systemd import get_systemd
 from .builder import PiWheelsBuilder, PiWheelsPackage
 
@@ -173,8 +172,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         """
         msg, data = 'HELLO', [
             self.config.timeout,
-            pep425tags.get_impl_ver(), pep425tags.get_abi_tag(),
-            pep425tags.get_platform(), self.label
+            platform.get_impl_ver(), platform.get_abi_tag(),
+            platform.get_platform(), self.label
         ]
         while True:
             queue.send_msg(msg, data)
