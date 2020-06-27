@@ -94,6 +94,6 @@ class Lumberjack(tasks.PauseableTask):
                 self.db.log_json(json)
             elif msg == 'LOGPAGE':
                 page = PageState.from_message(data)
-                self.logger.info('logging page page hit for %s from %s',
+                self.logger.info('logging page hit for %s from %s',
                                  page.page, page.host)
                 self.db.log_page(page)
