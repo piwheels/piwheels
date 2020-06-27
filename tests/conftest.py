@@ -39,7 +39,10 @@ from sqlalchemy import create_engine, text
 from voluptuous import Schema, ExactSequence, Extra, Any
 
 from piwheels import const, transport, protocols
-from piwheels.states import BuildState, FileState, DownloadState
+from piwheels.states import (
+    BuildState, FileState, DownloadState, SearchState, ProjectState, JSONState,
+    PageState
+)
 from piwheels.protocols import NoData
 from piwheels.initdb import get_script, parse_statements
 from piwheels.master.the_oracle import TheOracle
@@ -58,6 +61,7 @@ UTC = timezone.utc
 # the names of these entities for use by the test suite.
 
 PIWHEELS_TESTDB = os.environ.get('PIWHEELS_TESTDB', 'piwheels_test')
+PIWHEELS_HOST = os.environ.get('PIWHEELS_HOST', '')
 PIWHEELS_USER = os.environ.get('PIWHEELS_USER', 'piwheels')
 PIWHEELS_PASS = os.environ.get('PIWHEELS_PASS', 'piwheels')
 PIWHEELS_SUPERUSER = os.environ.get('PIWHEELS_SUPERUSER', 'postgres')
@@ -127,23 +131,67 @@ def download_state(request, file_state):
     return DownloadState(
         file_state.filename, '123.4.5.6',
         datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
-        'Raspbian', '9', 'Linux', '', 'CPython', '3.5')
+        'Raspbian', '9', 'Linux', '', 'CPython', '3.5',
+        'pip', None, None)
+
+
+@pytest.fixture()
+def search_state(request):
+    return SearchState(
+        'markupsafe',
+        '2a00:1098:0:80:1000:3b:1:1',
+        datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
+        'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
+        'CPython', '3.5.3', 'pip', '9.0.1', None,
+    )
+
+
+@pytest.fixture()
+def project_state(request):
+    return ProjectState(
+        'pyjokes',
+        '2a00:1098:0:82:1000:3b:1:1',
+        datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
+        'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+    )
+
+
+@pytest.fixture()
+def json_state(request):
+    return JSONState(
+        'gpiozero',
+        '2a00:1098:0:80:1000:3b:1:1',
+        datetime(2020, 6, 15, 21, 20, 16, tzinfo=UTC),
+        'wget',
+    )
+
+
+@pytest.fixture()
+def page_state(request):
+    return PageState(
+        'home',
+        '2a00:1098:0:82:1000:3b:1:1',
+        datetime(2019, 10, 11, 6, 11, 29, tzinfo=UTC),
+        'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+    )
 
 
 @pytest.fixture(scope='session')
 def db_url(request):
-    return 'postgres://{username}:{password}@/{db}'.format(
+    return 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
 
 
 @pytest.fixture(scope='session')
 def db_super_url(request):
-    return 'postgres://{username}:{password}@/{db}'.format(
+    return 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_SUPERUSER,
         password=PIWHEELS_SUPERPASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
 
@@ -290,9 +338,10 @@ def master_config(request, tmpdir):
     config.debug = []
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.pypi_simple = 'https://pypi.org/simple'
-    config.dsn = 'postgres://{username}:{password}@/{db}'.format(
+    config.dsn = 'postgres://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
+        host=PIWHEELS_HOST,
         db=PIWHEELS_TESTDB
     )
     config.output_path = str(tmpdir)

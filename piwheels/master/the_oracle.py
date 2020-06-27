@@ -40,7 +40,8 @@ to it.
 import pickle
 
 from .. import const, protocols, transport, tasks
-from ..states import BuildState, DownloadState
+from ..states import (
+    BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)
 from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
 
 
@@ -101,6 +102,10 @@ class TheOracle(tasks.Task):
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
                 'SKIPVER':     lambda: self.do_skipver(*data),
                 'LOGDOWNLOAD': lambda: self.do_logdownload(data),
+                'LOGSEARCH':   lambda: self.do_logsearch(data),
+                'LOGPROJECT':  lambda: self.do_logproject(data),
+                'LOGJSON':     lambda: self.do_logjson(data),
+                'LOGPAGE':     lambda: self.do_logpage(data),
                 'LOGBUILD':    lambda: self.do_logbuild(data),
                 'DELBUILD':    lambda: self.do_delbuild(*data),
                 'PKGFILES':    lambda: self.do_pkgfiles(data),
@@ -171,10 +176,38 @@ class TheOracle(tasks.Task):
 
     def do_logdownload(self, download):
         """
-        Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to
-        register a new download.
+        Handler for "LOGDOWNLOAD" message, sent by :class:`DbClient` to register
+        a new download.
         """
         self.db.log_download(DownloadState.from_message(download))
+
+    def do_logsearch(self, search):
+        """
+        Handler for "LOGSEARCH" message, sent by :class:`DbClient` to
+        register a new search.
+        """
+        self.db.log_search(SearchState.from_message(search))
+
+    def do_logproject(self, project):
+        """
+        Handler for "LOGPROJECT" message, sent by :class:`DbClient` to register
+        a new project page hit.
+        """
+        self.db.log_project(ProjectState.from_message(project))
+
+    def do_logjson(self, json):
+        """
+        Handler for "LOGJSON" message, sent by :class:`DbClient` to register a
+        new project JSON download.
+        """
+        self.db.log_json(JSONState.from_message(json))
+
+    def do_logpage(self, page):
+        """
+        Handler for "LOGPAGE" message, sent by :class:`DbClient` to register a
+        new web page hit.
+        """
+        self.db.log_page(PageState.from_message(page))
 
     def do_logbuild(self, build):
         """
@@ -367,6 +400,30 @@ class DbClient:
         See :meth:`.db.Database.log_download`.
         """
         self._execute('LOGDOWNLOAD', download.as_message())
+
+    def log_search(self, search):
+        """
+        See :meth:`.db.Database.log_search`.
+        """
+        self._execute('LOGSEARCH', search.as_message())
+
+    def log_project(self, project):
+        """
+        See :meth:`.db.Database.log_project`.
+        """
+        self._execute('LOGPROJECT', project.as_message())
+
+    def log_json(self, json):
+        """
+        See :meth:`.db.Database.log_json`.
+        """
+        self._execute('LOGJSON', json.as_message())
+
+    def log_page(self, page):
+        """
+        See :meth:`.db.Database.log_page`.
+        """
+        self._execute('LOGPAGE', page.as_message())
 
     def log_build(self, build):
         """

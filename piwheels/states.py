@@ -29,8 +29,8 @@
 """
 This module defines several classes which permit interested tasks to track the
 state of build slaves (:class:`SlaveState`), file transfers
-(:class:`TransferState`), build attempts (:class:`BuildState`) and build
-artifacts (:class:`FileState`).
+(:class:`TransferState`), build attempts (:class:`BuildState`), build
+artifacts (:class:`FileState`) and various loggers.
 
 .. autoclass:: FileState
     :members:
@@ -42,6 +42,21 @@ artifacts (:class:`FileState`).
     :members:
 
 .. autoclass:: TransferState
+    :members:
+
+.. autoclass:: DownloadState
+    :members:
+
+.. autoclass:: SearchState
+    :members:
+
+.. autoclass:: ProjectState
+    :members:
+
+.. autoclass:: JSONState
+    :members:
+
+.. autoclass:: PageState
     :members:
 """
 
@@ -704,6 +719,82 @@ class DownloadState(namedtuple('DownloadState', (
     'os_version',
     'py_name',
     'py_version',
+    'installer_name',
+    'installer_version',
+    'setuptools_version',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
+class SearchState(namedtuple('SearchState', (
+    'package',
+    'host',
+    'timestamp',
+    'arch',
+    'distro_name',
+    'distro_version',
+    'os_name',
+    'os_version',
+    'py_name',
+    'py_version',
+    'installer_name',
+    'installer_version',
+    'setuptools_version',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
+class ProjectState(namedtuple('ProjectState', (
+    'package',
+    'host',
+    'timestamp',
+    'user_agent',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
+class JSONState(namedtuple('JSONState', (
+    'package',
+    'host',
+    'timestamp',
+    'user_agent',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
+class PageState(namedtuple('PageState', (
+    'page',
+    'host',
+    'timestamp',
+    'user_agent',
 ))):
     __slots__ = ()
 

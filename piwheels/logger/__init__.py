@@ -35,6 +35,7 @@ Contains the functions that implement the :program:`piw-logger` script.
 """
 
 import io
+import re
 import sys
 import gzip
 import json
@@ -52,6 +53,23 @@ from .. import __version__, terminal, const, protocols, transport
 # Workaround: lars bug; User-Agent instead of User-agent
 COMBINED = '%h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-Agent}i"'
 UTC = timezone.utc
+
+get_package_name = lambda path: str(path).split('/')[2]
+get_access_ip = lambda rh: str(rh)
+get_access_time = lambda dt: dt.replace(tzinfo=UTC)
+get_arch = lambda ud: ud.get('cpu')
+get_distro_name = lambda ud: ud.get('distro', {}).get('name')
+get_distro_version = lambda ud: ud.get('distro', {}).get('version')
+get_os_name = lambda ud: ud.get('system', {}).get('name')
+get_os_version = lambda ud: ud.get('system', {}).get('release')
+get_py_name = lambda ud: ud.get('implementation', {'name': 'CPython'}).get('name')
+get_py_version = lambda ud: ud.get('implementation', {'version': ud.get('python')}).get('version')
+get_installer_name = lambda ud: ud.get('installer', {}).get('name')
+get_installer_version = lambda ud: ud.get('installer', {}).get('version')
+get_setuptools_version = lambda ud: ud.get('setuptools_version')
+clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
+get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
+get_user_agent = lambda ua: ua.split('/')[0].lower()
 
 
 def main(args=None):
@@ -109,9 +127,11 @@ as the piw-master script.
             try:
                 with ApacheSource(log_file, config.format) as src:
                     for row in src:
-                        if log_filter(row):
+                        log_type = get_log_type(row)
+                        if log_type:
                             if not config.drop or queue.poll(1, transport.POLLOUT):
-                                queue.send_msg('LOG', log_transform(row))
+                                data = log_transform(row, log_type)
+                                queue.send_msg(log_type, data)
                             else:
                                 logging.warning('dropping log entry')
             finally:
@@ -145,53 +165,111 @@ def log_open(filename):
         return io.open(filename, 'r', encoding='ascii')
 
 
-def log_filter(row):
+def get_log_type(row):
     """
-    Filters which log entries to include. Current criteria are: successful
-    downloads (status 200) only, user-agent must begin with ``"pip/"`` and
-    the accessed path must have an extension of ``".whl"``.
+    Returns a log type depending on the contents of the row. For rows not
+    containing a loggable record, None is returned so the entry can be
+    discarded. Other than None, return values must be valid log messages to be
+    handled by the oracle.
 
     :param row:
         A tuple containing the fields of the log entry, as returned by
         :class:`lars.apache.ApacheSource`.
     """
-    return (
-        row.status == 200
-        and row.req_User_Agent is not None
-        and row.req_User_Agent.startswith('pip/')
-        and row.request.url.path_str.endswith('.whl')
-    )
+    if row.status != 200 or row.req_User_Agent is None:
+        return
+    path = row.request.url.path_str
+    if row.req_User_Agent.startswith('pip/'):
+        if path.endswith('.whl'):
+            return 'LOGDOWNLOAD'
+        if path.startswith('/simple/'):
+            return 'LOGSEARCH'
+    if path.startswith('/project/'):
+        if path.endswith('/json/'):
+            return 'LOGJSON'
+        return 'LOGPROJECT'
+    if path == '/' or path.endswith('.html'):
+        return 'LOGPAGE'
 
-
-def log_transform(row, decoder=json.JSONDecoder()):
+def log_transform(row, log_type, decoder=json.JSONDecoder()):
     """
     Extracts the relevant information from the specified *row*.
 
     :param row:
         A tuple containing the fields of the log entry, as returned by
         :class:`lars.apache.ApacheSource`.
+
+    :param log_type:
+        A string representing the log type, e.g. 'LOGDOWNLOAD', as handled by
+        the oracle.
+
+    :param decoder:
+        The decoder to use for the serialised data in the log entry. Defaults to
+        :py:class:`json.JSONDecoder` instance.
     """
     path = PosixPath(row.request.url.path_str)
-    try:
-        json_start = row.req_User_Agent.index('{')
-    except ValueError:
-        user_data = {}
-    else:
+    if row.req_User_Agent.startswith('pip/'):
         try:
-            user_data = decoder.decode(row.req_User_Agent[json_start:])
+            json_start = row.req_User_Agent.index('{')
         except ValueError:
             user_data = {}
-    return [
+        else:
+            try:
+                user_data = decoder.decode(row.req_User_Agent[json_start:])
+            except ValueError:
+                user_data = {}
         # Convert lars types into standard types (avoids some issues with
         # some database backends)
-        path.name,
-        str(row.remote_host),
-        row.time.replace(tzinfo=UTC),
-        user_data.get('cpu'),
-        user_data.get('distro', {}).get('name'),
-        user_data.get('distro', {}).get('version'),
-        user_data.get('system', {}).get('name'),
-        user_data.get('system', {}).get('release'),
-        user_data.get('implementation', {'name': 'CPython'}).get('name'),
-        user_data.get('implementation', {'version': user_data.get('python')}).get('version'),
-    ]
+        if log_type == 'LOGDOWNLOAD':
+            return [
+                path.name,
+                get_access_ip(row.remote_host),
+                get_access_time(row.time),
+                get_arch(user_data),
+                get_distro_name(user_data),
+                get_distro_version(user_data),
+                get_os_name(user_data),
+                get_os_version(user_data),
+                get_py_name(user_data),
+                get_py_version(user_data),
+                get_installer_name(user_data),
+                get_installer_version(user_data),
+                get_setuptools_version(user_data),
+            ]
+        if log_type == 'LOGSEARCH':
+            return [
+                get_package_name(path),
+                get_access_ip(row.remote_host),
+                get_access_time(row.time),
+                get_arch(user_data),
+                get_distro_name(user_data),
+                get_distro_version(user_data),
+                get_os_name(user_data),
+                get_os_version(user_data),
+                get_py_name(user_data),
+                get_py_version(user_data),
+                get_installer_name(user_data),
+                get_installer_version(user_data),
+                get_setuptools_version(user_data),
+            ]
+    if log_type == 'LOGPROJECT':
+        return [
+            get_package_name(path),
+            get_access_ip(row.remote_host),
+            get_access_time(row.time),
+            row.req_User_Agent,
+        ]
+    if log_type == 'LOGJSON':
+        return [
+            get_package_name(path),
+            get_access_ip(row.remote_host),
+            get_access_time(row.time),
+            get_user_agent(row.req_User_Agent),
+        ]
+    if log_type == 'LOGPAGE':
+        return [
+            get_page_name(path),
+            get_access_ip(row.remote_host),
+            get_access_time(row.time),
+            row.req_User_Agent,
+        ]

@@ -191,6 +191,46 @@ def test_log_download(db, with_files, download_state, db_client):
             "SELECT filename FROM downloads").scalar() == download_state.filename
 
 
+def test_log_search(db, with_files, search_state, db_client):
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 0
+    db_client.log_search(search_state)
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 1
+        assert db.execute(
+            "SELECT package FROM searches").scalar() == search_state.package
+
+
+def test_log_project_page_hit(db, with_files, project_state, db_client):
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM project_page_hits").scalar() == 0
+    db_client.log_project(project_state)
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM project_page_hits").scalar() == 1
+        assert db.execute(
+            "SELECT package FROM project_page_hits").scalar() == project_state.package
+
+
+def test_log_project_json_download(db, with_files, json_state, db_client):
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM project_json_downloads").scalar() == 0
+    db_client.log_json(json_state)
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM project_json_downloads").scalar() == 1
+        assert db.execute(
+            "SELECT package FROM project_json_downloads").scalar() == json_state.package
+
+
+def test_log_web_page_hit(db, with_files, page_state, db_client):
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM web_page_hits").scalar() == 0
+    db_client.log_page(page_state)
+    with db.begin():
+        assert db.execute("SELECT COUNT(*) FROM web_page_hits").scalar() == 1
+        assert db.execute(
+            "SELECT page FROM web_page_hits").scalar() == page_state.page
+
+
 def test_log_build(db, with_package_version, build_state_hacked, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 0

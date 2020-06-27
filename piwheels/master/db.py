@@ -199,7 +199,7 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+                "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
                 (
                     download.filename,
                     download.host,
@@ -211,6 +211,75 @@ class Database:
                     download.os_version,
                     download.py_name,
                     download.py_version,
+                    download.installer_name,
+                    download.installer_version,
+                    download.setuptools_version,
+                ))
+
+    def log_search(self, search):
+        """
+        Log a search in the database, including data derived from JSON in
+        pip's user-agent.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+                (
+                    search.package,
+                    search.host,
+                    search.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    search.arch,
+                    search.distro_name,
+                    search.distro_version,
+                    search.os_name,
+                    search.os_version,
+                    search.py_name,
+                    search.py_version,
+                    search.installer_name,
+                    search.installer_version,
+                    search.setuptools_version,
+                ))
+
+    def log_project(self, project):
+        """
+        Log a project page hit in the database.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (log_project(%s, %s, %s, %s))",
+                (
+                    project.package,
+                    project.host,
+                    project.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    project.user_agent,
+                ))
+
+    def log_json(self, json):
+        """
+        Log a project's JSON page hit in the database.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (log_json(%s, %s, %s, %s))",
+                (
+                    json.package,
+                    json.host,
+                    json.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    json.user_agent,
+                ))
+
+    def log_page(self, page):
+        """
+        Log a web page hit in the database.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (log_page(%s, %s, %s, %s))",
+                (
+                    page.page,
+                    page.host,
+                    page.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    page.user_agent,
                 ))
 
     def log_build(self, build):

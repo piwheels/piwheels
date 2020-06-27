@@ -52,14 +52,58 @@ def log_queue(request, zmq_context, master_config):
     queue.close()
 
 
-def test_log_valid(db_queue, log_queue, download_state, task):
-    log_queue.send_msg('LOG', list(download_state))
+def test_log_valid_download(db_queue, log_queue, download_state, task):
+    log_queue.send_msg('LOGDOWNLOAD', list(download_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
     db_queue.send('OK', None)
     task.poll()
     assert task.logger.info.call_args == mock.call(
         'logging download of %s from %s',
         download_state.filename, download_state.host)
+    db_queue.check()
+
+
+def test_log_valid_search(db_queue, log_queue, search_state, task):
+    log_queue.send_msg('LOGSEARCH', list(search_state))
+    db_queue.expect('LOGSEARCH', search_state)
+    db_queue.send('OK', None)
+    task.poll()
+    assert task.logger.info.call_args == mock.call(
+        'logging search for %s from %s',
+        search_state.package, search_state.host)
+    db_queue.check()
+
+
+def test_log_valid_project_page_hit(db_queue, log_queue, project_state, task):
+    log_queue.send_msg('LOGPROJECT', list(project_state))
+    db_queue.expect('LOGPROJECT', project_state)
+    db_queue.send('OK', None)
+    task.poll()
+    assert task.logger.info.call_args == mock.call(
+        'logging project page hit for %s from %s',
+        project_state.package, project_state.host)
+    db_queue.check()
+
+
+def test_log_valid_json_hit(db_queue, log_queue, json_state, task):
+    log_queue.send_msg('LOGJSON', list(json_state))
+    db_queue.expect('LOGJSON', json_state)
+    db_queue.send('OK', None)
+    task.poll()
+    assert task.logger.info.call_args == mock.call(
+        'logging project json hit for %s from %s',
+        json_state.package, json_state.host)
+    db_queue.check()
+
+
+def test_log_valid_webpage_hit(db_queue, log_queue, page_state, task):
+    log_queue.send_msg('LOGPAGE', list(page_state))
+    db_queue.expect('LOGPAGE', page_state)
+    db_queue.send('OK', None)
+    task.poll()
+    assert task.logger.info.call_args == mock.call(
+        'logging page hit for %s from %s',
+        page_state.page, page_state.host)
     db_queue.check()
 
 
