@@ -89,7 +89,7 @@ class Lumberjack(tasks.PauseableTask):
                 self.db.log_project(project)
             elif msg == 'LOGJSON':
                 json = JSONState.from_message(data)
-                self.logger.info('logging json page hit for %s from %s',
+                self.logger.info('logging project json hit for %s from %s',
                                  json.package, json.host)
                 self.db.log_json(json)
             elif msg == 'LOGPAGE':
