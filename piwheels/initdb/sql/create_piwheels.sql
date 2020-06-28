@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.16');
+INSERT INTO configuration(id, version) VALUES (1, '0.17');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -326,7 +326,12 @@ GRANT SELECT ON rewrites_pending TO {username};
 
 -- preinstalled_apt_packages
 -------------------------------------------------------------------------------
--- XXX
+-- The "preinstalled_apt_packages" table stores the apt packages which are
+-- preinstalled in each distro version (where a distro version maps directly to
+-- an ABI) so that the relevant apt packages can be excluded from the
+-- dependencies shown for a particular piwheels package. The table should be
+-- populated with all the apt packages preinstalled in the "Lite" version of the
+-- OS release.
 -------------------------------------------------------------------------------
 
 CREATE TABLE preinstalled_apt_packages (
