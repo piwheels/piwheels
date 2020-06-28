@@ -141,6 +141,7 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
         time_mock.side_effect = datetime
         time_mock.now.side_effect = chain([
             start,
+            start,
             start + timedelta(seconds=400),
             start + timedelta(seconds=401),
         ], cycle([
