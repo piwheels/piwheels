@@ -316,7 +316,7 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
                         123456, '123456abcdef'),
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
-    db_queue.send('OK', {'apt': {'libc6', 'zlib1g', 'libfoo'}})
+    db_queue.send('OK', {'libfoo'})
     task.once()
     task.poll()
     db_queue.check()

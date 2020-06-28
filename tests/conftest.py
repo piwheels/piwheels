@@ -100,6 +100,22 @@ def file_state_hacked(request, file_content):
 
 
 @pytest.fixture()
+def file_states_deps(request, file_content):
+    h = sha256()
+    h.update(file_content)
+    return [
+        FileState(
+            'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
+            h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
+            {'apt': ['libc', 'libfoo4']}),
+        FileState(
+            'foo-0.1-cp35-cp35m-linux_armv7l.whl', len(file_content),
+            h.hexdigest().lower(), 'foo', '0.1', 'cp35', 'cp35m', 'linux_armv7l',
+            {'apt': ['libc', 'libfoo5']}),
+    ]
+
+
+@pytest.fixture()
 def file_state_universal(request, file_content):
     h = sha256()
     h.update(file_content)
@@ -309,6 +325,36 @@ def with_files(request, db, with_build, file_state, file_state_hacked):
                     "VALUES (%s, %s, %s)",
                     file_state_hacked.filename, tool, dependency)
     return [file_state, file_state_hacked]
+
+
+@pytest.fixture()
+def with_preinstalled_apt(request, db, with_build_abis):
+    with db.begin():
+        db.execute(
+            "INSERT INTO preinstalled_apt_packages "
+            "VALUES "
+            "('cp34m', 'libc'), ('cp35m', 'libc')"
+        )
+
+
+@pytest.fixture()
+def with_deps(request, db, file_states_deps, with_build, with_preinstalled_apt):
+    with db.begin():
+        for file_state in file_states_deps:
+            db.execute(
+                "INSERT INTO files "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                file_state.filename, with_build.build_id,
+                file_state.filesize, file_state.filehash, file_state.package_tag,
+                file_state.package_version_tag, file_state.py_version_tag,
+                file_state.abi_tag, file_state.platform_tag)
+            for tool, dependencies in file_state.dependencies.items():
+                for dependency in dependencies:
+                    db.execute(
+                        "INSERT INTO dependencies "
+                        "VALUES (%s, %s, %s)",
+                        file_state.filename, tool, dependency)
+        return file_states_deps
 
 
 @pytest.fixture()
