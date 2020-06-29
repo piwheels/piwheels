@@ -43,6 +43,7 @@ from piwheels.states import (
     FileState,
     TransferState,
     DownloadState,
+    mkdir_override_symlink,
 )
 
 
@@ -150,6 +151,8 @@ def test_slave_state_init():
         assert slave_state.request is None
         assert slave_state.reply is None
         assert slave_state.build is None
+        assert list(slave_state.stats) == []
+        assert slave_state.clock_skew is None
         assert not slave_state.killed
         assert not slave_state.paused
         assert not slave_state.skipped
@@ -433,3 +436,11 @@ def test_transfer_commit_armv6_exists(tmpdir, file_state, file_content):
     assert not (TransferState.output_path / 'simple' / trans_state._file.name).exists()
     assert final_path.exists()
     assert not link_path.is_symlink()
+
+
+def test_override_symlink_fallback():
+    pkg_dir = mock.Mock()
+    pkg_dir.mkdir.side_effect = [FileExistsError, None]
+    pkg_dir.is_symlink.return_value = True
+    pkg_dir.unlink.side_effect = IsADirectoryError
+    mkdir_override_symlink(pkg_dir)
