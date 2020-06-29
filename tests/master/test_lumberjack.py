@@ -109,7 +109,7 @@ def test_log_summary(db_queue, log_queue, download_state, project_state, task):
     task.poll(0)
     db_queue.check()
     task.log_counters()
-    assert set(call.args for call in task.logger.info.call_args_list) == {
+    assert set(tuple(call.args) for call in task.logger.info.call_args_list) == {
         ('logged %d %s in the last minute', 1, 'downloads'),
         ('logged %d %s in the last minute', 1, 'project hits'),
     }
