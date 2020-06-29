@@ -33,6 +33,8 @@ Defines the :class:`Lumberjack` task; see class for more details.
     :members:
 """
 
+from datetime import timedelta
+
 from .. import protocols, transport, tasks
 from ..states import (
     DownloadState, SearchState, ProjectState, JSONState, PageState)
@@ -55,10 +57,29 @@ class Lumberjack(tasks.PauseableTask):
         log_queue.bind(config.log_queue)
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config, self.logger)
+        self.access_handlers = {
+            'LOGDOWNLOAD': (DownloadState, self.db.log_download, 'downloads'),
+            'LOGSEARCH':   (SearchState,   self.db.log_search,   'searches'),
+            'LOGPROJECT':  (ProjectState,  self.db.log_project,  'project hits'),
+            'LOGJSON':     (JSONState,     self.db.log_json,     'JSON hits'),
+            'LOGPAGE':     (PageState,     self.db.log_page,     'page hits'),
+        }
+        self.counters = {msg: 0 for msg in self.access_handlers}
+        self.every(timedelta(minutes=1), self.log_counters)
 
     def close(self):
         self.db.close()
         super().close()
+
+    def log_counters(self):
+        """
+        Periodically prints the aggregated hit counters and resets them.
+        """
+        for msg, count in self.counters.items():
+            if count:
+                self.logger.info('logged %d %s in the last minute',
+                                 count, self.access_handlers[msg][2])
+        self.counters = {msg: 0 for msg in self.access_handlers}
 
     def handle_log(self, queue):
         """
@@ -72,28 +93,6 @@ class Lumberjack(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg == 'LOGDOWNLOAD':
-                download = DownloadState.from_message(data)
-                self.logger.info('logging download of %s from %s',
-                                 download.filename, download.host)
-                self.db.log_download(download)
-            elif msg == 'LOGSEARCH':
-                search = SearchState.from_message(data)
-                self.logger.info('logging search for %s from %s',
-                                 search.package, search.host)
-                self.db.log_search(search)
-            elif msg == 'LOGPROJECT':
-                project = ProjectState.from_message(data)
-                self.logger.info('logging project page hit for %s from %s',
-                                 project.package, project.host)
-                self.db.log_project(project)
-            elif msg == 'LOGJSON':
-                json = JSONState.from_message(data)
-                self.logger.info('logging project json hit for %s from %s',
-                                 json.package, json.host)
-                self.db.log_json(json)
-            elif msg == 'LOGPAGE':
-                page = PageState.from_message(data)
-                self.logger.info('logging page hit for %s from %s',
-                                 page.page, page.host)
-                self.db.log_page(page)
+            state_cls, handler, label = self.access_handlers[msg]
+            handler(state_cls.from_message(data))
+            self.counters[msg] += 1

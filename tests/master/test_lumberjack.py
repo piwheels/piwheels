@@ -57,9 +57,6 @@ def test_log_valid_download(db_queue, log_queue, download_state, task):
     db_queue.expect('LOGDOWNLOAD', download_state)
     db_queue.send('OK', None)
     task.poll(0)
-    assert task.logger.info.call_args == mock.call(
-        'logging download of %s from %s',
-        download_state.filename, download_state.host)
     db_queue.check()
 
 
@@ -67,10 +64,7 @@ def test_log_valid_search(db_queue, log_queue, search_state, task):
     log_queue.send_msg('LOGSEARCH', list(search_state))
     db_queue.expect('LOGSEARCH', search_state)
     db_queue.send('OK', None)
-    task.poll()
-    assert task.logger.info.call_args == mock.call(
-        'logging search for %s from %s',
-        search_state.package, search_state.host)
+    task.poll(0)
     db_queue.check()
 
 
@@ -78,10 +72,7 @@ def test_log_valid_project_page_hit(db_queue, log_queue, project_state, task):
     log_queue.send_msg('LOGPROJECT', list(project_state))
     db_queue.expect('LOGPROJECT', project_state)
     db_queue.send('OK', None)
-    task.poll()
-    assert task.logger.info.call_args == mock.call(
-        'logging project page hit for %s from %s',
-        project_state.package, project_state.host)
+    task.poll(0)
     db_queue.check()
 
 
@@ -89,10 +80,7 @@ def test_log_valid_json_hit(db_queue, log_queue, json_state, task):
     log_queue.send_msg('LOGJSON', list(json_state))
     db_queue.expect('LOGJSON', json_state)
     db_queue.send('OK', None)
-    task.poll()
-    assert task.logger.info.call_args == mock.call(
-        'logging project json hit for %s from %s',
-        json_state.package, json_state.host)
+    task.poll(0)
     db_queue.check()
 
 
@@ -100,10 +88,7 @@ def test_log_valid_webpage_hit(db_queue, log_queue, page_state, task):
     log_queue.send_msg('LOGPAGE', list(page_state))
     db_queue.expect('LOGPAGE', page_state)
     db_queue.send('OK', None)
-    task.poll()
-    assert task.logger.info.call_args == mock.call(
-        'logging page hit for %s from %s',
-        page_state.page, page_state.host)
+    task.poll(0)
     db_queue.check()
 
 
@@ -111,3 +96,22 @@ def test_log_invalid(db_queue, log_queue, task):
     log_queue.send(b'FOO')
     task.poll(0)
     assert task.logger.error.call_count == 1
+
+
+def test_log_summary(db_queue, log_queue, download_state, project_state, task):
+    log_queue.send_msg('LOGDOWNLOAD', list(download_state))
+    log_queue.send_msg('LOGPROJECT', list(project_state))
+    db_queue.expect('LOGDOWNLOAD', download_state)
+    db_queue.send('OK', None)
+    db_queue.expect('LOGPROJECT', project_state)
+    db_queue.send('OK', None)
+    task.poll(0)
+    task.poll(0)
+    db_queue.check()
+    task.log_counters()
+    assert set(call.args for call in task.logger.info.call_args_list) == {
+        ('logged %d %s in the last minute', 1, 'downloads'),
+        ('logged %d %s in the last minute', 1, 'project hits'),
+    }
+    for msg, count in task.counters.items():
+        assert count == 0
