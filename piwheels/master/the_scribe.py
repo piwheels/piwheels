@@ -83,9 +83,6 @@ class TheScribe(tasks.PauseableTask):
         self.db = DbClient(config, self.logger)
         self.package_cache = None
         self.statistics = {}
-        with pkg_resources.resource_stream(__name__, 'default_libs.txt') as s:
-            with io.TextIOWrapper(s, encoding='ascii') as t:
-                self.default_libs = set(line.strip() for line in t)
         self.templates = PageTemplateLoader(
             search_path=[
                 pkg_resources.resource_filename(__name__, 'templates')
@@ -323,11 +320,9 @@ class TheScribe(tasks.PauseableTask):
                 row.filename
             ), reverse=True)
         if files:
-            dependencies = self.db.get_file_dependencies(files[0].filename)
-            if 'apt' in dependencies:
-                dependencies['apt'] = dependencies['apt'] - self.default_libs
+            dependencies = self.db.get_file_apt_dependencies(files[0].filename)
         else:
-            dependencies = {}
+            dependencies = set()
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)

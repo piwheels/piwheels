@@ -314,10 +314,11 @@ class TheOracle(tasks.Task):
     def do_filedeps(self, filename):
         """
         Handler for "FILEDEPS" message, sent by :class:`DbClient` to request
-        dependencies for *filename*, returned as a dict mapping tool names
-        to dependency sets.
+        apt dependencies for *filename*, returned as a set of dependencies
+        excluding those which are preinstalled in the distro version with the
+        corresponding ABI tag.
         """
-        return self.db.get_file_dependencies(filename)
+        return self.db.get_file_apt_dependencies(filename)
 
     def do_saverwp(self, queue):
         """
@@ -510,9 +511,9 @@ class DbClient:
         """
         return self._execute('GETSKIP', [package, version])
 
-    def get_file_dependencies(self, filename):
+    def get_file_apt_dependencies(self, filename):
         """
-        See :meth:`.db.Database.get_file_dependencies`.
+        See :meth:`.db.Database.get_file_apt_dependencies`.
         """
         return self._execute('FILEDEPS', filename)
 

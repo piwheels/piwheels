@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.16');
+INSERT INTO configuration(id, version) VALUES (1, '0.17');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -323,6 +323,28 @@ CREATE TABLE rewrites_pending (
 
 CREATE INDEX rewrites_pending_added ON rewrites_pending(added_at);
 GRANT SELECT ON rewrites_pending TO {username};
+
+-- preinstalled_apt_packages
+-------------------------------------------------------------------------------
+-- The "preinstalled_apt_packages" table stores the apt packages which are
+-- preinstalled in each distro version (where a distro version maps directly to
+-- an ABI) so that the relevant apt packages can be excluded from the
+-- dependencies shown for a particular piwheels package. The table should be
+-- populated with all the apt packages preinstalled in the "Lite" version of the
+-- OS release.
+-------------------------------------------------------------------------------
+
+CREATE TABLE preinstalled_apt_packages (
+    abi_tag        VARCHAR(100) NOT NULL,
+    apt_package    VARCHAR(255) NOT NULL,
+
+    CONSTRAINT preinstalled_apt_packages_pk PRIMARY KEY (abi_tag, apt_package),
+    CONSTRAINT preinstalled_apt_packages_abi_tag_fk FOREIGN KEY (abi_tag)
+        REFERENCES build_abis (abi_tag) ON DELETE CASCADE
+);
+
+CREATE INDEX preinstalled_apt_packages_abi_tag ON preinstalled_apt_packages(abi_tag);
+GRANT SELECT ON preinstalled_apt_packages TO {username};
 
 -- builds_pending
 -------------------------------------------------------------------------------
@@ -1277,14 +1299,14 @@ $sql$;
 REVOKE ALL ON FUNCTION get_project_files(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_files(TEXT) TO {username};
 
--- get_file_dependencies(filename)
+-- get_file_apt_dependencies(filename)
 -------------------------------------------------------------------------------
--- Returns all dependencies registered against the specified *filename*.
+-- Returns apt dependencies registered against the specified *filename*,
+-- excluding those listed in preinstalled_apt_packages with a matching ABI tag.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION get_file_dependencies(fn TEXT)
+CREATE FUNCTION get_file_apt_dependencies(fn TEXT)
     RETURNS TABLE(
-        tool dependencies.tool%TYPE,
         dependency dependencies.dependency%TYPE
     )
     LANGUAGE SQL
@@ -1292,16 +1314,20 @@ CREATE FUNCTION get_file_dependencies(fn TEXT)
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    SELECT
-        d.tool,
-        d.dependency
-    FROM dependencies d
-    WHERE d.filename = fn
-    ORDER BY tool, dependency;
+    SELECT dependency
+        FROM dependencies
+        WHERE filename = fn
+        AND tool = 'apt'
+    EXCEPT ALL
+    SELECT apt_package
+        FROM preinstalled_apt_packages p
+        JOIN files f
+        ON p.abi_tag = f.abi_tag
+        WHERE f.filename = fn;
 $sql$;
 
-REVOKE ALL ON FUNCTION get_file_dependencies(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_file_dependencies(TEXT) TO {username};
+REVOKE ALL ON FUNCTION get_file_apt_dependencies(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_file_apt_dependencies(TEXT) TO {username};
 
 -- save_rewrites_pending(...)
 -------------------------------------------------------------------------------

@@ -489,20 +489,16 @@ class Database:
                 where(self._versions.c.version == version)
             )
 
-    def get_file_dependencies(self, filename):
+    def get_file_apt_dependencies(self, filename):
         """
-        Returns the dependencies for the specified *filename* as a map of
-        tool names to dependency sets.
+        Returns a set of the apt dependencies for the specified *filename*.
         """
         with self._conn.begin():
             return {
-                tool: {row.dependency for row in rows}
-                for tool, rows in groupby(
-                    self._conn.execute(
-                        "SELECT tool, dependency "
-                        "FROM get_file_dependencies(%s)", (filename,)
-                    ),
-                    key=attrgetter('tool')
+                row['dependency']
+                for row in self._conn.execute(
+                    "SELECT dependency "
+                    "FROM get_file_apt_dependencies(%s)", (filename,)
                 )
             }
 
