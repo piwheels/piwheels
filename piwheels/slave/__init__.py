@@ -122,7 +122,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         if os.geteuid() == 0:
             self.logger.fatal('Slave must not be run as root')
             return 1
-        if datetime.now(tz=UTC) < datetime(2019, 1, 1, tzinfo=UTC):
+        if datetime.now(tz=UTC) < datetime(2020, 6, 1, tzinfo=UTC):
             self.logger.fatal('System clock is far in the past')
             return 1
         self.systemd = get_systemd()
