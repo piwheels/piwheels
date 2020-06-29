@@ -32,7 +32,9 @@ from unittest import mock
 from datetime import datetime, timezone
 from threading import Thread
 from socketserver import ThreadingMixIn
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from xmlrpc.client import ProtocolError
 
 import pytest
 import http.client
@@ -87,6 +89,26 @@ def test_pypi_talks_xmlrpc():
             ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
             ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
         ]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_pypi_raises_errors():
+    class FakeXMLHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_error(404, 'Function not found')
+    class FakeXMLRPCServer(ThreadingMixIn, HTTPServer):
+        pass
+    server = FakeXMLRPCServer(("127.0.0.1", 8000), FakeXMLHandler)
+    server_thread = Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+    try:
+        events = PyPIEvents(pypi_xmlrpc='http://127.0.0.1:8000/')
+        events.transport.use_https = False
+        with pytest.raises(ProtocolError):
+            list(events)
     finally:
         server.shutdown()
         server.server_close()
