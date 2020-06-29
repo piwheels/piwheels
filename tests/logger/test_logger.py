@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from conftest import find_message
 from piwheels import __version__, protocols, transport
 from piwheels.logger import main
 
@@ -43,8 +44,7 @@ UTC = timezone.utc
 
 @pytest.fixture()
 def log_sample():
-    log = r"""\
-2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/ HTTP/1.1" 200 2655 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
+    log = r"""2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/ HTTP/1.1" 200 2655 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/certifi/ HTTP/1.1" 200 2222 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.8.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.98-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/MarkupSafe-1.1.1-cp35-cp35m-linux_armv7l.whl HTTP/1.1" 200 32003 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/asn1crypto/ HTTP/1.1" 200 1811 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"2.7.13\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
@@ -248,3 +248,19 @@ def test_parse_compressed(logger_queue_name, logger_queue, log_sample, tmpdir):
     main(['--log-queue', logger_queue_name, str(tmpdir.join('log.gz'))])
     for log_msg, entry in entries:
         assert logger_queue.recv_msg() == (log_msg, entry)
+
+
+def test_drop_entries(caplog, logger_queue_name, logger_queue, log_sample, tmpdir):
+    log, entries = log_sample
+    lines = len(log.splitlines())
+    count = 0
+    with tmpdir.join('log.txt').open('w') as f:
+        while count < 2000:
+            f.write(log)
+            count += lines
+    main(['--log-queue', logger_queue_name, '--drop', str(tmpdir.join('log.txt'))])
+    # Make sure the first entry gets thru then drain everything else
+    assert logger_queue.recv_msg() == entries[0]
+    assert find_message(caplog.records, message='dropping log entry')
+    while logger_queue.poll(0):
+        logger_queue.recv_msg()
