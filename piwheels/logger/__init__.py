@@ -44,6 +44,7 @@ import datetime as dt
 import ipaddress
 from pathlib import PosixPath
 from datetime import timezone
+from fnmatch import fnmatchcase
 
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
@@ -70,6 +71,17 @@ get_setuptools_version = lambda ud: ud.get('setuptools_version')
 clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
 get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
 get_user_agent = lambda ua: ua.split('/')[0].lower()
+
+log_type_patterns = (
+    ('pip/*', '/simple/', None),
+    ('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
+    ('pip/*', '/simple/*', 'LOGSEARCH'),
+    (None,    '/project/*/json/', 'LOGJSON'),
+    (None,    '/project/*/json/index.json', 'LOGJSON'),
+    (None,    '/project/*', 'LOGPROJECT'),
+    (None,    '/', 'LOGPAGE'),
+    (None,    '/*.html', 'LOGPAGE'),
+)
 
 
 def main(args=None):
@@ -179,17 +191,10 @@ def get_log_type(row):
     if row.status != 200 or row.req_User_Agent is None:
         return
     path = row.request.url.path_str
-    if row.req_User_Agent.startswith('pip/'):
-        if path.endswith('.whl'):
-            return 'LOGDOWNLOAD'
-        if path.startswith('/simple/'):
-            return 'LOGSEARCH'
-    if path.startswith('/project/'):
-        if path.endswith('/json/'):
-            return 'LOGJSON'
-        return 'LOGPROJECT'
-    if path == '/' or path.endswith('.html'):
-        return 'LOGPAGE'
+    for ua_mask, fn_mask, log_type in log_type_patterns:
+        if ua_mask is None or fnmatchcase(row.req_User_Agent, ua_mask):
+            if fnmatchcase(path, fn_mask):
+                return log_type
 
 def log_transform(row, log_type, decoder=json.JSONDecoder()):
     """
