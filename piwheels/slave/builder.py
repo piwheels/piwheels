@@ -432,7 +432,14 @@ class Builder(Thread):
                     match = find_re.search(line)
                     if match is not None:
                         try:
-                            lib_path = str(Path(match.group(2)).resolve())
+                            lib_path = Path(match.group(2))
+                            # This nonsense is purely because Py3.6 introduced
+                            # the "strict" parameter for Path.resolve, with a
+                            # default *different* to the behaviour of Py3.5!
+                            try:
+                                lib_path = str(lib_path.resolve(strict=True))
+                            except TypeError:
+                                lib_path = str(lib_path.resolve())
                         except FileNotFoundError:
                             continue
                         dep_libs.add(lib_path)

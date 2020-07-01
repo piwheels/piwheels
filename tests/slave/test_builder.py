@@ -377,7 +377,8 @@ def test_builder_dependencies_stopped(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.proc.call') as call_mock, \
             mock.patch('piwheels.slave.builder.proc.check_output') as output_mock, \
-            mock.patch('piwheels.slave.builder.apt') as apt_mock:
+            mock.patch('piwheels.slave.builder.apt') as apt_mock, \
+            mock.patch('piwheels.slave.builder.Path.resolve') as resolve_mock:
         tmpdir_mock().name = str(tmpdir)
         tmpdir_mock().__enter__.return_value = str(tmpdir)
         def call(*args, **kwargs):
@@ -389,6 +390,7 @@ def test_builder_dependencies_stopped(mock_archive, tmpdir):
             return b"libopenblas.so.0 => /usr/lib/libopenblas.so.0 (0x00007f7117fd4000)"
         call_mock.side_effect = call
         output_mock.side_effect = stop
+        resolve_mock.return_value = '/usr/lib/libopenblas.so.0'
         b = builder.Builder('foo', '0.1')
         b.start()
         b.join(1)
