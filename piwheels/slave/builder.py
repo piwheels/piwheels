@@ -482,12 +482,14 @@ class Builder(Thread):
                         self.build_dependencies(wheel)
                         self._wheels.append(wheel)
                 except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
+                    self.stop()
                     log_file.seek(0, os.SEEK_END)
                     if exc.output is not None:
                         log_file.write('\n')
                         log_file.write(exc.output.decode('ascii', 'replace'))
                     log_file.write('\n')
                     log_file.write(str(exc))
+                if self._stopped.wait(0):
                     self._status = False
                     self._wheels.clear()
             log_file.seek(0)
