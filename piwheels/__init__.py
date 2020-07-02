@@ -74,7 +74,7 @@ __author_email__ = 'ben@bennuttall.com'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
-__requires__ = ['configargparse', 'pyzmq', 'voluptuous', 'cbor2']
+__requires__ = ['configargparse', 'pyzmq', 'voluptuous', 'cbor2', 'simplejson']
 
 __extra_requires__ = {
     'monitor': ['urwid'],

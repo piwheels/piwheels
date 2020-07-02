@@ -281,6 +281,8 @@ the_oracle = Protocol(recv={
     'ALLVERS':     NoData,
     'NEWPKG':      ExactSequence([str, str]),  # package, skip reason
     'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
+    'PROJDESC':    ExactSequence([str, str]),  # package, description
+    'GETPROJDESC': str,  # package
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
     'LOGDOWNLOAD': _download_state,

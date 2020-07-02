@@ -37,6 +37,9 @@ from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
 import requests
+from requests.exceptions import RequestException
+from simplejson.errors import JSONDecodeError
+
 
 from .. import __version__
 
@@ -45,6 +48,7 @@ UTC = timezone.utc
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+logger = logging.getLogger('master.pypi')
 
 
 class PiWheelsTransport(xmlrpc.client.SafeTransport):
@@ -74,7 +78,7 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
                              timeout=self.timeout)
         try:
             resp.raise_for_status()
-        except requests.RequestException as exc:
+        except RequestException as exc:
             raise xmlrpc.client.ProtocolError(url, resp.status_code,
                                               str(exc), resp.headers)
         else:
@@ -189,3 +193,29 @@ class PyPIEvents:
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
                 self.next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
+
+
+def get_project_description(package):
+    "Look up the project description for *package* using PyPI's legacy JSON API"
+    url = 'https://pypi.org/pypi/{}/json'.format(package)
+    try:
+        r = requests.get(url)
+    except RequestException as e:
+        logger.error('failed to retrieve project summary for %s: %s', package, e)
+        return
+    if r.status_code < 300:
+        try:
+            j = r.json()
+        except JSONDecodeError as e:
+            logger.error('failed to retrieve project summary for %s: %s',
+                         package, e)
+            return
+        try:
+            description = j['info']['summary']
+        except KeyError as e:
+            logger.error('failed to retrieve project summary for %s: %s',
+                         package, repr(e))
+            return
+        return description[:200] if description else None
+    logger.error('failed to retrieve project summary for %s: status code %s',
+                 package, r.status_code)
