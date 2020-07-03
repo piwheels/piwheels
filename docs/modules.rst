@@ -115,12 +115,6 @@ piwheels.transport
 .. automodule:: piwheels.transport
 
 
-piwheels.protocols
-==================
-
-.. automodule:: piwheels.protocols
-
-
 piwheels.tasks
 ==============
 

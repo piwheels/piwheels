@@ -26,6 +26,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""
+This module defines derivatives of the ZMQ socket classes customized for the
+message structures used in piwheels.
+
+.. autoclass:: Context
+
+.. autoclass:: Socket
+
+.. autoclass:: Poller
+"""
+
 import logging
 import ipaddress as ip
 import datetime as dt
@@ -99,8 +110,8 @@ class Context:
 class Socket:
     """
     Wrapper for 0MQ :class:`zmq.Socket`. This extends 0MQ's sockets to include
-    a protocol which will be used to validate messages that are sent and
-    received (via a voluptuous-based schema), and a logger which can be used
+    a *protocol* which will be used to validate messages that are sent and
+    received (via a voluptuous-based schema), and a *logger* which can be used
     to debug socket behaviour.
     """
     def __init__(self, socket, protocol=None, logger=None):
@@ -171,6 +182,11 @@ class Socket:
 
     @property
     def hwm(self):
+        """
+        Gets or sets the high-water mark of the socket, i.e. the maximum number
+        of queued messages before the socket blocks or drops incoming messages
+        (which depends on the type of the socket).
+        """
         return self._socket.hwm
 
     @hwm.setter
@@ -179,6 +195,10 @@ class Socket:
 
     @property
     def mandatory(self):
+        """
+        If set to :data:`True`, specifies that messages for non-existent
+        recipients will be rejected.
+        """
         return self._socket.getsockopt(zmq.ROUTER_MANDATORY)
 
     @mandatory.setter
@@ -186,30 +206,59 @@ class Socket:
         self._socket.setsockopt(zmq.ROUTER_MANDATORY, value)
 
     def bind(self, address):
+        """
+        Binds the socket to listen on *address* for incoming connections.
+        """
         return self._socket.bind(address)
 
     def connect(self, address):
+        """
+        Connects the socket to one listening on *address*.
+        """
         return self._socket.connect(address)
 
     def close(self, linger=None):
+        """
+        Closes the connection, waiting for *linger* seconds to flush any
+        pending messages.
+        """
         return self._socket.close(
             linger=linger if linger is None else linger * 1000)
 
     def subscribe(self, topic):
+        """
+        Subscribes the SUB end of a PUB/SUB socket to messages with *topic* as
+        a prefix.
+        """
         self._socket.setsockopt_string(SUBSCRIBE, topic)
 
     def unsubscribe(self, topic):
+        """
+        Unsubscribes the SUB end of a PUB/SUB socket to messages with *topic*
+        as a prefix.
+        """
         self._socket.setsockopt_string(UNSUBSCRIBE, topic)
 
     def poll(self, timeout=None, flags=POLLIN):
+        """
+        Wait for *timeout* seconds for messages to arrive (if *flags* includes
+        :data:`POLLIN`) or for space to enqueue a message (if *flags* includes
+        :data:`POLLOUT`).
+        """
         return self._socket.poll(
             timeout if timeout is None else timeout * 1000, flags)
 
     def send(self, buf, flags=0):
+        """
+        Send *buf* (a :class:`bytes` string) to the connected socket.
+        """
         self._logger.debug('>> %s', buf)
         return self._socket.send(buf, flags)
 
     def recv(self, flags=0):
+        """
+        Receive a :class:`bytes` string from the connected socket.
+        """
         buf = self._socket.recv(flags)
         self._logger.debug('<< %s', buf)
         return buf
@@ -224,10 +273,20 @@ class Socket:
         return msg_parts
 
     def send_msg(self, msg, data=NoData, flags=0):
+        """
+        Send *msg* (a string) with *data* parameters to the connected socket.
+        The message, and its associated data, must validate against the
+        *protocol* associated with the socket on construction.
+        """
         self._logger.debug('>> %s %r', msg, data)
         return self._socket.send(self._dump_msg(msg, data), flags)
 
     def recv_msg(self, flags=0):
+        """
+        Receive a message (and its associated data) from the connected socket.
+        The message, and its associated data, will be validated agains the
+        *protocol* associated with the socket on construction.
+        """
         msg, data = self._load_msg(self._socket.recv(flags))
         self._logger.debug('<< %s %r', msg, data)
         return msg, data
