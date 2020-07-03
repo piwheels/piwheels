@@ -75,6 +75,7 @@ sys.modules['sqlalchemy.exc'] = Mock()
 sys.modules['sqlalchemy.engine.url'] = Mock()
 sys.modules['piwheels.terminal'] = Mock()
 sys.modules['voluptuous'] = Mock()
+sys.modules['cbor2'] = Mock()
 
 # -- General configuration ------------------------------------------------
 
