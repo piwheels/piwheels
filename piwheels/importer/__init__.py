@@ -33,9 +33,7 @@ Contains the functions that implement the :program:`piw-import` script.
 
 .. autofunction:: main
 
-.. autofunction:: print_build
-
-.. autofunction:: abi
+.. autofunction:: print_state
 
 .. autofunction:: do_import
 

@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 import piwheels as _setup
 
-sys.modules['zmq'] = mock.Mock()
+sys.modules['zmq'] = mock.MagicMock()
 sys.modules['zmq.error'] = mock.Mock()
 sys.modules['dateutil'] = mock.Mock()
 sys.modules['dateutil.parser'] = mock.Mock()
@@ -48,6 +48,9 @@ sys.modules['sqlalchemy.engine.url'] = mock.Mock()
 sys.modules['piwheels.terminal'] = mock.Mock()
 sys.modules['voluptuous'] = mock.Mock()
 sys.modules['cbor2'] = mock.Mock()
+sys.modules['chameleon'] = mock.Mock()
+sys.modules['psycopg2.extensions'] = mock.Mock()
+sys.modules['psycopg2'] = mock.Mock()
 
 # -- General configuration ------------------------------------------------
 
