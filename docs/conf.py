@@ -32,50 +32,22 @@
 import sys
 import os
 from datetime import datetime
+from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 import piwheels as _setup
 
-# Mock out certain modules while building documentation
-class Mock(object):
-    __all__ = []
-
-    def __init__(self, *args, **kw):
-        pass
-
-    def __call__(self, *args, **kw):
-        return Mock()
-
-    def __mul__(self, other):
-        return Mock()
-
-    def __and__(self, other):
-        return Mock()
-
-    def __bool__(self):
-        return False
-
-    def __nonzero__(self):
-        return False
-
-    @classmethod
-    def __getattr__(cls, name):
-        if name in ('__file__', '__path__'):
-            return '/dev/null'
-        else:
-            return Mock()
-
-sys.modules['zmq'] = Mock()
-sys.modules['zmq.error'] = Mock()
-sys.modules['dateutil'] = Mock()
-sys.modules['dateutil.parser'] = Mock()
-sys.modules['configargparse'] = Mock()
-sys.modules['sqlalchemy'] = Mock()
-sys.modules['sqlalchemy.exc'] = Mock()
-sys.modules['sqlalchemy.engine.url'] = Mock()
-sys.modules['piwheels.terminal'] = Mock()
-sys.modules['voluptuous'] = Mock()
-sys.modules['cbor2'] = Mock()
+sys.modules['zmq'] = mock.Mock()
+sys.modules['zmq.error'] = mock.Mock()
+sys.modules['dateutil'] = mock.Mock()
+sys.modules['dateutil.parser'] = mock.Mock()
+sys.modules['configargparse'] = mock.Mock()
+sys.modules['sqlalchemy'] = mock.Mock()
+sys.modules['sqlalchemy.exc'] = mock.Mock()
+sys.modules['sqlalchemy.engine.url'] = mock.Mock()
+sys.modules['piwheels.terminal'] = mock.Mock()
+sys.modules['voluptuous'] = mock.Mock()
+sys.modules['cbor2'] = mock.Mock()
 
 # -- General configuration ------------------------------------------------
 
