@@ -632,7 +632,7 @@ class SlaveState:
         self._request = value
         msg, data = value
         if msg == 'BUILT':
-            if self._reply[0] in ('BUILD', 'CONT'):
+            if self._reply[0] == 'BUILD':
                 try:
                     status, duration, output, files = data
                     files = [FileState.from_message(f) for f in files]
@@ -661,8 +661,9 @@ class SlaveState:
 
     @reply.setter
     def reply(self, value):
-        self._reply = value
         msg, data = value
+        if msg != 'CONT':
+            self._reply = value
         if msg == 'DONE':
             self._build = None
             self._skipped = False

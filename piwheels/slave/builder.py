@@ -356,8 +356,12 @@ class Builder(Thread):
         of :program:`piw-slave`.
         """
         return [
-            self.package, self.version, self.status, self.duration,
-            self.output, [pkg.as_message() for pkg in self._wheels]
+            self.package,
+            self.version,
+            self.status,
+            self.duration,
+            self.output,
+            [pkg.as_message() for pkg in self._wheels]
         ]
 
     def build_environment(self):

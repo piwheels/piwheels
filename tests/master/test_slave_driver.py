@@ -542,6 +542,35 @@ def test_slave_says_built_failed(task, db_queue, slave_queue, builds_queue,
     db_queue.check()
 
 
+def test_slave_says_built_failed_with_cont(
+        task, db_queue, slave_queue, builds_queue, web_queue, master_config,
+        stats_queue, hello_data):
+    task.logger = mock.Mock()
+    slave_queue.send_msg('HELLO', hello_data)
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
+    builds_queue.send_msg('QUEUE', {'cp34m': [('foo', '0.1')]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 1})
+    slave_queue.send_msg('IDLE', stats_data())
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('BUILD', ['foo', '0.1'])
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 0})
+    slave_queue.send_msg('BUSY', stats_data())
+    task.poll(0)
+    assert slave_queue.recv_msg() == ('CONT', None)
+    slave_queue.send_msg('BUILT', [False, timedelta(seconds=5), '', []])
+    bs = BuildState(
+        1, 'foo', '0.1', 'cp34m', False, timedelta(seconds=5), '', {})
+    db_queue.expect('LOGBUILD', bs.as_message())
+    db_queue.send('OK', 1)
+    task.poll(0)
+    assert task.logger.info.call_count == 2
+    assert web_queue.recv_msg() == ('PKGPROJ', 'foo')
+    assert slave_queue.recv_msg() == ('DONE', None)
+    db_queue.check()
+
+
 def test_slave_says_built_succeeded(task, fs_queue, slave_queue, builds_queue,
                                     web_queue, stats_queue, master_config,
                                     file_state, file_state_hacked, hello_data):

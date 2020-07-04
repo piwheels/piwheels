@@ -425,7 +425,7 @@ class SlaveDriver(tasks.Task):
         """
         if slave.reply[0] != 'BUILD':
             self.logger.error(
-                'slave %d (%s): protocol error (BUILD after %s)',
+                'slave %d (%s): protocol error (BUILT after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
         else:
