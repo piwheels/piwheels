@@ -49,14 +49,6 @@ from .. import __version__
 
 
 UTC = timezone.utc
-CONTROL_CHARS = {
-    c: '\N{REPLACEMENT CHARACTER}'
-    for c in chain(
-        range(0x00, 0x09),
-        range(0x0e, 0x20),
-        [0x0b, 0x7f]
-    )
-}
 
 
 ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
@@ -67,12 +59,24 @@ RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
 
+CONTROL_CHARS = {
+    c: '\N{REPLACEMENT CHARACTER}'
+    for c in chain(
+        range(0x00, 0x09),
+        range(0x0e, 0x20),
+        [0x0b, 0x7f]
+    )
+}
+
 def sanitize(s):
     """
     A small routine for sanitizing the sometimes crazy stuff that winds up in
     build log output...
     """
-    return s.translate(CONTROL_CHARS)
+    if s is None:
+        return None
+    else:
+        return s.translate(CONTROL_CHARS)
 
 
 class Database:
@@ -219,19 +223,19 @@ class Database:
             self._conn.execute(
                 "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
                 (
-                    download.filename,
+                    sanitize(download.filename),
                     download.host,
                     download.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    download.arch,
-                    download.distro_name,
-                    download.distro_version,
-                    download.os_name,
-                    download.os_version,
-                    download.py_name,
-                    download.py_version,
-                    download.installer_name,
-                    download.installer_version,
-                    download.setuptools_version,
+                    sanitize(download.arch),
+                    sanitize(download.distro_name),
+                    sanitize(download.distro_version),
+                    sanitize(download.os_name),
+                    sanitize(download.os_version),
+                    sanitize(download.py_name),
+                    sanitize(download.py_version),
+                    sanitize(download.installer_name),
+                    sanitize(download.installer_version),
+                    sanitize(download.setuptools_version),
                 ))
 
     def log_search(self, search):
@@ -243,19 +247,19 @@ class Database:
             self._conn.execute(
                 "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
                 (
-                    search.package,
+                    sanitize(search.package),
                     search.host,
                     search.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    search.arch,
-                    search.distro_name,
-                    search.distro_version,
-                    search.os_name,
-                    search.os_version,
-                    search.py_name,
-                    search.py_version,
-                    search.installer_name,
-                    search.installer_version,
-                    search.setuptools_version,
+                    sanitize(search.arch),
+                    sanitize(search.distro_name),
+                    sanitize(search.distro_version),
+                    sanitize(search.os_name),
+                    sanitize(search.os_version),
+                    sanitize(search.py_name),
+                    sanitize(search.py_version),
+                    sanitize(search.installer_name),
+                    sanitize(search.installer_version),
+                    sanitize(search.setuptools_version),
                 ))
 
     def log_project(self, project):
@@ -266,10 +270,10 @@ class Database:
             self._conn.execute(
                 "VALUES (log_project(%s, %s, %s, %s))",
                 (
-                    project.package,
+                    sanitize(project.package),
                     project.host,
                     project.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    project.user_agent,
+                    sanitize(project.user_agent),
                 ))
 
     def log_json(self, json):
@@ -280,10 +284,10 @@ class Database:
             self._conn.execute(
                 "VALUES (log_json(%s, %s, %s, %s))",
                 (
-                    json.package,
+                    sanitize(json.package),
                     json.host,
                     json.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    json.user_agent,
+                    sanitize(json.user_agent),
                 ))
 
     def log_page(self, page):
@@ -294,10 +298,10 @@ class Database:
             self._conn.execute(
                 "VALUES (log_page(%s, %s, %s, %s))",
                 (
-                    page.page,
+                    sanitize(page.page),
                     page.host,
                     page.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    page.user_agent,
+                    sanitize(page.user_agent),
                 ))
 
     def log_build(self, build):
