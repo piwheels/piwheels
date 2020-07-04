@@ -427,6 +427,24 @@ class SlaveState:
     :attr:`build`) and :class:`TransferState` (accessible from
     :attr:`transfer`). The class also tracks the time a request was last seen
     from the build slave, and includes a :meth:`kill` method.
+
+    :param str address:
+        The slave's XXX address.
+
+    :param str timeout:
+        XXX
+
+    :param str native_py_version:
+        The slave's native Python version.
+
+    :param str native_abi:
+        The slave's native Python ABI.
+
+    :param str native_platform:
+        The slave's native platform.
+
+    :param str label:
+        A label representing the slave.
     """
     counter = 0
     status_queue = None
@@ -586,6 +604,12 @@ class TransferState:
     methods to write a recevied :meth:`chunk`, and to determine the next chunk
     to :meth:`fetch`, as well as a property to determine when the transfer is
     :attr:`done`.
+
+    :param str slave_id:
+        The ID number of the slave which built the file.
+
+    :param str file_state:
+        XXX
     """
 
     chunk_size = 65536
@@ -723,6 +747,64 @@ class DownloadState(namedtuple('DownloadState', (
     'installer_version',
     'setuptools_version',
 ))):
+    """
+    Represents the state of the log entry for a download of a package wheel
+    file, including its :attr:`filename`, the user's :attr:`host` IP, access
+    :attr:`timestamp` and information about the operating system and installer.
+
+    :type filename: str
+    :param filename:
+        The filename of the downloaded wheel file.
+
+    :type host: str
+    :param host:
+        The IP address of the user.
+
+    :type timestamp: :class:`datetime.datetime`
+    :param timestamp:
+        The timestamp at which the file was downloaded.
+
+    :type arch: str or None
+    :param arch:
+        The architecture of the user's computer system (usually armv6 or
+        armv7).
+
+    :type distro_name: str or None
+    :param distro_name:
+        The user's operating system distribution name (e.g. Raspbian).
+
+    :type distro_version: str or None
+    :param distro_version:
+        The version of the user's operating system distribution.
+
+    :type os_name: str or None
+    :param os_name:
+        The name of the user's operating system (e.g. Linux).
+
+    :type os_version: str or None
+    :param os_version:
+        The version of the user's operating system (e.g. Linux kernel version).
+
+    :type py_name: str or None
+    :param py_name:
+        The Python implementation used (e.g. CPython).
+
+    :type py_version: str or None
+    :param py_version:
+        The Python version used (e.g. 3.7.3).
+
+    :type installer_name: str or None
+    :param installer_name:
+        The name of the tool used to install the file (e.g. pip).
+
+    :type installer_version: str or None
+    :param installer_version:
+        The version of the tool (e.g. pip) used to install the file.
+
+    :type setuptools_version: str or None
+    :param setuptools_version:
+        The version of setuptools used.
+    """
     __slots__ = ()
 
     def as_message(self):
@@ -748,6 +830,63 @@ class SearchState(namedtuple('SearchState', (
     'installer_version',
     'setuptools_version',
 ))):
+    """
+    Represents the state of the log entry for an instance of a package search,
+    including the :attr:`package` name, user's :attr:`host` IP, access
+    :attr:`timestamp` and information about the operating system and installer.
+
+    :type package: str
+    :param package:
+        The name of the package searched for.
+
+    :type host: str
+    :param host:
+        The IP address of the user.
+
+    :type timestamp: :class:`datetime.datetime`
+    :param timestamp:
+        The timestamp at which the search occurred.
+
+    :type arch: str or None
+    :param arch:
+        The architecture of the user's computer system (usually armv6 or armv7).
+
+    :type distro_name: str or None
+    :param distro_name:
+        The user's operating system distribution name (e.g. Raspbian).
+
+    :type distro_version: str or None
+    :param distro_version:
+        The version of the user's operating system distribution.
+
+    :type os_name: str or None
+    :param os_name:
+        The name of the user's operating system (e.g. Linux).
+
+    :type os_version: str or None
+    :param os_version:
+        The version of the user's operating system (e.g. Linux kernel version).
+
+    :type py_name: str or None
+    :param py_name:
+        The Python implementation used (e.g. CPython).
+
+    :type py_version: str or None
+    :param py_version:
+        The Python version used (e.g. 3.7.3).
+
+    :type installer_name: str or None
+    :param installer_name:
+        The name of the tool used (e.g. pip).
+
+    :type installer_version: str or None
+    :param installer_version:
+        The version of the tool (e.g. pip) used.
+
+    :type setuptools_version: str or None
+    :param setuptools_version:
+        The version of setuptools used.
+    """
     __slots__ = ()
 
     def as_message(self):
@@ -764,6 +903,27 @@ class ProjectState(namedtuple('ProjectState', (
     'timestamp',
     'user_agent',
 ))):
+    """
+    Represents the state of the log entry for an instance of project page hit,
+    including the :attr:`page` name, the user's :attr:`host` IP, access
+    :attr:`timestamp` and the user's :attr:`user_agent`.
+
+    :type package: str
+    :param package:
+        The name of the package searched for.
+
+    :type host: str
+    :param host:
+        The IP address of the user.
+
+    :type timestamp: :class:`datetime.datetime`
+    :param timestamp:
+        The timestamp at which the page was accessed.
+
+    :type host: str
+    :param str user_agent:
+        The user agent of the page request.
+    """
     __slots__ = ()
 
     def as_message(self):
@@ -780,6 +940,27 @@ class JSONState(namedtuple('JSONState', (
     'timestamp',
     'user_agent',
 ))):
+    """
+    Represents the state of the log entry for an instance of project JSON
+    download, including the :attr:`page` name, the user's :attr:`host` IP,
+    access :attr:`timestamp` and the user's :attr:`user_agent`.
+
+    :type package: str
+    :param package:
+        The name of the package whose JSON file was accessed.
+
+    :type host: str
+    :param host:
+        The IP address of the user.
+
+    :type timestamp: :class:`datetime.datetime`
+    :param timestamp:
+        The timestamp at which the page was accessed.
+
+    :type host: str
+    :param str user_agent:
+        The user agent of the request.
+    """
     __slots__ = ()
 
     def as_message(self):
@@ -796,6 +977,27 @@ class PageState(namedtuple('PageState', (
     'timestamp',
     'user_agent',
 ))):
+    """
+    Represents the state of the log entry for an instance of web page hit,
+    including the :attr:`page` name, the user's :attr:`host` IP, access
+    :attr:`timestamp` and the user's :attr:`user_agent`.
+
+    :type page: str
+    :param page:
+        The name of the page accessed.
+
+    :type host: str
+    :param host:
+        The IP address of the user.
+
+    :type timestamp: :class:`datetime.datetime`
+    :param timestamp:
+        The timestamp at which the page was accessed.
+
+    :type host: str
+    :param str user_agent:
+        The user agent of the page request.
+    """
     __slots__ = ()
 
     def as_message(self):
