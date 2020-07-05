@@ -272,7 +272,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             self.logger.info("Sleeping: paused")
         else:
             self.logger.info("Sleeping: no available jobs")
-        sleep(randint(5, 15))
+        sleep(randint(5, 10))
         return 'IDLE', self.get_status()
 
     def do_build(self, package, version):
@@ -302,7 +302,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         """
         assert self.slave_id is not None, 'CONT before ACK'
         assert self.builder, 'CONT before BUILD / after failed BUILD'
-        self.builder.join(10)
+        self.builder.join(randint(5, 10))
         if not self.builder.is_alive():
             if self.builder.status:
                 self.logger.info('Build succeeded')
