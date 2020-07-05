@@ -616,8 +616,8 @@ class TransferState:
     :param str slave_id:
         The ID number of the slave which built the file.
 
-    :param str file_state:
-        XXX
+    :param FileState file_state:
+        The details of the file to be transferred (filename, size, hash, etc.)
     """
 
     chunk_size = 65536
