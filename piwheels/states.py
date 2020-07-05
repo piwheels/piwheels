@@ -421,18 +421,26 @@ class BuildState:
 
 class SlaveState:
     """
-    Tracks the state of a build slave. The master updates this state which each
+    Tracks the state of a build slave. The master updates this state with each
     request and reply sent to and received from the slave, and this class in
     turn manages the associated :class:`BuildState` (accessible from
     :attr:`build`) and :class:`TransferState` (accessible from
     :attr:`transfer`). The class also tracks the time a request was last seen
     from the build slave, and includes a :meth:`kill` method.
 
-    :param str address:
-        The slave's XXX address.
+    :param bytes address:
+        The slave's ephemeral 0MQ address.
 
-    :param str timeout:
-        XXX
+        .. note::
+
+            This is *not* the slave's IP address; it's a unique identifier
+            generated on connection to the master's ROUTER socket. It will be
+            different each time the slave re-connects (due to timeout, reboot,
+            etc).
+
+    :param int timeout:
+        The number of seconds after which any build will be considered to have
+        timed out (and the slave will be assumed crashed).
 
     :param str native_py_version:
         The slave's native Python version.
