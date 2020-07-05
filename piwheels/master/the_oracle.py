@@ -99,6 +99,8 @@ class TheOracle(tasks.Task):
                 'ALLVERS':     lambda: self.do_allvers(),
                 'NEWPKG':      lambda: self.do_newpkg(*data),
                 'NEWVER':      lambda: self.do_newver(*data),
+                'PROJDESC':    lambda: self.do_projdesc(*data),
+                'GETPROJDESC': lambda: self.do_getprojdesc(data),
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
                 'SKIPVER':     lambda: self.do_skipver(*data),
                 'LOGDOWNLOAD': lambda: self.do_logdownload(data),
@@ -159,6 +161,20 @@ class TheOracle(tasks.Task):
         new (package, version) tuple.
         """
         return self.db.add_new_package_version(package, version, released, skip)
+
+    def do_projdesc(self, package, description):
+        """
+        Handler for "PROJDESC" message, sent by :class:`DbClient` to update a
+        package's project description.
+        """
+        return self.db.update_project_description(package, description)
+
+    def do_getprojdesc(self, package):
+        """
+        Handler for "GETPROJDESC" message, sent by :class:`DbClient` to retrieve
+        a package's project description.
+        """
+        return self.db.get_project_description(package)
 
     def do_skippkg(self, package, reason):
         """
@@ -371,6 +387,18 @@ class DbClient:
         See :meth:`.db.Database.add_new_package_version`.
         """
         return self._execute('NEWVER', [package, version, released, skip])
+
+    def update_project_description(self, package, description):
+        """
+        See :meth:`.db.Database.update_project_description`.
+        """
+        return self._execute('PROJDESC', [package, description])
+
+    def get_project_description(self, package):
+        """
+        See :meth:`.db.Database.get_project_description`.
+        """
+        return self._execute('GETPROJDESC', package)
 
     def skip_package(self, package, reason):
         """

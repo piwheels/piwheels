@@ -38,7 +38,7 @@ import io
 import re
 import sys
 import gzip
-import json
+import simplejson as json
 import logging
 import datetime as dt
 import ipaddress
@@ -210,7 +210,7 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
 
     :param decoder:
         The decoder to use for the serialised data in the log entry. Defaults to
-        :py:class:`json.JSONDecoder` instance.
+        :class:`simplejson.JSONDecoder` instance.
     """
     path = PosixPath(row.request.url.path_str)
     if row.req_User_Agent.startswith('pip/'):

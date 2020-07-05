@@ -34,7 +34,7 @@ Defines the :class:`CloudGazer` task; see class for more details.
 """
 
 from .. import protocols, transport, tasks
-from .pypi import PyPIEvents
+from .pypi import PyPIEvents, get_project_description
 from .the_oracle import DbClient
 
 
@@ -87,15 +87,18 @@ class CloudGazer(tasks.PauseableTask):
                         self.logger.info('added package %s', package)
                         self.web_queue.send_msg('PKGBOTH', package)
                 if version is not None:
-                    if self.db.add_new_package_version(
-                            package, version, timestamp,
-                            skip='' if action == 'source' else 'binary only'):
+                    skip = '' if action == 'source' else 'binary only'
+                    if self.db.add_new_package_version(package, version,
+                                                       timestamp, skip):
                         self.logger.info(
                             'added package %s version %s', package, version)
                         if action != 'source':
                             self.logger.info(
                                 'disabled package %s version %s (binary only)',
                                 package, version)
+                        description = get_project_description(package)
+                        if description:
+                            self.db.update_project_description(package, description)
                         self.web_queue.send_msg('PKGPROJ', package)
                     elif action == 'source' and self.db.get_version_skip(
                             package, version) == 'binary only':

@@ -323,6 +323,7 @@ class TheScribe(tasks.PauseableTask):
             dependencies = self.db.get_file_apt_dependencies(files[0].filename)
         else:
             dependencies = set()
+        description = self.db.get_project_description(package)
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
@@ -336,6 +337,7 @@ class TheScribe(tasks.PauseableTask):
                 dependencies=dependencies,
                 format_size=format_size,
                 timestamp=dt.strftime('%Y-%m-%d %H:%M'),
+                description=description,
                 url=lambda filename, filehash:
                     '/simple/{package}/{filename}#sha256={filehash}'.format(
                         package=package, filename=filename, filehash=filehash),

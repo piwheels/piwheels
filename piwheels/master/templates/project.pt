@@ -13,6 +13,7 @@
     <div class="row">
       <div class="small-12 medium-6 columns">
         <h2>${package}</h2>
+        <p>${description}</p>
       </div>
 
       <div class="small-12 medium-6 columns">

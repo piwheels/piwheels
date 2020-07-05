@@ -71,7 +71,7 @@ class ContainsParser(HTMLParser):
         self.compare = None
 
     def handle_starttag(self, tag, attrs):
-        if tag == self.tag and self.attrs <= set(attrs):
+        if tag == self.tag and self.attrs <= set(attrs) and self.state != 'found':
             if self.content is None:
                 self.state = 'found'
             else:
@@ -223,6 +223,8 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
+    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.send('OK', 'Some description')
     task.once()
     task.poll()
     db_queue.check()
@@ -249,6 +251,8 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config)
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [])
+    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.send('OK', 'Some description')
     task.once()
     task.poll()
     db_queue.check()
@@ -258,6 +262,7 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config)
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
     assert contains_elem(project, 'th', content='No files')
 
 
@@ -278,6 +283,8 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {})
+    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.send('OK', 'Some description')
     task.once()
     task.poll()
     db_queue.check()
@@ -287,6 +294,7 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
     assert contains_elem(
         project, 'a',
         [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
@@ -317,6 +325,8 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
     ])
     db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'libfoo'})
+    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.send('OK', 'Some description')
     task.once()
     task.poll()
     db_queue.check()
@@ -326,6 +336,7 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
     assert contains_elem(
         project, 'a',
         [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
@@ -363,6 +374,8 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     ])
     db_queue.expect('FILEDEPS', 'bar-1.0-cp34-cp34m-linux_armv7l.whl')
     db_queue.send('OK', {'apt': {'libc6'}})
+    db_queue.expect('GETPROJDESC', 'bar')
+    db_queue.send('OK', 'Some description')
     task.once()
     task.poll()
     db_queue.check()

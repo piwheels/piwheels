@@ -92,6 +92,8 @@ autodoc_member_order = 'groupwise'
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.5', None),
+    'lars': ('https://lars.readthedocs.io/en/latest', None),
+    'simplejson': ('https://simplejson.readthedocs.io/en/latest', None),
 }
 intersphinx_cache_limit = 7
 

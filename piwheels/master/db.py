@@ -153,6 +153,24 @@ class Database:
                  released.astimezone(UTC).replace(tzinfo=None), skip)
             ).scalar()
 
+    def update_project_description(self, package, description):
+        """
+        Update the project description for *package* in the packages table.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (update_project_description(%s, %s))",
+                (package, description))
+
+    def get_project_description(self, package):
+        """
+        Retrieve the project description for *package* in the packages table.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                "VALUES (get_project_description(%s))",
+                (package,)).scalar()
+
     def skip_package(self, package, reason):
         """
         Mark a package with a reason to prevent future builds of all versions

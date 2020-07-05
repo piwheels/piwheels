@@ -31,8 +31,12 @@ from unittest import mock
 from datetime import datetime, timezone
 
 import pytest
+import http.client
+import xmlrpc.client
+from requests.exceptions import RequestException
+from simplejson.errors import JSONDecodeError
 
-from piwheels.master.pypi import PyPIEvents
+from piwheels.master.pypi import PyPIEvents, get_project_description
 
 
 UTC = timezone.utc
@@ -40,6 +44,18 @@ UTC = timezone.utc
 
 def dt(s):
     return datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+
+
+@pytest.fixture()
+def mock_requests():
+    with mock.patch('piwheels.master.pypi.requests') as requests:
+        yield requests
+
+
+@pytest.fixture()
+def mock_logger():
+    with mock.patch('piwheels.master.pypi.logger') as logger:
+        yield logger
 
 
 def test_pypi_read_normal():
@@ -196,7 +212,6 @@ def test_pypi_backoff():
 
 
 def test_pypi_read_improper_state():
-    import http.client
     with mock.patch('xmlrpc.client.ServerProxy') as proxy:
         proxy().changelog_since_serial.side_effect = (
             http.client.ImproperConnectionState('Something went horribly wrong')
@@ -206,7 +221,6 @@ def test_pypi_read_improper_state():
 
 
 def test_pypi_read_server_error():
-    import xmlrpc.client
     with mock.patch('xmlrpc.client.ServerProxy') as proxy:
         proxy().changelog_since_serial.side_effect = (
             xmlrpc.client.ProtocolError('Something else went wrong',
@@ -216,7 +230,6 @@ def test_pypi_read_server_error():
         assert list(events) == []
 
 def test_pypi_read_client_error():
-    import xmlrpc.client
     with mock.patch('xmlrpc.client.ServerProxy') as proxy:
         proxy().changelog_since_serial.side_effect = (
             xmlrpc.client.ProtocolError('Client did something stupid',
@@ -225,3 +238,71 @@ def test_pypi_read_client_error():
         events = PyPIEvents()
         with pytest.raises(xmlrpc.client.ProtocolError):
             list(events)
+
+def test_get_project_description(mock_requests):
+    data = {
+        'info': {
+            'summary': 'really cool package',
+        },
+    }
+    mock_response = mock.Mock(
+        status_code=200,
+        json=mock.Mock(return_value=data),
+    )
+    mock_requests.get.return_value = mock_response
+    assert get_project_description('foo') == 'really cool package'
+
+def test_get_project_description_empty(mock_requests):
+    data = {
+        'info': {
+            'summary': '',
+        },
+    }
+    mock_response = mock.Mock(
+        status_code=200,
+        json=mock.Mock(return_value=data),
+    )
+    mock_requests.get.return_value = mock_response
+    assert get_project_description('foo') is None
+
+def test_get_project_description_bad_json(mock_requests, mock_logger):
+    empty = {}
+    no_info = {
+        'something': 'else',
+    }
+    info = {
+        'info': {},
+    }
+    for data in (empty, no_info, info):
+        mock_response = mock.Mock(
+            status_code=200,
+            json=mock.Mock(return_value=data),
+        )
+        mock_requests.get.return_value = mock_response
+        assert get_project_description('foo') is None
+        assert mock_logger.error.call_count == 1
+        mock_logger.reset_mock()
+
+def test_get_project_description_invalid_json(mock_requests, mock_logger):
+    mock_response = mock.Mock(
+        status_code=200,
+        json=mock.Mock(
+            side_effect=JSONDecodeError('Expecting value', 'doc', 0)
+        ),
+    )
+    mock_requests.get.return_value = mock_response
+    assert get_project_description('foo') is None
+    assert mock_logger.error.call_count == 1
+
+def test_get_project_description_bad_request(mock_requests, mock_logger):
+    mock_requests.get.side_effect = RequestException('something went wrong')
+    assert get_project_description('foo') is None
+    assert mock_logger.error.call_count == 1
+
+def test_get_project_description_404(mock_requests, mock_logger):
+    mock_response = mock.Mock(
+        status_code=404,
+    )
+    mock_requests.get.return_value = mock_response
+    assert get_project_description('foo') is None
+    assert mock_logger.error.call_count == 1
