@@ -169,7 +169,7 @@ class Database:
         with self._conn.begin():
             return self._conn.execute(
                 "VALUES (get_project_description(%s))",
-                (package)).scalar()
+                (package,)).scalar()
 
     def skip_package(self, package, reason):
         """

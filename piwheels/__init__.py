@@ -74,13 +74,13 @@ __author_email__ = 'ben@bennuttall.com'
 __url__          = 'https://www.piwheels.org/'
 __platforms__    = 'ALL'
 
-__requires__ = ['configargparse', 'pyzmq', 'voluptuous', 'cbor2', 'simplejson']
+__requires__ = ['configargparse', 'pyzmq', 'voluptuous', 'cbor2']
 
 __extra_requires__ = {
     'monitor': ['urwid'],
-    'master':  ['requests', 'sqlalchemy', 'psycopg2', 'chameleon'],
+    'master':  ['requests', 'sqlalchemy', 'psycopg2', 'chameleon', 'simplejson'],
     'slave':   ['pip', 'wheel', 'python-dateutil'],
-    'logger':  ['lars'],
+    'logger':  ['lars', 'simplejson'],
     'test':    ['pytest', 'coverage'],
     'doc':     ['sphinx'],
     'sense':   ['pisense', 'python-dateutil'],

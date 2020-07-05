@@ -201,14 +201,15 @@ def get_project_description(package):
     try:
         r = requests.get(url)
     except RequestException as e:
-        logger.error('failed to retrieve project summary for %s: %s', package, e)
+        logger.error('failed to retrieve project summary for %s: %s',
+                     package, repr(e))
         return
     if r.status_code < 300:
         try:
             j = r.json()
         except JSONDecodeError as e:
             logger.error('failed to retrieve project summary for %s: %s',
-                         package, e)
+                         package, repr(e))
             return
         try:
             description = j['info']['summary']
