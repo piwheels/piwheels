@@ -7,6 +7,11 @@ code. It is probably not terribly useful for reading through, but may be useful
 as a searchable reference.
 
 
+.. contents::
+    :depth: 1
+    :local:
+
+
 piwheels.master
 ===============
 

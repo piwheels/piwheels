@@ -760,20 +760,17 @@ class DownloadState(namedtuple('DownloadState', (
     file, including its :attr:`filename`, the user's :attr:`host` IP, access
     :attr:`timestamp` and information about the operating system and installer.
 
-    :type filename: str
-    :param filename:
+    :param str filename:
         The filename of the downloaded wheel file.
 
-    :type host: str
     :param host:
-        The IP address of the user.
+        The hostname or IP address of the user.
 
-    :type timestamp: :class:`datetime.datetime`
-    :param timestamp:
+    :param datetime.datetime timestamp:
         The timestamp at which the file was downloaded.
 
     :type arch: str or None
-    :param arch:
+    :param str or None arch:
         The architecture of the user's computer system (usually armv6 or
         armv7).
 
@@ -843,16 +840,13 @@ class SearchState(namedtuple('SearchState', (
     including the :attr:`package` name, user's :attr:`host` IP, access
     :attr:`timestamp` and information about the operating system and installer.
 
-    :type package: str
-    :param package:
+    :param str package:
         The name of the package searched for.
 
-    :type host: str
-    :param host:
-        The IP address of the user.
+    :param str host:
+        The hostname or IP address of the user.
 
-    :type timestamp: :class:`datetime.datetime`
-    :param timestamp:
+    :param datetime.datetime timestamp:
         The timestamp at which the search occurred.
 
     :type arch: str or None
@@ -916,13 +910,11 @@ class ProjectState(namedtuple('ProjectState', (
     including the :attr:`page` name, the user's :attr:`host` IP, access
     :attr:`timestamp` and the user's :attr:`user_agent`.
 
-    :type package: str
-    :param package:
+    :param str package:
         The name of the package searched for.
 
-    :type host: str
-    :param host:
-        The IP address of the user.
+    :param str host:
+        The hostname or IP address of the user.
 
     :type timestamp: :class:`datetime.datetime`
     :param timestamp:
@@ -953,19 +945,15 @@ class JSONState(namedtuple('JSONState', (
     download, including the :attr:`page` name, the user's :attr:`host` IP,
     access :attr:`timestamp` and the user's :attr:`user_agent`.
 
-    :type package: str
-    :param package:
+    :param str package:
         The name of the package whose JSON file was accessed.
 
-    :type host: str
-    :param host:
-        The IP address of the user.
+    :param str host:
+        The hostname or IP address of the user.
 
-    :type timestamp: :class:`datetime.datetime`
-    :param timestamp:
+    :param datetime.datetime timestamp:
         The timestamp at which the page was accessed.
 
-    :type host: str
     :param str user_agent:
         The user agent of the request.
     """
@@ -990,19 +978,15 @@ class PageState(namedtuple('PageState', (
     including the :attr:`page` name, the user's :attr:`host` IP, access
     :attr:`timestamp` and the user's :attr:`user_agent`.
 
-    :type page: str
-    :param page:
+    :param str page:
         The name of the page accessed.
 
-    :type host: str
-    :param host:
+    :param str host:
         The IP address of the user.
 
-    :type timestamp: :class:`datetime.datetime`
-    :param timestamp:
+    :param datetime.datetime timestamp:
         The timestamp at which the page was accessed.
 
-    :type host: str
     :param str user_agent:
         The user agent of the page request.
     """
