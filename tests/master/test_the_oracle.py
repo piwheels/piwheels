@@ -171,9 +171,93 @@ def test_get_version_skip(db, with_package_version, db_client):
     assert not db_client.get_version_skip('foo', '0.1')
 
 
-def test_test_package(db, with_package, db_client):
-    assert db_client.test_package('foo')
-    assert not db_client.test_package('quux')
+def test_get_version_skip(db, with_package_version, db_client):
+    assert not db_client.get_version_skip('foo', '0.1')
+
+
+def test_delete_package(db, with_package, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT count(*) "
+            "FROM packages "
+            "WHERE package = 'foo'").first() == (1,)
+    db_client.delete_package('foo')
+    with db.begin():
+        assert db.execute(
+            "SELECT count(*) "
+            "FROM packages "
+            "WHERE package = 'foo'").first() == (0,)
+
+
+def test_delete_version(db, with_package_version, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT count(*) "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (1,)
+    db_client.delete_version('foo', '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT count(*) "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (0,)
+
+
+def test_yank_version(db, with_package_version, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT yanked "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (False,)
+    db_client.yank_version('foo', '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT yanked "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (True,)
+
+
+def test_unyank_version(db, with_package_version, db_client):
+    db_client.yank_version('foo', '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT yanked "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (True,)
+    db_client.unyank_version('foo', '0.1')
+    with db.begin():
+        assert db.execute(
+            "SELECT yanked "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == (False,)
+
+
+def test_package_marked_deleted(db, with_package, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT skip "
+            "FROM packages "
+            "WHERE package = 'foo'").first() == ('',)
+    db_client.skip_package('foo', 'deleted')
+    with db.begin():
+        assert db.execute(
+            "SELECT skip "
+            "FROM packages "
+            "WHERE package = 'foo'").first() == ('deleted',)
+
+
+def test_get_versions_deleted(db, with_package_version, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT skip "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == ('',)
+    db_client.skip_package_version('foo', '0.1', 'deleted')
+    with db.begin():
+        assert db.execute(
+            "SELECT skip "
+            "FROM versions "
+            "WHERE package = 'foo'").first() == ('deleted',)
 
 
 def test_test_package_version(db, with_package_version, db_client):
@@ -249,13 +333,13 @@ def test_get_file_apt_dependencies(db, with_files, db_client):
 
 def test_get_project_versions(db, with_files, db_client):
     assert db_client.get_project_versions('foo') == [
-        ('0.1', '', 'cp34m', ''),
+        ('0.1', '', 'cp34m', '', False, False),
     ]
 
 
 def test_get_project_files(db, with_files, build_state_hacked, db_client):
     assert sorted(db_client.get_project_files('foo'), key=itemgetter(2)) == sorted([
-        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash)
+        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash, False)
         for f in build_state_hacked.files.values()
     ], key=itemgetter(2))
 

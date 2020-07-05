@@ -364,6 +364,10 @@ the_oracle = Protocol(recv={
     'GETPROJDESC': str,  # package
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
+    'DELPKG':      str,
+    'DELVER':      ExactSequence([str, str]),  # package, version
+    'YANKVER':     ExactSequence([str, str]),  # package, version
+    'UNYANKVER':   ExactSequence([str, str]),  # package, version
     'LOGDOWNLOAD': _download_state,
     'LOGSEARCH':   _search_state,
     'LOGPROJECT':  _project_state,
@@ -377,7 +381,9 @@ the_oracle = Protocol(recv={
     'VERFILES':    ExactSequence([str, str]),  # package, version
     'GETSKIP':     ExactSequence([str, str]),  # package, version
     'PKGEXISTS':   str,                        # package
+    'PKGDELETED':  str,                        # package
     'VEREXISTS':   ExactSequence([str, str]),  # package, version
+    'VERSDELETED': str,                        # package
     'GETABIS':     NoData,
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number

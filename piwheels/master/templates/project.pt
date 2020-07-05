@@ -58,7 +58,11 @@ sudo pip3 install ${package}</pre>
           <tr><th>Version</th><th>Successful builds</th><th>Failed builds</th><th>Skip</th></tr>
           <span tal:repeat="row versions" tal:omit-tag="True">
             <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
-              <td>${row.version}</td>
+              <td>
+                ${row.version}
+                <span tal:condition="row.prerelease" class="prerelease">pre-release</span>
+                <span tal:condition="row.yanked" class="yanked">yanked</span>
+              </td>
               <td>${row.builds_succeeded}</td>
               <td>${row.builds_failed}</td>
               <td>${row.skipped}</td>
@@ -97,7 +101,7 @@ sudo pip3 install ${package}</pre>
       <div class="small-12 columns">
         <h3>Issues with this package?</h3>
         <table class="package-issues">
-          <tr><td>Check if there's an open issue</td><td><a class="button" href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}">Search</a></td></tr>
+          <tr><td>Check if there's an open issue</td><td><a class="button" href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}+is%3Aopen">Search</a></td></tr>
           <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${package}">New issue</a></td></tr>
           <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${package}">New issue</a></td></tr>
         </table>

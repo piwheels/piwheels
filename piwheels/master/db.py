@@ -52,9 +52,10 @@ UTC = timezone.utc
 
 
 ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed'))
+    'version', 'skipped', 'builds_succeeded', 'builds_failed', 'yanked',
+    'prerelease'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
-    'version', 'abi_tag', 'filename', 'filesize', 'filehash'))
+    'version', 'abi_tag', 'filename', 'filesize', 'filehash', 'yanked'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
@@ -194,6 +195,39 @@ class Database:
                 "VALUES (skip_package_version(%s, %s, %s))",
                 (package, version, reason))
 
+    def delete_package(self, package):
+        """
+        Remove the specified package, along with all builds and files.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (delete_package(%s))", (package))
+
+    def delete_version(self, package, version):
+        """
+        Remove the specified version of the specified package, along with all
+        builds and files.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (delete_version(%s, %s))", (package, version))
+
+    def yank_version(self, package, version):
+        """
+        Mark the specified version of the specified package version as "yanked".
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (yank_version(%s, %s))", (package, version))
+
+    def unyank_version(self, package, version):
+        """
+        Mark the specified version of the specified package version as "unyanked".
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (unyank_version(%s, %s))", (package, version))
+
     def test_package(self, package):
         """
         Check whether *package* already exists in the database. Returns a
@@ -202,6 +236,15 @@ class Database:
         with self._conn.begin():
             return bool(self._conn.scalar(
                 "VALUES (test_package(%s))", (package,)
+            ))
+
+    def package_marked_deleted(self, package):
+        """
+        Check whether *package* has been marked for deletion.
+        """
+        with self._conn.begin():
+            return bool(self._conn.scalar(
+                "VALUES (package_marked_deleted(%s))", (package,)
             ))
 
     def test_package_version(self, package, version):
@@ -213,6 +256,18 @@ class Database:
             return bool(self._conn.scalar(
                 "VALUES (test_package_version(%s, %s))", (package, version)
             ))
+
+    def get_versions_deleted(self, package):
+        """
+        Return any versions of *package* which have been marked for deletion.
+        """
+        with self._conn.begin():
+            return {
+                row.version
+                for row in self._conn.execute(
+                    "SELECT version FROM get_versions_deleted(%s)", (package,)
+                )
+            }
 
     def log_download(self, download):
         """
@@ -488,7 +543,8 @@ class Database:
             return [
                 ProjectVersionsRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, skipped, builds_succeeded, builds_failed "
+                    "SELECT version, skipped, builds_succeeded, builds_failed, "
+                    "yanked, prerelease "
                     "FROM get_project_versions(%s)", (package,)
                 )
             ]
@@ -502,7 +558,7 @@ class Database:
             return [
                 ProjectFilesRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, abi_tag, filename, filesize, filehash "
+                    "SELECT version, abi_tag, filename, filesize, filehash, yanked "
                     "FROM get_project_files(%s)", (package,)
                 )
             ]

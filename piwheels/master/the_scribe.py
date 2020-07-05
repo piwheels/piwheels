@@ -44,15 +44,19 @@ from itertools import zip_longest
 
 import pkg_resources
 from chameleon import PageTemplateLoader
-try:
-    import simplejson as json
-except ImportError:
-    import json
+import simplejson as json
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
+
+
+PRERELEASE = ('a', 'b', 'rc', 'dev', 'alpha', 'beta', 'c', 'pre', 'preview')
+
+
+class PackageDeleted(ValueError):
+    "Error raised when a package is deleted and doesn't need updating"
 
 
 class TheScribe(tasks.PauseableTask):
@@ -159,16 +163,16 @@ class TheScribe(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg == 'PKGBOTH':
+            if msg in ('PKGBOTH', 'PKGPROJ'):
                 package = data
-                if package not in self.package_cache:
-                    self.package_cache.add(package)
-                    self.write_simple_index()
-                self.write_package_index(package)
-                self.write_project_page(package)
-            elif msg == 'PKGPROJ':
-                package = data
-                self.write_project_page(package)
+                try:
+                    self.do_pending_deletions(package)
+                except PackageDeleted:
+                    pass
+                else:
+                    if msg == 'PKGBOTH':
+                        self.write_package_index(package)
+                    self.write_project_page(package)
             elif msg == 'HOME':
                 self.write_homepage(MasterStats.from_message(data))
                 self.write_sitemap()
@@ -300,6 +304,9 @@ class TheScribe(tasks.PauseableTask):
             canon_dir.symlink_to(pkg_dir.name)
         except FileExistsError:
             pass
+        if package not in self.package_cache:
+            self.package_cache.add(package)
+            self.write_simple_index()
 
     def write_project_page(self, package):
         """
@@ -318,8 +325,13 @@ class TheScribe(tasks.PauseableTask):
                 pkg_resources.parse_version(row.version),
                 row.filename
             ), reverse=True)
-        if files:
-            dependencies = self.db.get_file_apt_dependencies(files[0].filename)
+        release_files = [
+            f.filename
+            for f in files
+            if not any(s in f.version for s in PRERELEASE)
+        ]
+        if release_files:
+            dependencies = self.db.get_file_apt_dependencies(release_files[0])
         else:
             dependencies = set()
         description = self.db.get_project_description(package)
@@ -347,6 +359,89 @@ class TheScribe(tasks.PauseableTask):
             canon_dir.symlink_to(pkg_dir.name)
         except FileExistsError:
             pass
+
+    def do_pending_deletions(self, package):
+        """
+        Tests if *package* has been marked for deletion in the database and,
+        if so, removes it from disk and then the database. Also tests for
+        deleted versions (in the case the package isn't marked for removal)
+        and removes those versions from disk if so.
+        """
+        if self.db.package_marked_deleted(package):
+            self.package_cache.discard(package)
+            self.write_simple_index()
+            self.delete_package(package)
+            self.db.delete_package(package)
+            raise PackageDeleted()
+        else:
+            versions = self.db.get_versions_deleted(package)
+            if versions:
+                self.delete_versions(package, versions)
+                for version in versions:
+                    self.db.delete_version(package, version)
+
+    def delete_package(self, package):
+        """
+        Attempts to remove the index and project page directories (including all
+        known wheel files) of the specified *package*.
+
+        :param str package:
+            The name of the package to delete.
+        """
+        self.logger.info('deleting package %s', package)
+        if len(package) == 0:
+            # refuse to delete /simple/ and /project/ by accident
+            self.logger.error('not deleting - package name is empty')
+            raise RuntimeError('Attempted to delete everything')
+
+        pkg_dir = self.output_path / 'simple' / package
+        proj_dir = self.output_path / 'project' / package
+        canon_pkg_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+        canon_proj_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+
+        files = {pkg_dir / f for f in self.db.get_package_files(package)}
+        files |= {
+            pkg_dir / 'index.html',
+            proj_dir / 'index.html',
+            canon_pkg_dir / 'index.html',
+            canon_proj_dir / 'index.html',
+        }
+
+        for file_path in files:
+            try:
+                file_path.unlink()
+                self.logger.debug('file deleted: %s', file_path)
+            except FileNotFoundError:
+                self.logger.error('file not found: %s', file_path)
+
+        for dir_path in {pkg_dir, proj_dir, canon_pkg_dir, canon_proj_dir}:
+            try:
+                dir_path.rmdir()
+            except OSError as e:
+                self.logger.error('failed to remove directory: %s', repr(e))
+
+    def delete_versions(self, package, versions):
+        """
+        Attempts to remove any known wheel files corresponding with deleted
+        *versions* of the specified *package*.
+
+        :param str package:
+            The name of the package to delete files for.
+
+        :param set versions:
+            The versions of *package* to delete files for.
+        """
+        self.logger.info('deleting %s versions for %s', len(versions), package)
+        pkg_dir = self.output_path / 'simple' / package
+        for version in versions:
+            files = self.db.get_version_files(package, version)
+            for file in files:
+                file_path = pkg_dir / file
+                try:
+                    file_path.unlink()
+                    self.logger.info('File deleted: %s', file)
+                except FileNotFoundError:
+                    self.logger.error('File not found: %s', file)
 
 
 # From pip/_vendor/packaging/utils.py

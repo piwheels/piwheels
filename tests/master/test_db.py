@@ -117,6 +117,47 @@ def test_skip_package_version(db_intf, db, with_package_version):
         "AND version = '0.1'").first() == ('binary only',)
 
 
+def test_delete_package(db_intf, db, with_package):
+    assert db.execute(
+        "SELECT count(*) FROM packages "
+        "WHERE package = 'foo'").first() == (1,)
+    db_intf.delete_package('foo')
+    assert db.execute(
+        "SELECT count(*) FROM packages "
+        "WHERE package = 'foo'").first() == (0,)
+
+
+def test_delete_version(db_intf, db, with_package_version):
+    assert db.execute(
+        "SELECT count(*) FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (1,)
+    db_intf.delete_version('foo', '0.1')
+    assert db.execute(
+        "SELECT count(*) FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (0,)
+
+
+def test_yank_version(db_intf, db, with_package_version):
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+    db_intf.yank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+
+
+def test_unyank_version(db_intf, db, with_package_version):
+    db_intf.yank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+    db_intf.unyank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+
+
 def test_test_package(db_intf, db, with_build_abis):
     assert not db_intf.test_package('foo')
     db_intf.add_new_package('foo')
@@ -313,13 +354,13 @@ def test_get_version_skip(db_intf, with_package_version):
 
 def test_get_project_versions(db_intf, with_files):
     assert list(db_intf.get_project_versions('foo')) == [
-        ('0.1', '', 'cp34m', ''),
+        ('0.1', '', 'cp34m', '', False, False),
     ]
 
 
 def test_get_project_files(db_intf, with_files, build_state_hacked):
     assert sorted(db_intf.get_project_files('foo'), key=itemgetter(2)) == sorted([
-        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash)
+        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash, False)
         for f in build_state_hacked.files.values()
     ], key=itemgetter(2))
 

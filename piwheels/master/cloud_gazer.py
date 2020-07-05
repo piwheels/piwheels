@@ -74,15 +74,14 @@ class CloudGazer(tasks.PauseableTask):
         for package, version, timestamp, action in self.pypi:
             if action == 'remove':
                 if version is None:
-                    self.logger.info(
-                        'disabled package %s (deleted)', package)
+                    self.logger.info('marking package %s for deletion', package)
                     self.db.skip_package(package, 'deleted')
                     self.packages.discard(package)
                 else:
-                    self.logger.info(
-                        'disabled package %s version %s (deleted)',
-                        package, version)
+                    self.logger.info('marking package %s version %s for deletion',
+                                     package, version)
                     self.db.skip_package_version(package, version, 'deleted')
+                self.web_queue.send_msg('PKGBOTH', package)
             else:
                 if package not in self.packages:
                     self.packages.add(package)
@@ -91,8 +90,19 @@ class CloudGazer(tasks.PauseableTask):
                         self.web_queue.send_msg('PKGBOTH', package)
                 if version is not None:
                     skip = '' if action == 'source' else 'binary only'
-                    if self.db.add_new_package_version(package, version,
-                                                       timestamp, skip):
+                    if action == 'yank':
+                        self.db.yank_version(package, version)
+                        self.logger.info(
+                            'yanked package %s version %s', package, version)
+                        self.web_queue.send_msg('PKGBOTH', package)
+                    elif action == 'unyank':
+                        self.db.unyank_version(package, version)
+                        self.logger.info(
+                            'unyanked package %s version %s', package, version)
+                        self.web_queue.send_msg('PKGBOTH', package)
+                    elif self.db.add_new_package_version(package, version,
+                                                         timestamp, skip):
+                        self.web_queue.send_msg('PKGBOTH', package)
                         self.logger.info(
                             'added package %s version %s', package, version)
                         if action != 'source':
@@ -102,7 +112,7 @@ class CloudGazer(tasks.PauseableTask):
                         description = get_project_description(package)
                         if description:
                             self.db.update_project_description(package, description)
-                        self.web_queue.send_msg('PKGPROJ', package)
+                        self.web_queue.send_msg('PKGBOTH', package)
                     elif action == 'source' and self.db.get_version_skip(
                             package, version) == 'binary only':
                         self.db.skip_package_version(package, version, '')

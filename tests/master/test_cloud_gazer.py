@@ -244,6 +244,57 @@ def test_remove_pkg(pypi_proxy, db_queue, web_queue, task, pypi_json):
     assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
 
 
+def test_remove_pkg_no_insert(pypi_proxy, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    pypi_proxy.put([
+        ('bar', None, 1531327388, 'remove package', 4),
+    ])
+    db_queue.expect('SKIPPKG', ['bar', 'deleted'])
+    db_queue.send('OK', True)
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+    # can we try deleting the simple and project pages, just in case?
+
+
+def test_remove_pkg_before_insert(pypi_proxy, db_queue, web_queue, task, pypi_json):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 2)
+    task.once()
+    db_queue.check()
+    pypi_proxy.put([
+        ('bar', None, 1531327388, 'remove package', 2),
+        ('bar', '1.0', 1531327389, 'create', 3),
+        ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 4),
+        ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 5),
+    ])
+    db_queue.expect('SKIPPKG', ['bar', 'deleted'])
+    db_queue.send('OK', True)
+    db_queue.expect('NEWPKG', ['bar', ''])
+    db_queue.send('OK', True)
+    db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
+    db_queue.send('OK', True)
+    db_queue.expect('PROJDESC', ['bar', 'some description'])
+    db_queue.send('OK', True)
+    db_queue.expect('SETPYPI', 5)
+    db_queue.send('OK', None)
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo", "bar"}
+    assert task.serial == 5
+    assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
+
+
 def test_enable_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
@@ -273,4 +324,70 @@ def test_enable_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
     db_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 6
-    assert web_queue.recv_msg() == ('PKGPROJ', 'foo')
+    assert web_queue.recv_msg() == ('PKGBOTH', 'foo')
+
+
+def test_yank_ver(pypi_proxy, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    pypi_proxy.put([
+        ('foo', '1.0', 1531327389, 'yank release', 4),
+    ])
+    db_queue.expect('YANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+    assert web_queue.recv_msg() == ('PKGBOTH', 'foo')
+
+
+def test_unyank_ver(pypi_proxy, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    pypi_proxy.put([
+        ('foo', '1.0', 1531327389, 'unyank release', 4),
+    ])
+    db_queue.expect('UNYANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+    assert web_queue.recv_msg() == ('PKGBOTH', 'foo')
+
+
+def test_yank_unyank_ver(pypi_proxy, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    pypi_proxy.put([
+        ('foo', '1.0', 1531327389, 'yank release', 4),
+        ('foo', '1.0', 1531327390, 'unyank release', 5),
+    ])
+    db_queue.expect('YANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    db_queue.expect('UNYANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    db_queue.expect('SETPYPI', 5)
+    db_queue.send('OK', None)
+    task.loop()
+    db_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 5
+    assert web_queue.recv_msg() == ('PKGBOTH', 'foo')

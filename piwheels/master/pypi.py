@@ -92,12 +92,12 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
 
 class PyPIEvents:
     """
-    When treated as an iterator, this class yields (package, version,
-    timestamp, action) tuples indicating new packages or package versions
-    registered on PyPI where action is one of 'create', 'source', or 'remove'.
-    A small attempt is made to avoid duplicate reports, but we don't attempt to
-    avoid reporting stuff already in the database (it's simpler to just start
-    from the beginning of PyPI's log and work through it).
+    When treated as an iterator, this class yields (package, version, timestamp,
+    action) tuples indicating new packages or package versions registered on
+    PyPI where action is one of 'create', 'source', 'remove', 'yank' or
+    'unyank'. A small attempt is made to avoid duplicate reports, but we don't
+    attempt to avoid reporting stuff already in the database (it's simpler to
+    just start from the beginning of PyPI's log and work through it).
 
     The iterator only retrieves a small batch of entries at a time as PyPI
     (very sensibly) limits the number of entries in a single query (to 50,000
@@ -123,6 +123,8 @@ class PyPIEvents:
     add_file_re = re.compile(r'^add ([^ ]+) file')
     create_re = re.compile(r'^create$')
     remove_re = re.compile(r'^remove(?: (?:package|release))?')
+    yank_re = re.compile(r'^yank release$')
+    unyank_re = re.compile(r'^unyank release$')
 
     def __init__(self, pypi_xmlrpc='https://pypi.org/pypi', serial=0,
                  retries=3, cache_size=1000):
@@ -187,6 +189,10 @@ class PyPIEvents:
                         if version is not None:
                             self.cache.pop((package, version), None)
                         yield (package, version, timestamp, 'remove')
+                    elif self.yank_re.search(action) is not None:
+                        yield (package, version, timestamp, 'yank')
+                    elif self.unyank_re.search(action) is not None:
+                        yield (package, version, timestamp, 'unyank')
                     self.serial = serial
             else:
                 # If the read is empty we've reached the end of the event log

@@ -74,6 +74,7 @@ get_user_agent = lambda ua: ua.split('/')[0].lower()
 
 log_type_patterns = (
     ('pip/*', '/simple/', None),
+    (None,    '/project/', None),
     ('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
     ('pip/*', '/simple/*', 'LOGSEARCH'),
     (None,    '/project/*/json/', 'LOGJSON'),
