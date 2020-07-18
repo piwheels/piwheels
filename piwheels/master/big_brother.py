@@ -45,7 +45,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class BigBrother(tasks.Task):
+class BigBrother(tasks.PausingTask):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the
@@ -106,29 +106,17 @@ class BigBrother(tasks.Task):
         """
         Handle incoming requests to the internal control queue.
 
-        This is mostly the same as :meth:`PauseableTask.handle_control` but
-        adds handling for the custom STATS verb to replay the master stats
-        history.
+        This just adds handling for the custom STATS verb to replay the master
+        stats history.
         """
         try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.error(str(e))
-        else:
-            if msg == 'QUIT':
-                raise tasks.TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                if not self.paused:
-                    self.logger.warning('Task is not paused')
-                else:
-                    self.paused = False
-            elif msg == 'STATS':
+            super().handle_control(queue)
+        except TaskControl as ctrl:
+            if ctrl.msg == 'STATS':
                 for stats in self.history:
                     self.status_queue.send_msg('STATS', stats.as_message())
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise
 
     def handle_stats(self, queue):
         try:

@@ -70,7 +70,7 @@ class TransferDone(TransferError):
     """
 
 
-class FileJuggler(tasks.Task):
+class FileJuggler(tasks.NonStopTask):
     """
     This task handles file transfers from the build slaves. The specifics of
     the file transfer protocol are best understood from the implementation of
@@ -235,10 +235,10 @@ class FileJuggler(tasks.Task):
             queue.send_multipart([address, b'DONE'])
             return
         except TransferIgnoreChunk as exc:
-            self.logger.debug(str(exc))
+            self.logger.debug('ignored chunk: %s', str(exc))
             return
         except TransferError as exc:
-            self.logger.error(str(exc))
+            self.logger.exception('transfer error')
             # XXX Delete the transfer object?
             if transfer is None:
                 return

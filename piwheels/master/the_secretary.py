@@ -44,7 +44,7 @@ UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
-class TheSecretary(tasks.Task):
+class TheSecretary(tasks.PausingTask):
     """
     This task buffers requests for the scribe, for the purpose of consolidating
     multiple consecutive (duplicate) requests.
@@ -97,24 +97,6 @@ class TheSecretary(tasks.Task):
         for item in queue:
             self.buffer.append(IndexTask(item.package, item.added_at))
             self.commands[item.package] = item.command
-
-    def handle_control(self, queue):
-        """
-        Handle incoming requests to the internal control queue.
-
-        Whilst :class:`TheSecretary` task is "pauseable", it can't simply stop
-        responding to requests from other components. Instead, its pause is
-        implemented as an internal flag. While paused it continues to accept
-        incoming requests to its internal buffer, but doesn't send anything
-        downstream to :class:`TheScribe`.
-        """
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise tasks.TaskQuit
-        elif msg == 'PAUSE':
-            self.paused = True
-        elif msg == 'RESUME':
-            self.paused = False
 
     def handle_input(self, queue):
         """

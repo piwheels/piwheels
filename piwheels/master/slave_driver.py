@@ -44,7 +44,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class SlaveDriver(tasks.Task):
+class SlaveDriver(tasks.PausingTask):
     """
     This task handles interaction with the build slaves using the slave
     protocol. Interaction is driven by the slaves (i.e. the master doesn't
@@ -63,7 +63,6 @@ class SlaveDriver(tasks.Task):
 
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.slave_driver_control)
-        self.paused = False
         self.abi_queues = {}
         self.recent_builds = {}
         slave_queue = self.socket(
@@ -168,30 +167,16 @@ class SlaveDriver(tasks.Task):
         """
         Handle incoming requests to the internal control queue.
 
-        Whilst the :class:`SlaveDriver` task is "pauseable", it can't simply
-        stop responding to requests from build slaves. Instead, its pause is
-        implemented as an internal flag. While paused it simply tells build
-        slaves requesting a new job that none are currently available but
-        otherwise continues servicing requests.
-
-        It also understands a couple of extra control messages unique to it,
+        This class understands a couple of extra control messages unique to it,
         specifically "KILL" to tell a build slave to terminate, "SKIP" to tell
         a build slave to terminate its current build immmediately, and "HELLO"
         to cause all "HELLO" messages from build slaves to be replayed (for the
         benefit of a newly attached monitor process).
         """
         try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.error(str(e))
-        else:
-            if msg == 'QUIT':
-                raise tasks.TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                self.paused = False
-            elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
+            super().handle_control(queue)
+        except TaskControl as ctrl:
+            if ctrl.msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
                 for slave in self.slaves.values():
                     if data is None or slave.slave_id == data:
                         {
@@ -199,12 +184,12 @@ class SlaveDriver(tasks.Task):
                             'SLEEP': slave.sleep,
                             'SKIP':  slave.skip,
                             'WAKE':  slave.wake,
-                        }[msg]()
-            elif msg == 'HELLO':
+                        }[ctrl.msg]()
+            elif ctrl.msg == 'HELLO':
                 for slave in self.slaves.values():
                     slave.hello()
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise
 
     def handle_build(self, queue):
         """

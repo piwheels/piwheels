@@ -43,7 +43,7 @@ from ..states import (
 from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
 
 
-class TheOracle(tasks.Task):
+class TheOracle(tasks.NonStopTask):
     """
     This task provides an RPC-like interface to the database; it handles
     requests such as registering a new package, version, or build, and
