@@ -73,6 +73,10 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
 
 apt purge python3-cryptography -y
 
+# Install rust compiler
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
+sh /tmp/rustup.sh -y
+
 pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
