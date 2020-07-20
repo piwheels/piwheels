@@ -261,6 +261,14 @@ master_control = Protocol(recv={
 })
 
 
+cloud_gazer = Protocol(send={
+    'DELVER': ExactSequence([str, str]),  # package, version
+    'DELPKG': str,                        # package
+}, recv={
+    'OK': NoData,
+})
+
+
 slave_driver_control = Protocol(recv=dict(chain(
     task_control.recv.items(),
     master_control.recv.items(),
@@ -283,10 +291,14 @@ big_brother = Protocol(recv={
 
 
 the_scribe = Protocol(recv={
-    'PKGBOTH': str,  # package name
-    'PKGPROJ': str,  # package name
+    'DELVER':  ExactSequence([str, str]),  # package, version
+    'DELPKG':  str,  # package name
+    'PROJECT': str,  # package name
+    'BOTH':    str,  # package name
     'HOME':    _master_stats,  # statistics
     'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
+}, send={
+    'DONE':    NoData,
 })
 
 

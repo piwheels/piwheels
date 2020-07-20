@@ -65,6 +65,7 @@ class SlaveDriver(tasks.PausingTask):
         super().__init__(config, control_protocol=protocols.slave_driver_control)
         self.abi_queues = {}
         self.recent_builds = {}
+        self.recent_deletes = set()
         slave_queue = self.socket(
             transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
@@ -86,6 +87,10 @@ class SlaveDriver(tasks.PausingTask):
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.connect(config.stats_queue)
+        delete_queue = self.socket(
+            transport.REP, protocol=reversed(protocols.cloud_gazer))
+        delete_queue.bind(const.SKIP_QUEUE)
+        self.register(delete_queue, self.handle_delete)
         self.db = DbClient(config, self.logger)
         self.fs = FsClient(config, self.logger)
         self.slaves = {}
@@ -228,15 +233,43 @@ class SlaveDriver(tasks.PausingTask):
             self.abi_queues = {
                 abi: [
                     (package, version) for package, version in new_queue
-                    if (package, version) not in recent_builds
+                    if (package, version) not in self.recent_builds[abi]
+                    and (package, version) not in self.recent_deletes
+                    and (package, None) not in self.recent_deletes
                 ]
                 for abi, new_queue in new_queues.items()
-                for recent_builds in (self.recent_builds[abi],)
             }
             self.stats_queue.send_msg('STATBQ', {
                 abi: len(queue)
                 for (abi, queue) in self.abi_queues.items()
             })
+            # Wipe the recent_deletes set; it only exists to prune recently
+            # deleted packages from in-flight build-queue queries
+            self.recent_deletes = set()
+
+    def handle_delete(self, queue):
+        """
+        Handle package or version deletion requests.
+
+        When the PyPI upstream deletes a version or package, the
+        :class:`CloudGazer` task requests that other tasks perform the deletion
+        on its behalf. In the case of this task, this involves cancelling any
+        pending builds of that package (version), and ignoring any builds
+        involving that package (version) in the next queue update from
+        :class:`TheArchitect`.
+        """
+        msg, data = queue.recv_msg()
+        if msg == 'DELVER':
+            del_pkg, del_ver = data
+        elif msg == 'DELPKG':
+            del_pkg, del_ver = data, None
+        self.recent_deletes.add((del_pkg, del_ver))
+        for slave in self.slaves.values():
+            if slave.reply[0] == 'BUILD':
+                build_pkg, build_ver = slave.reply[1]
+                if build_pkg == del_pkg and del_ver in (None, build_ver):
+                    slave.skip()
+        queue.send_msg('OK')
 
     def handle_slave(self, queue):
         """
@@ -390,6 +423,8 @@ class SlaveDriver(tasks.PausingTask):
         "IDLE" state.
         """
         if slave.skipped:
+            self.logger.info('slave %d (%s): build skipped',
+                             slave.slave_id, slave.label)
             return 'DONE', protocols.NoData
         else:
             return 'CONT', protocols.NoData
@@ -413,6 +448,13 @@ class SlaveDriver(tasks.PausingTask):
                 'slave %d (%s): protocol error (BUILT after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
+        elif slave.skipped:
+            # If the build was skipped, throw away the result without recording
+            # success or failure (it may have been skipped because we know
+            # there's something wrong with the slave)
+            self.logger.info('slave %d (%s): build skipped',
+                             slave.slave_id, slave.label)
+            return 'DONE', protocols.NoData
         else:
             build_armv6l_hack(slave.build)
             if slave.build.status and not slave.build.transfers_done:
@@ -428,7 +470,8 @@ class SlaveDriver(tasks.PausingTask):
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
                 self.db.log_build(slave.build)
-                self.web_queue.send_msg('PKGPROJ', slave.build.package)
+                self.web_queue.send_msg('PROJECT', slave.build.package)
+                self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
 
     def do_sent(self, slave):
@@ -459,7 +502,8 @@ class SlaveDriver(tasks.PausingTask):
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
                 self.db.log_build(slave.build)
-                self.web_queue.send_msg('PKGBOTH', slave.build.package)
+                self.web_queue.send_msg('BOTH', slave.build.package)
+                self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
             else:
                 self.fs.expect(slave.slave_id,

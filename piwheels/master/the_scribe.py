@@ -52,9 +52,6 @@ from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
 
 
-PRERELEASE = ('a', 'b', 'rc', 'dev', 'alpha', 'beta', 'c', 'pre', 'preview')
-
-
 class PackageDeleted(ValueError):
     "Error raised when a package is deleted and doesn't need updating"
 
@@ -80,7 +77,7 @@ class TheScribe(tasks.PauseableTask):
         super().__init__(config)
         self.output_path = Path(config.output_path)
         scribe_queue = self.socket(
-            transport.PULL, protocol=protocols.the_scribe)
+            transport.REP, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
         scribe_queue.bind(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)
@@ -163,22 +160,28 @@ class TheScribe(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg in ('PKGBOTH', 'PKGPROJ'):
+            if msg in ('BOTH', 'PROJECT'):
                 package = data
-                try:
-                    self.do_pending_deletions(package)
-                except PackageDeleted:
-                    pass
-                else:
-                    if msg == 'PKGBOTH':
-                        self.write_package_index(package)
-                    self.write_project_page(package)
+                if msg == 'BOTH':
+                    self.write_package_index(package)
+                self.write_project_page(package)
             elif msg == 'HOME':
                 self.write_homepage(MasterStats.from_message(data))
                 self.write_sitemap()
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
+            elif msg == 'DELVER':
+                package, version = data
+                self.delete_version(package, version)
+                self.write_package_index(package)
+                self.write_project_page(package)
+            elif msg == 'DELPKG':
+                package = data
+                self.package_cache.discard(package)
+                self.write_simple_index()
+                self.delete_package(package)
+            queue.send_msg('DONE')
 
     def write_homepage(self, statistics):
         """
@@ -360,26 +363,6 @@ class TheScribe(tasks.PauseableTask):
         except FileExistsError:
             pass
 
-    def do_pending_deletions(self, package):
-        """
-        Tests if *package* has been marked for deletion in the database and,
-        if so, removes it from disk and then the database. Also tests for
-        deleted versions (in the case the package isn't marked for removal)
-        and removes those versions from disk if so.
-        """
-        if self.db.package_marked_deleted(package):
-            self.package_cache.discard(package)
-            self.write_simple_index()
-            self.delete_package(package)
-            self.db.delete_package(package)
-            raise PackageDeleted()
-        else:
-            versions = self.db.get_versions_deleted(package)
-            if versions:
-                self.delete_versions(package, versions)
-                for version in versions:
-                    self.db.delete_version(package, version)
-
     def delete_package(self, package):
         """
         Attempts to remove the index and project page directories (including all
@@ -391,7 +374,6 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('deleting package %s', package)
         if len(package) == 0:
             # refuse to delete /simple/ and /project/ by accident
-            self.logger.error('not deleting - package name is empty')
             raise RuntimeError('Attempted to delete everything')
 
         pkg_dir = self.output_path / 'simple' / package
@@ -420,7 +402,7 @@ class TheScribe(tasks.PauseableTask):
             except OSError as e:
                 self.logger.error('failed to remove directory: %s', repr(e))
 
-    def delete_versions(self, package, versions):
+    def delete_version(self, package, version):
         """
         Attempts to remove any known wheel files corresponding with deleted
         *versions* of the specified *package*.
@@ -428,20 +410,18 @@ class TheScribe(tasks.PauseableTask):
         :param str package:
             The name of the package to delete files for.
 
-        :param set versions:
-            The versions of *package* to delete files for.
+        :param str version:
+            The version of *package* to delete files for.
         """
-        self.logger.info('deleting %s versions for %s', len(versions), package)
+        self.logger.info('deleting package %s version %s', package, version)
         pkg_dir = self.output_path / 'simple' / package
-        for version in versions:
-            files = self.db.get_version_files(package, version)
-            for file in files:
-                file_path = pkg_dir / file
-                try:
-                    file_path.unlink()
-                    self.logger.info('File deleted: %s', file)
-                except FileNotFoundError:
-                    self.logger.error('File not found: %s', file)
+        for file in self.db.get_version_files(package, version):
+            file_path = pkg_dir / file
+            try:
+                file_path.unlink()
+                self.logger.info('File deleted: %s', file)
+            except FileNotFoundError:
+                self.logger.error('File not found: %s', file)
 
 
 # From pip/_vendor/packaging/utils.py

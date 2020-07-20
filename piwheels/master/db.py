@@ -52,8 +52,7 @@ UTC = timezone.utc
 
 
 ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed', 'yanked',
-    'prerelease'))
+    'version', 'skipped', 'builds_succeeded', 'builds_failed', 'yanked'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
     'version', 'abi_tag', 'filename', 'filesize', 'filehash', 'yanked'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
@@ -543,8 +542,7 @@ class Database:
             return [
                 ProjectVersionsRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, skipped, builds_succeeded, builds_failed, "
-                    "yanked, prerelease "
+                    "SELECT version, skipped, builds_succeeded, builds_failed, yanked "
                     "FROM get_project_versions(%s)", (package,)
                 )
             ]
