@@ -90,8 +90,7 @@ class BigBrother(tasks.PausingTask):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
         self.every(timedelta(minutes=5), self.update_search_index)
         self.every(timedelta(seconds=30), self.update_homepage)
@@ -111,7 +110,7 @@ class BigBrother(tasks.PausingTask):
         """
         try:
             super().handle_control(queue)
-        except TaskControl as ctrl:
+        except tasks.TaskControl as ctrl:
             if ctrl.msg == 'STATS':
                 for stats in self.history:
                     self.status_queue.send_msg('STATS', stats.as_message())
@@ -138,12 +137,14 @@ class BigBrother(tasks.PausingTask):
     def update_search_index(self):
         if not self.paused:
             self.web_queue.send_msg('SEARCH', self.db.get_search_index())
+            self.web_queue.recv_msg()
 
     def update_homepage(self):
         if not self.paused:
             self.stats = self.stats._replace(
                 timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
             self.web_queue.send_msg('HOME', self.stats.as_message())
+            self.web_queue.recv_msg()
 
     def update_stats(self):
         if not self.paused:
