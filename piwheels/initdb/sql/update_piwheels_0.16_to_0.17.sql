@@ -174,19 +174,6 @@ $sql$;
 REVOKE ALL ON FUNCTION get_project_description(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_description(TEXT) TO {username};
 
-CREATE FUNCTION version_is_prerelease(version TEXT)
-    RETURNS BOOLEAN
-    LANGUAGE SQL
-    RETURNS NULL ON NULL INPUT
-    SECURITY DEFINER
-    SET search_path = public, pg_temp
-AS $sql$
-    VALUES (LOWER(version) ~* '(a|b|rc|dev|alpha|beta|c|pre|preview)');
-$sql$;
-
-REVOKE ALL ON FUNCTION version_is_prerelease(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION version_is_prerelease(TEXT) TO {username};
-
 DROP FUNCTION get_project_versions(TEXT);
 
 CREATE FUNCTION get_project_versions(pkg TEXT)
@@ -195,8 +182,7 @@ CREATE FUNCTION get_project_versions(pkg TEXT)
         skipped versions.skip%TYPE,
         builds_succeeded TEXT,
         builds_failed TEXT,
-        yanked BOOLEAN,
-        prerelease BOOLEAN
+        yanked BOOLEAN
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -208,8 +194,7 @@ AS $sql$
         COALESCE(NULLIF(v.skip, ''), p.skip) AS skipped,
         COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE b.status), '') AS builds_succeeded,
         COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE NOT b.status), '') AS builds_failed,
-        v.yanked,
-        version_is_prerelease(v.version)
+        v.yanked
     FROM
         packages p
         JOIN versions v USING (package)

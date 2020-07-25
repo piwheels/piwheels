@@ -41,6 +41,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from itertools import zip_longest
+from operator import attrgetter
 
 import pkg_resources
 from chameleon import PageTemplateLoader
@@ -272,12 +273,11 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        files = sorted(
-            self.db.get_project_files(package),
-            key=lambda row: (
-                pkg_resources.parse_version(row.version),
-                row.filename
-            ), reverse=True)
+        files = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_files(package)
+        ]
+        files = sorted(files, key=attrgetter('version'), reverse=True)
         with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['simple_package'](
@@ -318,20 +318,20 @@ class TheScribe(tasks.PauseableTask):
         :param str package:
             The name of the package to write the project page for
         """
-        versions = sorted(
-            self.db.get_project_versions(package),
-            key=lambda row: pkg_resources.parse_version(row.version),
-            reverse=True)
-        files = sorted(
-            self.db.get_project_files(package),
-            key=lambda row: (
-                pkg_resources.parse_version(row.version),
-                row.filename
-            ), reverse=True)
+        versions = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_versions(package)
+        ]
+        versions = sorted(versions, key=attrgetter('version'), reverse=True)
+        files = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_files(package)
+        ]
+        files = sorted(files, key=attrgetter('version'), reverse=True)
         release_files = [
             f.filename
             for f in files
-            if not any(s in f.version for s in PRERELEASE)
+            if not f.version.is_prerelease
         ]
         if release_files:
             dependencies = self.db.get_file_apt_dependencies(release_files[0])
@@ -441,6 +441,15 @@ def grouper(iterable, n, fillvalue=None):
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
+
+
+def parse_version(s):
+    v = pkg_resources.parse_version(s)
+    # Keep a reference to the original string as otherwise it's unrecoverable;
+    # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
+    # parsed variant will fail
+    v.original = s
+    return v
 
 
 class AtomicReplaceFile:

@@ -59,8 +59,8 @@ sudo pip3 install ${package}</pre>
           <span tal:repeat="row versions" tal:omit-tag="True">
             <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
               <td>
-                ${row.version}
-                <span tal:condition="row.prerelease" class="prerelease">pre-release</span>
+                ${row.version.original}
+                <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
                 <span tal:condition="row.yanked" class="yanked">yanked</span>
               </td>
               <td>${row.builds_succeeded}</td>
@@ -83,7 +83,7 @@ sudo pip3 install ${package}</pre>
           <tr><th>Version</th><th>ABI</th><th>Filename</th><th>Size</th></tr>
           <span tal:repeat="row files" tal:omit-tag="True">
             <tr class="${'hidden-file' if repeat.row.number > 5 else ''}">
-              <td>${row.version}</td>
+              <td>${row.version.original}</td>
               <td>${row.abi_tag}</td>
               <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
               <td>${format_size(row.filesize)}</td>
