@@ -81,7 +81,7 @@ class SlaveDriver(tasks.PausingTask):
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.socket(
@@ -180,10 +180,10 @@ class SlaveDriver(tasks.PausingTask):
         """
         try:
             super().handle_control(queue)
-        except TaskControl as ctrl:
+        except tasks.TaskControl as ctrl:
             if ctrl.msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
                 for slave in self.slaves.values():
-                    if data is None or slave.slave_id == data:
+                    if ctrl.data is None or slave.slave_id == ctrl.data:
                         {
                             'KILL':  slave.kill,
                             'SLEEP': slave.sleep,

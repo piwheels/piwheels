@@ -663,7 +663,7 @@ class MockTask(Thread):
                 print('%s END' % self.sock_addr)
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture()
 def db_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, transport.REP, master_config.db_queue,
                     protocols.the_oracle)
@@ -671,9 +671,17 @@ def db_queue(request, zmq_context, master_config):
     task.close()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture()
 def fs_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, transport.REP, master_config.fs_queue,
                     protocols.file_juggler_fs)
+    yield task
+    task.close()
+
+
+@pytest.fixture()
+def web_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, transport.REP, master_config.web_queue,
+                    protocols.the_scribe, debug=True)
     yield task
     task.close()
