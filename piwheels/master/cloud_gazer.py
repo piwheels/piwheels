@@ -54,7 +54,6 @@ class CloudGazer(tasks.PauseableTask):
         self.pypi = PyPIEvents(config.pypi_xmlrpc)
         self.web_queue = self.socket(
             transport.REQ, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.skip_queue = self.socket(
             transport.REQ, protocol=protocols.cloud_gazer)
@@ -80,8 +79,8 @@ class CloudGazer(tasks.PauseableTask):
                     self.logger.info('marking package %s for deletion', package)
                     self.db.skip_package(package, 'deleted')
                     self.packages.discard(package)
-                    self.web_queue.send_msg('DELPKG', package, version)
-                    self.skip_queue.send_msg('DELPKG', package, version)
+                    self.web_queue.send_msg('DELPKG', package)
+                    self.skip_queue.send_msg('DELPKG', package)
                     self.web_queue.recv_msg()
                     self.skip_queue.recv_msg()
                     self.db.delete_package(package)
@@ -89,8 +88,8 @@ class CloudGazer(tasks.PauseableTask):
                     self.logger.info('marking package %s version %s for deletion',
                                      package, version)
                     self.db.skip_package_version(package, version, 'deleted')
-                    self.web_queue.send_msg('DELVER', package, version)
-                    self.skip_queue.send_msg('DELVER', package, version)
+                    self.web_queue.send_msg('DELVER', (package, version))
+                    self.skip_queue.send_msg('DELVER', (package, version))
                     self.web_queue.recv_msg()
                     self.skip_queue.recv_msg()
                     self.db.delete_version(package, version)

@@ -28,6 +28,7 @@
 
 
 import os
+import logging
 from unittest import mock
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -391,7 +392,7 @@ def master_config(request, tmpdir):
         db=PIWHEELS_TESTDB
     )
     config.output_path = str(tmpdir)
-    config.web_queue = 'inproc://tests-indexes'
+    config.web_queue = 'inproc://tests-web'
     config.status_queue = 'inproc://tests-status'
     config.control_queue = 'inproc://tests-control'
     config.builds_queue = 'inproc://tests-builds'
@@ -529,7 +530,7 @@ class MockTask(Thread):
     })
 
 
-    def __init__(self, ctx, sock_type, sock_addr, sock_protocol):
+    def __init__(self, ctx, sock_type, sock_addr, sock_protocol, debug=False):
         address = 'inproc://mock-%d' % MockTask.ident
         super().__init__(target=self.loop, args=(ctx, address))
         MockTask.ident += 1
@@ -543,6 +544,7 @@ class MockTask(Thread):
         self.sock.hwm = 1
         self.sock.bind(sock_addr)
         self.daemon = True
+        self.debug = debug
         self.start()
 
     def __repr__(self):
@@ -589,8 +591,14 @@ class MockTask(Thread):
         def handle_queue():
             if self.sock in socks and queue[0].action == 'recv':
                 queue[0].actual = self.sock.recv_msg()
+                if self.debug:
+                    print('%s << %s %r' % (
+                        self.sock_addr, queue[0].actual[0], queue[0].actual[1]))
                 done.append(queue.pop(0))
             elif queue[0].action == 'send':
+                if self.debug:
+                    print('%s >> %s %r' % (
+                        self.sock_addr, queue[0].expect[0], queue[0].expect[1]))
                 self.sock.send_msg(*queue[0].expect)
                 queue[0].actual = queue[0].expect
                 done.append(queue.pop(0))
@@ -628,7 +636,7 @@ class MockTask(Thread):
                                 timeout = timedelta(seconds=data)
                                 start = datetime.now(tz=UTC)
                                 while queue and datetime.now(tz=UTC) - start < timeout:
-                                    socks = dict(poller.poll(10))
+                                    socks = dict(poller.poll(0.2))
                                     handle_queue()
                                 if queue:
                                     assert False, 'Still waiting for %r' % queue[0]
@@ -646,9 +654,13 @@ class MockTask(Thread):
                     try:
                         handle_queue()
                     except Exception as exc:
+                        if self.debug:
+                            print('%s EXC: %r' % (self.sock_addr, exc))
                         pending = exc
         finally:
             control.close()
+            if self.debug:
+                print('%s END' % self.sock_addr)
 
 
 @pytest.fixture(scope='function')
@@ -665,11 +677,3 @@ def fs_queue(request, zmq_context, master_config):
                     protocols.file_juggler_fs)
     yield task
     task.close()
-
-
-@pytest.fixture()
-def pypi_json(request):
-    with mock.patch('piwheels.master.cloud_gazer.get_project_description') as gpd:
-        gpd.return_value = 'some description'
-        yield gpd
-        
