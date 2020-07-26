@@ -41,7 +41,7 @@ from .. import protocols, tasks, transport
 from .db import Database
 
 
-class TheArchitect(tasks.Task):
+class TheArchitect(tasks.PauseableTask):
     """
     This task queries the backend database to determine which versions of
     packages have yet to be built (and aren't marked to be skipped). It pushes
