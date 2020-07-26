@@ -56,13 +56,6 @@ def pypi_proxy(request, zmq_context):
 
 
 @pytest.fixture()
-def pypi_json(request):
-    with mock.patch('piwheels.master.cloud_gazer.get_project_description') as gpd:
-        gpd.return_value = 'some description'
-        yield gpd
-
-
-@pytest.fixture()
 def skip_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, transport.REP, const.SKIP_QUEUE,
                     reversed(protocols.cloud_gazer))

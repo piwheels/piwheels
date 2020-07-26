@@ -149,7 +149,7 @@ class Socket:
             try:
                 data = schema(data)
             except Invalid as e:
-                raise IOError('invalid data for %s: %s' % (msg, e))
+                raise IOError('invalid data for %s: %r' % (msg, data))
             try:
                 return cbor2.dumps((msg, data), default=default_encoder)
             except cbor2.CBOREncodeError as e:
@@ -182,7 +182,7 @@ class Socket:
             try:
                 return msg, schema(data)
             except Invalid as e:
-                raise IOError('invalid data for %s: %s' % (msg, e))
+                raise IOError('invalid data for %s: %r' % (msg, data))
 
     @property
     def hwm(self):

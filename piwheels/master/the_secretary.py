@@ -157,19 +157,16 @@ class TheSecretary(tasks.PausingTask):
 
         This sub-task runs periodically to pluck things from the internal
         buffer that have reached the minute delay, and passes them downstream
-        to :class:`TheScribe`. The process stops when either we run out of
-        things that have expired or the downstream queue is filled.
+        to :class:`TheScribe`. The process stops when we run out of things that
+        have expired.
         """
         now = datetime.now(tz=UTC)
         while (
                 not self.paused and
                 self.buffer and
-                self.output.poll(0, transport.POLLOUT)
+                (now - self.buffer[0].timestamp > self.timeout)
         ):
-            if now - self.buffer[0].timestamp > self.timeout:
-                package = self.buffer.popleft().package
-                message = self.commands.pop(package)
-                self.output.send_msg(message, package)
-                self.output.recv_msg()
-            else:
-                break
+            package = self.buffer.popleft().package
+            message = self.commands.pop(package)
+            self.output.send_msg(message, package)
+            self.output.recv_msg()

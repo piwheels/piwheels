@@ -685,3 +685,10 @@ def web_queue(request, zmq_context, master_config):
                     protocols.the_scribe, debug=True)
     yield task
     task.close()
+
+
+@pytest.fixture()
+def pypi_json(request):
+    with mock.patch('piwheels.master.cloud_gazer.get_project_description') as gpd:
+        gpd.return_value = 'some description'
+        yield gpd

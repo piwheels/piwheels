@@ -145,9 +145,11 @@ class TheScribe(tasks.PauseableTask):
 
         * "HOME", a request to write the homepage with some associated
           statistics
-        * "PKGBOTH", a request to write the index and project page for
-          the specified package
-        * "PKGPROJ", a request to write just the project page for the specified
+
+        * "BOTH", a request to write the index and project page for the
+          specified package
+
+        * "PROJECT", a request to write just the project page for the specified
           package
 
         .. note::
@@ -175,8 +177,8 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'DELVER':
                 package, version = data
                 self.delete_version(package, version)
-                self.write_package_index(package)
-                self.write_project_page(package)
+                self.write_package_index(package, exclude={version})
+                self.write_project_page(package, exclude={version})
             elif msg == 'DELPKG':
                 package = data
                 self.package_cache.discard(package)
@@ -261,7 +263,7 @@ class TheScribe(tasks.PauseableTask):
             index.file.write(self.templates['simple_index'](
                 packages=self.package_cache))
 
-    def write_package_index(self, package):
+    def write_package_index(self, package, *, exclude=None):
         """
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
@@ -270,12 +272,15 @@ class TheScribe(tasks.PauseableTask):
         :param str package:
             The name of the package to write the index for
         """
+        if exclude is None:
+            exclude = set()
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
         files = [
             row._replace(version=parse_version(row.version))
             for row in self.db.get_project_files(package)
+            if row.version not in exclude
         ]
         files = sorted(files, key=attrgetter('version'), reverse=True)
         with AtomicReplaceFile(pkg_dir / 'index.html',
@@ -311,21 +316,25 @@ class TheScribe(tasks.PauseableTask):
             self.package_cache.add(package)
             self.write_simple_index()
 
-    def write_project_page(self, package):
+    def write_project_page(self, package, *, exclude=None):
         """
         (Re)writes the project page of the specified package.
 
         :param str package:
             The name of the package to write the project page for
         """
+        if exclude is None:
+            exclude = set()
         versions = [
             row._replace(version=parse_version(row.version))
             for row in self.db.get_project_versions(package)
+            if row.version not in exclude
         ]
         versions = sorted(versions, key=attrgetter('version'), reverse=True)
         files = [
             row._replace(version=parse_version(row.version))
             for row in self.db.get_project_files(package)
+            if row.version not in exclude
         ]
         files = sorted(files, key=attrgetter('version'), reverse=True)
         release_files = [
