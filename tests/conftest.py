@@ -195,7 +195,7 @@ def page_state(request):
 
 @pytest.fixture(scope='session')
 def db_url(request):
-    return 'postgres://{username}:{password}@{host}/{db}'.format(
+    return 'postgresql://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
         host=PIWHEELS_HOST,
@@ -205,7 +205,7 @@ def db_url(request):
 
 @pytest.fixture(scope='session')
 def db_super_url(request):
-    return 'postgres://{username}:{password}@{host}/{db}'.format(
+    return 'postgresql://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_SUPERUSER,
         password=PIWHEELS_SUPERPASS,
         host=PIWHEELS_HOST,
@@ -385,7 +385,7 @@ def master_config(request, tmpdir):
     config.debug = []
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.pypi_simple = 'https://pypi.org/simple'
-    config.dsn = 'postgres://{username}:{password}@{host}/{db}'.format(
+    config.dsn = 'postgresql://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
         host=PIWHEELS_HOST,
