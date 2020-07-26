@@ -640,6 +640,8 @@ class MockTask(Thread):
                                     handle_queue()
                                 if queue:
                                     assert False, 'Still waiting for %r' % queue[0]
+                                else:
+                                    assert not poller.poll(0)
                                 for item in done:
                                     assert item.expect == item.actual
                             except Exception as exc:
@@ -682,7 +684,7 @@ def fs_queue(request, zmq_context, master_config):
 @pytest.fixture()
 def web_queue(request, zmq_context, master_config):
     task = MockTask(zmq_context, transport.REP, master_config.web_queue,
-                    protocols.the_scribe, debug=True)
+                    protocols.the_scribe)
     yield task
     task.close()
 

@@ -9,6 +9,17 @@ ALTER TABLE versions
     ADD CONSTRAINT versions_package_fk FOREIGN KEY (package)
         REFERENCES packages ON DELETE CASCADE;
 
+ALTER TABLE rewrites_pending
+    DROP CONSTRAINT rewrites_pending_command_ck;
+
+UPDATE rewrites_pending SET command = CASE command
+    WHEN 'PKGPROJ' THEN 'PROJECT'
+    WHEN 'PKGBOTH' THEN 'BOTH'
+END;
+
+ALTER TABLE rewrites_pending
+    ADD CONSTRAINT rewrites_pending_command_ck CHECK (command IN ('PROJECT', 'BOTH'));
+
 CREATE TABLE preinstalled_apt_packages (
     abi_tag        VARCHAR(100) NOT NULL,
     apt_package    VARCHAR(255) NOT NULL,

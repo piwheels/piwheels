@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from conftest import MockTask
 from piwheels import const, protocols, transport
 from piwheels.states import MasterStats
 from piwheels.master.db import RewritePendingRow
@@ -44,12 +45,11 @@ UTC = timezone.utc
 
 
 @pytest.fixture()
-def scribe_queue(request, zmq_context):
-    queue = zmq_context.socket(transport.PULL, protocol=protocols.the_scribe)
-    queue.hwm = 10
-    queue.bind(const.SCRIBE_QUEUE)
-    yield queue
-    queue.close()
+def scribe_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, transport.REP, const.SCRIBE_QUEUE,
+                    protocols.the_scribe)
+    yield task
+    task.close()
 
 
 @pytest.fixture()
@@ -69,8 +69,7 @@ def task(request, zmq_context, master_config, scribe_queue, db_queue):
 @pytest.fixture()
 def web_queue(request, zmq_context, task, master_config):
     queue = zmq_context.socket(
-        transport.PUSH, protocol=reversed(protocols.the_scribe))
-    queue.hwm = 10
+        transport.REQ, protocol=reversed(protocols.the_scribe))
     queue.connect(master_config.web_queue)
     yield queue
     queue.close()
@@ -103,11 +102,18 @@ def stats_data(request):
 
 def test_pass_through(task, web_queue, scribe_queue, stats_data, db_queue):
     web_queue.send_msg('HOME', stats_data.as_message())
+    scribe_queue.expect('HOME', stats_data.as_message())
+    scribe_queue.send('DONE')
     task.poll(0)
-    assert scribe_queue.recv_msg() == ('HOME', stats_data.as_message())
+    scribe_queue.check()
+    assert web_queue.recv_msg() == ('DONE', None)
+
     web_queue.send_msg('SEARCH', {'foo': (0, 1)})
+    scribe_queue.expect('SEARCH', {'foo': (0, 1)})
+    scribe_queue.send('DONE')
     task.poll(0)
-    assert scribe_queue.recv_msg() == ('SEARCH', {'foo': [0, 1]})
+    scribe_queue.check()
+    assert web_queue.recv_msg() == ('DONE', None)
 
 
 def test_bad_request(task, web_queue):
@@ -126,13 +132,16 @@ def test_buffer(task, web_queue, scribe_queue):
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         task.force(task.handle_output)
         task.poll(0)
-        web_queue.send_msg('PKGPROJ', 'foo')
+        web_queue.send_msg('PROJECT', 'foo')
         task.poll(0)
-        with pytest.raises(transport.Again):
-            scribe_queue.recv_msg(flags=transport.NOBLOCK)
+        assert web_queue.recv_msg() == ('DONE', None)
+        scribe_queue.check()  # tests for empty input queue
+
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
+        scribe_queue.expect('PROJECT', 'foo')
+        scribe_queue.send('DONE')
         task.poll(0)
-        assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
+        scribe_queue.check()
 
 
 def test_upgrade(task, web_queue, scribe_queue):
@@ -141,21 +150,30 @@ def test_upgrade(task, web_queue, scribe_queue):
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
         task.force(task.handle_output)
         task.poll(0)
-        web_queue.send_msg('PKGPROJ', 'foo')
+        web_queue.send_msg('PROJECT', 'foo')
         task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 30, tzinfo=UTC)
-        web_queue.send_msg('PKGBOTH', 'foo')
+        web_queue.send_msg('BOTH', 'foo')
         task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 31, tzinfo=UTC)
-        web_queue.send_msg('PKGPROJ', 'bar')
+        web_queue.send_msg('PROJECT', 'bar')
         task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 32, tzinfo=UTC)
-        web_queue.send_msg('PKGPROJ', 'bar')
+        web_queue.send_msg('PROJECT', 'bar')
         task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
+        scribe_queue.check()  # tests for empty input queue
+
         dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 35, 0, tzinfo=UTC)
+        scribe_queue.expect('BOTH', 'foo')
+        scribe_queue.send('DONE')
+        scribe_queue.expect('PROJECT', 'bar')
+        scribe_queue.send('DONE')
         task.poll(0)
-        assert scribe_queue.recv_msg() == ('PKGBOTH', 'foo')
-        assert scribe_queue.recv_msg() == ('PKGPROJ', 'bar')
+        scribe_queue.check()
 
 
 def test_persistence(zmq_context, master_config, scribe_queue, db_queue):
@@ -163,14 +181,18 @@ def test_persistence(zmq_context, master_config, scribe_queue, db_queue):
     try:
         db_queue.expect('LOADRWP')
         db_queue.send('OK', [
-            RewritePendingRow('foo', datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC), 'PKGPROJ'),
-            RewritePendingRow('bar', datetime(2018, 1, 1, 12, 30, 5, tzinfo=UTC), 'PKGBOTH'),
+            RewritePendingRow('foo', datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC), 'PROJECT'),
+            RewritePendingRow('bar', datetime(2018, 1, 1, 12, 30, 5, tzinfo=UTC), 'BOTH'),
         ])
         task.once()
         db_queue.check()
+
+        scribe_queue.expect('PROJECT', 'foo')
+        scribe_queue.send('DONE')
+        scribe_queue.expect('BOTH', 'bar')
+        scribe_queue.send('DONE')
         task.poll(0)
-        assert scribe_queue.recv_msg() == ('PKGPROJ', 'foo')
-        assert scribe_queue.recv_msg() == ('PKGBOTH', 'bar')
+        scribe_queue.check()
     finally:
         db_queue.expect('SAVERWP', [])
         db_queue.send('OK', None)

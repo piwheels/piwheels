@@ -404,7 +404,7 @@ def test_get_downloads_recent(db_client, db, with_downloads):
 
 def test_store_rewrites_pending(db_client, db, with_package):
     state = [
-        ('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PKGPROJ'),
+        ('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PROJECT'),
     ]
     db_client.save_rewrites_pending(state)
     assert db_client.load_rewrites_pending() == state

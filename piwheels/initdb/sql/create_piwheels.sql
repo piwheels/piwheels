@@ -318,7 +318,7 @@ CREATE TABLE rewrites_pending (
 
     CONSTRAINT rewrites_pending_pk PRIMARY KEY (package),
     CONSTRAINT rewrites_pending_command_ck CHECK
-        (command IN ('PKGPROJ', 'PKGBOTH'))
+        (command IN ('PROJECT', 'BOTH'))
 );
 
 CREATE INDEX rewrites_pending_added ON rewrites_pending(added_at);

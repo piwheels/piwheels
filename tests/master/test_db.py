@@ -392,7 +392,7 @@ def test_delete_build(db_intf, db, with_files, build_state_hacked):
 
 def test_store_rewrites_pending(db_intf, db, with_package):
     state = [
-        RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PKGPROJ'),
+        RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PROJECT'),
     ]
     assert db.execute(
         "SELECT COUNT(*) FROM rewrites_pending").first() == (0,)
