@@ -242,9 +242,8 @@ write access to the output directory.
             elif isinstance(task, BigBrother):
                 self.big_brother = task
             task.start()
-        self.logger.info('started all tasks')
-        for task in self.tasks:
             task.ready.wait(10)
+        self.logger.info('started all tasks')
         assert all(task.ready.wait(0) for task in self.tasks)
         self.logger.info('all tasks ready')
         systemd = get_systemd()
