@@ -97,8 +97,8 @@ class TheOracle(tasks.NonStopTask):
                 'ALLVERS':     lambda: self.do_allvers(),
                 'NEWPKG':      lambda: self.do_newpkg(*data),
                 'NEWVER':      lambda: self.do_newver(*data),
-                'PROJDESC':    lambda: self.do_projdesc(*data),
-                'GETPROJDESC': lambda: self.do_getprojdesc(data),
+                'SETDESC':     lambda: self.do_setdesc(*data),
+                'GETDESC':     lambda: self.do_getdesc(data),
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
                 'SKIPVER':     lambda: self.do_skipver(*data),
                 'DELPKG':      lambda: self.do_delpkg(data),
@@ -166,16 +166,16 @@ class TheOracle(tasks.NonStopTask):
         """
         return self.db.add_new_package_version(package, version, released, skip)
 
-    def do_projdesc(self, package, description):
+    def do_setdesc(self, package, description):
         """
-        Handler for "PROJDESC" message, sent by :class:`DbClient` to update a
+        Handler for "SETDESC" message, sent by :class:`DbClient` to update a
         package's project description.
         """
         return self.db.update_project_description(package, description)
 
-    def do_getprojdesc(self, package):
+    def do_getdesc(self, package):
         """
-        Handler for "GETPROJDESC" message, sent by :class:`DbClient` to retrieve
+        Handler for "GETDESC" message, sent by :class:`DbClient` to retrieve
         a package's project description.
         """
         return self.db.get_project_description(package)
@@ -434,17 +434,17 @@ class DbClient:
         """
         return self._execute('NEWVER', [package, version, released, skip])
 
-    def update_project_description(self, package, description):
+    def set_package_description(self, package, description):
         """
         See :meth:`.db.Database.update_project_description`.
         """
-        return self._execute('PROJDESC', [package, description])
+        return self._execute('SETDESC', [package, description])
 
-    def get_project_description(self, package):
+    def get_package_description(self, package):
         """
         See :meth:`.db.Database.get_project_description`.
         """
-        return self._execute('GETPROJDESC', package)
+        return self._execute('GETDESC', package)
 
     def skip_package(self, package, reason):
         """

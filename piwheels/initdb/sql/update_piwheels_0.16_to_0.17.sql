@@ -155,7 +155,7 @@ $sql$;
 REVOKE ALL ON FUNCTION get_file_apt_dependencies(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_file_apt_dependencies(TEXT) TO {username};
 
-CREATE FUNCTION update_project_description(pkg TEXT, dsc TEXT)
+CREATE FUNCTION set_package_description(pkg TEXT, dsc TEXT)
     RETURNS VOID
     LANGUAGE SQL
     CALLED ON NULL INPUT
@@ -167,10 +167,10 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION update_project_description(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION update_project_description(TEXT, TEXT) TO {username};
+REVOKE ALL ON FUNCTION set_package_description(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_package_description(TEXT, TEXT) TO {username};
 
-CREATE FUNCTION get_project_description(pkg TEXT)
+CREATE FUNCTION get_package_description(pkg TEXT)
     RETURNS TEXT
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -182,8 +182,8 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION get_project_description(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_description(TEXT) TO {username};
+REVOKE ALL ON FUNCTION get_package_description(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_package_description(TEXT) TO {username};
 
 DROP FUNCTION get_project_versions(TEXT);
 

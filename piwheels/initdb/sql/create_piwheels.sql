@@ -545,13 +545,12 @@ GRANT EXECUTE ON FUNCTION add_new_package_version(
     TEXT, TEXT, TIMESTAMP, TEXT
     ) TO {username};
 
--- update_project_description(package, description)
+-- set_package_description(package, description)
 -------------------------------------------------------------------------------
--- Called to update the project description for *package* in the packages
--- table.
+-- Called to update the description for *package* in the packages table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION update_project_description(pkg TEXT, dsc TEXT)
+CREATE FUNCTION set_package_description(pkg TEXT, dsc TEXT)
     RETURNS VOID
     LANGUAGE SQL
     CALLED ON NULL INPUT
@@ -563,16 +562,15 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION update_project_description(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION update_project_description(TEXT, TEXT) TO {username};
+REVOKE ALL ON FUNCTION set_package_description(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_package_description(TEXT, TEXT) TO {username};
 
--- get_project_description(package)
+-- get_package_description(package)
 -------------------------------------------------------------------------------
--- Called to retrieve the project description for *package* in the packages
--- table.
+-- Called to retrieve the description for *package* in the packages table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION get_project_description(pkg TEXT)
+CREATE FUNCTION get_package_description(pkg TEXT)
     RETURNS TEXT
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -584,8 +582,8 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION get_project_description(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_description(TEXT) TO {username};
+REVOKE ALL ON FUNCTION get_package_description(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_package_description(TEXT) TO {username};
 
 -- skip_package(package, reason)
 -------------------------------------------------------------------------------

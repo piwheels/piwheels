@@ -346,7 +346,7 @@ class TheScribe(tasks.PauseableTask):
             dependencies = self.db.get_file_apt_dependencies(release_files[0])
         else:
             dependencies = set()
-        description = self.db.get_project_description(package)
+        description = self.db.get_package_description(package)
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)

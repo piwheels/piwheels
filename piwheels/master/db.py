@@ -157,23 +157,22 @@ class Database:
                  released.astimezone(UTC).replace(tzinfo=None), skip)
             ).scalar()
 
-    def update_project_description(self, package, description):
+    def set_package_description(self, package, description):
         """
-        Update the project description for *package* in the packages table.
+        Update the description for *package* in the packages table.
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (update_project_description(%s, %s))",
+                "VALUES (set_package_description(%s, %s))",
                 (package, description))
 
-    def get_project_description(self, package):
+    def get_package_description(self, package):
         """
-        Retrieve the project description for *package* in the packages table.
+        Retrieve the description for *package* in the packages table.
         """
         with self._conn.begin():
             return self._conn.execute(
-                "VALUES (get_project_description(%s))",
-                (package,)).scalar()
+                "VALUES (get_package_description(%s))", (package,)).scalar()
 
     def skip_package(self, package, reason):
         """

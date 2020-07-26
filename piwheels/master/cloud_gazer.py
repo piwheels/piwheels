@@ -120,8 +120,8 @@ class CloudGazer(tasks.PauseableTask):
                                 'disabled package %s version %s (binary only)',
                                 package, version)
                         description = get_project_description(package)
-                        if description:
-                            self.db.update_project_description(
+                        if description is not None:
+                            self.db.set_package_description(
                                 package, description)
                     elif action == 'source' and self.db.get_version_skip(
                             package, version) == 'binary only':
