@@ -210,11 +210,14 @@ class MrChase(tasks.PauseableTask):
         self.logger.info('removing %s %s', package, version)
         if reason:
             self.db.skip_package_version(package, version, reason)
-        for filename in self.db.get_version_files(package, version):
-            self.fs.remove(package, filename)
-        self.db.delete_build(package, version)
-        self.web_queue.send_msg('BOTH', package)
+        self.web_queue.send_msg('DELVER', [package, version])
         self.web_queue.recv_msg()
+        # XXX Technically we ought to send DELVER to slave-driver's skip-queue
+        # here but let's not complicate the spider's web of connections!
+        if reason:
+            self.db.delete_build(package, version)
+        else:
+            self.db.delete_version(package, version)
         return 'DONE', protocols.NoData
 
     def do_rebuild(self, state):

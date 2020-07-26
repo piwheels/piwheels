@@ -128,7 +128,6 @@ class FileJuggler(tasks.NonStopTask):
                 handler = {
                     'EXPECT': self.do_expect,
                     'VERIFY': self.do_verify,
-                    'REMOVE': self.do_remove,
                 }[msg]
                 result = handler(*data)
             except Exception as exc:
@@ -179,28 +178,6 @@ class FileJuggler(tasks.NonStopTask):
         else:
             transfer.commit(package)
             self.logger.info('verified: %s', transfer.file_state.filename)
-            self.stats_queue.send_msg(
-                'STATFS', info.get_disk_stats(str(self.output_path)))
-
-    def do_remove(self, package, filename):
-        """
-        Message sent by :class:`FsClient` to request that *filename* in
-        *package* should be removed.
-
-        :param str package:
-            The name of the package from which the specified file is to be
-            removed.
-
-        :param str filename:
-            The name of the file to remove from *package*.
-        """
-        path = self.output_path / 'simple' / package / filename
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            self.logger.warning('remove failed (not found): %s', path)
-        else:
-            self.logger.info('removed: %s', path)
             self.stats_queue.send_msg(
                 'STATFS', info.get_disk_stats(str(self.output_path)))
 
@@ -359,9 +336,3 @@ class FsClient:
             return False
         else:
             return True
-
-    def remove(self, package, filename):
-        """
-        See :meth:`FileJuggler.do_remove`.
-        """
-        self._execute('REMOVE', [package, filename])

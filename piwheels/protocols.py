@@ -315,8 +315,7 @@ file_juggler_files = Protocol()
 
 file_juggler_fs = Protocol(recv={
     'EXPECT': ExactSequence([int, _file_state]),  # slave ID, file state
-    'VERIFY': ExactSequence([int, str]),                 # slave ID, package
-    'REMOVE': ExactSequence([str, str]),                 # package, filename
+    'VERIFY': ExactSequence([int, str]),          # slave ID, package
 }, send={
     'OK':     Extra,  # some result object XXX refine this?
     'ERROR':  str,    # error message
@@ -329,8 +328,8 @@ mr_chase = Protocol(recv={
     'REBUILD': Any(
         ExactSequence(['HOME']),
         ExactSequence(['SEARCH']),
-        ExactSequence(['PKGPROJ', Any(str, None)]),
-        ExactSequence(['PKGBOTH', Any(str, None)]),
+        ExactSequence(['PROJECT', Any(str, None)]),
+        ExactSequence(['BOTH', Any(str, None)]),
     ),
     'SENT':   NoData,
 }, send={

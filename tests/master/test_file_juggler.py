@@ -241,26 +241,3 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll(0)
     assert fs_queue.recv_msg() == ('OK', None)
-
-
-def test_remove_success(task, master_config, stats_queue, fs_queue, disk_stats):
-    task.logger = mock.Mock()
-    out = Path(master_config.output_path)
-    wheel = out / 'simple' / 'foo' / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
-    wheel.parent.mkdir(parents=True)
-    wheel.touch()
-    fs_queue.send_msg('REMOVE', ['foo', wheel.name])
-    task.poll(0)
-    assert fs_queue.recv_msg() == ('OK', None)
-    assert stats_queue.recv_msg() == ('STATFS', list(disk_stats))
-    assert task.logger.info.call_count == 1
-    assert not wheel.exists()
-
-
-def test_remove_failed(task, master_config, stats_queue, fs_queue, disk_stats):
-    task.logger = mock.Mock()
-    out = Path(master_config.output_path)
-    fs_queue.send_msg('REMOVE', ['foo', 'foo.whl'])
-    task.poll(0)
-    assert fs_queue.recv_msg() == ('OK', None)
-    assert task.logger.warning.call_count == 1
