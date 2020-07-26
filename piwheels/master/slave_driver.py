@@ -193,7 +193,7 @@ class SlaveDriver(tasks.PausingTask):
                 for slave in self.slaves.values():
                     slave.hello()
             else:
-                raise
+                raise  # pragma: no cover
 
     def handle_build(self, queue):
         """

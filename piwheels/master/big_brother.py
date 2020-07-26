@@ -115,7 +115,7 @@ class BigBrother(tasks.PausingTask):
                 for stats in self.history:
                     self.status_queue.send_msg('STATS', stats.as_message())
             else:
-                raise
+                raise  # pragma: no cover
 
     def handle_stats(self, queue):
         try:
