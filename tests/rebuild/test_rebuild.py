@@ -118,7 +118,7 @@ def test_rebuild_search(import_queue_name, import_queue):
 
 def test_rebuild_project(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
-        assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
+        assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', 'foo'])
         import_queue.send_msg('DONE')
         thread.join(10)
         assert thread.exitcode == 0
@@ -128,7 +128,7 @@ def test_rebuild_all(import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RebuildThread(['--import-queue', import_queue_name, 'project']) as thread:
-            assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', None])
+            assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', None])
             import_queue.send_msg('DONE')
             thread.join(10)
             assert thread.exitcode == 0
@@ -136,7 +136,7 @@ def test_rebuild_all(import_queue_name, import_queue):
 
 def test_rebuild_all_yes(import_queue_name, import_queue):
         with RebuildThread(['--yes', '--import-queue', import_queue_name, 'project']) as thread:
-            assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', None])
+            assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', None])
             import_queue.send_msg('DONE')
             thread.join(10)
             assert thread.exitcode == 0
@@ -144,7 +144,7 @@ def test_rebuild_all_yes(import_queue_name, import_queue):
 
 def test_rebuild_failure(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
-        assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
+        assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', 'foo'])
         import_queue.send_msg('ERROR', 'Package foo does not exist')
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
@@ -153,7 +153,7 @@ def test_rebuild_failure(import_queue_name, import_queue):
 
 def test_unexpected(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
-        assert import_queue.recv_msg() == ('REBUILD', ['PKGPROJ', 'foo'])
+        assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', 'foo'])
         import_queue.send_msg('SEND', 'foo.whl')
         thread.join(10)
         assert isinstance(thread.exception, RuntimeError)
