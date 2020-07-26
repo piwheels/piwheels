@@ -35,6 +35,8 @@ import http.client
 import xmlrpc.client
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit, urlunsplit
+from pathlib import PosixPath
 
 import requests
 from requests.exceptions import RequestException
@@ -126,8 +128,9 @@ class PyPIEvents:
     yank_re = re.compile(r'^yank release$')
     unyank_re = re.compile(r'^unyank release$')
 
-    def __init__(self, pypi_xmlrpc='https://pypi.org/pypi', serial=0,
-                 retries=3, cache_size=1000):
+    def __init__(self, *, pypi_xmlrpc='https://pypi.org/pypi',
+                 pypi_json='https://pypi.org/pypi',
+                 serial=0, retries=3, cache_size=1000):
         self.retries = retries
         self.next_read = datetime.now(tz=UTC)
         self.serial = serial
@@ -136,6 +139,7 @@ class PyPIEvents:
         self.cache = OrderedDict()
         self.cache_size = cache_size
         self.transport = PiWheelsTransport()
+        self.pypi_json = urlsplit(pypi_json)
         self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc, self.transport)
 
     def _get_events(self):
@@ -153,6 +157,57 @@ class PyPIEvents:
             else:
                 raise
 
+    def _get_description(self, package):
+        """
+        Look up the project description for *package* using PyPI's legacy JSON
+        API
+        """
+        path = PosixPath(self.pypi_json.path) / package / 'json'
+        url = urlunsplit(self.pypi_json._replace(path=str(path)))
+        resp = requests.get(url)
+        if resp.status_code >= 500:
+            # Server side error; probably a temporary service failure. Because
+            # the package description isn't critical just ignore it and return
+            # None for now and assume we'll pick it up at a later point
+            return None
+        elif resp.status_code == 404:
+            # We may be requesting a description for a package that is
+            # subsequently deleted; return None
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        try:
+            description = data['info']['summary']
+        except KeyError as exc:
+            logger.error('%s missing when getting description for %s',
+                         exc, package)
+        else:
+            if len(description) > 200:
+                return description[:199] + '…'
+            else:
+                return description
+
+    def _check_new_version(self, package, version, timestamp, action):
+        try:
+            self.cache.move_to_end((package, version))
+        except KeyError:
+            self.cache[(package, version)] = (timestamp, action)
+            description = self._get_description(package)
+            yield (package, version, timestamp, action, description)
+        else:
+            # This (package, version) combo was already cached; unless it's
+            # a change from binary-only to source, don't bother emitting it
+            (last_timestamp, last_action) = self.cache[(package, version)]
+            if (last_action, action) == ('create', 'source'):
+                self.cache[(package, version)] = (last_timestamp, action)
+                # _get_description is relatively expensive (it's another
+                # whole network transaction usually involving a fair chunk of
+                # JSON) so only do it if we're not suppressing a repeated item
+                description = self._get_description(package)
+                yield (package, version, last_timestamp, action, description)
+        while len(self.cache) > self.cache_size:
+            self.cache.popitem(last=False)
+
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
         # end of the event log entries
@@ -166,63 +221,25 @@ class PyPIEvents:
                         action = (
                             'source' if match.group(1) == 'source' else
                             'create')
-                        try:
-                            self.cache.move_to_end((package, version))
-                        except KeyError:
-                            self.cache[(package, version)] = (timestamp, action)
-                            yield (package, version, timestamp, action)
-                        else:
-                            (last_timestamp, last_action
-                                ) = self.cache[(package, version)]
-                            if (last_action, action) == ('create', 'source'):
-                                self.cache[(package, version)] = (
-                                    last_timestamp, action)
-                                yield (package, version, last_timestamp, action)
-                        while len(self.cache) > self.cache_size:
-                            self.cache.popitem(last=False)
+                        yield from self._check_new_version(
+                            package, version, timestamp, action)
                     elif self.create_re.search(action) is not None:
-                        yield (package, None, timestamp, 'create')
+                        description = self._get_description(package)
+                        yield (package, None, timestamp, 'create', description)
                     elif self.remove_re.search(action) is not None:
                         # If version is None here, indicating package deletion
                         # we could search and remove all corresponding versions
                         # from the cache but, frankly, it's not worth it
                         if version is not None:
                             self.cache.pop((package, version), None)
-                        yield (package, version, timestamp, 'remove')
+                        yield (package, version, timestamp, 'remove', None)
                     elif self.yank_re.search(action) is not None:
-                        yield (package, version, timestamp, 'yank')
+                        yield (package, version, timestamp, 'yank', None)
                     elif self.unyank_re.search(action) is not None:
-                        yield (package, version, timestamp, 'unyank')
+                        yield (package, version, timestamp, 'unyank', None)
                     self.serial = serial
             else:
                 # If the read is empty we've reached the end of the event log
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
                 self.next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
-
-
-def get_project_description(package):
-    "Look up the project description for *package* using PyPI's legacy JSON API"
-    url = 'https://pypi.org/pypi/{}/json'.format(package)
-    try:
-        r = requests.get(url)
-    except RequestException as e:
-        logger.error('failed to retrieve project summary for %s: %s',
-                     package, repr(e))
-        return
-    if r.status_code < 300:
-        try:
-            j = r.json()
-        except JSONDecodeError as e:
-            logger.error('failed to retrieve project summary for %s: %s',
-                         package, repr(e))
-            return
-        try:
-            description = j['info']['summary']
-        except KeyError as e:
-            logger.error('failed to retrieve project summary for %s: %s',
-                         package, repr(e))
-            return
-        return description[:200] if description else None
-    logger.error('failed to retrieve project summary for %s: status code %s',
-                 package, r.status_code)

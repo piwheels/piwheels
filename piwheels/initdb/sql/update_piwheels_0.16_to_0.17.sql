@@ -35,6 +35,26 @@ GRANT SELECT ON preinstalled_apt_packages TO {username};
 ALTER TABLE rewrites_pending
     DROP CONSTRAINT rewrites_pending_package_fk;
 
+DROP FUNCTION add_new_package(TEXT, TEXT);
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '', description TEXT = '')
+    RETURNS BOOLEAN
+    LANGUAGE plpgsql
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+BEGIN
+    INSERT INTO packages (package, skip, description)
+        VALUES (package, skip, description);
+    RETURN true;
+EXCEPTION
+    WHEN unique_violation THEN RETURN false;
+END;
+$sql$;
+
+REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT, TEXT) TO {username};
+
 CREATE FUNCTION delete_package(pkg TEXT)
     RETURNS VOID
     LANGUAGE SQL

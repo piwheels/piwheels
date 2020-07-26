@@ -385,6 +385,7 @@ def master_config(request, tmpdir):
     config.debug = []
     config.pypi_xmlrpc = 'https://pypi.org/pypi'
     config.pypi_simple = 'https://pypi.org/simple'
+    config.pypi_json = 'https://pypi.org/pypi'
     config.dsn = 'postgresql://{username}:{password}@{host}/{db}'.format(
         username=PIWHEELS_USER,
         password=PIWHEELS_PASS,
@@ -687,10 +688,3 @@ def web_queue(request, zmq_context, master_config):
                     protocols.the_scribe)
     yield task
     task.close()
-
-
-@pytest.fixture()
-def pypi_json(request):
-    with mock.patch('piwheels.master.cloud_gazer.get_project_description') as gpd:
-        gpd.return_value = 'some description'
-        yield gpd

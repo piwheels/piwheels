@@ -132,14 +132,15 @@ class Database:
             self._conn.close()
             self._conn = None
 
-    def add_new_package(self, package, skip=''):
+    def add_new_package(self, package, skip='', description=''):
         """
         Insert a new package record into the database. Returns True if the row
         was inserted successfully, or False if a key violation occurred.
         """
         with self._conn.begin():
             return self._conn.execute(
-                "VALUES (add_new_package(%s, %s))", (package, skip)).scalar()
+                "VALUES (add_new_package(%s, %s, %s))", (package, skip,
+                                                         description)).scalar()
 
     def add_new_package_version(self, package, version,
                                 released=None, skip=''):

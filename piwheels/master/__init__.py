@@ -128,6 +128,9 @@ write access to the output directory.
             '--pypi-simple', metavar='URL', default=const.PYPI_SIMPLE,
             help="The URL of the PyPI simple API (default: %(default)s)")
         parser.add_argument(
+            '--pypi-json', metavar='URL', default=const.PYPI_JSON,
+            help="The URL of the PyPI JSON API (default: %(default)s)")
+        parser.add_argument(
             '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
             help="The address of the queue used to report status to monitors "
             "(default: %(default)s); this is usually an ipc address")

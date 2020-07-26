@@ -37,6 +37,7 @@ USER = 'piwheels'
 PYPI_ROOT = 'https://pypi.org/'
 PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
+PYPI_JSON = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 OUTPUT_PATH = '/var/www'
 STATUS_QUEUE = 'ipc:///tmp/piw-status'
 CONTROL_QUEUE = 'ipc:///tmp/piw-control'

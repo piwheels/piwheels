@@ -152,12 +152,12 @@ class TheOracle(tasks.NonStopTask):
         """
         return self.db.get_all_package_versions()
 
-    def do_newpkg(self, package, skip):
+    def do_newpkg(self, package, skip, description):
         """
         Handler for "NEWPKG" message, sent by :class:`DbClient` to register a
         new package.
         """
-        return self.db.add_new_package(package, skip)
+        return self.db.add_new_package(package, skip, description)
 
     def do_newver(self, package, version, released, skip):
         """
@@ -422,11 +422,11 @@ class DbClient:
         else:
             raise IOError(result)
 
-    def add_new_package(self, package, skip=''):
+    def add_new_package(self, package, skip='', description=''):
         """
         See :meth:`.db.Database.add_new_package`.
         """
-        return self._execute('NEWPKG', [package, skip])
+        return self._execute('NEWPKG', [package, skip, description])
 
     def add_new_package_version(self, package, version, released=None, skip=''):
         """

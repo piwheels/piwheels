@@ -36,7 +36,7 @@ Defines the :class:`CloudGazer` task; see class for more details.
 from datetime import timedelta
 
 from .. import protocols, transport, tasks, const
-from .pypi import PyPIEvents, get_project_description
+from .pypi import PyPIEvents
 from .the_oracle import DbClient
 
 
@@ -51,7 +51,9 @@ class CloudGazer(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.db = DbClient(config, self.logger)
-        self.pypi = PyPIEvents(config.pypi_xmlrpc)
+        self.pypi = PyPIEvents(
+            pypi_xmlrpc=config.pypi_xmlrpc,
+            pypi_json=config.pypi_json)
         self.web_queue = self.socket(
             transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
@@ -73,7 +75,7 @@ class CloudGazer(tasks.PauseableTask):
         self.logger.info('querying upstream')
 
     def read_pypi(self):
-        for package, version, timestamp, action in self.pypi:
+        for package, version, timestamp, action, description in self.pypi:
             if action == 'remove':
                 if version is None:
                     self.logger.info('marking package %s for deletion', package)
@@ -96,10 +98,13 @@ class CloudGazer(tasks.PauseableTask):
             else:
                 if package not in self.packages:
                     self.packages.add(package)
-                    if self.db.add_new_package(package, skip=self.skip_default):
+                    if self.db.add_new_package(package, skip=self.skip_default,
+                                               description=description):
                         self.logger.info('added package %s', package)
                         self.web_queue.send_msg('BOTH', package)
                         self.web_queue.recv_msg()
+                    elif description is not None:
+                        self.db.set_package_description(package, description)
                 if version is not None:
                     skip = '' if action == 'source' else 'binary only'
                     update = 'BOTH'
@@ -119,7 +124,6 @@ class CloudGazer(tasks.PauseableTask):
                             self.logger.info(
                                 'disabled package %s version %s (binary only)',
                                 package, version)
-                        description = get_project_description(package)
                         if description is not None:
                             self.db.set_package_description(
                                 package, description)

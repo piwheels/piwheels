@@ -489,12 +489,12 @@ $sql$;
 REVOKE ALL ON FUNCTION set_pypi_serial(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_pypi_serial(INTEGER) TO {username};
 
--- add_new_package(package, skip=NULL)
+-- add_new_package(package, skip='', description='')
 -------------------------------------------------------------------------------
 -- Called to insert a new row in the "packages" table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '', description TEXT = '')
     RETURNS BOOLEAN
     LANGUAGE plpgsql
     CALLED ON NULL INPUT
@@ -502,15 +502,16 @@ CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
     SET search_path = public, pg_temp
 AS $sql$
 BEGIN
-    INSERT INTO packages (package, skip) VALUES (package, skip);
+    INSERT INTO packages (package, skip, description)
+        VALUES (package, skip, description);
     RETURN true;
 EXCEPTION
     WHEN unique_violation THEN RETURN false;
 END;
 $sql$;
 
-REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT) TO {username};
+REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT, TEXT) TO {username};
 
 -- add_new_package_version(package, version, released=NULL, skip=NULL)
 -------------------------------------------------------------------------------

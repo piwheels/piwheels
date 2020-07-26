@@ -214,7 +214,7 @@ def test_write_homepage(db_queue, task, scribe_queue, master_config, stats_data)
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -257,7 +257,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config, pypi_json)
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -283,7 +283,7 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -369,7 +369,7 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -417,7 +417,7 @@ def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config, p
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -465,7 +465,7 @@ def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_confi
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue, master_config, pypi_json):
+def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()

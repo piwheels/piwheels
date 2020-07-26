@@ -119,17 +119,17 @@ def test_get_all_package_versions(db, with_package_version, db_client):
 def test_add_new_package(db, with_schema, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 0
-    db_client.add_new_package('foo', '')
+    db_client.add_new_package('foo', '', '')
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 1
         assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', '')
-    db_client.add_new_package('bar', 'skipped')
+            "SELECT package, skip, description FROM packages").first() == ('foo', '', '')
+    db_client.add_new_package('bar', 'skipped', 'package bar')
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 2
         assert db.execute(
-            "SELECT package, skip FROM packages "
-            "WHERE package = 'bar'").first() == ('bar', 'skipped')
+            "SELECT package, skip, description FROM packages "
+            "WHERE package = 'bar'").first() == ('bar', 'skipped', 'package bar')
 
 
 def test_add_new_package_version(db, with_package, db_client):

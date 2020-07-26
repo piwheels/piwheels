@@ -369,7 +369,7 @@ slave_driver = Protocol(recv={
 the_oracle = Protocol(recv={
     'ALLPKGS':     NoData,
     'ALLVERS':     NoData,
-    'NEWPKG':      ExactSequence([str, str]),  # package, skip reason
+    'NEWPKG':      ExactSequence([str, str, str]),  # package, skip reason, description
     'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
     'SETDESC':     ExactSequence([str, str]),  # package, description
     'GETDESC':     str,  # package
