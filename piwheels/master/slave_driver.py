@@ -82,7 +82,6 @@ class SlaveDriver(tasks.PausingTask):
         SlaveState.status_queue = self.status_queue
         self.web_queue = self.socket(
             transport.REQ, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))

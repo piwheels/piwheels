@@ -54,7 +54,7 @@ digraph piwheels {
         BigBrother->main;
         SlaveDriver->main;
         MrChase->main;
-        MrChase->TheSecretary;
+        MrChase->TheSecretary [dir=both];
     }
 
     subgraph cluster_monitor {
@@ -127,8 +127,8 @@ digraph piwheels {
     CloudGazer->SlaveDriver [dir=both];
     CloudGazer->Seraph [dir=both];
     CloudGazer->TheSecretary [dir=both];
-    BigBrother->TheSecretary;
-    SlaveDriver->TheSecretary;
+    BigBrother->TheSecretary [dir=both];
+    SlaveDriver->TheSecretary [dir=both];
     SlaveDriver->BigBrother;
     FileJuggler->BigBrother;
     TheSecretary->Seraph [dir=both];
