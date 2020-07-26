@@ -213,7 +213,10 @@ write access to the output directory.
 
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
-        # for more information)
+        # for more information). If I was a bit more intelligent, the tasks
+        # would simply declare their sockets and which bound/connected to
+        # which addresses at which point the master could calculate the order
+        # below. Oh well ...
         self.tasks = [
             task(config)
             for task in (
@@ -240,6 +243,10 @@ write access to the output directory.
                 self.big_brother = task
             task.start()
         self.logger.info('started all tasks')
+        for task in self.tasks:
+            task.ready.wait(10)
+        assert all(task.ready.wait(0) for task in self.tasks)
+        self.logger.info('all tasks ready')
         systemd = get_systemd()
         signal.signal(signal.SIGTERM, sig_term)
         try:

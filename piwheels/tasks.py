@@ -43,7 +43,7 @@ master.
 import ctypes as ct
 import logging
 from datetime import datetime, timedelta, timezone
-from threading import Thread
+from threading import Thread, Event
 from fnmatch import fnmatch
 
 from . import transport, protocols
@@ -146,6 +146,7 @@ class Task(Thread):
         self.quit_queue.hwm = 10
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
+        self.ready = Event()
 
     def close(self):
         """
@@ -303,6 +304,7 @@ class Task(Thread):
         prctl(PR_SET_NAME, self.name.encode('ascii')[:15], 0, 0, 0)
         try:
             self.once()
+            self.ready.set()
             self.logger.info('started')
             while True:
                 self.poll()
