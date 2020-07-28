@@ -189,24 +189,24 @@ class PyPIEvents:
 
     def _check_new_version(self, package, version, timestamp, action):
         try:
-            self.cache.move_to_end((package, version))
+            self.versions.move_to_end((package, version))
         except KeyError:
-            self.cache[(package, version)] = (timestamp, action)
+            self.versions[(package, version)] = (timestamp, action)
             description = self._get_description(package)
             yield (package, version, timestamp, action, description)
         else:
             # This (package, version) combo was already cached; unless it's
             # a change from binary-only to source, don't bother emitting it
-            (last_timestamp, last_action) = self.cache[(package, version)]
+            (last_timestamp, last_action) = self.versions[(package, version)]
             if (last_action, action) == ('create', 'source'):
-                self.cache[(package, version)] = (last_timestamp, action)
+                self.versions[(package, version)] = (last_timestamp, action)
                 # _get_description is relatively expensive (it's another
                 # whole network transaction usually involving a fair chunk of
                 # JSON) so only do it if we're not suppressing a repeated item
                 description = self._get_description(package)
                 yield (package, version, last_timestamp, action, description)
-        while len(self.cache) > self.cache_size:
-            self.cache.popitem(last=False)
+        while len(self.versions) > self.versions_size:
+            self.versions.popitem(last=False)
 
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
@@ -231,7 +231,7 @@ class PyPIEvents:
                         # we could search and remove all corresponding versions
                         # from the cache but, frankly, it's not worth it
                         if version is not None:
-                            self.cache.pop((package, version), None)
+                            self.versions.pop((package, version), None)
                         yield (package, version, timestamp, 'remove', None)
                     elif self.yank_re.search(action) is not None:
                         yield (package, version, timestamp, 'yank', None)
