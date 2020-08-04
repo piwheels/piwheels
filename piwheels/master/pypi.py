@@ -161,7 +161,10 @@ class PyPIBuffer:
         # later. If we get a protocol error with error 5xx it's a server-side
         # problem, so we again return an empty list and try later
         try:
-            return self.client.changelog_since_serial(serial)
+            return [
+                tuple(event) for event in
+                self.client.changelog_since_serial(serial)
+            ]
         except (OSError, http.client.ImproperConnectionState):
             return []
         except xmlrpc.client.ProtocolError as exc:
@@ -178,7 +181,7 @@ class PyPIBuffer:
         # output of _get_events is assumed to be sorted by serial
         last_serial = self.next_serial
         self.next_serial = events[-1][4]
-        if last_serial <= self.serial <= self.next_serial:
+        if last_serial < self.serial <= self.next_serial:
             # Find the timestamp of the event we want in the serial-sorted
             # events, so we can easily find it in the timestamp-sorted
             # buffer
@@ -212,12 +215,12 @@ class PyPIBuffer:
                 self.buffer[start][-1] < self.serial):
             start += 1
         assert self.buffer[start][2] == self.serial_timestamp
-        if start < finish:
-            for row in self.buffer[start:finish]:
-                yield row
-            self.serial_timestamp = self.buffer[finish][2]
-            self.serial = self.buffer[finish][4]
-            del self.buffer[:finish]
+        assert start < finish
+        for row in self.buffer[start:finish]:
+            yield row
+        self.serial_timestamp = self.buffer[finish][2]
+        self.serial = self.buffer[finish][4]
+        del self.buffer[:finish]
 
 
 class PyPIEvents:
@@ -309,12 +312,9 @@ class PyPIEvents:
             # This (package, version) combo was already cached; unless it's
             # a change from binary-only to source, don't bother emitting it
             (last_timestamp, last_action) = self.versions[(package, version)]
+            description = self._get_description(package)
             if (last_action, action) == ('create', 'source'):
                 self.versions[(package, version)] = (last_timestamp, action)
-                # _get_description is relatively expensive (it's another
-                # whole network transaction usually involving a fair chunk of
-                # JSON) so only do it if we're not suppressing a repeated item
-                description = self._get_description(package)
                 yield (package, version, last_timestamp, action, description)
         while len(self.versions) > self.versions_size:
             self.versions.popitem(last=False)
