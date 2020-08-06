@@ -92,6 +92,22 @@ def test_add_new_package_version(db_intf, db, with_package):
         "FROM versions").first() == (with_package, '0.1')
 
 
+def test_get_package_description(db_intf, db, with_package):
+    assert db_intf.get_package_description(with_package) == ''
+    db_intf.add_new_package('bar', description='blah blah')
+    assert db_intf.get_package_description('bar') == 'blah blah'
+
+
+def test_set_package_description(db_intf, db, with_package):
+    assert db.execute(
+        "SELECT description FROM packages "
+        "WHERE package = 'foo'").first() == ('',)
+    db_intf.set_package_description(with_package, 'a package')
+    assert db.execute(
+        "SELECT description FROM packages "
+        "WHERE package = 'foo'").first() == ('a package',)
+
+
 def test_skip_package(db_intf, db, with_package):
     assert db.execute(
         "SELECT skip FROM packages "
@@ -164,10 +180,22 @@ def test_test_package(db_intf, db, with_build_abis):
     assert db_intf.test_package('foo')
 
 
+def test_package_marked_deleted(db_intf, db, with_package):
+    assert not db_intf.package_marked_deleted(with_package)
+    db_intf.skip_package(with_package, 'deleted')
+    assert db_intf.package_marked_deleted(with_package)
+
+
 def test_test_package_version(db_intf, db, with_package):
     assert not db_intf.test_package_version(with_package, '0.1')
     db_intf.add_new_package_version(with_package, '0.1')
     assert db_intf.test_package_version(with_package, '0.1')
+
+
+def test_get_versions_deleted(db_intf, db, with_package_version):
+    assert not db_intf.get_versions_deleted('foo')
+    db_intf.skip_package_version('foo', '0.1', 'deleted')
+    assert db_intf.get_versions_deleted('foo') == {'0.1'}
 
 
 def test_log_download(db_intf, db, with_files, download_state):
