@@ -32,14 +32,20 @@
 Implements the classes for tracking slave states.
 
 .. autoclass:: SlaveList
+    :members:
+
+.. autoclass:: MasterState
+    :members:
 
 .. autoclass:: SlaveState
+    :members:
 """
 
-from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
-from colorzero import Color
+from colorzero import Color, Hue
+
+from .. import states
 
 
 UTC = timezone.utc
@@ -52,7 +58,7 @@ class SlaveList:
     on the external status queue.
     """
     def __init__(self):
-        self.slaves = {}
+        self.slaves = {None: MasterState()}
 
     def __len__(self):
         return len(self.slaves)
@@ -66,13 +72,13 @@ class SlaveList:
 
     def _sorted_list(self):
         return sorted(self.slaves.values(),
-                      key=lambda slave: (slave.abi, slave.label))
+                      key=lambda state: state.sort_key)
 
     def prune(self):
         now = datetime.now(tz=UTC)
-        for slave in list(self):
-            if slave.terminated and (now - slave.last_seen >
-                                     timedelta(seconds=5)):
+        for slave in self._sorted_list():
+            if slave.killed and (now - slave.last_seen > timedelta(seconds=5)):
+                # TODO Don't remove the master widget
                 del self.slaves[slave.slave_id]
 
     def message(self, slave_id, timestamp, msg, data):
@@ -99,76 +105,35 @@ class SlaveList:
         state.update(timestamp, msg, data)
 
 
-class SlaveState:
+class MasterState(states.MasterState):
     """
-    Class for tracking the state of a single build slave.
+    Class for tracking the state of the master. :class:`SlaveList` stores an
+    instance of this against slave_id ``None``.
     """
-    # pylint: disable=too-many-instance-attributes
+    @property
+    def color(self):
+        return {
+            'okay':   Color('#060'),
+            'silent': Color('#760'),
+            'dead':   Color('red'),
+        }[self.state]
 
-    def __init__(self, slave_id):
-        self.terminated = False
-        self.slave_id = slave_id
-        self.last_msg = '?'
-        self.py_version = '?'
-        self.timeout = timedelta(hours=3)
-        self.abi = '?'
-        self.platform = '?'
-        self.first_seen = None
-        self.last_seen = None
-        self.status = '?'
-        self.label = '???'
-        self._color = Color('red')
 
-    def update(self, timestamp, msg, data):
-        """
-        Update the slave's state from an incoming reply message.
-
-        :param datetime.datetime timestamp:
-            The time at which the message was originally sent.
-
-        :param str msg:
-            The message itself.
-
-        :param data:
-            Any data sent with the message.
-        """
-        self.last_msg = msg
-        self.last_seen = timestamp
-        if msg == 'HELLO':
-            self.status = 'Initializing'
-            self.first_seen = timestamp
-            (
-                self.timeout,
-                self.py_version,
-                self.abi,
-                self.platform,
-                self.label
-            ) = data
-        elif msg == 'SLEEP':
-            self.status = 'Waiting for jobs'
-            self._color = Color('#333')
-        elif msg == 'BYE':
-            self.terminated = True
-            self.status = 'Terminating'
-            self._color = Color('red')
-        elif msg == 'BUILD':
-            self.status = 'Building {} {}'.format(data[0], data[1])
-            self._color = Color('#060')
-        elif msg == 'SEND':
-            self.status = 'Transferring file'
-            self._color = Color('#007')
-        elif msg == 'DONE':
-            self.status = 'Cleaning up after build'
-            self._color = Color('#707')
-
+class SlaveState(states.SlaveState):
+    """
+    Class for tracking the state of a single build slave. :class:`SlaveList`
+    stores instances of this keyed by the *slave_id*.
+    """
     @property
     def color(self):
         """
         Calculate a simple color indicator for the slave.
         """
-        if self.last_seen is not None:
-            if datetime.now(tz=UTC) - self.last_seen > timedelta(minutes=15):
-                return Color('#760')  # silent
-            elif datetime.now(tz=UTC) - self.last_seen > self.timeout:
-                return Color('red')  # dead
-        return self._color
+        return {
+            'idle':     Color('#333'),
+            'building': Color('#060'),
+            'sending':  Color('#007'),
+            'cleaning': Color('#707'),
+            'silent':   Color('#760'),
+            'dead':     Color('red'),
+        }[self.state]

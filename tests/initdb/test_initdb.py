@@ -213,6 +213,31 @@ def test_init(db, with_clean_db, db_super_url, caplog):
                         'version %s' % __version__)
 
 
+def test_init_debug(db, with_clean_db, db_super_url, caplog):
+    assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes', '--debug']) == 0
+    with db.begin():
+        for row in db.execute("SELECT version FROM configuration"):
+            assert row[0] == __version__
+            break
+        else:
+            assert False, "Didn't find version row in configuration"
+    assert find_message(
+        caplog.records,
+        message='Initializing database at version %s' % __version__)
+    assert find_message(
+        caplog.records,
+        message='REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC;')
+    assert find_message(
+        caplog.records,
+        message='REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC;')
+    assert find_message(
+        caplog.records,
+        message='CREATE INDEX builds_timestamp ON builds(built_at DESC NULLS LAST);')
+    assert find_message(
+        caplog.records,
+        message='CREATE INDEX files_builds ON files(build_id);')
+
+
 def test_full_upgrade(db, with_clean_db, db_super_url, caplog, create_script_04):
     # The following is the creation script from the ancient 0.4 version; this
     # is deliberately picked so we run through all subsequent update scripts

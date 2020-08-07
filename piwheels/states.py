@@ -58,6 +58,14 @@ artifacts (:class:`FileState`) and various loggers.
 
 .. autoclass:: PageState
     :members:
+
+.. autoclass:: SlaveStats
+    :members:
+
+.. autoclass:: MasterStats
+    :members:
+
+.. autofunction:: mkdir_override_symlink
 """
 
 import hashlib
@@ -65,7 +73,7 @@ import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from collections import namedtuple
+from collections import namedtuple, deque
 
 from .ranges import exclude, intersect
 
@@ -75,7 +83,7 @@ UTC = timezone.utc
 # pylint complains about all these classes having too many attributes (and thus
 # their constructors having too many arguments) and about the lack of (entirely
 # pointless) docstrings on the various property getter methods. Most of the
-# classes are tuple-esque; each operates as *mostly* read-only collection of
+# classes are tuple-esque; each operates as a *mostly* read-only collection of
 # attributes but these classes aren't tuples because in each case there's
 # usually one or two fields that can be twiddled (e.g. when a record gets
 # inserted into the database, or a file transferred, etc).
@@ -457,21 +465,31 @@ class SlaveState:
     counter = 0
     status_queue = None
 
-    def __init__(self, address, timeout, native_py_version, native_abi,
-                 native_platform, label):
+    def __init__(self, address, build_timeout, busy_timeout, native_py_version,
+                 native_abi, native_platform, label, os_name, os_version,
+                 board_revision, board_serial):
         SlaveState.counter += 1
         self._address = address
         self._slave_id = SlaveState.counter
-        self._label = label
-        self._timeout = timeout
+        self._build_timeout = build_timeout
+        self._busy_timeout = busy_timeout
         self._native_py_version = native_py_version
         self._native_abi = native_abi
         self._native_platform = native_platform
+        self._label = label
+        self._os_name = os_name
+        self._os_version = os_version
+        self._board_revision = board_revision
+        self._board_serial = board_serial
         self._first_seen = self._last_seen = datetime.now(tz=UTC)
         self._request = None
         self._reply = None
         self._build = None
-        self._terminated = False
+        self._stats = deque(maxlen=100)
+        self._clock_skew = None
+        self._killed = False
+        self._skipped = False
+        self._paused = False
 
     def __repr__(self):
         return (
@@ -482,7 +500,7 @@ class SlaveState:
                 last_seen=datetime.now(tz=UTC) - self.last_seen,
                 reply='none' if self.reply is None else self.reply[0],
                 alive='killed'
-                if self.terminated else 'expired'
+                if self.killed else 'expired'
                 if self.expired else 'alive'
             )
         )
@@ -491,24 +509,46 @@ class SlaveState:
         SlaveState.status_queue.send_msg(
             'SLAVE', [
                 self._slave_id, self._first_seen, 'HELLO', [
-                     self._timeout, self._native_py_version, self._native_abi,
-                     self._native_platform, self._label
+                    self._build_timeout, self._busy_timeout,
+                    self._native_py_version, self._native_abi,
+                    self._native_platform, self._label, self._os_name,
+                    self._os_version, self._board_revision, self._board_serial,
                 ]
             ]
         )
-        if self._reply is not None:
-            # Replay the last reply for the sake of monitors that have just
-            # connected to the master
-            msg, data = self._reply
+        # Replay the history stats and the last reply for the sake of monitors
+        # that have just connected to the master
+        for stat in self._stats:
             SlaveState.status_queue.send_msg(
-                'SLAVE', [self._slave_id, self._last_seen, msg, data])
+                'SLAVE', [self._slave_id, self._last_seen,
+                          'STATS', stat.as_message()])
+        msg, data = self._reply
+        SlaveState.status_queue.send_msg(
+            'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
     def kill(self):
-        self._terminated = True
+        self._killed = True
+
+    def skip(self):
+        self._skipped = True
+
+    def sleep(self):
+        self._paused = True
+
+    def wake(self):
+        self._killed, self._skipped, self._paused = False, False, False
 
     @property
-    def terminated(self):
-        return self._terminated
+    def killed(self):
+        return self._killed
+
+    @property
+    def skipped(self):
+        return self._skipped
+
+    @property
+    def paused(self):
+        return self._paused
 
     @property
     def address(self):
@@ -523,8 +563,12 @@ class SlaveState:
         return self._label
 
     @property
-    def timeout(self):
-        return self._timeout
+    def build_timeout(self):
+        return self._build_timeout
+
+    @property
+    def busy_timeout(self):
+        return self._busy_timeout
 
     @property
     def native_platform(self):
@@ -539,6 +583,22 @@ class SlaveState:
         return self._native_py_version
 
     @property
+    def os_name(self):
+        return self._os_name
+
+    @property
+    def os_version(self):
+        return self._os_version
+
+    @property
+    def board_revision(self):
+        return self._board_revision
+
+    @property
+    def board_serial(self):
+        return self._board_serial
+
+    @property
     def first_seen(self):
         return self._first_seen
 
@@ -548,13 +608,19 @@ class SlaveState:
 
     @property
     def expired(self):
-        # There's a fudge factor of 10% here to allow slaves a little extra
-        # time before we expire and forget them
-        return (datetime.now(tz=UTC) - self._last_seen) > (self._timeout * 1.1)
+        return (datetime.now(tz=UTC) - self._last_seen) > self._busy_timeout
 
     @property
     def build(self):
         return self._build
+
+    @property
+    def stats(self):
+        return self._stats
+
+    @property
+    def clock_skew(self):
+        return self._clock_skew
 
     @property
     def request(self):
@@ -583,6 +649,11 @@ class SlaveState:
             else:
                 logging.error('Invalid BUILT after %s', self._reply[0])
                 self._build = None
+        elif msg in ('IDLE', 'BUSY'):
+            self._stats.append(SlaveStats.from_message(data))
+            self._clock_skew = self._last_seen - self._stats[-1].timestamp
+            SlaveState.status_queue.send_msg(
+                'SLAVE', [self._slave_id, self._last_seen, 'STATS', data])
 
     @property
     def reply(self):
@@ -590,13 +661,15 @@ class SlaveState:
 
     @reply.setter
     def reply(self, value):
-        self._reply = value
         msg, data = value
+        if msg != 'CONT':
+            self._reply = value
         if msg == 'DONE':
             self._build = None
+            self._skipped = False
         if msg == 'ACK':
             self.hello()
-        else:
+        elif msg != 'CONT':
             SlaveState.status_queue.send_msg(
                 'SLAVE', [self._slave_id, self._last_seen, msg, data])
 
@@ -738,6 +811,58 @@ class TransferState:
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+class MasterStats(namedtuple('MasterStats', (
+    'timestamp',
+    'packages_built',
+    'builds_last_hour',
+    'builds_time',
+    'builds_size',
+    'builds_pending',
+    'new_last_hour',
+    'files_count',
+    'downloads_last_hour',
+    'downloads_last_month',
+    'downloads_all',
+    'disk_size',
+    'disk_free',
+    'mem_size',
+    'mem_free',
+    'swap_size',
+    'swap_free',
+    'load_average',
+    'cpu_temp',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
+class SlaveStats(namedtuple('SlaveStats', (
+    'timestamp',
+    'disk_size',
+    'disk_free',
+    'mem_size',
+    'mem_free',
+    'swap_size',
+    'swap_free',
+    'load_average',
+    'cpu_temp',
+))):
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
 
 
 class DownloadState(namedtuple('DownloadState', (

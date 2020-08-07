@@ -33,8 +33,6 @@ Defines the :class:`MrChase` task; see class for more details.
     :members:
 """
 
-import pickle
-
 from .. import const, protocols, transport, tasks
 from ..states import BuildState, FileState
 from .the_oracle import DbClient

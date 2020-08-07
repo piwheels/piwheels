@@ -28,7 +28,6 @@
 
 
 import os
-import pickle
 import zipfile
 from hashlib import sha256
 from unittest import mock
@@ -46,6 +45,31 @@ from piwheels.importer import main
 @pytest.fixture()
 def mock_wheel(request, tmpdir):
     filename = str(tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl'))
+    with zipfile.ZipFile(filename, 'w', compression=zipfile.ZIP_STORED) as arc:
+        arc.writestr('foo/__init__.py', b'\x00' * 123456)
+        arc.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.0
+Name: foo
+Version: 0.1
+Summary: A test package
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+License: BSD
+Platform: any
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+
+""")
+    return filename
+
+
+@pytest.fixture()
+def mock_wheel_no_abi(request, tmpdir):
+    filename = str(tmpdir.join('foo-0.1-cp34-none-any.whl'))
     with zipfile.ZipFile(filename, 'w', compression=zipfile.ZIP_STORED) as arc:
         arc.writestr('foo/__init__.py', b'\x00' * 123456)
         arc.writestr('foo-0.1.dist-info/METADATA', """\
@@ -178,7 +202,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with ImportThread(['--import-queue', import_queue_name, mock_wheel]) as thread, \
-                mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+                mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
             assert import_queue.recv_msg() == (
                 'IMPORT', [
                     0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -201,7 +225,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
 def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -225,7 +249,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
 def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),
@@ -252,7 +276,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
     output = tmpdir.join('foo_output.txt')
     output.write('FOO\n')
     with ImportThread(['-y', '--output', str(output), '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0), 'FOO\n', [
@@ -273,23 +297,30 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
         assert os.path.exists(mock_wheel)
 
 
-def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
+def test_import_no_abi(mock_wheel_no_abi, mock_wheel_stats, import_queue_name, import_queue):
+    mock_wheel = mock_wheel_no_abi
+    with pytest.raises(RuntimeError):
+        main(['-y', '--import-queue', import_queue_name, mock_wheel])
+
+
+def test_import_override_abi(mock_wheel_no_abi, mock_wheel_stats, import_queue_name, import_queue):
+    mock_wheel = mock_wheel_no_abi
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--abi', 'cp35m', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp35m', True, timedelta(0),
                 'Imported manually via piw-import', [
                     [
-                        'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        'foo-0.1-cp34-none-any.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', {},
+                        'cp34', 'none', 'any', {},
                     ],
                 ]
             ]
         )
-        import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+        import_queue.send_msg('SEND', 'foo-0.1-cp34-none-any.whl')
         assert import_queue.recv_msg() == ('SENT', None)
         import_queue.send_msg('DONE')
         thread.join(10)
@@ -301,7 +332,7 @@ def test_import_override_abi(mock_wheel, mock_wheel_stats, import_queue_name, im
 def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, import_queue):
     filesize, filehash = mock_wheel_stats
     with ImportThread(['-y', '--delete', '--import-queue', import_queue_name, mock_wheel]) as thread, \
-            mock.patch('piwheels.slave.builder.PiWheelsPackage.transfer') as transfer_mock:
+            mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
         assert import_queue.recv_msg() == (
             'IMPORT', [
                 0, 'foo', '0.1', 'cp34m', True, timedelta(0),

@@ -26,41 +26,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"Defines an urwid event loop for zmq applications and some simple widgets"
+"Defines an urwid event loop for zmq applications"
 
 import os
-import errno
 import heapq
+import errno
 import signal
 from time import time
 from itertools import count
 from collections import namedtuple
 
-# This module is a one-stop shop for all the monitor's widget needs, hence all
-# the unused imports
-# pylint: disable=unused-import
-
-from urwid import (
-    connect_signal,
-    AttrMap,
-    Button,
-    Text,
-    SelectableIcon,
-    WidgetWrap,
-    Pile,
-    Columns,
-    Filler,
-    Divider,
-    Frame,
-    LineBox,
-    ListBox,
-    Overlay,
-    ProgressBar,
-    ListWalker,
-    MainLoop,
-    ExitMainLoop,
-)
-
+from urwid import ExitMainLoop
 try:
     from urwid import EventLoop
 except ImportError:
@@ -90,39 +66,10 @@ except ImportError:
         def set_signal_handler(self, signum, handler):
             return signal.signal(signum, handler)
 
-from .. import transport
-
-
-# Stop the relentless march against nicely aligned code
-# pylint: disable=bad-whitespace
-
-PALETTE = [
-    ('okay',        'light green',     'default'),
-    ('silent',      'yellow',          'default'),
-    ('dead',        'light red',       'default'),
-    ('time',        'light gray',      'default'),
-    ('status',      'light gray',      'default'),
-    ('hotkey',      'light cyan',      'dark blue'),
-    ('normal',      'light gray',      'default'),
-    ('todo',        'white',           'dark blue'),
-    ('done',        'black',           'light gray'),
-    ('todo_smooth', 'dark blue',       'light gray'),
-    ('header',      'light gray',      'dark blue'),
-    ('footer',      'light gray',      'dark blue'),
-    ('dialog',      'light gray',      'dark blue'),
-    ('button',      'light gray',      'dark blue'),
-    ('coltrans',    'dark cyan',       'dark blue'),
-    ('colheader',   'black',           'dark cyan'),
-    ('inv_dialog',  'dark blue',       'light gray'),
-    ('inv_normal',  'black',           'light gray'),
-    ('inv_hotkey',  'dark cyan',       'light gray'),
-    ('inv_button',  'black',           'light gray'),
-    ('inv_status',  'black',           'light gray'),
-]
+from piwheels import transport
 
 
 AlarmTask = namedtuple('AlarmTask', ('due', 'tie_break', 'callback'))
-
 
 class ZMQEventLoop(EventLoop):
     """
@@ -304,77 +251,3 @@ class ZMQEventLoop(EventLoop):
         for queue, _ in ready.items():
             self._queue_callbacks[queue]()
             self._did_something = True
-
-
-class SimpleButton(Button):
-    """
-    Overrides :class:`Button` to enclose the label in [square brackets].
-    """
-    button_left = Text("[")
-    button_right = Text("]")
-
-
-class FixedButton(SimpleButton):
-    """
-    A fixed sized, one-line button derived from :class:`SimpleButton`.
-    """
-    def sizing(self):
-        return frozenset(['fixed'])
-
-    def pack(self, size, focus=False):
-        # pylint: disable=unused-argument
-        return (len(self.get_label()) + 4, 1)
-
-
-class YesNoDialog(WidgetWrap):
-    """
-    Wraps a box and buttons to form a simple Yes/No modal dialog. The dialog
-    emits signals "yes" and "no" when either button is clicked or when "y" or
-    "n" are pressed on the keyboard.
-    """
-    signals = ['yes', 'no']
-
-    def __init__(self, title, message):
-        yes_button = FixedButton('Yes')
-        no_button = FixedButton('No')
-        connect_signal(yes_button, 'click', lambda btn: self._emit('yes'))
-        connect_signal(no_button, 'click', lambda btn: self._emit('no'))
-        super().__init__(
-            LineBox(
-                Pile([
-                    ('pack', Text(message)),
-                    Filler(
-                        Columns([
-                            ('pack', AttrMap(yes_button, 'button', 'inv_button')),
-                            ('pack', AttrMap(no_button, 'button', 'inv_button')),
-                        ], dividechars=2),
-                        valign='bottom'
-                    )
-                ]),
-                title
-            )
-        )
-
-    def keypress(self, size, key):
-        """
-        Respond to "y" or "n" on the keyboard as a short-cut to selecting and
-        clicking the actual buttons.
-        """
-        # Urwid does some amusing things with its widget classes which fools
-        # pylint's static analysis. The super-method *is* callable here.
-        # pylint: disable=not-callable
-        key = super().keypress(size, key)
-        if isinstance(key, str):
-            if key.lower() == 'y':
-                self._emit('yes')
-            elif key.lower() == 'n':
-                self._emit('no')
-        return key
-
-    def _get_title(self):
-        return self._w.title_widget.text.strip()
-
-    def _set_title(self, value):
-        self._w.set_title(value)
-
-    title = property(_get_title, _set_title)

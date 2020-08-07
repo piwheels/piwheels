@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import os
 import sys
 import ipaddress as ip
 import datetime as dt
@@ -37,7 +38,7 @@ import pytest
 from voluptuous import Any
 
 from piwheels.protocols import Protocol, NoData
-from piwheels.transport import Context, Socket, PUSH, PULL
+from piwheels.transport import *
 
 
 def test_ipaddress_roundtrip():
@@ -204,3 +205,34 @@ def test_hwm_attr():
     sock = ctx.socket(PULL)
     sock.hwm = 10
     assert sock.hwm == 10
+    sock.close()
+
+
+def test_subscribe():
+    ctx = Context()
+    pub = ctx.socket(PUB, protocol=Protocol(send={'FOO': int}))
+    sub = ctx.socket(SUB, protocol=Protocol(recv={'FOO': int}))
+    pub.bind('inproc://foo')
+    sub.connect('inproc://foo')
+    sub.subscribe('')
+    pub.send_msg('FOO', 1)
+    assert sub.recv_msg() == ('FOO', 1)
+    sub.unsubscribe('')
+    pub.send_msg('FOO', 2)
+    assert not sub.poll(0.5)
+    sub.close()
+    pub.close()
+
+
+def test_poll_fd(tmpdir):
+    r, w = os.pipe()
+    p = Poller()
+    p.register(r)
+    assert not p.poll(0.1)
+    os.write(w, b'foo')
+    assert p.poll(0.1)
+    p.unregister(r)
+    os.write(w, b'bar')
+    assert not p.poll(0.1)
+    os.close(w)
+    os.close(r)

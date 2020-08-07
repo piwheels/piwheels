@@ -27,12 +27,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from threading import Event
 
 import pytest
 
 from piwheels import protocols, transport
 from piwheels.master.the_architect import TheArchitect
+from psycopg2.extensions import QueryCanceledError
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture(scope='function')
@@ -52,17 +57,36 @@ def task(request, builds_queue, master_config):
 
 
 def test_architect_queue(db, with_build, task, builds_queue):
-    with mock.patch('piwheels.master.the_architect.datetime') as dtmock:
-        now = datetime.utcnow()
-        dtmock.utcnow.side_effect = [
-            now,
-            now,
-            now + timedelta(seconds=300),
-            now + timedelta(seconds=300),
-        ]
-        task.loop()
+    with mock.patch('piwheels.tasks.datetime') as dt:
+        dt.now.return_value = datetime.now(tz=UTC)
+        task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
         with db.begin():
             db.execute("DELETE FROM builds")
-        task.loop()
+        dt.now.return_value += timedelta(minutes=3)
+        task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})
+
+
+def test_architect_cancel(db, with_build, task, builds_queue):
+    try:
+        with mock.patch('piwheels.master.the_architect.Database') as db:
+            query_event = Event()
+            cancelled = Event()
+            def get_build_queue(limit):
+                if query_event.wait(5):
+                    cancelled.set()
+                    raise QueryCanceledError()
+                return {}
+            db().get_build_queue.side_effect = get_build_queue
+            db()._conn.connection.cancel.side_effect = query_event.set
+            task.db = db()
+            task.start()
+            while not task.can_cancel:
+                cancelled.wait(0.1)
+            task.quit()
+            task.join(10)
+            assert not task.is_alive()
+            assert cancelled.wait(0)
+    finally:
+        task.close()

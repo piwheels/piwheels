@@ -67,7 +67,7 @@ in the root of the piwheels repository:
 
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/bennuttall/piwheels/master/deploy_slave.sh
+    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/deploy_slave.sh
     # chmod +x deploy_slave.sh
     # ./deploy_slave.sh
 
@@ -94,7 +94,7 @@ the root of the piwheels repository:
 
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/bennuttall/piwheels/master/piwheels-slave.service
+    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/piwheels-slave.service
     # cp piwheels-slave.service /etc/systemd/system/
     # systemctl daemon-reload
     # systemctl enable piwheels-slave

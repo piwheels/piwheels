@@ -26,8 +26,18 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import ipaddress as ip
+"""
+This module defines the protocols used by the tasks to talk to each other. A
+:class:`Protocol` consists of two dictionaries mapping send / recv messages to
+schemas for validating their associated data.
+
+.. autoclass:: Protocol
+    :members:
+"""
+
 import datetime as dt
+import ipaddress as ip
+from itertools import chain
 from collections import namedtuple
 
 from voluptuous import Schema, ExactSequence, Extra, Any
@@ -51,11 +61,19 @@ NoData = _NoData()
 
 
 class Protocol(namedtuple('Protocol', ('recv', 'send'))):
-    # Protocols are generally specified from the point of view of the master;
-    # i.e. the recv dictionary contains the messages (and schemas) the master
-    # task expects to recv, and the send dictionary contains the messages it
-    # expects to send. The special __reversed__ method is overridden to allow
-    # client tasks to specify their protocol as reversed(some_protocol)
+    """
+    Represents a socket protocol as two dictionaries, :attr:`recv` and
+    :attr:`send` which map message strings to a voluptuous schema used to
+    validate the data associated with the message.
+
+    Protocols are generally specified from the point of view of the master;
+    i.e. the recv dictionary contains the messages (and schemas) the master
+    task expects to recv, and the send dictionary contains the messages it
+    expects to send.
+
+    The special __reversed__ method is overridden to allow client tasks to
+    specify their protocol as reversed(some_protocol).
+    """
     __slots__ = ()
 
     def __new__(cls, recv=None, send=None):
@@ -79,20 +97,64 @@ class Protocol(namedtuple('Protocol', ('recv', 'send'))):
         return Protocol(self.send, self.recv)
 
 
-_statistics = {      # statistics
-    'packages_built':        int,
-    'builds_count':          int,
-    'builds_last_hour':      int,
-    'builds_success':        int,
-    'builds_time':           dt.timedelta,
-    'builds_size':           int,
-    'builds_pending':        int,
-    'files_count':           int,
-    'disk_free':             int,
-    'disk_size':             int,
-    'downloads_last_month':  int,
-    'downloads_all':         int,
-}
+_master_hello = ExactSequence([
+    dt.datetime,    # start timestamp
+    str,            # label (default: hostname)
+    str,            # os name
+    str,            # os version
+    str,            # board revision
+    str,            # board serial
+])
+
+
+_master_stats = ExactSequence([
+    dt.datetime,  # timestamp
+    int,          # packages built
+    {str: int},   # builds last hour (map of abi: count)
+    dt.timedelta, # builds time
+    int,          # builds size
+    {str: int},   # builds pending (map of abi: count)
+    int,          # new last hour
+    int,          # files count
+    int,          # downloads last hour
+    int,          # downloads last month
+    int,          # downloads all
+    int,          # disk size (for output dir)
+    int,          # disk free (for output dir)
+    int,          # mem size
+    int,          # mem free
+    int,          # swap size
+    int,          # swap free
+    float,        # load average
+    float,        # board temperature (C)
+])
+
+
+_slave_hello = ExactSequence([
+    dt.timedelta,   # build timeout
+    dt.timedelta,   # busy timeout
+    str,            # python version
+    str,            # native abi
+    str,            # native platform
+    str,            # label (default: hostname)
+    str,            # os name
+    str,            # os version
+    str,            # board revision
+    str,            # board serial
+])
+
+
+_slave_stats = ExactSequence([
+    dt.datetime,    # timestamp
+    int,            # disk size (for build dir)
+    int,            # disk free (for build dir)
+    int,            # mem size
+    int,            # mem free
+    int,            # swap size
+    int,            # swap free
+    float,          # load average (for 1-min)
+    float,          # board temperature (C)
+])
 
 
 _file_state = ExactSequence([
@@ -190,16 +252,31 @@ task_control = Protocol(recv={
 
 
 master_control = Protocol(recv={
-    'HELLO':  NoData,  # new monitor
-    'PAUSE':  NoData,  # pause all operations on the master
-    'RESUME': NoData,  # resume all operations on the master
-    'KILL':   int,     # kill the specified slave
-    'QUIT':   NoData,  # terminate the master
+    'HELLO':  NoData,          # new monitor
+    'KILL':   Any(int, None),  # kill the specified slave
+    'SLEEP':  Any(int, None),  # pause the specified slave
+    'SKIP':   Any(int, None),  # skip the specified slave
+    'WAKE':   Any(int, None),  # resume the specified slave
+    'QUIT':   NoData,          # terminate the master
 })
 
 
+slave_driver_control = Protocol(recv=dict(chain(
+    task_control.recv.items(),
+    master_control.recv.items(),
+)))
+
+
+big_brother_control = Protocol(recv=dict(chain(
+    task_control.recv.items(),
+    {
+        'STATS': NoData,  # re-send master stats
+    }.items()
+)))
+
+
 big_brother = Protocol(recv={
-    'STATFS': ExactSequence([int, int, int]),  # frsize, bavail, blocks
+    'STATFS': ExactSequence([int, int]),  # disk-size, disk-free
     'STATBQ': {str: int},  # abi: queue-size
     'HOME':   NoData,
 })
@@ -208,7 +285,7 @@ big_brother = Protocol(recv={
 the_scribe = Protocol(recv={
     'PKGBOTH': str,  # package name
     'PKGPROJ': str,  # package name
-    'HOME':    _statistics,  # statistics
+    'HOME':    _master_stats,  # statistics
     'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
 })
 
@@ -261,16 +338,18 @@ lumberjack = Protocol(recv={
 
 
 slave_driver = Protocol(recv={
-    'HELLO': ExactSequence([dt.timedelta, str, str, str, str]), # timeout, py-version, abi, platform, label
+    'HELLO': _slave_hello,
     'BYE':   NoData,
-    'IDLE':  NoData,
+    'IDLE':  _slave_stats,
     'BUILT': ExactSequence([bool, dt.timedelta, str, [_file_state]]),
+    'BUSY':  _slave_stats,
     'SENT':  NoData,
 }, send={
     'ACK':   ExactSequence([int, str]),  # slave ID, PyPI URL
     'DIE':   NoData,
-    'SLEEP': NoData,
+    'SLEEP': bool,
     'BUILD': ExactSequence([str, str]),  # package, version
+    'CONT':  NoData,
     'SEND':  str,                        # filename
     'DONE':  NoData,
 })
@@ -314,7 +393,8 @@ the_oracle = Protocol(recv={
 
 
 monitor_stats = Protocol(send={
-    'STATS': _statistics,
+    'HELLO': _master_hello,
+    'STATS': _master_stats,
     'SLAVE': ExactSequence([int, dt.datetime, str, Extra]), # slave id, timestamp, message, data
 })
 

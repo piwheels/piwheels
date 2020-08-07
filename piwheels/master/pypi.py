@@ -87,7 +87,7 @@ class PiWheelsTransport(xmlrpc.client.SafeTransport):
 
     def _build_url(self, host, handler):
         scheme = 'https' if self.use_https else 'http'
-        return '%s://%s/%s' % (scheme, host, handler)
+        return '%s://%s/%s' % (scheme, host, handler.lstrip('/'))
 
 
 class PyPIEvents:
@@ -124,8 +124,8 @@ class PyPIEvents:
     create_re = re.compile(r'^create$')
     remove_re = re.compile(r'^remove(?: (?:package|release))?')
 
-    def __init__(self, pypi_xmlrpc='https://pypi.org/pypi',
-                 serial=0, retries=3, cache_size=1000):
+    def __init__(self, pypi_xmlrpc='https://pypi.org/pypi', serial=0,
+                 retries=3, cache_size=1000):
         self.retries = retries
         self.next_read = datetime.now(tz=UTC)
         self.serial = serial

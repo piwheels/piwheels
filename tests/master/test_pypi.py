@@ -27,8 +27,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+from time import sleep
 from unittest import mock
 from datetime import datetime, timezone
+from threading import Thread
+from socketserver import ThreadingMixIn
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from xmlrpc.client import ProtocolError
 
 import pytest
 import http.client
@@ -56,6 +62,56 @@ def mock_requests():
 def mock_logger():
     with mock.patch('piwheels.master.pypi.logger') as logger:
         yield logger
+
+
+def test_pypi_talks_xmlrpc():
+    def changelog_since_serial(n):
+        return [
+            ('foo', '0.1', 1531327388, 'create', n),
+            ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', n + 1),
+            ('bar', '1.0', 1531327389, 'create', n + 2),
+            ('bar', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', n + 3),
+        ]
+    class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
+        pass
+    server = ThreadedXMLRPCServer(("127.0.0.1", 8000))
+    server.register_introspection_functions()
+    server.register_function(changelog_since_serial)
+    server_thread = Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+    try:
+        events = PyPIEvents(pypi_xmlrpc='http://127.0.0.1:8000/')
+        events.transport.use_https = False
+        assert list(events) == [
+            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
+            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
+            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
+            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
+        ]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_pypi_raises_errors():
+    class FakeXMLHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_error(404, 'Function not found')
+    class FakeXMLRPCServer(ThreadingMixIn, HTTPServer):
+        pass
+    server = FakeXMLRPCServer(("127.0.0.1", 8000), FakeXMLHandler)
+    server_thread = Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+    try:
+        events = PyPIEvents(pypi_xmlrpc='http://127.0.0.1:8000/')
+        events.transport.use_https = False
+        with pytest.raises(ProtocolError):
+            list(events)
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_pypi_read_normal():
@@ -184,31 +240,6 @@ def test_pypi_remove_package():
             ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
             ('foo', None,  dt('2018-07-11 16:43:08'), 'remove'),
         ]
-
-
-def test_pypi_backoff():
-    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
-        proxy().changelog_since_serial.return_value = [
-            ('foo', '0.1', 1531327388, 'create', 0),
-            ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
-            ('bar', '1.0', 1531327389, 'create', 2),
-            ('bar', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 3),
-        ]
-        events = PyPIEvents()
-        assert list(events) == [
-            ('foo', None,  dt('2018-07-11 16:43:08'), 'create'),
-            ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source'),
-            ('bar', None,  dt('2018-07-11 16:43:09'), 'create'),
-            ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create'),
-        ]
-        proxy().changelog_since_serial.return_value = []
-        assert list(events) == []
-        proxy().changelog_since_serial.return_value = [
-            ('bar', '1.1', 1531327392, 'create', 4),
-            ('bar', '1.1', 1531327393, 'add source file bar-1.1.tar.gz', 5),
-        ]
-        # Because 10 seconds haven't elapsed...
-        assert list(events) == []
 
 
 def test_pypi_read_improper_state():

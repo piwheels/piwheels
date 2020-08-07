@@ -299,12 +299,12 @@ def test_set_pypi_serial(db, with_schema, db_client):
 def test_get_statistics(db_client, db, with_files):
     expected = {
         'packages_built': 1,
-        'builds_count': 1,
-        'builds_count_success': 1,
-        'builds_count_last_hour': 0,
+        'builds_last_hour': {'cp34m': 0, 'cp35m': 0},
         'builds_time': timedelta(minutes=5),
         'files_count': 2,
         'builds_size': 123456,
+        'new_last_hour': 0,
+        'downloads_last_hour': 0,
         'downloads_last_month': 0,
         'downloads_all': 0,
     }

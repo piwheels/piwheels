@@ -42,9 +42,19 @@ import os
 import sys
 import stat
 import signal
+import socket
 import logging
+from datetime import datetime, timezone
 
-from .. import __version__, terminal, const, systemd, transport, protocols
+from .. import (
+    __version__,
+    terminal,
+    const,
+    systemd,
+    transport,
+    protocols,
+    info,
+)
 from ..systemd import get_systemd
 from ..tasks import TaskQuit
 from .big_brother import BigBrother
@@ -60,6 +70,9 @@ from .mr_chase import MrChase
 from .lumberjack import Lumberjack
 
 
+UTC = timezone.utc
+
+
 class PiWheelsMaster:
     """
     This is the main class for the :program:`piw-master` script. It spawns
@@ -69,10 +82,13 @@ class PiWheelsMaster:
     """
     def __init__(self):
         self.logger = logging.getLogger('master')
+        self.started = datetime.now(tz=UTC)
         self.control_queue = None
         self.int_status_queue = None
         self.ext_status_queue = None
         self.tasks = []
+        self.slave_driver = None
+        self.big_brother = None
 
     @staticmethod
     def configure_parser():
@@ -189,7 +205,6 @@ write access to the output directory.
         self.ext_status_queue = ctx.socket(
             transport.PUB, protocol=protocols.monitor_stats,
             logger=self.logger)
-        self.ext_status_queue.hwm = 10
         self.ext_status_queue.bind(config.status_queue)
         # Ensure that the control and external status queues can be written to
         # by the owning group (for remote monitors)
@@ -219,6 +234,10 @@ write access to the output directory.
         ]
         self.logger.info('starting tasks')
         for task in self.tasks:
+            if isinstance(task, SlaveDriver):
+                self.slave_driver = task
+            elif isinstance(task, BigBrother):
+                self.big_brother = task
             task.start()
         self.logger.info('started all tasks')
         systemd = get_systemd()
@@ -277,11 +296,12 @@ write access to the output directory.
                         self.logger.error(str(exc))
                     else:
                         handler = {
-                            'QUIT': self.do_quit,
-                            'KILL': lambda: self.do_kill(data),
                             'HELLO': self.do_hello,
-                            'PAUSE': self.do_pause,
-                            'RESUME': self.do_resume,
+                            'QUIT':  self.do_quit,
+                            'KILL':  lambda: self.do_kill(data),
+                            'SKIP':  lambda: self.do_skip(data),
+                            'SLEEP': lambda: self.do_sleep(data),
+                            'WAKE':  lambda: self.do_wake(data),
                         }[msg]
                         handler()
         finally:
@@ -306,42 +326,67 @@ write access to the output directory.
 
     def do_kill(self, slave_id):
         """
-        Handler for the KILL message; this terminates the specified build slave
-        by its master id.
+        Handler for the KILL message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to terminate.
         """
-        self.logger.warning('killing slave %d', slave_id)
-        for task in self.tasks:
-            if isinstance(task, SlaveDriver):
-                task.kill_slave(slave_id)
+        if slave_id is None:
+            self.logger.warning('killing all slaves')
+        else:
+            self.logger.warning('killing slave %d', slave_id)
+        self.slave_driver.kill_slave(slave_id)
 
-    def do_pause(self):
+    def do_skip(self, slave_id):
         """
-        Handler for the PAUSE message; this requests all tasks pause their
+        Handler for the SKIP message; this tells the specified build slave to
+        skip its current build next time it contacts the master.
+        """
+        if slave_id is None:
+            self.logger.warning('skipping all slaves')
+        else:
+            self.logger.warning('skipping slave %d', slave_id)
+        self.slave_driver.skip_slave(slave_id)
+
+    def do_sleep(self, slave_id):
+        """
+        Handler for the SLEEP message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to pause their
         operations.
         """
-        self.logger.warning('pausing operations')
-        for task in self.tasks:
-            task.pause()
+        if slave_id is None:
+            self.logger.warning('sleeping all slaves and master')
+            for task in self.tasks:
+                task.pause()
+        else:
+            self.logger.warning('sleeping slave %d', slave_id)
+        self.slave_driver.sleep_slave(slave_id)
 
-    def do_resume(self):
+    def do_wake(self, slave_id):
         """
-        Handler for the RESUME message; this requests all tasks resume their
+        Handler for the WAKE message; this tells the specified build slave (or
+        all slaves and the master if *slave_id* is ``None``) to resume their
         operations.
         """
-        self.logger.warning('resuming operations')
-        for task in self.tasks:
-            task.resume()
+        if slave_id is None:
+            self.logger.warning('waking all slaves and master')
+            for task in self.tasks:
+                task.resume()
+        else:
+            self.logger.warning('waking slave %d', slave_id)
+        self.slave_driver.wake_slave(slave_id)
 
     def do_hello(self):
         """
         Handler for the HELLO message; this indicates a new monitor has been
-        attached and would like all the build slave's HELLO messages replayed
-        to it.
+        attached and would like the master's HELLO message and all the build
+        slave's HELLO messages replayed to it.
         """
         self.logger.warning('sending status to new monitor')
-        for task in self.tasks:
-            if isinstance(task, SlaveDriver):
-                task.list_slaves()
+        os_name, os_version = info.get_os_name_version()
+        self.ext_status_queue.send_msg('HELLO', (
+            self.started, socket.gethostname(), os_name, os_version,
+            info.get_board_revision(), info.get_board_serial()))
+        self.big_brother.replay_stats()
+        self.slave_driver.list_slaves()
 
 
 def sig_term(signo, stack_frame):

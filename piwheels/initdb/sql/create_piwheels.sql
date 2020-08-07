@@ -1115,15 +1115,14 @@ GRANT EXECUTE ON FUNCTION get_build_queue(INTEGER) TO {username};
 
 CREATE FUNCTION get_statistics()
     RETURNS TABLE(
-        packages_built         INTEGER,
-        builds_count           INTEGER,
-        builds_count_success   INTEGER,
-        builds_count_last_hour INTEGER,
         builds_time            INTERVAL,
-        files_count            INTEGER,
         builds_size            BIGINT,
+        packages_built         INTEGER,
+        files_count            INTEGER,
+        new_last_hour          INTEGER,
+        downloads_all          INTEGER,
         downloads_last_month   INTEGER,
-        downloads_all          INTEGER
+        downloads_last_hour    INTEGER
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1132,8 +1131,6 @@ CREATE FUNCTION get_statistics()
 AS $sql$
     WITH build_stats AS (
         SELECT
-            COUNT(*) AS builds_count,
-            COUNT(*) FILTER (WHERE status) AS builds_count_success,
             COALESCE(SUM(CASE
                 -- This guards against including insanely huge durations as
                 -- happens when a builder starts without NTP time sync and
@@ -1144,11 +1141,6 @@ AS $sql$
             END), INTERVAL '0') AS builds_time
         FROM
             builds
-    ),
-    build_latest AS (
-        SELECT COUNT(*) AS builds_count_last_hour
-        FROM builds
-        WHERE built_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
     ),
     file_count AS (
         SELECT
@@ -1166,32 +1158,68 @@ AS $sql$
     ),
     download_stats AS (
         SELECT
+            COUNT(*) AS downloads_all,
             COUNT(*) FILTER (
                 WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
             ) AS downloads_last_month,
-            COUNT(*) AS downloads_all
+            COUNT(*) FILTER (
+                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+            ) AS downloads_last_hour
         FROM downloads
+    ),
+    version_stats AS (
+        SELECT COUNT(*) AS new_last_hour
+        FROM versions
+        WHERE released > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
     )
     SELECT
-        CAST(fc.packages_built AS INTEGER),
-        CAST(bs.builds_count AS INTEGER),
-        CAST(bs.builds_count_success AS INTEGER),
-        CAST(bl.builds_count_last_hour AS INTEGER),
         bs.builds_time,
-        CAST(fc.files_count AS INTEGER),
         fs.builds_size,
+        CAST(fc.packages_built AS INTEGER),
+        CAST(fc.files_count AS INTEGER),
+        CAST(vs.new_last_hour AS INTEGER),
+        CAST(dl.downloads_all AS INTEGER),
         CAST(dl.downloads_last_month AS INTEGER),
-        CAST(dl.downloads_all AS INTEGER)
+        CAST(dl.downloads_last_hour AS INTEGER)
     FROM
         build_stats bs,
-        build_latest bl,
         file_count fc,
         file_stats fs,
+        version_stats vs,
         download_stats dl;
 $sql$;
 
 REVOKE ALL ON FUNCTION get_statistics() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_statistics() TO {username};
+
+-- get_builds_last_hour()
+-------------------------------------------------------------------------------
+-- Returns an ABI separated count of the builds in the last hour
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_builds_last_hour()
+    RETURNS TABLE(
+        abi_tag build_abis.abi_tag%TYPE,
+        builds  INTEGER
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    WITH t AS (
+        SELECT abi_tag
+        FROM builds
+        WHERE built_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
+    )
+    SELECT b.abi_tag, CAST(COUNT(t.abi_tag) AS INTEGER) AS builds
+    FROM build_abis b LEFT JOIN t USING (abi_tag)
+    WHERE b.skip = ''
+    GROUP BY b.abi_tag;
+$sql$;
+
+REVOKE ALL ON FUNCTION get_builds_last_hour() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_builds_last_hour() TO {username};
 
 -- get_search_index()
 -------------------------------------------------------------------------------

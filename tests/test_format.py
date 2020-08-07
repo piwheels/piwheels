@@ -26,10 +26,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import datetime as dt
 
 import pytest
 
-from piwheels.format import format_size
+from piwheels.format import format_size, format_timedelta
 
 
 def test_format_zero():
@@ -62,3 +63,10 @@ def test_format_templates():
     assert format_size(1, template='{size:.0f}{suffix}') == '1B'
     assert format_size(1024, template='{size}{suffix}') == '1.0KB'
     assert format_size(1536, template='{size:.1f} {suffix}') == '1.5 KB'
+
+
+def test_format_timedelta():
+    assert format_timedelta(dt.timedelta(0)) == '0:00:00'
+    assert format_timedelta(dt.timedelta(seconds=5)) == '0:00:05'
+    assert format_timedelta(dt.timedelta(minutes=1)) == '0:01:00'
+    assert format_timedelta(dt.timedelta(hours=1, microseconds=1)) == '1:00:00'

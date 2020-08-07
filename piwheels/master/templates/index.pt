@@ -26,10 +26,10 @@
 
       <div class="small-12 medium-4 columns">
         <table class="stats">
-          <tr><th>Packages</th><td>${'{:,}'.format(packages_built)}</td></tr>
-          <tr><th>Wheels</th><td>${'{:,}'.format(files_count)}</td></tr>
-          <tr><th>Downloads (all time)</th><td>${'{:,}'.format(downloads_all)}</td></tr>
-          <tr><th>Downloads (last 30 days)</th><td>${'{:,}'.format(downloads_last_month)}</td></tr>
+          <tr><th>Packages</th><td>${'{:,}'.format(stats.packages_built)}</td></tr>
+          <tr><th>Wheels</th><td>${'{:,}'.format(stats.files_count)}</td></tr>
+          <tr><th>Downloads (all time)</th><td>${'{:,}'.format(stats.downloads_all)}</td></tr>
+          <tr><th>Downloads (last 30 days)</th><td>${'{:,}'.format(stats.downloads_last_month)}</td></tr>
         </table>
       </div>
     </div>

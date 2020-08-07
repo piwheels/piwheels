@@ -29,10 +29,10 @@
 """
 Defines the classes which use ``pip`` to build wheels.
 
-.. autoclass:: PiWheelsPackage
+.. autoclass:: Wheel
     :members:
 
-.. autoclass:: PiWheelsBuilder
+.. autoclass:: Builder
     :members:
 """
 
@@ -46,18 +46,19 @@ import warnings
 import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta
-from subprocess import Popen, DEVNULL, PIPE, TimeoutExpired
+from threading import Thread, Event
 from collections import defaultdict
 
-try:
-    import apt
-except ImportError:
-    apt = None
+import apt
 
-from ..systemd import get_systemd
+from .. import proc
 
 
-class PiWheelsPackage:
+class BuildTerminated(Exception):
+    pass
+
+
+class Wheel:
     """
     Records the state of a build artifact, i.e. a wheel package. The filename
     is deconstructed into the fields specified by :pep:`425`.
@@ -65,15 +66,14 @@ class PiWheelsPackage:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
     """
-    apt_cache = None
-
-    def __init__(self, path):
-        self.systemd = get_systemd()
+    def __init__(self, path, dependencies=None):
         self.wheel_file = path
         self._filesize = path.stat().st_size
         self._filehash = None
         self._metadata = None
-        self._dependencies = None
+        if dependencies is None:
+            dependencies = {}
+        self._dependencies = dependencies
         self._parts = list(path.stem.split('-'))
         # Fix up retired tags (noabi->none)
         if self._parts[-2] == 'noabi':
@@ -183,6 +183,15 @@ class PiWheelsPackage:
         return self.wheel_file.open('rb')
 
     @property
+    def dependencies(self):
+        """
+        Return the dependencies required by the wheel as a mapping of
+        dependency system (e.g. "apt", "pip", etc.) to set of package names for
+        that system.
+        """
+        return self._dependencies
+
+    @property
     def metadata(self):
         """
         Return the contents of the :file:`METADATA` file inside the wheel.
@@ -198,61 +207,6 @@ class PiWheelsPackage:
                     parser = email.parser.BytesParser()
                     self._metadata = parser.parse(metadata)
         return self._metadata
-
-    def _calculate_apt_dependencies(self):
-        if PiWheelsPackage.apt_cache is None:
-            PiWheelsPackage.apt_cache = apt.cache.Cache()
-        cache = PiWheelsPackage.apt_cache
-        find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
-        deps = defaultdict(set)
-        libs = set()
-        with tempfile.TemporaryDirectory() as tempdir:
-            with zipfile.ZipFile(self.open()) as wheel:
-                for info in wheel.infolist():
-                    if info.filename.endswith('.so') or '.so.' in info.filename:
-                        with wheel.open(info) as testfile:
-                            is_elf = testfile.read(4) == b'\x7FELF'
-                        if is_elf:
-                            libs.add(wheel.extract(info, path=tempdir))
-            for lib in libs:
-                p = Popen(['ldd', lib], stdout=PIPE, stderr=DEVNULL)
-                try:
-                    out, errs = p.communicate(timeout=10)
-                except TimeoutExpired:
-                    p.kill()
-                    out, errs = p.communicate()
-                finally:
-                    out = out.decode('ascii', 'replace')
-                    for line in out.splitlines():
-                        match = find_re.search(line)
-                        if match is not None:
-                            try:
-                                lib_path = str(Path(match.group(2)).resolve())
-                            except FileNotFoundError:
-                                continue
-                            providers = {
-                                pkg.name for pkg in cache
-                                if pkg.installed is not None
-                                and lib_path in pkg.installed_files}
-                            assert len(providers) <= 1
-                            try:
-                                deps['apt'].add(providers.pop())
-                            except KeyError:
-                                deps[''].add(lib_path)
-                            self.systemd.watchdog_ping()
-        return {tool: sorted(deps) for tool, deps in deps.items()}
-
-    @property
-    def dependencies(self):
-        if self._dependencies is None:
-            if apt is None:
-                warnings.warn(
-                    Warning('Cannot import apt module; unable to calculate '
-                            'apt dependencies'))
-                self._dependencies = {}
-            else:
-                self._dependencies = self._calculate_apt_dependencies()
-        return self._dependencies
 
     def transfer(self, queue, slave_id):
         """
@@ -270,10 +224,6 @@ class PiWheelsPackage:
                         [b'HELLO', str(slave_id).encode('ascii')]
                     )
                     timeout = 5
-                    # Transfers are generally very fast but if we wind up
-                    # having to restart there's a possibility we'll miss the
-                    # watchdog timer, so ping it each time the poll fails
-                    self.systemd.watchdog_ping()
                 else:
                     req, *args = queue.recv_multipart()
                     if req == b'DONE':
@@ -284,25 +234,121 @@ class PiWheelsPackage:
                         queue.send_multipart([b'CHUNK', offset, f.read(int(size))])
 
 
-class PiWheelsBuilder:
+class Builder(Thread):
     """
     Class responsible for building wheels for a given *version* of a *package*.
+    Note that this class derives from :class:`~threading.Thread` and hence is
+    expected to run in the background after calling
+    :meth:`~threading.Thread.start`.
 
     :param str package:
         The name of the package to attempt to build wheels for.
 
     :param str version:
         The version of the package to attempt to build.
+
+    :param datetime.timedelta timeout:
+        The number of seconds to wait for ``pip`` to finish before raising
+        :exc:`subprocess.TimeoutExpired`.
+
+    :param str pypi_index:
+        The URL of the :pep:`503` compliant repository from which to fetch
+        packages for building.
+
+    :param str dir:
+        The directory in which to store wheel and log output.
     """
-    def __init__(self, package, version):
-        self.systemd = get_systemd()
-        self.wheel_dir = None
-        self.package = package
-        self.version = version
-        self.duration = None
-        self.output = ''
-        self.files = []
-        self.status = False
+    apt_cache = None
+
+    def __init__(self, package, version, timeout=timedelta(minutes=5),
+                 pypi_index='https://pypi.python.org/simple', dir=None):
+        super().__init__()
+        self._wheel_dir = tempfile.TemporaryDirectory(dir=dir)
+        self._package = package
+        self._version = version
+        self._timeout = timeout
+        self._pypi_index = pypi_index
+        self._duration = None
+        self._output = ''
+        self._wheels = []
+        self._status = False
+        self._stopped = Event()
+
+    def close(self):
+        """
+        Remove the temporary build directory and all its contents.
+        """
+        if self._wheel_dir is not None:
+            self._wheel_dir.cleanup()
+            self._wheel_dir = None
+
+    @property
+    def package(self):
+        """
+        The package that the builder will attempt to build.
+        """
+        return self._package
+
+    @property
+    def version(self):
+        """
+        The version of :attr:`package` that the builder will attempt to build.
+        """
+        return self._version
+
+    @property
+    def timeout(self):
+        """
+        The :class:`~datetime.timedelta` after which the builder will assume
+        the build has failed.
+        """
+        return self._timeout
+
+    @property
+    def pypi_index(self):
+        """
+        The URL of the PyPI server from which the builder will attempt to
+        obtain the source to build.
+        """
+        return self._pypi_index
+
+    @property
+    def wheels(self):
+        """
+        A list of :class:`Wheel` instances generated by the build.
+        """
+        return [] if self.is_alive() else self._wheels
+
+    @property
+    def output(self):
+        """
+        The log output from the build.
+        """
+        return None if self.is_alive() else self._output
+
+    @property
+    def duration(self):
+        """
+        The :class:`~datetime.timedelta` indicating how long the actual build
+        took (without any extraneous tasks like dependency calculation). This
+        is an indication of how long a user would spend installing the package
+        without piwheels.
+        """
+        return None if self.is_alive() else self._duration
+
+    @property
+    def status(self):
+        """
+        A :class:`bool` indicating if the build succeeded or failed. If the
+        build is still on-going, returns :data:`None`.
+        """
+        return None if self.is_alive() else self._status
+
+    def stop(self):
+        """
+        Tell the build to stop prematurely.
+        """
+        self._stopped.set()
 
     def as_message(self):
         """
@@ -310,100 +356,152 @@ class PiWheelsBuilder:
         of :program:`piw-slave`.
         """
         return [
-            self.package, self.version, self.status, self.duration,
-            self.output, [pkg.as_message() for pkg in self.files]
+            self.package,
+            self.version,
+            self.status,
+            self.duration,
+            self.output,
+            [pkg.as_message() for pkg in self._wheels]
         ]
 
-    def build(self, timeout=timedelta(minutes=5),
-              pypi_index='https://pypi.python.org/simple'):
+    def build_environment(self):
         """
-        Attempt to build the package within the specified *timeout*.
-
-        :param float timeout:
-            The number of seconds to wait for ``pip`` to finish before raising
-            :exc:`subprocess.TimeoutExpired`.
-
-        :param str pypi_index:
-            The URL of the :pep:`503` compliant repository from which to fetch
-            packages for building.
+        Configure the environment for the build.
         """
-        self.wheel_dir = tempfile.TemporaryDirectory()
-        with tempfile.NamedTemporaryFile('w+', dir=self.wheel_dir.name,
+        # Limit the data segment of this process (and all children) to 1Gb
+        # in size. This doesn't guarantee that stuff can't grow until it
+        # crashes (multiple children can violate the limit together while
+        # obeying it individually), but it should reduce the incidence of
+        # huge C++ compiles killing the build slaves
+        resource.setrlimit(resource.RLIMIT_DATA, (1024**3, 1024**3))
+        env = os.environ.copy()
+        # Force git to fail if it needs to prompt for anything (a
+        # disturbing minority of packages try to run git clone during their
+        # setup.py)
+        env['GIT_ALLOW_PROTOCOL'] = 'file'
+        return env
+
+    def build_command(self, log_file):
+        """
+        Generate the pip command line used to run the build.
+        """
+        return [
+            'pip3', 'wheel',
+            '--index-url={}'.format(self.pypi_index),
+            '--wheel-dir={}'.format(self._wheel_dir.name),
+            '--log={}'.format(log_file.name),
+            '--no-deps',                    # don't build dependencies
+            '--no-cache-dir',               # disable the cache directory
+            '--exists-action=w',            # wipe existing paths
+            '--disable-pip-version-check',  # don't check for new pip
+            '{}=={}'.format(self.package, self.version),
+        ]
+
+    def build_wheel(self, log_file):
+        """
+        Call pip and attempt to build the wheel; handle killing the subprocess
+        if termination is requested, and watch the clock for a build timeout.
+        """
+        # Ensure stdin is /dev/null; this causes anything stupid enough
+        # to use input() in its setup.py to fail immediately. Also
+        # ignore all output (goes to log_file instead)
+        return proc.call(
+            self.build_command(log_file),
+            env=self.build_environment(), event=self._stopped,
+            stdin=proc.DEVNULL, stdout=proc.DEVNULL, stderr=proc.DEVNULL)
+
+    def build_dependencies(self, wheel):
+        """
+        Calculate the apt dependencies of *wheel* (which is a :class:`Wheel`
+        instance representing a built wheel).
+        """
+        apt_cache = apt.cache.Cache()
+        find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
+        deps = defaultdict(set)
+        whl_libs = set()
+        dep_libs = set()
+        with tempfile.TemporaryDirectory() as tempdir:
+            with zipfile.ZipFile(wheel.open()) as zip_dir:
+                for info in zip_dir.infolist():
+                    if info.filename.endswith('.so') or '.so.' in info.filename:
+                        with zip_dir.open(info) as testfile:
+                            is_elf = testfile.read(4) == b'\x7FELF'
+                        if is_elf:
+                            whl_libs.add(zip_dir.extract(info, path=tempdir))
+            for lib in whl_libs:
+                out = proc.check_output(['ldd', lib],
+                                        timeout=30, event=self._stopped)
+                out = out.decode('ascii', 'replace')
+                for line in out.splitlines():
+                    match = find_re.search(line)
+                    if match is not None:
+                        try:
+                            lib_path = Path(match.group(2))
+                            # This nonsense is purely because Py3.6 introduced
+                            # the "strict" parameter for Path.resolve, with a
+                            # default *different* to the behaviour of Py3.5!
+                            try:
+                                lib_path = str(lib_path.resolve(strict=True))
+                            except TypeError:
+                                lib_path = str(lib_path.resolve())
+                        except FileNotFoundError:
+                            continue
+                        dep_libs.add(lib_path)
+        for lib in dep_libs:
+            providers = {
+                pkg.name for pkg in apt_cache
+                if pkg.installed is not None
+                and lib in pkg.installed_files}
+            assert len(providers) <= 1
+            try:
+                deps['apt'].add(providers.pop())
+            except KeyError:
+                deps[''].add(lib)
+            if self._stopped.wait(0):
+                raise proc.ProcessTerminated(['dpkg', '--search', lib],
+                                             self._stopped)
+        wheel._dependencies = {
+            tool: sorted(deps)
+            for tool, deps in deps.items()
+        }
+
+    def run(self):
+        """
+        Attempt to build the package within the configured timeout.
+        """
+        with tempfile.NamedTemporaryFile('w+', dir=self._wheel_dir.name,
                                          suffix='.log',
                                          encoding='utf-8') as log_file:
-            env = os.environ.copy()
-            # Force git to fail if it needs to prompt for anything (a
-            # disturbing minority of packages try to run git clone during their
-            # setup.py)
-            env['GIT_ALLOW_PROTOCOL'] = 'file'
-            args = [
-                'pip3', 'wheel',
-                '--index-url={}'.format(pypi_index),
-                '--wheel-dir={}'.format(self.wheel_dir.name),
-                '--log={}'.format(log_file.name),
-                '--no-deps',                    # don't build dependencies
-                '--no-cache-dir',               # disable the cache directory
-                '--no-binary=:all:',            # never get binary wheels
-                '--exists-action=w',            # wipe existing paths
-                '--disable-pip-version-check',  # don't check for new pip
-                '{}=={}'.format(self.package, self.version),
-            ]
-            # Limit the data segment of this process (and all children) to 1Gb
-            # in size. This doesn't guarantee that stuff can't grow until it
-            # crashes (multiple children can violate the limit together while
-            # obeying it individually), but it should reduce the incidence of
-            # huge C++ compiles killing the build slaves
-            resource.setrlimit(resource.RLIMIT_DATA, (1024**3, 1024**3))
             start = datetime.utcnow()
             try:
-                proc = Popen(
-                    args,
-                    stdin=DEVNULL,     # ensure stdin is /dev/null; this causes
-                                       # anything stupid enough to use input()
-                                       # in its setup.py to fail immediately
-                    stdout=DEVNULL,    # also ignore all output
-                    stderr=DEVNULL,
-                    env=env
-                )
-                # If the build times out attempt to kill it with SIGTERM; if
-                # that hasn't worked after 10 seconds, resort to SIGKILL.
-                # Builds frequently exceed the watchdog timeout (2 minutes) so
-                # ping every 60 seconds
-                while True:
-                    self.systemd.watchdog_ping()
-                    try:
-                        proc.wait(10)
-                    except TimeoutExpired:
-                        if datetime.utcnow() - start > timeout:
-                            proc.terminate()
-                            try:
-                                proc.wait(10)
-                            except TimeoutExpired:
-                                proc.kill()
-                            raise
-                    else:
-                        break
+                rc = self.build_wheel(log_file)
             except Exception as exc:
-                error = exc
-            else:
-                error = None
-            self.duration = datetime.utcnow() - start
-            self.status = proc.returncode == 0
-            if error is not None:
                 log_file.seek(0, os.SEEK_END)
-                log_file.write('\n' + str(error))
+                log_file.write('\n' + str(exc))
+                self._status = False
+            else:
+                self._status = rc == 0
+            finally:
+                # Build duration is purely the time to build the wheel; it
+                # does not include time to calculate the dependencies (which
+                # users wouldn't have to do)
+                self._duration = datetime.utcnow() - start
+            if self._status:
+                try:
+                    for path in Path(self._wheel_dir.name).glob('*.whl'):
+                        wheel = Wheel(path)
+                        self.build_dependencies(wheel)
+                        self._wheels.append(wheel)
+                except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
+                    self.stop()
+                    log_file.seek(0, os.SEEK_END)
+                    if exc.output is not None:
+                        log_file.write('\n')
+                        log_file.write(exc.output.decode('ascii', 'replace'))
+                    log_file.write('\n')
+                    log_file.write(str(exc))
+                if self._stopped.wait(0):
+                    self._status = False
+                    self._wheels.clear()
             log_file.seek(0)
-            self.output = log_file.read()
-
-            if self.status:
-                for path in Path(self.wheel_dir.name).glob('*.whl'):
-                    self.files.append(PiWheelsPackage(path))
-            return self.status
-
-    def clean(self):
-        """
-        Remove the temporary build directory and all its contents.
-        """
-        if self.wheel_dir is not None:
-            self.wheel_dir.cleanup()
-            self.wheel_dir = None
+            self._output = log_file.read()

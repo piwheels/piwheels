@@ -49,7 +49,7 @@ from .. import __version__, terminal, const, transport, protocols
 from ..format import format_size
 from ..states import FileState, BuildState
 from ..slave import duration
-from ..slave.builder import PiWheelsPackage
+from ..slave.builder import Wheel
 
 
 def main(args=None):
@@ -113,7 +113,7 @@ registered as produced by a *single* build.
     # NOTE: If any of the files are unreadable, this'll fail (it attempts
     # to calculate the hash of the file which requires reading it)
     packages = [
-        PiWheelsPackage(Path(filename))
+        Wheel(Path(filename))
         for filename in config.files
     ]
     state = BuildState(
@@ -183,8 +183,8 @@ def do_import(config, packages, state):
         The configuration obtained from parsing the command line.
 
     :param list packages:
-        A sequence of :class:`PiWheelsPackage` objects corresponding to files
-        in the *state*.
+        A sequence of :class:`Wheel` objects corresponding to files in the
+        *state*.
 
     :param BuildState state:
         The object representing the state of the build.

@@ -43,24 +43,27 @@ import sys
 import signal
 import logging
 import socket
-from datetime import datetime, timezone
-from time import time, sleep
+import tempfile
+from datetime import datetime, timedelta, timezone
+from time import sleep
 from random import randint
 
 import dateutil.parser
 
-from .. import __version__, terminal, transport, protocols, platform
+from .. import __version__, terminal, transport, protocols, info, platform
 from ..systemd import get_systemd
-from .builder import PiWheelsBuilder, PiWheelsPackage
+from .builder import Builder, Wheel
 
 
 UTC = timezone.utc
 
 
 class MasterTimeout(IOError):
-    """
-    Exception raised when the master fails to respond before a timeout.
-    """
+    "Exception raised when the master fails to respond before a timeout."
+
+
+class TerminateTimeout(IOError):
+    "Exception raised when a build fails to terminate in a reasonable time."
 
 
 class PiWheelsSlave:
@@ -75,7 +78,6 @@ class PiWheelsSlave:
     """
     def __init__(self):
         self.logger = logging.getLogger('slave')
-        self.label = socket.gethostname()
         self.config = None
         self.slave_id = None
         self.builder = None
@@ -103,17 +105,24 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
             default='3h', type=duration,
             help="The time to wait before assuming a build has failed "
             "(default: %(default)s)")
+        parser.add_argument(
+            '-d', '--dir', metavar='DIR', default=tempfile.gettempdir(),
+            help="The temporary directory to use when building wheels "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '-L', '--label', metavar='STR', default=socket.gethostname(),
+            help="The label to transmit to the master identifying this "
+            "build slave (default: %(default)s)")
         self.config = parser.parse_args(args)
         if self.config.debug:
             self.config.log_level = logging.DEBUG
-        terminal.configure_logging(self.config.log_level,
-                                   self.config.log_file)
+        terminal.configure_logging(self.config.log_level, self.config.log_file)
 
         self.logger.info('PiWheels Slave version %s', __version__)
         if os.geteuid() == 0:
             self.logger.fatal('Slave must not be run as root')
             return 1
-        if datetime.now(tz=UTC) < datetime(2019, 1, 1, tzinfo=UTC):
+        if datetime.now(tz=UTC) < datetime(2020, 6, 1, tzinfo=UTC):
             self.logger.fatal('System clock is far in the past')
             return 1
         self.systemd = get_systemd()
@@ -137,10 +146,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
                     self.logger.warning('Resetting connection')
                     queue.close(linger=1)
                 finally:
-                    if self.builder:
-                        self.logger.warning('Discarding current build')
-                        self.builder.clean()
-                        self.builder = None
+                    self.clean_up_build()
         except SystemExit:
             self.logger.warning('Shutting down on SIGTERM')
         finally:
@@ -161,30 +167,54 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
     # sending nonsense (in which case it should calmly ignore it and/or attempt
     # to kill said slave with a "BYE" message).
 
-    def main_loop(self, queue, timeout=300):
+    def main_loop(self, queue, master_timeout=timedelta(minutes=5)):
         """
         The main messaging loop. Sends the initial request, and dispatches
         replies via :meth:`handle_reply`. Implements a *timeout* for responses
         from the master and raises :exc:`MasterTimeout` if *timeout* seconds
         are exceeded.
         """
+        os_name, os_version = info.get_os_name_version()
         msg, data = 'HELLO', [
-            self.config.timeout,
+            self.config.timeout, master_timeout,
             platform.get_impl_ver(), platform.get_abi_tag(),
-            platform.get_platform(), self.label
+            platform.get_platform(), self.config.label,
+            os_name, os_version,
+            info.get_board_revision(), info.get_board_serial(),
         ]
         while True:
             queue.send_msg(msg, data)
-            start = time()
+            start = datetime.now(tz=UTC)
             while True:
                 self.systemd.watchdog_ping()
                 if queue.poll(1):
                     msg, data = queue.recv_msg()
                     msg, data = self.handle_reply(msg, data)
                     break
-                elif time() - start > timeout:
+                elif datetime.now(tz=UTC) - start > master_timeout:
                     self.logger.warning('Timed out waiting for master')
                     raise MasterTimeout()
+
+    def clean_up_build(self, timeout=timedelta(minutes=1)):
+        """
+        Terminate any existing build and clean up its temporary storage. Raises
+        an exception if termination does not occur in a reasonable time.
+        """
+        if self.builder is not None:
+            try:
+                if self.builder.is_alive():
+                    self.logger.info('Terminating current build')
+                    self.builder.stop()
+                    self.builder.join(timeout.total_seconds())
+                if self.builder.is_alive():
+                    self.logger.fatal('Build failed to terminate')
+                    raise TerminateTimeout()
+                else:
+                    self.logger.info('Removing temporary build directories')
+                    self.builder.close()
+            finally:
+                # Always set self.builder to None to ensure we don't re-try
+                self.builder = None
 
     def handle_reply(self, msg, data):
         """
@@ -192,13 +222,27 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         """
         handler = {
             'ACK': lambda: self.do_ack(*data),
-            'SLEEP': self.do_sleep,
+            'SLEEP': lambda: self.do_sleep(data),
             'BUILD': lambda: self.do_build(*data),
+            'CONT': self.do_cont,
             'SEND': lambda: self.do_send(data),
             'DONE': self.do_done,
             'DIE': self.do_die,
         }[msg]
         return handler()
+
+    def get_status(self):
+        """
+        Returns the set of statistics periodically required by the master when
+        reporting our status.
+        """
+        return (
+            [datetime.now(tz=UTC)] +
+            list(info.get_disk_stats(self.config.dir)) +
+            list(info.get_mem_stats()) +
+            list(info.get_swap_stats()) +
+            [os.getloadavg()[0], info.get_cpu_temp()]
+        )
 
     def do_ack(self, new_id, pypi_url):
         """
@@ -215,84 +259,108 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         self.pypi_url = pypi_url
         self.logger = logging.getLogger('slave-%d' % self.slave_id)
         self.logger.info('Connected to master')
-        return 'IDLE', protocols.NoData
+        return 'IDLE', self.get_status()
 
-    def do_sleep(self):
+    def do_sleep(self, paused):
         """
         If, in response to an "IDLE" message we receive "SLEEP" this indicates
         the master has nothing for us to do currently. Sleep for a little while
         then try "IDLE" again.
         """
         assert self.slave_id is not None, 'SLEEP before ACK'
-        self.logger.info('No available jobs; sleeping')
-        sleep(randint(5, 15))
-        return 'IDLE', protocols.NoData
+        if paused:
+            self.logger.info("Sleeping: paused")
+        else:
+            self.logger.info("Sleeping: no available jobs")
+        sleep(randint(5, 10))
+        return 'IDLE', self.get_status()
 
     def do_build(self, package, version):
         """
         Alternatively, in response to "IDLE", the master may send "BUILD"
         *package* *version*. We should then attempt to build the specified
-        wheel and send back a "BUILT" message with a full report of the
-        outcome.
+        wheel and send back a "BUSY" message with more status info.
         """
         assert self.slave_id is not None, 'BUILD before ACK'
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
-        self.builder = PiWheelsBuilder(package, version)
-        if self.builder.build(self.config.timeout, self.pypi_url):
-            self.logger.info('Build succeeded')
+        self.builder = Builder(package, version, self.config.timeout,
+                               self.pypi_url, self.config.dir)
+        self.builder.start()
+        return 'BUSY', self.get_status()
+
+    def do_cont(self):
+        """
+        Once we're busy building something the master will periodically ping
+        us with "CONT" if it wishes us to continue building. We wait up to
+        10 seconds for the build to finish and reply with "BUILT" (and a full
+        status report on the build) if it finishes in that time, or "BUSY"
+        and more status info otherwise.
+
+        If the master wishes to terminate a build prior to completion, it'll
+        send "DONE" instead of "CONT" and we move straight to clean-up.
+        """
+        assert self.slave_id is not None, 'CONT before ACK'
+        assert self.builder, 'CONT before BUILD / after failed BUILD'
+        self.builder.join(randint(5, 10))
+        if not self.builder.is_alive():
+            if self.builder.status:
+                self.logger.info('Build succeeded')
+            else:
+                self.logger.warning('Build failed')
+            return 'BUILT', self.builder.as_message()[2:]
         else:
-            self.logger.warning('Build failed')
-        return 'BUILT', self.builder.as_message()[2:]
+            return 'BUSY', self.get_status()
 
     def do_send(self, filename):
         """
         If a build succeeds and generates files (detailed in a "BUILT"
         message), the master will reply with "SEND" *filename* indicating we
         should transfer the specified file (this is done on a separate socket
-        with a different protocol; see :meth:`builder.PiWheelsPackage.transfer`
-        for more details). Once the transfers concludes, reply to the master
-        with "SENT".
+        with a different protocol; see :meth:`builder.Wheel.transfer` for more
+        details). Once the transfers concludes, reply to the master with
+        "SENT".
         """
         assert self.slave_id is not None, 'SEND before ACK'
-        assert self.builder, 'Send before build / after failed build'
-        assert self.builder.status, 'Send after failed build'
-        pkg = [f for f in self.builder.files if f.filename == filename][0]
+        assert self.builder, 'SEND before BUILD / after failed BUILD'
+        assert self.builder.status, 'SEND after failed BUILD'
+        wheel = [f for f in self.builder.wheels if f.filename == filename][0]
         self.logger.info(
-            'Sending %s to master on %s', pkg.filename, self.config.master)
+            'Sending %s to master on %s', wheel.filename, self.config.master)
         ctx = transport.Context()
         queue = ctx.socket(transport.DEALER, logger=self.logger)
         queue.hwm = 10
         queue.connect('tcp://{master}:5556'.format(master=self.config.master))
         try:
-            pkg.transfer(queue, self.slave_id)
+            wheel.transfer(queue, self.slave_id)
         finally:
             queue.close()
         return 'SENT', protocols.NoData
 
     def do_done(self):
         """
-        After all files have been sent (and successfully verified), the master
-        will reply with "DONE" indicating we can remove all associated build
-        artifacts. We respond with "IDLE".
+        The master can send "DONE" at any point during a built to terminate it
+        prematurely. Alternately, this is also the standard reponse after a
+        successful build has finished and all files have been sent (and
+        successfully verified).
+
+        In response we must clean-up all resources associated with the build
+        (including terminating an on-going build) and return "IDLE" with the
+        usual stats.
         """
         assert self.slave_id is not None, 'DONE before ACK'
-        assert self.builder, 'Done before build'
-        self.logger.info('Removing temporary build directories')
-        self.builder.clean()
-        self.builder = None
-        return 'IDLE', protocols.NoData
+        assert self.builder, 'DONE before BUILD'
+        self.clean_up_build()
+        return 'IDLE', self.get_status()
 
     def do_die(self):
         """
         The master may respond with "DIE" at any time indicating we should
-        immediately terminate (first cleaning up any extant build). We raise
-        :exc:`SystemExit` to cause :meth:`main_loop` to exit.
+        immediately terminate. We raise :exc:`SystemExit` to cause
+        :meth:`main_loop` to exit. Clean-up of any extant build is handled by
+        our caller.
         """
         self.logger.warning('Master requested termination')
-        if self.builder is not None:
-            self.logger.info('Removing temporary build directories')
-            self.builder.clean()
         raise SystemExit(0)
 
 

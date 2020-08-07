@@ -127,6 +127,9 @@ def configure_logging(log_level, log_filename=None, console_name=False):
     _CONSOLE.setLevel(log_level)
     _CONSOLE.setFormatter(WidthFormatter(
         '%(name)s: %(message)s' if console_name else '%(message)s'))
+    # Yes, this is redundant with the call above but Logger.addHandler checks
+    # for (and ignores) dupes
+    logging.getLogger().addHandler(_CONSOLE)
     if log_filename is not None:
         log_file = logging.FileHandler(log_filename)
         log_file.setFormatter(WidthFormatter(
@@ -165,13 +168,12 @@ class ErrorHandler:
     """
     def __init__(self):
         self._config = OrderedDict({
+            # Exception type:  (handler method, exit code)
             SystemExit:        (None, self.exc_value),
             KeyboardInterrupt: (None, 2),
             IOError:           (self.exc_message, 1),
-            configargparse.ArgumentError: (
-                lambda exc_type, exc_value, exc_tb:
-                    [exc_value, 'Try the --help option for more information.'], 2
-            ),
+            configargparse.ArgumentError:
+                               (self.syntax_error, 2),
         })
 
     @staticmethod
@@ -181,6 +183,10 @@ class ErrorHandler:
     @staticmethod
     def exc_value(exc_type, exc_value, exc_tb):
         return exc_value
+
+    @staticmethod
+    def syntax_error(exc_type, exc_value, exc_tb):
+        return [exc_value, 'Try the --help option for more information.']
 
     def __len__(self):
         return len(self._config)
@@ -208,13 +214,12 @@ class ErrorHandler:
                     for line in message:
                         logging.critical(line)
                 return value
-        else:
-            # Otherwise, log the stack trace and the exception into the log
-            # file for debugging purposes
-            for line in traceback.format_exception(exc_type, exc_value, exc_tb):
-                for msg in line.rstrip().split('\n'):
-                    logging.critical(msg.replace('%', '%%'))
-            return 1
+        # Otherwise, log the stack trace and the exception into the log
+        # file for debugging purposes
+        for line in traceback.format_exception(exc_type, exc_value, exc_tb):
+            for msg in line.rstrip().split('\n'):
+                logging.critical(msg.replace('%', '%%'))
+        return 1
 
 error_handler = ErrorHandler()
 

@@ -33,6 +33,8 @@ Defines the :class:`CloudGazer` task; see class for more details.
     :members:
 """
 
+from datetime import timedelta
+
 from .. import protocols, transport, tasks
 from .pypi import PyPIEvents, get_project_description
 from .the_oracle import DbClient
@@ -60,6 +62,7 @@ class CloudGazer(tasks.PauseableTask):
             self.skip_default = 'development mode'
         else:
             self.skip_default = ''
+        self.every(timedelta(seconds=10), self.read_pypi)
 
     def once(self):
         self.logger.info('retrieving current state')
@@ -67,7 +70,7 @@ class CloudGazer(tasks.PauseableTask):
         self.pypi.serial = self.serial = self.db.get_pypi_serial()
         self.logger.info('querying upstream')
 
-    def loop(self):
+    def read_pypi(self):
         for package, version, timestamp, action in self.pypi:
             if action == 'remove':
                 if version is None:
@@ -106,7 +109,6 @@ class CloudGazer(tasks.PauseableTask):
                         self.logger.info(
                             'enabled package %s version %s', package, version)
                         self.web_queue.send_msg('PKGPROJ', package)
-            self.poll(0)
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial
             self.db.set_pypi_serial(self.serial)

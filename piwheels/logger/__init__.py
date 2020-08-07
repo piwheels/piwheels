@@ -141,7 +141,7 @@ as the piw-master script.
                     for row in src:
                         log_type = get_log_type(row)
                         if log_type:
-                            if not config.drop or queue.poll(1, transport.POLLOUT):
+                            if not config.drop or queue.poll(0.01, transport.POLLOUT):
                                 data = log_transform(row, log_type)
                                 queue.send_msg(log_type, data)
                             else:

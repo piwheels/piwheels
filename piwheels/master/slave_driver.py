@@ -33,8 +33,7 @@ Defines the :class:`SlaveDriver` task; see class for more details.
     :members:
 """
 
-import pickle
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .. import const, protocols, tasks, transport
 from ..states import SlaveState, FileState
@@ -63,7 +62,7 @@ class SlaveDriver(tasks.Task):
     name = 'master.slave_driver'
 
     def __init__(self, config):
-        super().__init__(config, control_protocol=protocols.master_control)
+        super().__init__(config, control_protocol=protocols.slave_driver_control)
         self.paused = False
         self.abi_queues = {}
         self.recent_builds = {}
@@ -92,6 +91,7 @@ class SlaveDriver(tasks.Task):
         self.fs = FsClient(config, self.logger)
         self.slaves = {}
         self.pypi_simple = config.pypi_simple
+        self.every(timedelta(seconds=10), self.remove_expired)
 
     def close(self):
         self.fs.close()
@@ -110,12 +110,36 @@ class SlaveDriver(tasks.Task):
     def kill_slave(self, slave_id):
         """
         Additional task control method to trigger a "KILL" message to the
-        internal control queue. See :meth:`~.tasks.Task.quit` for more
+        internal control queue. See :meth:`handle_control` for more
         information.
         """
         self._ctrl('KILL', slave_id)
 
-    def loop(self):
+    def sleep_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "SLEEP" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('SLEEP', slave_id)
+
+    def skip_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "SKIP" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('SKIP', slave_id)
+
+    def wake_slave(self, slave_id):
+        """
+        Additional task control method to trigger a "WAKE" message to the
+        internal control queue. See :meth:`handle_control` for more
+        information.
+        """
+        self._ctrl('WAKE', slave_id)
+
+    def remove_expired(self):
         """
         Remove slaves which have exceeded their timeout.
         """
@@ -135,9 +159,9 @@ class SlaveDriver(tasks.Task):
                 self.logger.warning(
                     'slave %d (%s): timed out during %s',
                     slave.slave_id, slave.label, slave.reply[0])
-            # Send a fake BYE message to the status queue so that listening
+            # Send a fake DIE message to the status queue so that listening
             # monitors know to remove the entry
-            slave.reply = ('BYE', None)
+            slave.reply = ('DIE', None)
             del self.slaves[address]
 
     def handle_control(self, queue):
@@ -151,25 +175,36 @@ class SlaveDriver(tasks.Task):
         otherwise continues servicing requests.
 
         It also understands a couple of extra control messages unique to it,
-        specifically "KILL" to tell a build slave to terminate, and "HELLO"
-        to cause all "HELLO" messages from build slaves to be replayed (for
-        the benefit of a newly attached monitor process).
+        specifically "KILL" to tell a build slave to terminate, "SKIP" to tell
+        a build slave to terminate its current build immmediately, and "HELLO"
+        to cause all "HELLO" messages from build slaves to be replayed (for the
+        benefit of a newly attached monitor process).
         """
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise tasks.TaskQuit
-        elif msg == 'PAUSE':
-            self.paused = True
-        elif msg == 'RESUME':
-            self.paused = False
-        elif msg == 'KILL':
-            for slave in self.slaves.values():
-                if slave.slave_id == data:
-                    slave.kill()
-                    break
-        elif msg == 'HELLO':
-            for slave in self.slaves.values():
-                slave.hello()
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
+        else:
+            if msg == 'QUIT':
+                raise tasks.TaskQuit
+            elif msg == 'PAUSE':
+                self.paused = True
+            elif msg == 'RESUME':
+                self.paused = False
+            elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
+                for slave in self.slaves.values():
+                    if data is None or slave.slave_id == data:
+                        {
+                            'KILL':  slave.kill,
+                            'SLEEP': slave.sleep,
+                            'SKIP':  slave.skip,
+                            'WAKE':  slave.wake,
+                        }[msg]()
+            elif msg == 'HELLO':
+                for slave in self.slaves.values():
+                    slave.hello()
+            else:
+                self.logger.error('missing control handler for %s', msg)
 
     def handle_build(self, queue):
         """
@@ -214,7 +249,8 @@ class SlaveDriver(tasks.Task):
                 for recent_builds in (self.recent_builds[abi],)
             }
             self.stats_queue.send_msg('STATBQ', {
-                abi: len(queue) for (abi, queue) in self.abi_queues.items()
+                abi: len(queue)
+                for (abi, queue) in self.abi_queues.items()
             })
 
     def handle_slave(self, queue):
@@ -248,10 +284,11 @@ class SlaveDriver(tasks.Task):
         slave.request = msg, data
         handler = {
             'HELLO': self.do_hello,
-            'BYE': self.do_bye,
-            'IDLE': self.do_idle,
+            'BYE':   self.do_bye,
+            'IDLE':  self.do_idle,
+            'BUSY':  self.do_busy,
             'BUILT': self.do_built,
-            'SENT': self.do_sent,
+            'SENT':  self.do_sent,
         }[msg]
         msg, data = handler(slave)
         if msg is not None:
@@ -272,9 +309,13 @@ class SlaveDriver(tasks.Task):
             The object representing the current status of the build slave.
         """
         self.logger.warning(
-            'slave %d: hello (timeout=%s, abi=%s, platform=%s, label=%s)',
-            slave.slave_id, slave.timeout, slave.native_abi,
-            slave.native_platform, slave.label)
+            'slave %d (%s): hello (build_timeout=%s, busy_timeout=%s, abi=%s, '
+            'platform=%s, os_name=%s, os_version=%s, board_revision=%s, '
+            'board_serial=%s)',
+            slave.slave_id, slave.label, slave.build_timeout,
+            slave.busy_timeout, slave.native_abi, slave.native_platform,
+            slave.os_name, slave.os_version, slave.board_revision,
+            slave.board_serial)
         self.slaves[slave.address] = slave
         return 'ACK', [slave.slave_id, self.pypi_simple]
 
@@ -313,13 +354,13 @@ class SlaveDriver(tasks.Task):
                 'slave %d (%s): protocol error (IDLE after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
-        elif slave.terminated:
+        elif slave.killed:
             return 'DIE', protocols.NoData
         elif self.paused:
             self.logger.info(
                 'slave %d (%s): sleeping because master is paused',
                 slave.slave_id, slave.label)
-            return 'SLEEP', protocols.NoData
+            return 'SLEEP', True
         else:
             try:
                 abi_queue = self.abi_queues[slave.native_abi]
@@ -334,16 +375,39 @@ class SlaveDriver(tasks.Task):
                             'slave %d (%s): build %s %s',
                             slave.slave_id, slave.label, package, version)
                         recent_builds[(package, version)] = (
-                            datetime.now(tz=UTC) + slave.timeout)
+                            datetime.now(tz=UTC) + slave.build_timeout)
                         return 'BUILD', [package, version]
                 self.logger.info(
                     'slave %d (%s): sleeping because no builds',
                     slave.slave_id, slave.label)
-                return 'SLEEP', protocols.NoData
+                return 'SLEEP', False
             finally:
-                self.stats_queue.send_msg('STATBQ', {
-                    abi: len(queue) for (abi, queue) in self.abi_queues.items()
-                })
+                # Only push queue stats if there's space in the stats_queue
+                # (it's not essential; just a nice-to-have)
+                if self.stats_queue.poll(0, transport.POLLOUT):
+                    self.stats_queue.send_msg('STATBQ', {
+                        abi: len(queue)
+                        for (abi, queue) in self.abi_queues.items()
+                    })
+
+    def do_busy(self, slave):
+        """
+        Handler for the build slave's "BUSY" message, which is sent
+        periodically during package builds. If the slave fails to respond with
+        a BUSY ping for a duration longer than :attr:`SlaveState.busy_timeout`
+        then the master will assume the slave has died and remove it from the
+        internal state mapping (if the slave happens to resurrect itself later
+        the master will simply treat it as a new build slave).
+
+        In response to "BUSY" the master can respond "CONT" to indicate the
+        build should continue processing, or "DONE" to indicate that the build
+        slave should immediately terminate and discard the build and return to
+        "IDLE" state.
+        """
+        if slave.skipped:
+            return 'DONE', protocols.NoData
+        else:
+            return 'CONT', protocols.NoData
 
     def do_built(self, slave):
         """
@@ -361,7 +425,7 @@ class SlaveDriver(tasks.Task):
         """
         if slave.reply[0] != 'BUILD':
             self.logger.error(
-                'slave %d (%s): protocol error (BUILD after %s)',
+                'slave %d (%s): protocol error (BUILT after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
         else:

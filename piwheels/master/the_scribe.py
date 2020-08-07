@@ -51,7 +51,7 @@ except ImportError:
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
-from ..states import mkdir_override_symlink
+from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
 
 
@@ -170,8 +170,7 @@ class TheScribe(tasks.PauseableTask):
                 package = data
                 self.write_project_page(package)
             elif msg == 'HOME':
-                status_info = data
-                self.write_homepage(status_info)
+                self.write_homepage(MasterStats.from_message(data))
                 self.write_sitemap()
             elif msg == 'SEARCH':
                 search_index = data
@@ -193,7 +192,7 @@ class TheScribe(tasks.PauseableTask):
                 layout=self.templates['layout']['layout'],
                 timestamp=dt.strftime('%Y-%m-%d %H:%M'),
                 page='home',
-                **statistics))
+                stats=statistics))
 
     def write_search_index(self, search_index):
         """

@@ -42,10 +42,14 @@ master.
 
 import ctypes as ct
 import logging
+from datetime import datetime, timedelta, timezone
 from threading import Thread
 from fnmatch import fnmatch
 
 from . import transport, protocols
+
+
+UTC = timezone.utc
 
 
 # Grab the prctl(2) function from libc; the prototype is actually a lie, but
@@ -65,13 +69,41 @@ class TaskQuit(Exception):
     """
 
 
+class TaskInterval:
+    """
+    Associates *handler*, a method to be periodically called, with *interval*,
+    the period of time to wait between runs.
+    """
+    def __init__(self, interval, handler):
+        assert isinstance(interval, timedelta)
+        self.interval = interval
+        self.last_run = None
+        self.handler = handler
+        self.force()
+
+    def force(self):
+        self.last_run = datetime.now(tz=UTC) - self.interval
+
+    def poll(self, now=None):
+        if datetime.now(tz=UTC) - self.last_run >= self.interval:
+            self.handler()
+            # Deliberately re-query the clock; otherwise excessive runtime of
+            # handler() can lead to no delay before the next run
+            self.last_run = datetime.now(tz=UTC)
+
+
 class Task(Thread):
     """
     The :class:`Task` class is a :class:`~threading.Thread` derivative which is
     the base for all tasks in the piwheels master. The :meth:`run` method is
-    overridden to perform a simple task loop which calls :meth:`loop` once a
-    cycle, and :meth:`poll` to react to any messages arriving into queues.
+    overridden to perform a simple task loop which calls :meth:`poll` once a
+    cycle to react to any messages arriving into queues, and to dispatch any
+    periodically executed methods.
+
     Queues are associated with handlers via the :meth:`register` method.
+    Periodic methods are associated with an interval via the :meth:`every`
+    method. These should be called during initialization (don't attempt to
+    register handlers from within the thread itself).
     """
     name = 'Task'
 
@@ -85,7 +117,8 @@ class Task(Thread):
                     self.logger.setLevel(logging.DEBUG)
                     break
         self.ctx = transport.Context()
-        self.handlers = {}
+        self.sockets = {}
+        self.intervals = []
         self.poller = transport.Poller()
         self.control_protocol = control_protocol
         control_queue = self.socket(
@@ -103,7 +136,10 @@ class Task(Thread):
         Close all registered queues. This should be overridden to close any
         additional queues the task holds which aren't registered.
         """
-        for queue in self.handlers:
+        for interval in self.intervals:
+            # Break circular refs
+            interval.handler = None
+        for queue in self.sockets:
             queue.close()
         self.quit_queue.close()
 
@@ -115,8 +151,30 @@ class Task(Thread):
         """
         socket = self.ctx.socket(
             sock_type, protocol=protocol, logger=self.logger)
-        self.handlers[socket] = None
+        self.sockets[socket] = None
         return socket
+
+    def every(self, interval, handler):
+        """
+        Register *handler* to be called every *interval* periodically.
+
+        :param timedelta interval:
+            The time interval between each run of *handler*.
+
+        :param handler:
+            The function or method to call periodically.
+        """
+        self.intervals.append(TaskInterval(interval, handler))
+
+    def force(self, handler):
+        """
+        Force *handler* to run next time its interval is polled.
+        """
+        for interval in self.intervals:
+            if interval.handler == handler:
+                interval.force()
+                return
+        raise ValueError("%r is not registered as a periodic handler" % handler)
 
     def register(self, queue, handler, flags=transport.POLLIN):
         """
@@ -136,7 +194,7 @@ class Task(Thread):
             The flags to match in the queue poller (defaults to ``POLLIN``).
         """
         self.poller.register(queue, flags)
-        self.handlers[queue] = handler
+        self.sockets[queue] = handler
 
     def _ctrl(self, msg, data=protocols.NoData):
         queue = self.ctx.socket(
@@ -177,10 +235,6 @@ class Task(Thread):
         implementation it simply handles the "QUIT" message by raising TaskQuit
         (which the :meth:`run` method will catch and use as a signal to end).
         """
-        # pylint: disable=no-self-use,unused-variable
-        # We deliberately don't catch the IOError that can result from recv_msg
-        # here as this queue is guaranteed to be in-process. If something sends
-        # us an invalid message it's a bug and we should shut down (see run)
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
@@ -201,25 +255,19 @@ class Task(Thread):
         """
         pass
 
-    def loop(self):
-        """
-        This method is called once per loop of the task's :meth:`run` method.
-        If the task needs to do some work periodically, this is the place to do
-        it.
-        """
-        pass
-
     def poll(self, timeout=1):
         """
         This method is called once per loop of the task's :meth:`run` method.
-        It polls all registered queues and calls their associated handlers if
-        the poll is successful.
+        It runs all periodic handlers, then polls all registered queues and
+        calls their associated handlers if the poll is successful.
         """
+        for interval in self.intervals:
+            interval.poll()
         while True:
             socks = self.poller.poll(timeout)
             try:
                 for queue in socks:
-                    self.handlers[queue](queue)
+                    self.sockets[queue](queue)
             except transport.Again:
                 continue  # pragma: no cover
             break
@@ -239,7 +287,6 @@ class Task(Thread):
             self.once()
             self.logger.info('started')
             while True:
-                self.loop()
                 self.poll()
         except TaskQuit:
             self.logger.info('stopping')
@@ -261,20 +308,23 @@ class PauseableTask(Task):
     is resumed (or terminated).
     """
     def handle_control(self, queue):
-        # pylint: disable=unused-variable
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise TaskQuit
-        elif msg == 'PAUSE':
-            while True:
-                msg, data = queue.recv_msg()
-                if msg == 'QUIT':
-                    raise TaskQuit
-                elif msg == 'RESUME':
-                    break
-                else:
-                    raise IOError('invalid control message: %s' % msg)
-        elif msg == 'RESUME':
-            self.logger.warning('Task is not paused')
+        try:
+            msg, data = queue.recv_msg()
+        except IOError as e:
+            self.logger.error(str(e))
         else:
-            raise IOError('invalid control message: %s' % msg)
+            if msg == 'QUIT':
+                raise TaskQuit
+            elif msg == 'PAUSE':
+                while True:
+                    msg, data = queue.recv_msg()
+                    if msg == 'QUIT':
+                        raise TaskQuit
+                    elif msg == 'RESUME':
+                        break
+                    else:
+                        self.logger.error('missing control handler for %s', msg)
+            elif msg == 'RESUME':
+                self.logger.warning('Task is not paused')
+            else:
+                self.logger.error('missing control handler for %s', msg)

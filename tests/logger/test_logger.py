@@ -28,12 +28,15 @@
 
 
 import io
+import os
 import gzip
 from unittest import mock
 from datetime import datetime, timezone
+from threading import Thread
 
 import pytest
 
+from conftest import find_message
 from piwheels import __version__, protocols, transport
 from piwheels.logger import main
 
@@ -43,15 +46,14 @@ UTC = timezone.utc
 
 @pytest.fixture()
 def log_sample():
-    log = r"""\
-2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/ HTTP/1.1" 200 2655 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
+    log = r"""2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/ HTTP/1.1" 200 2655 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/certifi/ HTTP/1.1" 200 2222 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.8.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.98-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/markupsafe/MarkupSafe-1.1.1-cp35-cp35m-linux_armv7l.whl HTTP/1.1" 200 32003 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:56 +0000] "GET /simple/asn1crypto/ HTTP/1.1" 200 1811 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"2.7.13\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:24:57 +0000] "GET /simple/backports-abc/ HTTP/1.1" 200 794 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.8.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.98-v7+\"}}"
 2a00:1098:0:82:1000:3b:1:1 - - [18/Mar/2019:14:24:58 +0000] "GET /simple/pip/ HTTP/1.1" 200 7973 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"setuptools_version\":\"33.1.1\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.98-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:04 +0000] "GET /simple/pyyaml/PyYAML-3.13-cp35-cp35m-linux_armv7l.whl HTTP/1.1" 200 42641 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.3\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.5.3\",\"setuptools_version\":\"33.1.1\",\"system\":{\"name\":\"Linux\",\"release\":\"4.19.27-v7+\"}}"
-2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:05 +0000] "GET /simple/pip/ HTTP/1.1" 200 7973 "-" "pip/18.0 {\"cpu\":\"armv6l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"18.0\"},\"openssl_version\":\"OpenSSL 1.1.0f  25 May 2017\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.0.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.52+\"}}"
+80.229.34.140 - - [18/Mar/2019:14:26:05 +0000] "GET /simple/pip/ HTTP/1.1" 200 7973 "-" "pip/18.0 {\"cpu\":\"armv6l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"18.0\"},\"openssl_version\":\"OpenSSL 1.1.0f  25 May 2017\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.0.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.52+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:06 +0000] "GET /simple/lxml/ HTTP/1.1" 200 8015 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.6.8\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.6.8\",\"setuptools_version\":\"40.8.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.9.93-linuxkit-aufs\"}}"
 2a00:1098:0:82:1000:3b:1:1 - - [18/Mar/2019:14:26:06 +0000] "GET /simple/cffi/ HTTP/1.1" 200 10390 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0f  25 May 2017\",\"python\":\"2.7.13\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:26 +0000] "GET /simple/foo/foo-0.1-cp34-none-any.whl HTTP/1.1" 200 42641 "-" "pip/19.0.3 no JSON UA"
@@ -59,6 +61,7 @@ def log_sample():
 2a00:1098:0:80:1000:3b:1:1 - - [15/Jun/2020:21:20:16 +0000] "GET /project/gpiozero/json/ HTTP/1.1" 200 2509872 "-" "Wget/1.20.3 (linux-gnu)"
 2a00:1098:0:80:1000:3b:1:1 - - [15/Jun/2020:21:20:52 +0000] "GET /project/gpiozero/json/ HTTP/1.1" 200 2509872 "-" "python-requests/2.22.0"
 2a00:1098:0:80:1000::14 - - [11/Oct/2019:06:26:55 +0100] "GET / HTTP/1.1" 200 6153 "-" "Mythic HTTP monitor check"
+80.229.34.140 - - [29/Jun/2020:00:02:15 +0000] "GET /simple/app-ui-test-api/ HTTP/1.1" 404 3819 "-" "pip/20.1.1 {\"ci\":null,\"cpu\":\"armv7l\",\"distro\":{\"id\":\"buster\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.28\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"10\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.5.4\"},\"installer\":{\"name\":\"pip\",\"version\":\"20.1.1\"},\"openssl_version\":\"OpenSSL 1.1.1d  10 Sep 2019\",\"python\":\"3.5.4\",\"setuptools_version\":\"41.4.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.19.97-v7l+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [11/Oct/2019:06:26:55 +0100] "GET /faq.html HTTP/1.1" 200 6153 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:07:11:29 +0100] "GET / HTTP/1.1" 200 6297 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/ici/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
@@ -116,7 +119,7 @@ def log_sample():
         ]),
         ('LOGSEARCH', [
             'pip',
-            '2a00:1098:0:80:1000:3b:1:1',
+            '80.229.34.140',
             datetime(2019, 3, 18, 14, 26, 5, tzinfo=UTC),
             'armv6l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.52+',
             'CPython', '2.7.13', 'pip', '18.0', '40.0.0',
@@ -167,6 +170,7 @@ def log_sample():
             datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC),
             'Mythic HTTP monitor check',
         ]),
+        # The log entry here is 404 and thus produces no entries
         ('LOGPAGE', [
             'faq',
             '2a00:1098:0:80:1000:3b:1:1',
@@ -248,3 +252,27 @@ def test_parse_compressed(logger_queue_name, logger_queue, log_sample, tmpdir):
     main(['--log-queue', logger_queue_name, str(tmpdir.join('log.gz'))])
     for log_msg, entry in entries:
         assert logger_queue.recv_msg() == (log_msg, entry)
+
+
+def test_drop_entries(logger_queue_name, logger_queue, log_sample, tmpdir):
+    log, entries = log_sample
+    log = log.splitlines(keepends=True)
+    fifo = str(tmpdir.join('log.fifo'))
+    os.mkfifo(fifo)
+    with mock.patch('piwheels.logger.logging') as logging:
+        main_thread = Thread(target=main, daemon=True,
+                             args=(['--log-queue', logger_queue_name, '--drop', fifo],))
+        main_thread.start()
+        with io.open(fifo, 'w') as f:
+            for _ in range(10000):
+                f.write(log[0])
+                if logging.warning.called:
+                    if logging.warning.call_args == mock.call('dropping log entry'):
+                        break
+                    logging.warning.reset_mock()
+            else:
+                assert False, 'never saw dropping log entry'
+        # Drain the logger queue
+        while logger_queue.poll(0):
+            assert logger_queue.recv_msg() == entries[0]
+        main_thread.join()
