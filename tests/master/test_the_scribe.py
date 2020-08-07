@@ -244,6 +244,57 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert index.exists() and index.is_file()
+    assert contains_elem(
+        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
+    )
+    assert contains_elem(
+        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
+    )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', set())
+    task.once()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert not contains_elem(simple, 'a', [('href', 'foo')])
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 'cp34m', '', False),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {'libc6'})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    task.poll(0)
+    db_queue.check()
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
     index = root / 'simple' / 'foo' / 'index.html'
     assert index.exists() and index.is_file()
     assert contains_elem(
@@ -538,6 +589,7 @@ def test_write_search_index(db_queue, task, scribe_queue, master_config):
     }
     assert scribe_queue.recv_msg() == ('DONE', None)
 
+
 def test_delete_package(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
@@ -559,6 +611,7 @@ def test_delete_package(db_queue, task, scribe_queue, master_config):
     assert not index.exists()
     assert not project.exists()
     assert scribe_queue.recv_msg() == ('DONE', None)
+
 
 def test_delete_package_fail(db_queue, task, scribe_queue, master_config):
     task.logger = mock.Mock()

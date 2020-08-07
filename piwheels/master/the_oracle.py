@@ -171,14 +171,14 @@ class TheOracle(tasks.NonStopTask):
         Handler for "SETDESC" message, sent by :class:`DbClient` to update a
         package's project description.
         """
-        return self.db.update_project_description(package, description)
+        return self.db.set_package_description(package, description)
 
     def do_getdesc(self, package):
         """
         Handler for "GETDESC" message, sent by :class:`DbClient` to retrieve
         a package's project description.
         """
-        return self.db.get_project_description(package)
+        return self.db.get_package_description(package)
 
     def do_skippkg(self, package, reason):
         """

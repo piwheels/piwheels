@@ -145,6 +145,25 @@ def test_add_new_package_version(db, with_package, db_client):
                 'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8), '')
 
 
+def test_set_package_description(db, with_package, db_client):
+    with db.begin():
+        assert db.execute(
+            "SELECT package, description FROM packages").first() == ('foo', '')
+    db_client.set_package_description('foo', 'a package')
+    with db.begin():
+        assert db.execute(
+            "SELECT package, description FROM packages").first() == ('foo', 'a package')
+
+
+def test_get_package_description(db, with_package, db_client):
+    assert db_client.get_package_description('foo') == ''
+    with db.begin():
+        db.execute(
+            "UPDATE packages SET description = 'a package' "
+            "WHERE package = 'foo'")
+    assert db_client.get_package_description('foo') == 'a package'
+
+
 def test_skip_package(db, with_package, db_client):
     with db.begin():
         assert db.execute(
@@ -265,6 +284,15 @@ def test_test_package_version(db, with_package_version, db_client):
     assert not db_client.test_package_version('foo', '0.2')
 
 
+def test_get_versions_deleted(db, with_package_version, db_client):
+    assert db_client.get_versions_deleted('foo') == set()
+    with db.begin():
+        db.execute(
+            "UPDATE versions SET skip = 'deleted' "
+            "WHERE package = 'foo' AND version = '0.1'")
+    assert db_client.get_versions_deleted('foo') == {'0.1'}
+
+
 def test_log_download(db, with_files, download_state, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM downloads").scalar() == 0
@@ -364,6 +392,20 @@ def test_get_package_files(db, with_files, build_state_hacked, db_client):
 
 def test_get_version_files(db, with_files, build_state_hacked, db_client):
     assert db_client.get_version_files('foo', '0.1') == build_state_hacked.files.keys()
+
+
+def test_test_package(db, with_package, db_client):
+    assert db_client.test_package(with_package)
+    assert not db_client.test_package('blah-blah')
+
+
+def test_package_marked_deleted(db, with_package, db_client):
+    assert not db_client.package_marked_deleted(with_package)
+    with db.begin():
+        db.execute(
+            "UPDATE packages SET skip = 'deleted' "
+            "WHERE package = 'foo'")
+    assert db_client.package_marked_deleted(with_package)
 
 
 def test_get_build_abis(db, with_build_abis, db_client):
