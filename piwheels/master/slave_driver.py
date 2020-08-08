@@ -44,7 +44,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class SlaveDriver(tasks.Task):
+class SlaveDriver(tasks.PausingTask):
     """
     This task handles interaction with the build slaves using the slave
     protocol. Interaction is driven by the slaves (i.e. the master doesn't
@@ -63,9 +63,9 @@ class SlaveDriver(tasks.Task):
 
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.slave_driver_control)
-        self.paused = False
         self.abi_queues = {}
         self.recent_builds = {}
+        self.recent_deletes = set()
         slave_queue = self.socket(
             transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
@@ -81,12 +81,15 @@ class SlaveDriver(tasks.Task):
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         SlaveState.status_queue = self.status_queue
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.connect(config.stats_queue)
+        delete_queue = self.socket(
+            transport.REP, protocol=reversed(protocols.cloud_gazer))
+        delete_queue.bind(const.SKIP_QUEUE)
+        self.register(delete_queue, self.handle_delete)
         self.db = DbClient(config, self.logger)
         self.fs = FsClient(config, self.logger)
         self.slaves = {}
@@ -168,43 +171,29 @@ class SlaveDriver(tasks.Task):
         """
         Handle incoming requests to the internal control queue.
 
-        Whilst the :class:`SlaveDriver` task is "pauseable", it can't simply
-        stop responding to requests from build slaves. Instead, its pause is
-        implemented as an internal flag. While paused it simply tells build
-        slaves requesting a new job that none are currently available but
-        otherwise continues servicing requests.
-
-        It also understands a couple of extra control messages unique to it,
+        This class understands a couple of extra control messages unique to it,
         specifically "KILL" to tell a build slave to terminate, "SKIP" to tell
         a build slave to terminate its current build immmediately, and "HELLO"
         to cause all "HELLO" messages from build slaves to be replayed (for the
         benefit of a newly attached monitor process).
         """
         try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.error(str(e))
-        else:
-            if msg == 'QUIT':
-                raise tasks.TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                self.paused = False
-            elif msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
+            super().handle_control(queue)
+        except tasks.TaskControl as ctrl:
+            if ctrl.msg in ('KILL', 'SLEEP', 'SKIP', 'WAKE'):
                 for slave in self.slaves.values():
-                    if data is None or slave.slave_id == data:
+                    if ctrl.data is None or slave.slave_id == ctrl.data:
                         {
                             'KILL':  slave.kill,
                             'SLEEP': slave.sleep,
                             'SKIP':  slave.skip,
                             'WAKE':  slave.wake,
-                        }[msg]()
-            elif msg == 'HELLO':
+                        }[ctrl.msg]()
+            elif ctrl.msg == 'HELLO':
                 for slave in self.slaves.values():
                     slave.hello()
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise  # pragma: no cover
 
     def handle_build(self, queue):
         """
@@ -243,15 +232,43 @@ class SlaveDriver(tasks.Task):
             self.abi_queues = {
                 abi: [
                     (package, version) for package, version in new_queue
-                    if (package, version) not in recent_builds
+                    if (package, version) not in self.recent_builds[abi]
+                    and (package, version) not in self.recent_deletes
+                    and (package, None) not in self.recent_deletes
                 ]
                 for abi, new_queue in new_queues.items()
-                for recent_builds in (self.recent_builds[abi],)
             }
             self.stats_queue.send_msg('STATBQ', {
                 abi: len(queue)
                 for (abi, queue) in self.abi_queues.items()
             })
+            # Wipe the recent_deletes set; it only exists to prune recently
+            # deleted packages from in-flight build-queue queries
+            self.recent_deletes = set()
+
+    def handle_delete(self, queue):
+        """
+        Handle package or version deletion requests.
+
+        When the PyPI upstream deletes a version or package, the
+        :class:`CloudGazer` task requests that other tasks perform the deletion
+        on its behalf. In the case of this task, this involves cancelling any
+        pending builds of that package (version), and ignoring any builds
+        involving that package (version) in the next queue update from
+        :class:`TheArchitect`.
+        """
+        msg, data = queue.recv_msg()
+        if msg == 'DELVER':
+            del_pkg, del_ver = data
+        elif msg == 'DELPKG':
+            del_pkg, del_ver = data, None
+        self.recent_deletes.add((del_pkg, del_ver))
+        for slave in self.slaves.values():
+            if slave.reply[0] == 'BUILD':
+                build_pkg, build_ver = slave.reply[1]
+                if build_pkg == del_pkg and del_ver in (None, build_ver):
+                    slave.skip()
+        queue.send_msg('OK')
 
     def handle_slave(self, queue):
         """
@@ -405,6 +422,8 @@ class SlaveDriver(tasks.Task):
         "IDLE" state.
         """
         if slave.skipped:
+            self.logger.info('slave %d (%s): build skipped',
+                             slave.slave_id, slave.label)
             return 'DONE', protocols.NoData
         else:
             return 'CONT', protocols.NoData
@@ -428,6 +447,13 @@ class SlaveDriver(tasks.Task):
                 'slave %d (%s): protocol error (BUILT after %s)',
                 slave.slave_id, slave.label, slave.reply[0])
             return 'DIE', protocols.NoData
+        elif slave.skipped:
+            # If the build was skipped, throw away the result without recording
+            # success or failure (it may have been skipped because we know
+            # there's something wrong with the slave)
+            self.logger.info('slave %d (%s): build skipped',
+                             slave.slave_id, slave.label)
+            return 'DONE', protocols.NoData
         else:
             build_armv6l_hack(slave.build)
             if slave.build.status and not slave.build.transfers_done:
@@ -443,7 +469,8 @@ class SlaveDriver(tasks.Task):
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
                 self.db.log_build(slave.build)
-                self.web_queue.send_msg('PKGPROJ', slave.build.package)
+                self.web_queue.send_msg('PROJECT', slave.build.package)
+                self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
 
     def do_sent(self, slave):
@@ -474,7 +501,8 @@ class SlaveDriver(tasks.Task):
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
                 self.db.log_build(slave.build)
-                self.web_queue.send_msg('PKGBOTH', slave.build.package)
+                self.web_queue.send_msg('BOTH', slave.build.package)
+                self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
             else:
                 self.fs.expect(slave.slave_id,

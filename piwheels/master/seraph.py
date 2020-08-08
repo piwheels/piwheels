@@ -36,7 +36,7 @@ Defines the :class:`Seraph` task; see class for more details.
 from .. import const, tasks, transport
 
 
-class Seraph(tasks.Task):
+class Seraph(tasks.NonStopTask):
     """
     This task is a simple load-sharing router for
     :class:`~.the_oracle.TheOracle` tasks.

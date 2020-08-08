@@ -113,10 +113,10 @@ def test_transfer_bad_start(task, file_queue):
     task.logger = mock.Mock()
     file_queue.send_multipart([b'HELLO', b'1'])
     task.poll(0)
-    assert task.logger.error.call_count == 1
+    assert task.logger.exception.call_count == 1
     file_queue.send_multipart([b'HELLO', b'FOO'])
     task.poll(0)
-    assert task.logger.error.call_count == 2
+    assert task.logger.exception.call_count == 2
 
 
 def test_transfer_success(task, master_config, stats_queue, fs_queue,
@@ -222,7 +222,7 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     # Send a corrupted HELLO; should be reported as error but ignored
     file_queue.send_multipart([b'ELLO', b'1'])
     task.poll(0)
-    assert task.logger.error.call_count == 1
+    assert task.logger.exception.call_count == 1
     # Carry on with the transfer to make sure it succeeds after the initial
     # hiccups
     file_queue.send_multipart([b'HELLO', b'1'])
@@ -233,7 +233,7 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     assert file_queue.recv_multipart() == [b'FETCH', b'65536', b'57920']
     file_queue.send_multipart([b'HUNK', b'65536', file_content[65536:123456]])
     task.poll(0)
-    assert task.logger.error.call_count == 2
+    assert task.logger.exception.call_count == 2
     assert file_queue.recv_multipart() == [b'FETCH', b'65536', b'57920']
     file_queue.send_multipart([b'CHUNK', b'65536', file_content[65536:123456]])
     task.poll(0)
@@ -241,26 +241,3 @@ def test_transfer_error_recovery(task, fs_queue, file_queue, file_state,
     fs_queue.send_msg('VERIFY', [1, file_state.package_tag])
     task.poll(0)
     assert fs_queue.recv_msg() == ('OK', None)
-
-
-def test_remove_success(task, master_config, stats_queue, fs_queue, disk_stats):
-    task.logger = mock.Mock()
-    out = Path(master_config.output_path)
-    wheel = out / 'simple' / 'foo' / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
-    wheel.parent.mkdir(parents=True)
-    wheel.touch()
-    fs_queue.send_msg('REMOVE', ['foo', wheel.name])
-    task.poll(0)
-    assert fs_queue.recv_msg() == ('OK', None)
-    assert stats_queue.recv_msg() == ('STATFS', list(disk_stats))
-    assert task.logger.info.call_count == 1
-    assert not wheel.exists()
-
-
-def test_remove_failed(task, master_config, stats_queue, fs_queue, disk_stats):
-    task.logger = mock.Mock()
-    out = Path(master_config.output_path)
-    fs_queue.send_msg('REMOVE', ['foo', 'foo.whl'])
-    task.poll(0)
-    assert fs_queue.recv_msg() == ('OK', None)
-    assert task.logger.warning.call_count == 1

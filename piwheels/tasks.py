@@ -43,7 +43,7 @@ master.
 import ctypes as ct
 import logging
 from datetime import datetime, timedelta, timezone
-from threading import Thread
+from threading import Thread, Event
 from fnmatch import fnmatch
 
 from . import transport, protocols
@@ -67,6 +67,18 @@ class TaskQuit(Exception):
     Exception raised when the "QUIT" message is received by the internal
     control queue.
     """
+
+
+class TaskControl(Exception):
+    """
+    Exception raised when an unhandled control message is received. The
+    :attr:`msg` and :attr:`data` attributes store the *msg* and *data*
+    which can be used by descendents to handle extended control messages.
+    """
+    def __init__(self, msg, data):
+        self.msg = msg
+        self.data = data
+        super().__init__("Missing control handler for %s" % msg)
 
 
 class TaskInterval:
@@ -104,6 +116,10 @@ class Task(Thread):
     Periodic methods are associated with an interval via the :meth:`every`
     method. These should be called during initialization (don't attempt to
     register handlers from within the thread itself).
+
+    Generally this shouldn't be used as a base-class. Use one of the
+    descendents that implements a pausing mechanism, :class:`NonStopTask`,
+    :class:`PauseableTask`, or :class:`PausingTask`.
     """
     name = 'Task'
 
@@ -130,6 +146,7 @@ class Task(Thread):
         self.quit_queue.hwm = 10
         self.quit_queue.connect(config.control_queue)
         self.register(control_queue, self.handle_control)
+        self.ready = Event()
 
     def close(self):
         """
@@ -231,9 +248,13 @@ class Task(Thread):
 
     def handle_control(self, queue):
         """
-        Default handler for the internal control queue. In this base
-        implementation it simply handles the "QUIT" message by raising TaskQuit
-        (which the :meth:`run` method will catch and use as a signal to end).
+        Default handler for the internal control queue. In this base class it
+        simply handles the "QUIT" message by raising :exc:`TaskQuit` (which the
+        :meth:`run` method will catch and use as a signal to end).
+
+        Messages other than QUIT, PAUSE and RESUME raise :exc:`TaskControl`
+        which can be caught in descendents to implement custom control
+        messages.
         """
         try:
             msg, data = queue.recv_msg()
@@ -242,10 +263,8 @@ class Task(Thread):
         else:
             if msg == 'QUIT':
                 raise TaskQuit
-            elif msg in ('PAUSE', 'RESUME'):
-                self.logger.warning('cannot pause or resume %s', self.name)
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise TaskControl(msg, data)
 
     def once(self):
         """
@@ -285,6 +304,7 @@ class Task(Thread):
         prctl(PR_SET_NAME, self.name.encode('ascii')[:15], 0, 0, 0)
         try:
             self.once()
+            self.ready.set()
             self.logger.info('started')
             while True:
                 self.poll()
@@ -298,6 +318,52 @@ class Task(Thread):
             self.logger.info('stopped')
 
 
+class NonStopTask(Task):
+    """
+    Derivative of :class:`Task` that handles, but ignores PAUSE and RESUME
+    messages. This is used for tasks that cannot pause under any circumstances,
+    for instance the database handling tasks :class:`Seraph` and
+    :class:`TheOracle`.
+    """
+    def handle_control(self, queue):
+        try:
+            super().handle_control(queue)
+        except TaskControl as ctrl:
+            if ctrl.msg == 'PAUSE':
+                self.logger.info('paused')
+            elif ctrl.msg == 'RESUME':
+                self.logger.info('resumed')
+            else:
+                raise
+
+
+class PausingTask(Task):
+    """
+    Derivative of :class:`Task` that uses a :attr:`paused` flag to indicate
+    to internal handlers when it's paused. It is up to your queue handlers to
+    honour :attr:`paused` when it's set.
+    """
+    def __init__(self, config, control_protocol=protocols.task_control):
+        super().__init__(config, control_protocol)
+        self.paused = False
+
+    def handle_control(self, queue):
+        try:
+            super().handle_control(queue)
+        except TaskControl as ctrl:
+            if ctrl.msg == 'PAUSE':
+                self.logger.info('paused')
+                self.paused = True
+            elif ctrl.msg == 'RESUME':
+                if not self.paused:
+                    self.logger.warning('resumed while not paused')
+                else:
+                    self.paused = False
+                    self.logger.info('resumed')
+            else:
+                raise
+
+
 class PauseableTask(Task):
     """
     Derivative of :class:`Task` that implements a rudimentary pausing
@@ -306,25 +372,27 @@ class PauseableTask(Task):
     waiting for "RESUME" or "QUIT". No other work will be done
     (:meth:`Task.loop` and :meth:`Task.poll` will not be called) until the task
     is resumed (or terminated).
+
+    If you need a more complex pausing implementation which can still do some
+    work while paused (to drain incoming queues for instance), use
+    :class:`PausingTask` instead.
     """
     def handle_control(self, queue):
         try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.error(str(e))
-        else:
-            if msg == 'QUIT':
-                raise TaskQuit
-            elif msg == 'PAUSE':
+            super().handle_control(queue)
+        except TaskControl as ctrl:
+            if ctrl.msg == 'PAUSE':
+                self.logger.info('paused')
                 while True:
                     msg, data = queue.recv_msg()
                     if msg == 'QUIT':
                         raise TaskQuit
                     elif msg == 'RESUME':
+                        self.logger.info('resumed')
                         break
                     else:
-                        self.logger.error('missing control handler for %s', msg)
-            elif msg == 'RESUME':
-                self.logger.warning('Task is not paused')
+                        raise TaskControl(msg, data)
+            elif ctrl.msg == 'RESUME':
+                self.logger.warning('resumed while not paused')
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise

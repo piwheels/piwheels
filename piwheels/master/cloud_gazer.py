@@ -35,8 +35,8 @@ Defines the :class:`CloudGazer` task; see class for more details.
 
 from datetime import timedelta
 
-from .. import protocols, transport, tasks
-from .pypi import PyPIEvents, get_project_description
+from .. import protocols, transport, tasks, const
+from .pypi import PyPIEvents
 from .the_oracle import DbClient
 
 
@@ -51,11 +51,15 @@ class CloudGazer(tasks.PauseableTask):
     def __init__(self, config):
         super().__init__(config)
         self.db = DbClient(config, self.logger)
-        self.pypi = PyPIEvents(config.pypi_xmlrpc)
+        self.pypi = PyPIEvents(
+            pypi_xmlrpc=config.pypi_xmlrpc,
+            pypi_json=config.pypi_json)
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
+        self.skip_queue = self.socket(
+            transport.REQ, protocol=protocols.cloud_gazer)
+        self.skip_queue.connect(const.SKIP_QUEUE)
         self.serial = -1
         self.packages = None
         if config.dev_mode:
@@ -71,44 +75,66 @@ class CloudGazer(tasks.PauseableTask):
         self.logger.info('querying upstream')
 
     def read_pypi(self):
-        for package, version, timestamp, action in self.pypi:
+        for package, version, timestamp, action, description in self.pypi:
             if action == 'remove':
                 if version is None:
-                    self.logger.info(
-                        'disabled package %s (deleted)', package)
+                    self.logger.info('marking package %s for deletion', package)
                     self.db.skip_package(package, 'deleted')
                     self.packages.discard(package)
+                    self.web_queue.send_msg('DELPKG', package)
+                    self.skip_queue.send_msg('DELPKG', package)
+                    self.web_queue.recv_msg()
+                    self.skip_queue.recv_msg()
+                    self.db.delete_package(package)
                 else:
-                    self.logger.info(
-                        'disabled package %s version %s (deleted)',
-                        package, version)
+                    self.logger.info('marking package %s version %s for deletion',
+                                     package, version)
                     self.db.skip_package_version(package, version, 'deleted')
+                    self.web_queue.send_msg('DELVER', (package, version))
+                    self.skip_queue.send_msg('DELVER', (package, version))
+                    self.web_queue.recv_msg()
+                    self.skip_queue.recv_msg()
+                    self.db.delete_version(package, version)
             else:
                 if package not in self.packages:
                     self.packages.add(package)
-                    if self.db.add_new_package(package, skip=self.skip_default):
+                    if self.db.add_new_package(package, skip=self.skip_default,
+                                               description=description):
                         self.logger.info('added package %s', package)
-                        self.web_queue.send_msg('PKGBOTH', package)
+                        self.web_queue.send_msg('BOTH', package)
+                        self.web_queue.recv_msg()
+                    elif description is not None:
+                        self.db.set_package_description(package, description)
                 if version is not None:
                     skip = '' if action == 'source' else 'binary only'
-                    if self.db.add_new_package_version(package, version,
-                                                       timestamp, skip):
+                    update = 'BOTH'
+                    if action == 'yank':
+                        self.db.yank_version(package, version)
+                        self.logger.info(
+                            'yanked package %s version %s', package, version)
+                    elif action == 'unyank':
+                        self.db.unyank_version(package, version)
+                        self.logger.info(
+                            'unyanked package %s version %s', package, version)
+                    elif self.db.add_new_package_version(package, version,
+                                                         timestamp, skip):
                         self.logger.info(
                             'added package %s version %s', package, version)
                         if action != 'source':
                             self.logger.info(
                                 'disabled package %s version %s (binary only)',
                                 package, version)
-                        description = get_project_description(package)
-                        if description:
-                            self.db.update_project_description(package, description)
-                        self.web_queue.send_msg('PKGPROJ', package)
+                        if description is not None:
+                            self.db.set_package_description(
+                                package, description)
                     elif action == 'source' and self.db.get_version_skip(
                             package, version) == 'binary only':
                         self.db.skip_package_version(package, version, '')
                         self.logger.info(
                             'enabled package %s version %s', package, version)
-                        self.web_queue.send_msg('PKGPROJ', package)
+                        update = 'PROJECT'
+                    self.web_queue.send_msg(update, package)
+                    self.web_queue.recv_msg()
         if self.serial < self.pypi.serial:
             self.serial = self.pypi.serial
             self.db.set_pypi_serial(self.serial)

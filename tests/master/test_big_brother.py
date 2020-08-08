@@ -107,16 +107,6 @@ def stats_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(
-        transport.PULL, protocol=protocols.the_scribe)
-    queue.hwm = 1
-    queue.bind(master_config.web_queue)
-    yield queue
-    queue.close()
-
-
-@pytest.fixture()
 def task(request, master_config):
     task = BigBrother(master_config)
     yield task
@@ -129,16 +119,18 @@ def test_update_homepage(db_queue, web_queue, task, db_result, stats_data):
         db_result['builds_last_hour'] = {'cp34m': 0, 'cp35m': 0}
         db_result['downloads_all'] = 1000
         db_result['downloads_last_month'] = 100
-        db_queue.expect('GETSTATS')
-        db_queue.send('OK', db_result)
-        task.update_homepage()
-        db_queue.check()
         stats_data = stats_data._replace(
             builds_last_hour={'cp34m': 0, 'cp35m': 0},
             downloads_all=1000,
             downloads_last_month=100,
         )
-        assert web_queue.recv_msg() == ('HOME', stats_data.as_message())
+        db_queue.expect('GETSTATS')
+        db_queue.send('OK', db_result)
+        web_queue.expect('HOME', stats_data.as_message())
+        web_queue.send('DONE')
+        task.update_homepage()
+        db_queue.check()
+        web_queue.check()
 
 
 def test_update_search_index(db_queue, web_queue, task):
@@ -146,9 +138,11 @@ def test_update_search_index(db_queue, web_queue, task):
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
         db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
+        web_queue.expect('SEARCH', {'foo': [10, 100]})
+        web_queue.send('DONE')
         task.update_search_index()
         db_queue.check()
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
+        web_queue.check()
 
 
 def test_update_stats(master_status_queue, task, stats_data):
@@ -198,21 +192,24 @@ def test_gen_homepage(db_queue, db_result, web_queue, task, stats_queue,
         db_result['builds_last_hour'] = {'cp34m': 5, 'cp35m': 0}
         db_result['downloads_last_month'] = 100
         db_result['downloads_last_hour'] = 1
+        stats_data = stats_data._replace(
+            builds_last_hour={'cp34m': 5, 'cp35m': 0},
+            downloads_last_month=100, downloads_last_hour=1
+        )
         db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
+        web_queue.expect('SEARCH', {'foo': [10, 100]})
+        web_queue.send('DONE')
         db_queue.expect('GETSTATS')
         db_queue.send('OK', db_result)
+        web_queue.expect('HOME', stats_data.as_message())
+        web_queue.send('DONE')
         # Crank the handle once (handles HOME message) but no periodic tasks
         task.poll(0)
         # Crank it again to run the forced periodic tasks
         task.poll(0)
         db_queue.check()
-        stats_data = stats_data._replace(
-            builds_last_hour={'cp34m': 5, 'cp35m': 0},
-            downloads_last_month=100, downloads_last_hour=1
-        )
-        assert web_queue.recv_msg() == ('SEARCH', {'foo': [10, 100]})
-        assert web_queue.recv_msg() == ('HOME', stats_data.as_message())
+        web_queue.check()
 
 
 def test_bad_stats(task, stats_queue):

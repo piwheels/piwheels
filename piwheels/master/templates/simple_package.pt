@@ -6,6 +6,6 @@
 <body>
 <h1>Links for ${package}</h1>
 
-<span tal:repeat="row files" tal:omit-tag="True"><a href="${row.filename}#sha256=${row.filehash}">${row.filename}</a><br></span>
+<span tal:repeat="row files" tal:omit-tag="True"><a href="${row.filename}#sha256=${row.filehash}" tal:attributes="data-yanked '' if row.yanked else None">${row.filename}</a><br></span>
 </body>
 </html>

@@ -1,6 +1,6 @@
 digraph piwheels {
-    graph [splines=ortho, nodesep=0.5, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc"];
-    node [shape=rect, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=1];
+    graph [splines=ortho, nodesep=0.1, ranksep=1, style=filled, fontname=Roboto, fontsize=14, fillcolor="#cccccc", penwidth=0];
+    node [shape=rect, fontname=Roboto, fontsize=10, style=filled, fillcolor="#9999ff", penwidth=0.3];
     edge [fontname=Sans, fontsize=8];
 
     PyPI [label="PyPI", shape=egg];
@@ -35,7 +35,7 @@ digraph piwheels {
         fs [label="www\nfilesystem", shape=folder];
         httpd;
 
-        TheSecretary->TheScribe;
+        TheSecretary->TheScribe [dir=both];
         TheScribe->fs;
         FileJuggler->fs [dir=both];
         fs->httpd;
@@ -54,7 +54,7 @@ digraph piwheels {
         BigBrother->main;
         SlaveDriver->main;
         MrChase->main;
-        MrChase->TheSecretary;
+        MrChase->TheSecretary [dir=both];
     }
 
     subgraph cluster_monitor {
@@ -124,10 +124,11 @@ digraph piwheels {
     main->monitor;
     monitor->main;
 
+    CloudGazer->SlaveDriver [dir=both];
     CloudGazer->Seraph [dir=both];
-    CloudGazer->TheSecretary;
-    BigBrother->TheSecretary;
-    SlaveDriver->TheSecretary;
+    CloudGazer->TheSecretary [dir=both];
+    BigBrother->TheSecretary [dir=both];
+    SlaveDriver->TheSecretary [dir=both];
     SlaveDriver->BigBrother;
     FileJuggler->BigBrother;
     TheSecretary->Seraph [dir=both];

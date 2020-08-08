@@ -33,6 +33,7 @@ import pytest
 from queue import Queue
 from datetime import datetime, timezone
 
+from conftest import MockTask
 from piwheels import const, protocols, transport
 from piwheels.master.cloud_gazer import CloudGazer
 
@@ -45,33 +46,35 @@ def dt(s):
 
 
 @pytest.fixture()
-def pypi_proxy(request, zmq_context):
-    q = Queue()
-    proxy_patcher = mock.patch('xmlrpc.client.ServerProxy')
-    proxy_mock = proxy_patcher.start()
-    proxy_mock().changelog_since_serial.side_effect = lambda serial: q.get()
-    yield q
-    proxy_patcher.stop()
+def mock_events(request):
+    with mock.patch('piwheels.master.cloud_gazer.PyPIEvents') as pypi_events:
+        pypi_events().serial = 0
+        source = []
+        def events_iter():
+            for index, event in enumerate(source, start=pypi_events().serial + 1):
+                pypi_events().serial = index
+                yield event
+        pypi_events().__iter__.side_effect = events_iter
+        yield source
 
 
 @pytest.fixture()
-def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(transport.PULL, protocol=protocols.the_scribe)
-    queue.hwm = 1
-    queue.bind(master_config.web_queue)
-    yield queue
-    queue.close()
+def skip_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, transport.REP, const.SKIP_QUEUE,
+                    reversed(protocols.cloud_gazer))
+    yield task
+    task.close()
 
 
 @pytest.fixture(scope='function')
-def task(request, db_queue, web_queue, master_config):
+def task(request, db_queue, web_queue, skip_queue, master_config):
     task = CloudGazer(master_config)
     yield task
     task.close()
     db_queue.check()
 
 
-def test_init(pypi_proxy, db_queue, task):
+def test_init(mock_events, db_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
     db_queue.expect('GETPYPI')
@@ -82,7 +85,7 @@ def test_init(pypi_proxy, db_queue, task):
     assert task.serial == 1
 
 
-def test_new_pkg(pypi_proxy, db_queue, task, pypi_json):
+def test_new_pkg(mock_events, db_queue, web_queue, task):
     assert task.skip_default == ''
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
@@ -90,23 +93,26 @@ def test_new_pkg(pypi_proxy, db_queue, task, pypi_json):
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('foo', '0.2', 1531327388, 'create', 0),
-        ('foo', '0.2', 1531327388, 'add source file foo-0.2.tar.gz', 1),
-    ])
+    mock_events[:] = [
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
+    ]
     db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), ''])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['foo', 'some description'])
+    db_queue.expect('SETDESC', ['foo', 'package foo'])
     db_queue.send('OK', None)
-    db_queue.expect('SETPYPI', 1)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 2)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 1
+    assert task.serial == 2
 
 
-def test_dev_mode(dev_mode, pypi_proxy, db_queue, task, pypi_json):
+def test_dev_mode(dev_mode, mock_events, db_queue, web_queue, task):
     assert task.skip_default == 'development mode'
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', set())
@@ -114,163 +120,335 @@ def test_dev_mode(dev_mode, pypi_proxy, db_queue, task, pypi_json):
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('foo', '0.2', 1531327388, 'create', 0),
-        ('foo', '0.2', 1531327388, 'add source file foo-0.2.tar.gz', 1),
-    ])
-    db_queue.expect('NEWPKG', ['foo', 'development mode'])
+    mock_events[:] = [
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
+    ]
+    db_queue.expect('NEWPKG', ['foo', 'development mode', 'package foo'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
     db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), ''])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['foo', 'some description'])
+    db_queue.expect('SETDESC', ['foo', 'package foo'])
     db_queue.send('OK', True)
-    db_queue.expect('SETPYPI', 1)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 2)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 1
+    assert task.serial == 2
 
 
-def test_existing_ver(pypi_proxy, db_queue, task):
+def test_existing_ver(mock_events, db_queue, web_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', set())
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('foo', '0.2', 1531327388, 'create', 0),
-        ('foo', '0.2', 1531327388, 'add cp34 file foo-0.2-cp34-cp34m-manylinux1_x86_64.whl', 1),
-    ])
-    db_queue.expect('NEWPKG', ['foo', ''])
+    mock_events[:] = [
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+    ]
+    db_queue.expect('NEWPKG', ['foo', '', 'package foo'])
     db_queue.send('OK', False)
+    db_queue.expect('SETDESC', ['foo', 'package foo'])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), 'binary only'])
     db_queue.send('OK', False)
-    db_queue.expect('SETPYPI', 1)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 2)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 1
+    assert task.serial == 2
 
 
-def test_new_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
+def test_new_ver(mock_events, db_queue, web_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 2)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('bar', '1.0', 1531327389, 'create', 2),
-        ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 3),
-        ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
-        ('bar', '1.0', 1531327392, 'add cp34 file bar-0.1-cp34-cp34-manylinux1_x86_64.whl', 5),
-        ('bar', '1.0', 1531327392, 'add cp35 file bar-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
-    ])
-    db_queue.expect('NEWPKG', ['bar', ''])
+    mock_events[:] = [
+        ('bar', None, dt('2018-07-11 16:43:07'), 'create', 'some description'),
+        ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
+    ]
+    db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['bar', 'some description'])
+    db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
-    db_queue.expect('SETPYPI', 6)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 4)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo", "bar"}
-    assert task.serial == 6
-    assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
+    assert task.serial == 4
 
 
-def test_remove_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
+def test_remove_ver(mock_events, db_queue, web_queue, skip_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 2)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('bar', '1.0', 1531327389, 'create', 2),
-        ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 3),
-        ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
-        ('bar', '1.0', 1531327392, 'remove release', 5),
-    ])
-    db_queue.expect('NEWPKG', ['bar', ''])
+    mock_events[:] = [
+        ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
+        ('bar', '1.0', dt('2018-07-11 16:43:11'), 'remove', None),
+    ]
+    db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['bar', 'some description'])
+    db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     db_queue.expect('SKIPVER', ['bar', '1.0', 'deleted'])
     db_queue.send('OK', True)
+    web_queue.expect('DELVER', ['bar', '1.0'])
+    web_queue.send('DONE')
+    skip_queue.expect('DELVER', ['bar', '1.0'])
+    skip_queue.send('OK')
+    db_queue.expect('DELVER', ['bar', '1.0'])
+    db_queue.send('OK', None)
     db_queue.expect('SETPYPI', 5)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo", "bar"}
     assert task.serial == 5
-    assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
 
 
-def test_remove_pkg(pypi_proxy, db_queue, web_queue, task, pypi_json):
+def test_remove_pkg(mock_events, db_queue, web_queue, skip_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 2)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('bar', '1.0', 1531327389, 'create', 2),
-        ('bar', '1.0', 1531327389, 'add source file bar-1.0.zip', 3),
-        ('bar', '1.0', 1531327391, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 4),
-        ('bar', None, 1531327392, 'remove package', 5),
-    ])
-    db_queue.expect('NEWPKG', ['bar', ''])
+    mock_events[:] = [
+        ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
+        ('bar', None, dt('2018-07-11 16:43:11'), 'remove', None),
+    ]
+    db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['bar', 'some description'])
+    db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     db_queue.expect('SKIPPKG', ['bar', 'deleted'])
     db_queue.send('OK', True)
+    web_queue.expect('DELPKG', 'bar')
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', 'bar')
+    skip_queue.send('OK')
+    db_queue.expect('DELPKG', 'bar')
+    db_queue.send('OK', None)
     db_queue.expect('SETPYPI', 5)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo"}
     assert task.serial == 5
-    assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
 
 
-def test_enable_ver(pypi_proxy, db_queue, web_queue, task, pypi_json):
+def test_remove_pkg_no_insert(mock_events, db_queue, web_queue, skip_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 3)
     task.once()
     db_queue.check()
-    pypi_proxy.put([
-        ('foo', '1.0', 1531327389, 'add py2.py3 file foo-1.0-py2.py3-none-any.whl', 3),
-        ('foo', '1.0', 1531327389, 'add cp34 file foo-0.1-cp34-cp34-manylinux1_x86_64.whl', 4),
-        ('foo', '1.0', 1531327392, 'add source file foo-1.0.zip', 5),
-        ('foo', '1.0', 1531327392, 'add cp35 file foo-0.1-cp35-cp35-manylinux1_x86_64.whl', 6),
-    ])
+    mock_events[:] = [
+        ('bar', None, dt('2018-07-11 16:43:09'), 'remove', None),
+    ]
+    db_queue.expect('SKIPPKG', ['bar', 'deleted'])
+    db_queue.send('OK', True)
+    web_queue.expect('DELPKG', 'bar')
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', 'bar')
+    skip_queue.send('OK')
+    db_queue.expect('DELPKG', 'bar')
+    db_queue.send('OK', None)
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+
+
+def test_remove_pkg_before_insert(mock_events, db_queue, web_queue, skip_queue,
+                                  task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 2)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('bar', None, dt('2018-07-11 16:43:08'), 'remove', None),
+        ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
+    ]
+    db_queue.expect('SKIPPKG', ['bar', 'deleted'])
+    db_queue.send('OK', True)
+    web_queue.expect('DELPKG', 'bar')
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', 'bar')
+    skip_queue.send('OK')
+    db_queue.expect('DELPKG', 'bar')
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKG', ['bar', '', 'some description'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
+    db_queue.send('OK', True)
+    db_queue.expect('SETDESC', ['bar', 'some description'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 5)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo", "bar"}
+    assert task.serial == 5
+
+
+def test_enable_ver(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('foo', '1.0', dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('foo', '1.0', dt('2018-07-11 16:43:11'), 'source', 'some description'),
+    ]
     db_queue.expect('NEWVER', ['foo', '1.0', dt('2018-07-11 16:43:09'), 'binary only'])
     db_queue.send('OK', True)
-    db_queue.expect('PROJDESC', ['foo', 'some description'])
+    db_queue.expect('SETDESC', ['foo', 'some description'])
     db_queue.send('OK', True)
-    db_queue.expect('NEWVER', ['foo', '1.0', dt('2018-07-11 16:43:09'), ''])
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('NEWVER', ['foo', '1.0', dt('2018-07-11 16:43:11'), ''])
     db_queue.send('OK', False)
     db_queue.expect('GETSKIP', ['foo', '1.0'])
     db_queue.send('OK', 'binary only')
     db_queue.expect('SKIPVER', ['foo', '1.0', ''])
     db_queue.send('OK', None)
-    db_queue.expect('SETPYPI', 6)
+    web_queue.expect('PROJECT', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 5)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
+    web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 6
-    assert web_queue.recv_msg() == ('PKGPROJ', 'foo')
+    assert task.serial == 5
+
+
+def test_yank_ver(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('foo', '1.0', dt('2018-07-11 16:43:11'), 'yank', None),
+    ]
+    db_queue.expect('YANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+
+
+def test_unyank_ver(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('foo', '1.0', dt('2018-07-11 16:43:11'), 'unyank', None),
+    ]
+    db_queue.expect('UNYANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 4
+
+
+def test_yank_unyank_ver(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 3)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('foo', '1.0', dt('2018-07-11 16:43:11'), 'yank', None),
+        ('foo', '1.0', dt('2018-07-11 16:43:12'), 'unyank', None),
+    ]
+    db_queue.expect('YANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('UNYANKVER', ['foo', '1.0'])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 5)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 5

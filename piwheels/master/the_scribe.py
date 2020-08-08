@@ -41,18 +41,20 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from itertools import zip_longest
+from operator import attrgetter
 
 import pkg_resources
 from chameleon import PageTemplateLoader
-try:
-    import simplejson as json
-except ImportError:
-    import json
+import simplejson as json
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
+
+
+class PackageDeleted(ValueError):
+    "Error raised when a package is deleted and doesn't need updating"
 
 
 class TheScribe(tasks.PauseableTask):
@@ -76,7 +78,7 @@ class TheScribe(tasks.PauseableTask):
         super().__init__(config)
         self.output_path = Path(config.output_path)
         scribe_queue = self.socket(
-            transport.PULL, protocol=protocols.the_scribe)
+            transport.REP, protocol=protocols.the_scribe)
         scribe_queue.hwm = 100
         scribe_queue.bind(const.SCRIBE_QUEUE)
         self.register(scribe_queue, self.handle_index)
@@ -143,9 +145,11 @@ class TheScribe(tasks.PauseableTask):
 
         * "HOME", a request to write the homepage with some associated
           statistics
-        * "PKGBOTH", a request to write the index and project page for
-          the specified package
-        * "PKGPROJ", a request to write just the project page for the specified
+
+        * "BOTH", a request to write the index and project page for the
+          specified package
+
+        * "PROJECT", a request to write just the project page for the specified
           package
 
         .. note::
@@ -159,15 +163,10 @@ class TheScribe(tasks.PauseableTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg == 'PKGBOTH':
+            if msg in ('BOTH', 'PROJECT'):
                 package = data
-                if package not in self.package_cache:
-                    self.package_cache.add(package)
-                    self.write_simple_index()
-                self.write_package_index(package)
-                self.write_project_page(package)
-            elif msg == 'PKGPROJ':
-                package = data
+                if msg == 'BOTH':
+                    self.write_package_index(package)
                 self.write_project_page(package)
             elif msg == 'HOME':
                 self.write_homepage(MasterStats.from_message(data))
@@ -175,6 +174,17 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
+            elif msg == 'DELVER':
+                package, version = data
+                self.delete_version(package, version)
+                self.write_package_index(package, exclude={version})
+                self.write_project_page(package, exclude={version})
+            elif msg == 'DELPKG':
+                package = data
+                self.package_cache.discard(package)
+                self.write_simple_index()
+                self.delete_package(package)
+            queue.send_msg('DONE')
 
     def write_homepage(self, statistics):
         """
@@ -253,7 +263,7 @@ class TheScribe(tasks.PauseableTask):
             index.file.write(self.templates['simple_index'](
                 packages=self.package_cache))
 
-    def write_package_index(self, package):
+    def write_package_index(self, package, *, exclude=None):
         """
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
@@ -262,15 +272,17 @@ class TheScribe(tasks.PauseableTask):
         :param str package:
             The name of the package to write the index for
         """
+        if exclude is None:
+            exclude = set()
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        files = sorted(
-            self.db.get_project_files(package),
-            key=lambda row: (
-                pkg_resources.parse_version(row.version),
-                row.filename
-            ), reverse=True)
+        files = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_files(package)
+            if row.version not in exclude
+        ]
+        files = sorted(files, key=attrgetter('version'), reverse=True)
         with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['simple_package'](
@@ -300,29 +312,41 @@ class TheScribe(tasks.PauseableTask):
             canon_dir.symlink_to(pkg_dir.name)
         except FileExistsError:
             pass
+        if package not in self.package_cache:
+            self.package_cache.add(package)
+            self.write_simple_index()
 
-    def write_project_page(self, package):
+    def write_project_page(self, package, *, exclude=None):
         """
         (Re)writes the project page of the specified package.
 
         :param str package:
             The name of the package to write the project page for
         """
-        versions = sorted(
-            self.db.get_project_versions(package),
-            key=lambda row: pkg_resources.parse_version(row.version),
-            reverse=True)
-        files = sorted(
-            self.db.get_project_files(package),
-            key=lambda row: (
-                pkg_resources.parse_version(row.version),
-                row.filename
-            ), reverse=True)
-        if files:
-            dependencies = self.db.get_file_apt_dependencies(files[0].filename)
+        if exclude is None:
+            exclude = set()
+        versions = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_versions(package)
+            if row.version not in exclude
+        ]
+        versions = sorted(versions, key=attrgetter('version'), reverse=True)
+        files = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_files(package)
+            if row.version not in exclude
+        ]
+        files = sorted(files, key=attrgetter('version'), reverse=True)
+        release_files = [
+            f.filename
+            for f in files
+            if not f.version.is_prerelease
+        ]
+        if release_files:
+            dependencies = self.db.get_file_apt_dependencies(release_files[0])
         else:
             dependencies = set()
-        description = self.db.get_project_description(package)
+        description = self.db.get_package_description(package)
         self.logger.info('writing project page for %s', package)
         pkg_dir = self.output_path / 'project' / package
         mkdir_override_symlink(pkg_dir)
@@ -348,6 +372,66 @@ class TheScribe(tasks.PauseableTask):
         except FileExistsError:
             pass
 
+    def delete_package(self, package):
+        """
+        Attempts to remove the index and project page directories (including all
+        known wheel files) of the specified *package*.
+
+        :param str package:
+            The name of the package to delete.
+        """
+        self.logger.info('deleting package %s', package)
+        if len(package) == 0:
+            # refuse to delete /simple/ and /project/ by accident
+            raise RuntimeError('Attempted to delete everything')
+
+        pkg_dir = self.output_path / 'simple' / package
+        proj_dir = self.output_path / 'project' / package
+        canon_pkg_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+        canon_proj_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
+
+        files = {pkg_dir / f for f in self.db.get_package_files(package)}
+        files |= {
+            pkg_dir / 'index.html',
+            proj_dir / 'index.html',
+            canon_pkg_dir / 'index.html',
+            canon_proj_dir / 'index.html',
+        }
+
+        for file_path in files:
+            try:
+                file_path.unlink()
+                self.logger.debug('file deleted: %s', file_path)
+            except FileNotFoundError:
+                self.logger.error('file not found: %s', file_path)
+
+        for dir_path in {pkg_dir, proj_dir, canon_pkg_dir, canon_proj_dir}:
+            try:
+                dir_path.rmdir()
+            except OSError as e:
+                self.logger.error('failed to remove directory: %s', repr(e))
+
+    def delete_version(self, package, version):
+        """
+        Attempts to remove any known wheel files corresponding with deleted
+        *versions* of the specified *package*.
+
+        :param str package:
+            The name of the package to delete files for.
+
+        :param str version:
+            The version of *package* to delete files for.
+        """
+        self.logger.info('deleting package %s version %s', package, version)
+        pkg_dir = self.output_path / 'simple' / package
+        for file in self.db.get_version_files(package, version):
+            file_path = pkg_dir / file
+            try:
+                file_path.unlink()
+                self.logger.info('File deleted: %s', file)
+            except FileNotFoundError:
+                self.logger.error('File not found: %s', file)
+
 
 # From pip/_vendor/packaging/utils.py
 # pylint: disable=invalid-name
@@ -366,6 +450,15 @@ def grouper(iterable, n, fillvalue=None):
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
+
+
+def parse_version(s):
+    v = pkg_resources.parse_version(s)
+    # Keep a reference to the original string as otherwise it's unrecoverable;
+    # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
+    # parsed variant will fail
+    v.original = s
+    return v
 
 
 class AtomicReplaceFile:

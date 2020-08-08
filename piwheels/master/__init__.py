@@ -128,6 +128,9 @@ write access to the output directory.
             '--pypi-simple', metavar='URL', default=const.PYPI_SIMPLE,
             help="The URL of the PyPI simple API (default: %(default)s)")
         parser.add_argument(
+            '--pypi-json', metavar='URL', default=const.PYPI_JSON,
+            help="The URL of the PyPI JSON API (default: %(default)s)")
+        parser.add_argument(
             '--status-queue', metavar='ADDR', default=const.STATUS_QUEUE,
             help="The address of the queue used to report status to monitors "
             "(default: %(default)s); this is usually an ipc address")
@@ -213,7 +216,10 @@ write access to the output directory.
 
         # NOTE: Tasks are spawned in a specific order (you need to know the
         # task dependencies to determine this order; see docs/master_arch chart
-        # for more information)
+        # for more information). If I was a bit more intelligent, the tasks
+        # would simply declare their sockets and which bound/connected to
+        # which addresses at which point the master could calculate the order
+        # below. Oh well ...
         self.tasks = [
             task(config)
             for task in (
@@ -239,7 +245,10 @@ write access to the output directory.
             elif isinstance(task, BigBrother):
                 self.big_brother = task
             task.start()
+            task.ready.wait(10)
         self.logger.info('started all tasks')
+        assert all(task.ready.wait(0) for task in self.tasks)
+        self.logger.info('all tasks ready')
         systemd = get_systemd()
         signal.signal(signal.SIGTERM, sig_term)
         try:
@@ -262,8 +271,7 @@ write access to the output directory.
                         break
                     # Continue draining the incoming status queue to prevent
                     # any tasks from blocking while trying to update status
-                    while self.int_status_queue.poll(0):
-                        self.broadcast_status()
+                    self.int_status_queue.drain()
                 systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
             self.control_queue.close()

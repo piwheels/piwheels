@@ -70,7 +70,7 @@ class TransferDone(TransferError):
     """
 
 
-class FileJuggler(tasks.Task):
+class FileJuggler(tasks.NonStopTask):
     """
     This task handles file transfers from the build slaves. The specifics of
     the file transfer protocol are best understood from the implementation of
@@ -128,7 +128,6 @@ class FileJuggler(tasks.Task):
                 handler = {
                     'EXPECT': self.do_expect,
                     'VERIFY': self.do_verify,
-                    'REMOVE': self.do_remove,
                 }[msg]
                 result = handler(*data)
             except Exception as exc:
@@ -182,28 +181,6 @@ class FileJuggler(tasks.Task):
             self.stats_queue.send_msg(
                 'STATFS', info.get_disk_stats(str(self.output_path)))
 
-    def do_remove(self, package, filename):
-        """
-        Message sent by :class:`FsClient` to request that *filename* in
-        *package* should be removed.
-
-        :param str package:
-            The name of the package from which the specified file is to be
-            removed.
-
-        :param str filename:
-            The name of the file to remove from *package*.
-        """
-        path = self.output_path / 'simple' / package / filename
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            self.logger.warning('remove failed (not found): %s', path)
-        else:
-            self.logger.info('removed: %s', path)
-            self.stats_queue.send_msg(
-                'STATFS', info.get_disk_stats(str(self.output_path)))
-
     def handle_file(self, queue):
         """
         Handle incoming file-transfer messages from build slaves.
@@ -235,10 +212,10 @@ class FileJuggler(tasks.Task):
             queue.send_multipart([address, b'DONE'])
             return
         except TransferIgnoreChunk as exc:
-            self.logger.debug(str(exc))
+            self.logger.debug('ignored chunk: %s', str(exc))
             return
         except TransferError as exc:
-            self.logger.error(str(exc))
+            self.logger.exception('transfer error')
             # XXX Delete the transfer object?
             if transfer is None:
                 return
@@ -359,9 +336,3 @@ class FsClient:
             return False
         else:
             return True
-
-    def remove(self, package, filename):
-        """
-        See :meth:`FileJuggler.do_remove`.
-        """
-        self._execute('REMOVE', [package, filename])

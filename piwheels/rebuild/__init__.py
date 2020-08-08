@@ -48,10 +48,10 @@ from ..slave import duration
 def part(s):
     try:
         return {
-            'home': 'HOME',
-            'search': 'SEARCH',
-            'project': 'PKGPROJ',
-            'index': 'PKGBOTH',
+            'home':    'HOME',
+            'search':  'SEARCH',
+            'project': 'PROJECT',
+            'index':   'BOTH',
         }[s]
     except KeyError:
         raise ValueError('invalid website part %s' % s)
@@ -94,7 +94,7 @@ piw-master script.
     logging.info("PiWheels Rebuilder version %s", __version__)
 
     if not config.yes:
-        if config.part in ('PKGPROJ', 'PKGBOTH') and config.package is None:
+        if config.part in ('PROJECT', 'BOTH') and config.package is None:
             s = 'This will rebuild pages for ALL packages; proceed?'
             if not terminal.yes_no_prompt(s):
                 logging.warning('User aborted rebuild')

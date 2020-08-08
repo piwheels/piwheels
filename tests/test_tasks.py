@@ -190,8 +190,7 @@ def test_broken_control(master_config, caplog):
         assert caplog.record_tuples == [
             ('counter', logging.INFO, 'starting'),
             ('counter', logging.INFO, 'started'),
-            ('counter', logging.ERROR, 'missing control handler for FOO'),
-            ('counter', logging.INFO, 'stopping'),
+            ('counter', logging.ERROR, 'unhandled exception in %r' % task),
             ('counter', logging.INFO, 'stopped'),
         ]
     finally:
@@ -207,8 +206,7 @@ def test_broken_control(master_config, caplog):
         assert caplog.record_tuples == [
             ('simple', logging.INFO, 'starting'),
             ('simple', logging.INFO, 'started'),
-            ('simple', logging.ERROR, 'missing control handler for FOO'),
-            ('simple', logging.INFO, 'stopping'),
+            ('simple', logging.ERROR, 'unhandled exception in %r' % task),
             ('simple', logging.INFO, 'stopped'),
         ]
     finally:

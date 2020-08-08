@@ -64,8 +64,7 @@ class MrChase(tasks.PauseableTask):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
@@ -163,7 +162,8 @@ class MrChase(tasks.PauseableTask):
             # XXX We'll never reach this branch at the moment, but in future we
             # might well support failed builds (as another method of skipping
             # builds)
-            self.web_queue.send_msg('PKGPROJ', state.package)
+            self.web_queue.send_msg('PROJECT', state.package)
+            self.web_queue.recv_msg()
             return 'DONE', protocols.NoData
 
     def do_sent(self, state):
@@ -185,7 +185,8 @@ class MrChase(tasks.PauseableTask):
             self.logger.info('verified transfer of %s', state.next_file)
             state.files[state.next_file].verified()
             if state.transfers_done:
-                self.web_queue.send_msg('PKGBOTH', state.package)
+                self.web_queue.send_msg('BOTH', state.package)
+                self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
             else:
                 self.fs.expect(0, state.files[state.next_file])
@@ -209,10 +210,14 @@ class MrChase(tasks.PauseableTask):
         self.logger.info('removing %s %s', package, version)
         if reason:
             self.db.skip_package_version(package, version, reason)
-        for filename in self.db.get_version_files(package, version):
-            self.fs.remove(package, filename)
-        self.db.delete_build(package, version)
-        self.web_queue.send_msg('PKGBOTH', package)
+        self.web_queue.send_msg('DELVER', [package, version])
+        self.web_queue.recv_msg()
+        # XXX Technically we ought to send DELVER to slave-driver's skip-queue
+        # here but let's not complicate the spider's web of connections!
+        if reason:
+            self.db.delete_build(package, version)
+        else:
+            self.db.delete_version(package, version)
         return 'DONE', protocols.NoData
 
     def do_rebuild(self, state):
@@ -224,15 +229,17 @@ class MrChase(tasks.PauseableTask):
         if part in ('HOME', 'SEARCH'):
             self.logger.info('requesting rebuild of homepage and search')
             self.stats_queue.send_msg('HOME')
-        else:  # ('PKGPROJ', 'PKGBOTH'):
+        else:  # ('PROJECT', 'BOTH'):
             package, = state
             if package is None:
                 self.logger.warning('requesting rebuild of *all* pages')
                 for package in self.db.get_all_packages():
                     self.web_queue.send_msg(part, package)
+                    self.web_queue.recv_msg()
             elif self.db.test_package(package):
                 self.logger.info('requesting rebuild of pages for %s', package)
                 self.web_queue.send_msg(part, package)
+                self.web_queue.recv_msg()
             else:
                 return 'ERROR', 'unknown package %s' % package
         return 'DONE', protocols.NoData

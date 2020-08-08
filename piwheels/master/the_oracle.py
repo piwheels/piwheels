@@ -43,7 +43,7 @@ from ..states import (
 from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
 
 
-class TheOracle(tasks.Task):
+class TheOracle(tasks.NonStopTask):
     """
     This task provides an RPC-like interface to the database; it handles
     requests such as registering a new package, version, or build, and
@@ -97,10 +97,14 @@ class TheOracle(tasks.Task):
                 'ALLVERS':     lambda: self.do_allvers(),
                 'NEWPKG':      lambda: self.do_newpkg(*data),
                 'NEWVER':      lambda: self.do_newver(*data),
-                'PROJDESC':    lambda: self.do_projdesc(*data),
-                'GETPROJDESC': lambda: self.do_getprojdesc(data),
+                'SETDESC':     lambda: self.do_setdesc(*data),
+                'GETDESC':     lambda: self.do_getdesc(data),
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
                 'SKIPVER':     lambda: self.do_skipver(*data),
+                'DELPKG':      lambda: self.do_delpkg(data),
+                'DELVER':      lambda: self.do_delver(*data),
+                'YANKVER':     lambda: self.do_yankver(*data),
+                'UNYANKVER':   lambda: self.do_unyankver(*data),
                 'LOGDOWNLOAD': lambda: self.do_logdownload(data),
                 'LOGSEARCH':   lambda: self.do_logsearch(data),
                 'LOGPROJECT':  lambda: self.do_logproject(data),
@@ -114,7 +118,9 @@ class TheOracle(tasks.Task):
                 'VERFILES':    lambda: self.do_verfiles(*data),
                 'GETSKIP':     lambda: self.do_getskip(*data),
                 'PKGEXISTS':   lambda: self.do_pkgexists(data),
+                'PKGDELETED':  lambda: self.do_pkgdeleted(data),
                 'VEREXISTS':   lambda: self.do_verexists(*data),
+                'VERSDELETED': lambda: self.do_versdeleted(data),
                 'GETABIS':     lambda: self.do_getabis(),
                 'GETPYPI':     lambda: self.do_getpypi(),
                 'SETPYPI':     lambda: self.do_setpypi(data),
@@ -146,12 +152,12 @@ class TheOracle(tasks.Task):
         """
         return self.db.get_all_package_versions()
 
-    def do_newpkg(self, package, skip):
+    def do_newpkg(self, package, skip, description):
         """
         Handler for "NEWPKG" message, sent by :class:`DbClient` to register a
         new package.
         """
-        return self.db.add_new_package(package, skip)
+        return self.db.add_new_package(package, skip, description)
 
     def do_newver(self, package, version, released, skip):
         """
@@ -160,19 +166,19 @@ class TheOracle(tasks.Task):
         """
         return self.db.add_new_package_version(package, version, released, skip)
 
-    def do_projdesc(self, package, description):
+    def do_setdesc(self, package, description):
         """
-        Handler for "PROJDESC" message, sent by :class:`DbClient` to update a
+        Handler for "SETDESC" message, sent by :class:`DbClient` to update a
         package's project description.
         """
-        return self.db.update_project_description(package, description)
+        return self.db.set_package_description(package, description)
 
-    def do_getprojdesc(self, package):
+    def do_getdesc(self, package):
         """
-        Handler for "GETPROJDESC" message, sent by :class:`DbClient` to retrieve
+        Handler for "GETDESC" message, sent by :class:`DbClient` to retrieve
         a package's project description.
         """
-        return self.db.get_project_description(package)
+        return self.db.get_package_description(package)
 
     def do_skippkg(self, package, reason):
         """
@@ -187,6 +193,34 @@ class TheOracle(tasks.Task):
         building a specific version of a package.
         """
         self.db.skip_package_version(package, version, reason)
+
+    def do_delpkg(self, package):
+        """
+        Handler for "DELPKG" message, sent by :class:`DbClient` to delete a
+        package.
+        """
+        self.db.delete_package(package)
+
+    def do_delver(self, package, version):
+        """
+        Handler for "DELVER" message, sent by :class:`DbClient` to delete
+        a specific version of a package.
+        """
+        self.db.delete_version(package, version)
+
+    def do_yankver(self, package, version):
+        """
+        Handler for "YANKVER" message, sent by :class:`DbClient` to mark
+        a specific version of a package as "yanked".
+        """
+        self.db.yank_version(package, version)
+
+    def do_unyankver(self, package, version):
+        """
+        Handler for "UNYANKVER" message, sent by :class:`DbClient` to mark
+        a specific version of a package as not "yanked".
+        """
+        self.db.unyank_version(package, version)
 
     def do_logdownload(self, download):
         """
@@ -281,12 +315,26 @@ class TheOracle(tasks.Task):
         """
         return self.db.test_package(package)
 
+    def do_pkgdeleted(self, package):
+        """
+        Handler for "PKGDELETED" message, sent by :class:`DbClient` to request
+        whether or not the specified *package* has been marked for deletion.
+        """
+        return self.db.package_marked_deleted(package)
+
     def do_verexists(self, package, version):
         """
         Handler for "VEREXISTS" message, sent by :class:`DbClient` to request
         whether or not the specified *version* of *package* exists.
         """
         return self.db.test_package_version(package, version)
+
+    def do_versdeleted(self, package):
+        """
+        Handler for "VERSDELETED" message, sent by :class:`DbClient` to request
+        any versions for *package* which have been marked for deletion.
+        """
+        return self.db.get_versions_deleted(package)
 
     def do_getabis(self):
         """
@@ -374,11 +422,11 @@ class DbClient:
         else:
             raise IOError(result)
 
-    def add_new_package(self, package, skip=''):
+    def add_new_package(self, package, skip='', description=''):
         """
         See :meth:`.db.Database.add_new_package`.
         """
-        return self._execute('NEWPKG', [package, skip])
+        return self._execute('NEWPKG', [package, skip, description])
 
     def add_new_package_version(self, package, version, released=None, skip=''):
         """
@@ -386,17 +434,17 @@ class DbClient:
         """
         return self._execute('NEWVER', [package, version, released, skip])
 
-    def update_project_description(self, package, description):
+    def set_package_description(self, package, description):
         """
         See :meth:`.db.Database.update_project_description`.
         """
-        return self._execute('PROJDESC', [package, description])
+        return self._execute('SETDESC', [package, description])
 
-    def get_project_description(self, package):
+    def get_package_description(self, package):
         """
         See :meth:`.db.Database.get_project_description`.
         """
-        return self._execute('GETPROJDESC', package)
+        return self._execute('GETDESC', package)
 
     def skip_package(self, package, reason):
         """
@@ -410,17 +458,53 @@ class DbClient:
         """
         self._execute('SKIPVER', [package, version, reason])
 
+    def delete_package(self, package):
+        """
+        See :meth:`.db.Database.delete_package`.
+        """
+        self._execute('DELPKG', package)
+
+    def delete_version(self, package, version):
+        """
+        See :meth:`.db.Database.delete_version`.
+        """
+        self._execute('DELVER', [package, version])
+
+    def yank_version(self, package, version):
+        """
+        See :meth:`.db.Database.yank_version`.
+        """
+        self._execute('YANKVER', [package, version])
+
+    def unyank_version(self, package, version):
+        """
+        See :meth:`.db.Database.unyank_version`.
+        """
+        self._execute('UNYANKVER', [package, version])
+
     def test_package(self, package):
         """
         See :meth:`.db.Database.test_package`.
         """
         return self._execute('PKGEXISTS', package)
 
+    def package_marked_deleted(self, package):
+        """
+        See :meth:`.db.Database.package_marked_deleted`.
+        """
+        return self._execute('PKGDELETED', package)
+
     def test_package_version(self, package, version):
         """
         See :meth:`.db.Database.test_package_version`.
         """
         return self._execute('VEREXISTS', [package, version])
+
+    def get_versions_deleted(self, package):
+        """
+        See :meth:`.db.Database.get_versions_deleted`.
+        """
+        return self._execute('VERSDELETED', package)
 
     def log_download(self, download):
         """

@@ -116,7 +116,7 @@ def test_version(capsys):
 def test_bad_db():
     with pytest.raises(RuntimeError) as exc:
         # hopefully you don't have a database named this...
-        main(['--dsn', 'postgres:///djskalfjsqklfjdsklfjklsd'])
+        main(['--dsn', 'postgresql:///djskalfjsqklfjdsklfjklsd'])
         assert 'does not exist' in str(exc)
 
 

@@ -45,7 +45,7 @@ from .file_juggler import FsClient
 UTC = timezone.utc
 
 
-class BigBrother(tasks.Task):
+class BigBrother(tasks.PausingTask):
     """
     This task periodically queries the database and output file-system for
     various statistics like the number of packages known to the system, the
@@ -90,8 +90,7 @@ class BigBrother(tasks.Task):
         self.status_queue.hwm = 10
         self.status_queue.connect(const.INT_STATUS_QUEUE)
         self.web_queue = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.web_queue.hwm = 10
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
         self.every(timedelta(minutes=5), self.update_search_index)
         self.every(timedelta(seconds=30), self.update_homepage)
@@ -106,29 +105,17 @@ class BigBrother(tasks.Task):
         """
         Handle incoming requests to the internal control queue.
 
-        This is mostly the same as :meth:`PauseableTask.handle_control` but
-        adds handling for the custom STATS verb to replay the master stats
-        history.
+        This just adds handling for the custom STATS verb to replay the master
+        stats history.
         """
         try:
-            msg, data = queue.recv_msg()
-        except IOError as e:
-            self.logger.error(str(e))
-        else:
-            if msg == 'QUIT':
-                raise tasks.TaskQuit
-            elif msg == 'PAUSE':
-                self.paused = True
-            elif msg == 'RESUME':
-                if not self.paused:
-                    self.logger.warning('Task is not paused')
-                else:
-                    self.paused = False
-            elif msg == 'STATS':
+            super().handle_control(queue)
+        except tasks.TaskControl as ctrl:
+            if ctrl.msg == 'STATS':
                 for stats in self.history:
                     self.status_queue.send_msg('STATS', stats.as_message())
             else:
-                self.logger.error('missing control handler for %s', msg)
+                raise  # pragma: no cover
 
     def handle_stats(self, queue):
         try:
@@ -150,12 +137,14 @@ class BigBrother(tasks.Task):
     def update_search_index(self):
         if not self.paused:
             self.web_queue.send_msg('SEARCH', self.db.get_search_index())
+            self.web_queue.recv_msg()
 
     def update_homepage(self):
         if not self.paused:
             self.stats = self.stats._replace(
                 timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
             self.web_queue.send_msg('HOME', self.stats.as_message())
+            self.web_queue.recv_msg()
 
     def update_stats(self):
         if not self.paused:

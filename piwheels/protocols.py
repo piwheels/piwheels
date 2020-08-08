@@ -261,6 +261,14 @@ master_control = Protocol(recv={
 })
 
 
+cloud_gazer = Protocol(send={
+    'DELVER': ExactSequence([str, str]),  # package, version
+    'DELPKG': str,                        # package
+}, recv={
+    'OK': NoData,
+})
+
+
 slave_driver_control = Protocol(recv=dict(chain(
     task_control.recv.items(),
     master_control.recv.items(),
@@ -283,10 +291,14 @@ big_brother = Protocol(recv={
 
 
 the_scribe = Protocol(recv={
-    'PKGBOTH': str,  # package name
-    'PKGPROJ': str,  # package name
+    'DELVER':  ExactSequence([str, str]),  # package, version
+    'DELPKG':  str,  # package name
+    'PROJECT': str,  # package name
+    'BOTH':    str,  # package name
     'HOME':    _master_stats,  # statistics
     'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
+}, send={
+    'DONE':    NoData,
 })
 
 
@@ -303,8 +315,7 @@ file_juggler_files = Protocol()
 
 file_juggler_fs = Protocol(recv={
     'EXPECT': ExactSequence([int, _file_state]),  # slave ID, file state
-    'VERIFY': ExactSequence([int, str]),                 # slave ID, package
-    'REMOVE': ExactSequence([str, str]),                 # package, filename
+    'VERIFY': ExactSequence([int, str]),          # slave ID, package
 }, send={
     'OK':     Extra,  # some result object XXX refine this?
     'ERROR':  str,    # error message
@@ -317,8 +328,8 @@ mr_chase = Protocol(recv={
     'REBUILD': Any(
         ExactSequence(['HOME']),
         ExactSequence(['SEARCH']),
-        ExactSequence(['PKGPROJ', Any(str, None)]),
-        ExactSequence(['PKGBOTH', Any(str, None)]),
+        ExactSequence(['PROJECT', Any(str, None)]),
+        ExactSequence(['BOTH', Any(str, None)]),
     ),
     'SENT':   NoData,
 }, send={
@@ -358,12 +369,16 @@ slave_driver = Protocol(recv={
 the_oracle = Protocol(recv={
     'ALLPKGS':     NoData,
     'ALLVERS':     NoData,
-    'NEWPKG':      ExactSequence([str, str]),  # package, skip reason
+    'NEWPKG':      ExactSequence([str, str, str]),  # package, skip reason, description
     'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
-    'PROJDESC':    ExactSequence([str, str]),  # package, description
-    'GETPROJDESC': str,  # package
+    'SETDESC':     ExactSequence([str, str]),  # package, description
+    'GETDESC':     str,  # package
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
+    'DELPKG':      str,
+    'DELVER':      ExactSequence([str, str]),  # package, version
+    'YANKVER':     ExactSequence([str, str]),  # package, version
+    'UNYANKVER':   ExactSequence([str, str]),  # package, version
     'LOGDOWNLOAD': _download_state,
     'LOGSEARCH':   _search_state,
     'LOGPROJECT':  _project_state,
@@ -377,7 +392,9 @@ the_oracle = Protocol(recv={
     'VERFILES':    ExactSequence([str, str]),  # package, version
     'GETSKIP':     ExactSequence([str, str]),  # package, version
     'PKGEXISTS':   str,                        # package
+    'PKGDELETED':  str,                        # package
     'VEREXISTS':   ExactSequence([str, str]),  # package, version
+    'VERSDELETED': str,                        # package
     'GETABIS':     NoData,
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number

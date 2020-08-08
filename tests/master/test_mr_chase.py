@@ -46,16 +46,6 @@ def import_queue(request, zmq_context, master_config):
 
 
 @pytest.fixture()
-def web_queue(request, zmq_context, master_config):
-    queue = zmq_context.socket(
-        transport.PULL, protocol=protocols.the_scribe)
-    queue.hwm = 1
-    queue.bind(master_config.web_queue)
-    yield queue
-    queue.close()
-
-
-@pytest.fixture()
 def stats_queue(request, zmq_context, master_config):
     queue = zmq_context.socket(
         transport.PULL, protocol=protocols.big_brother)
@@ -113,12 +103,14 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
     fs_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
+    web_queue.check()
 
 
 def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
@@ -159,15 +151,17 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
     fs_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
+    web_queue.check()
 
 
-def test_import_resend_file(db_queue, fs_queue, task, import_queue,
+def test_import_resend_file(db_queue, web_queue, fs_queue, task, import_queue,
                             build_state, build_state_hacked):
     bs, bsh = build_state, build_state_hacked
     bs._slave_id = bsh._slave_id = 0
@@ -194,11 +188,14 @@ def test_import_resend_file(db_queue, fs_queue, task, import_queue,
     import_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [0, bsh.package])
     fs_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
     task.poll(0)
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
+    web_queue.check()
 
 
 def test_import_default_abi(db_queue, fs_queue, task, import_queue,
@@ -324,29 +321,24 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     assert task.logger.error.call_count == 1
 
 
-def test_normal_remove(db_queue, fs_queue, web_queue, task, import_queue,
+def test_normal_remove(db_queue, web_queue, task, import_queue,
                        build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_msg('REMOVE', [bsh.package, bsh.version, ''])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
-    db_queue.expect('VERFILES', [bsh.package, bsh.version])
-    files = [f.filename for f in bsh.files.values()]
-    db_queue.send('OK', files)
-    for filename in files:
-        fs_queue.expect('REMOVE', [bsh.package, filename])
-        fs_queue.send('OK', None)
-    db_queue.expect('DELBUILD', [bsh.package, bsh.version])
+    web_queue.expect('DELVER', [bsh.package, bsh.version])
+    web_queue.send('DONE')
+    db_queue.expect('DELVER', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
     db_queue.check()
-    fs_queue.check()
+    web_queue.check()
 
 
-def test_remove_with_skip(db_queue, fs_queue, web_queue, task, import_queue,
+def test_remove_with_skip(db_queue, web_queue, task, import_queue,
                           build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_msg('REMOVE', [bsh.package, bsh.version, 'broken version'])
@@ -354,20 +346,15 @@ def test_remove_with_skip(db_queue, fs_queue, web_queue, task, import_queue,
     db_queue.send('OK', True)
     db_queue.expect('SKIPVER', [bsh.package, bsh.version, 'broken version'])
     db_queue.send('OK', None)
-    db_queue.expect('VERFILES', [bsh.package, bsh.version])
-    files = [f.filename for f in bsh.files.values()]
-    db_queue.send('OK', files)
-    for filename in files:
-        fs_queue.expect('REMOVE', [bsh.package, filename])
-        fs_queue.send('OK', None)
+    web_queue.expect('DELVER', [bsh.package, bsh.version])
+    web_queue.send('DONE')
     db_queue.expect('DELBUILD', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', bsh.package)
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
     db_queue.check()
-    fs_queue.check()
+    web_queue.check()
 
 
 def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
@@ -401,41 +388,51 @@ def test_rebuild_search(task, import_queue, stats_queue):
     assert len(task.states) == 0
 
 
-def test_rebuild_package_project(db_queue, task, import_queue, web_queue,
+def test_rebuild_package_project(db_queue, web_queue, task, import_queue,
                                  build_state):
-    import_queue.send_msg('REBUILD', ['PKGPROJ', build_state.package])
+    import_queue.send_msg('REBUILD', ['PROJECT', build_state.package])
     db_queue.expect('PKGEXISTS', build_state.package)
     db_queue.send('OK', True)
+    web_queue.expect('PROJECT', build_state.package)
+    web_queue.send('DONE')
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGPROJ', build_state.package)
+    db_queue.check()
+    web_queue.check()
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
 
 
-def test_rebuild_package_index(db_queue, task, import_queue, web_queue,
+def test_rebuild_package_index(db_queue, web_queue, task, import_queue,
                                  build_state):
-    import_queue.send_msg('REBUILD', ['PKGBOTH', build_state.package])
+    import_queue.send_msg('REBUILD', ['BOTH', build_state.package])
     db_queue.expect('PKGEXISTS', build_state.package)
     db_queue.send('OK', True)
+    web_queue.expect('BOTH', build_state.package)
+    web_queue.send('DONE')
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', build_state.package)
+    db_queue.check()
+    web_queue.check()
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
 
 
-def test_rebuild_all_indexes(db_queue, task, import_queue, web_queue):
-    import_queue.send_msg('REBUILD', ['PKGBOTH', None])
+def test_rebuild_all_indexes(db_queue, web_queue, task, import_queue):
+    import_queue.send_msg('REBUILD', ['BOTH', None])
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', ['foo', 'bar'])  # cheat, this returns a set normally
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
     task.poll(0)
-    assert web_queue.recv_msg() == ('PKGBOTH', 'foo')
-    assert web_queue.recv_msg() == ('PKGBOTH', 'bar')
+    db_queue.check()
+    web_queue.check()
     assert import_queue.recv_msg() == ('DONE', None)
     assert len(task.states) == 0
 
 
 def test_rebuild_unknown_package(db_queue, task, import_queue):
-    import_queue.send_msg('REBUILD', ['PKGBOTH', 'foo'])
+    import_queue.send_msg('REBUILD', ['BOTH', 'foo'])
     db_queue.expect('PKGEXISTS', 'foo')
     db_queue.send('OK', False)
     task.poll(0)

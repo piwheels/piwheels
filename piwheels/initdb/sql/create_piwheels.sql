@@ -53,10 +53,11 @@ CREATE TABLE versions (
     version  VARCHAR(200) NOT NULL,
     released TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
     skip     VARCHAR(100) DEFAULT '' NOT NULL,
+    yanked   BOOLEAN DEFAULT false NOT NULL,
 
     CONSTRAINT versions_pk PRIMARY KEY (package, version),
     CONSTRAINT versions_package_fk FOREIGN KEY (package)
-        REFERENCES packages ON DELETE RESTRICT
+        REFERENCES packages ON DELETE CASCADE
 );
 
 CREATE INDEX versions_package ON versions(package);
@@ -316,10 +317,8 @@ CREATE TABLE rewrites_pending (
     command        VARCHAR(8) NOT NULL,
 
     CONSTRAINT rewrites_pending_pk PRIMARY KEY (package),
-    CONSTRAINT rewrites_pending_package_fk FOREIGN KEY (package)
-        REFERENCES packages (package) ON DELETE CASCADE,
     CONSTRAINT rewrites_pending_command_ck CHECK
-        (command IN ('PKGPROJ', 'PKGBOTH'))
+        (command IN ('PROJECT', 'BOTH'))
 );
 
 CREATE INDEX rewrites_pending_added ON rewrites_pending(added_at);
@@ -490,12 +489,12 @@ $sql$;
 REVOKE ALL ON FUNCTION set_pypi_serial(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_pypi_serial(INTEGER) TO {username};
 
--- add_new_package(package, skip=NULL)
+-- add_new_package(package, skip='', description='')
 -------------------------------------------------------------------------------
 -- Called to insert a new row in the "packages" table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
+CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '', description TEXT = '')
     RETURNS BOOLEAN
     LANGUAGE plpgsql
     CALLED ON NULL INPUT
@@ -503,15 +502,16 @@ CREATE FUNCTION add_new_package(package TEXT, skip TEXT = '')
     SET search_path = public, pg_temp
 AS $sql$
 BEGIN
-    INSERT INTO packages (package, skip) VALUES (package, skip);
+    INSERT INTO packages (package, skip, description)
+        VALUES (package, skip, description);
     RETURN true;
 EXCEPTION
     WHEN unique_violation THEN RETURN false;
 END;
 $sql$;
 
-REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT) TO {username};
+REVOKE ALL ON FUNCTION add_new_package(TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_new_package(TEXT, TEXT, TEXT) TO {username};
 
 -- add_new_package_version(package, version, released=NULL, skip=NULL)
 -------------------------------------------------------------------------------
@@ -546,13 +546,12 @@ GRANT EXECUTE ON FUNCTION add_new_package_version(
     TEXT, TEXT, TIMESTAMP, TEXT
     ) TO {username};
 
--- update_project_description(package, description)
+-- set_package_description(package, description)
 -------------------------------------------------------------------------------
--- Called to update the project description for *package* in the packages
--- table.
+-- Called to update the description for *package* in the packages table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION update_project_description(pkg TEXT, dsc TEXT)
+CREATE FUNCTION set_package_description(pkg TEXT, dsc TEXT)
     RETURNS VOID
     LANGUAGE SQL
     CALLED ON NULL INPUT
@@ -564,16 +563,15 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION update_project_description(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION update_project_description(TEXT, TEXT) TO {username};
+REVOKE ALL ON FUNCTION set_package_description(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_package_description(TEXT, TEXT) TO {username};
 
--- get_project_description(package)
+-- get_package_description(package)
 -------------------------------------------------------------------------------
--- Called to retrieve the project description for *package* in the packages
--- table.
+-- Called to retrieve the description for *package* in the packages table.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION get_project_description(pkg TEXT)
+CREATE FUNCTION get_package_description(pkg TEXT)
     RETURNS TEXT
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -585,8 +583,8 @@ AS $sql$
     WHERE package = pkg;
 $sql$;
 
-REVOKE ALL ON FUNCTION get_project_description(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_description(TEXT) TO {username};
+REVOKE ALL ON FUNCTION get_package_description(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_package_description(TEXT) TO {username};
 
 -- skip_package(package, reason)
 -------------------------------------------------------------------------------
@@ -624,6 +622,87 @@ $sql$;
 
 REVOKE ALL ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION skip_package_version(TEXT, TEXT, TEXT) TO {username};
+
+-- delete_package(package)
+-------------------------------------------------------------------------------
+-- Deletes the specified package from the packages table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION delete_package(pkg TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    DELETE FROM packages
+    WHERE package = pkg;
+$sql$;
+
+REVOKE ALL ON FUNCTION delete_package(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_package(TEXT) TO {username};
+
+-- delete_version(package, version)
+-------------------------------------------------------------------------------
+-- Deletes the specified package version from the versions table.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION delete_version(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    DELETE FROM versions
+    WHERE package = pkg
+    AND version = ver;
+$sql$;
+
+REVOKE ALL ON FUNCTION delete_version(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION delete_version(TEXT, TEXT) TO {username};
+
+-- yank_version(package, version)
+-------------------------------------------------------------------------------
+-- Marks the specified version as "yanked".
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION yank_version(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE versions
+    SET yanked = true
+    WHERE package = pkg
+    AND version = ver;
+$sql$;
+
+REVOKE ALL ON FUNCTION yank_version(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION yank_version(TEXT, TEXT) TO {username};
+
+-- unyank_version(package, version)
+-------------------------------------------------------------------------------
+-- Marks the specified version as not "yanked".
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION unyank_version(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE versions
+    SET yanked = false
+    WHERE package = pkg
+    AND version = ver;
+$sql$;
+
+REVOKE ALL ON FUNCTION unyank_version(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION unyank_version(TEXT, TEXT) TO {username};
 
 -- log_download(filename, accessed_by, accessed_at, arch, distro_name,
 --              distro_version, os_name, os_version, py_name, py_version,
@@ -1062,6 +1141,27 @@ $sql$;
 REVOKE ALL ON FUNCTION test_package(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION test_package(TEXT) TO {username};
 
+-- package_marked_deleted(package)
+-------------------------------------------------------------------------------
+-- Checks whether *package* has been marked for deletion.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION package_marked_deleted(pkg TEXT)
+    RETURNS BOOLEAN
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT COUNT(*) = 1
+    FROM packages
+    WHERE package = pkg
+    AND skip = 'deleted';
+$sql$;
+
+REVOKE ALL ON FUNCTION package_marked_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION package_marked_deleted(TEXT) TO {username};
+
 -- test_package_version(package, version)
 -------------------------------------------------------------------------------
 -- Tests *version* of *package* exists as a row in the *versions* table,
@@ -1081,6 +1181,29 @@ $sql$;
 
 REVOKE ALL ON FUNCTION test_package_version(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION test_package_version(TEXT, TEXT) TO {username};
+
+-- get_versions_deleted(package)
+-------------------------------------------------------------------------------
+-- Returns any versions of *package* which have been marked for deletion.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_versions_deleted(pkg TEXT)
+    RETURNS TABLE(
+        version versions.version%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT version
+    FROM versions
+    WHERE package = pkg
+    AND skip = 'deleted';
+$sql$;
+
+REVOKE ALL ON FUNCTION get_versions_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_versions_deleted(TEXT) TO {username};
 
 -- get_build_queue()
 -------------------------------------------------------------------------------
@@ -1313,7 +1436,8 @@ CREATE FUNCTION get_project_versions(pkg TEXT)
         version versions.version%TYPE,
         skipped versions.skip%TYPE,
         builds_succeeded TEXT,
-        builds_failed TEXT
+        builds_failed TEXT,
+        yanked BOOLEAN
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1324,13 +1448,14 @@ AS $sql$
         v.version,
         COALESCE(NULLIF(v.skip, ''), p.skip) AS skipped,
         COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE b.status), '') AS builds_succeeded,
-        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE NOT b.status), '') AS builds_failed
+        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ', ') FILTER (WHERE NOT b.status), '') AS builds_failed,
+        v.yanked
     FROM
         packages p
         JOIN versions v USING (package)
         LEFT JOIN builds b USING (package, version)
     WHERE v.package = pkg
-    GROUP BY version, skipped;
+    GROUP BY version, skipped, yanked;
 $sql$;
 
 REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
@@ -1347,7 +1472,8 @@ CREATE FUNCTION get_project_files(pkg TEXT)
         abi_tag files.abi_tag%TYPE,
         filename files.filename%TYPE,
         filesize files.filesize%TYPE,
-        filehash files.filehash%TYPE
+        filehash files.filehash%TYPE,
+        yanked versions.yanked%TYPE
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1359,10 +1485,12 @@ AS $sql$
         f.abi_tag,
         f.filename,
         f.filesize,
-        f.filehash
+        f.filehash,
+        v.yanked
     FROM
         builds b
         JOIN files f USING (build_id)
+        JOIN versions v USING (package, version)
     WHERE b.status
     AND b.package = pkg;
 $sql$;

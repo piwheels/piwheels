@@ -612,25 +612,17 @@ sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
           </div>
 
           <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">A package version has been deleted from PyPI but it's still on piwheels</a>
+            <a href="#" class="accordion-title">I need to remove a release</a>
 
             <div class="accordion-content" data-tab-content>
-              <p>Currently, piwheels does not remove deleted package versions. This feature is being discussed in
-              <a href="https://github.com/piwheels/piwheels/issues/211">issue #211</a>. Please <a href="https://github.com/piwheels/packages/issues/new/choose">open an issue</a>
-              if you see a package version which should have been removed.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">A package version has been yanked from PyPI but it's still on piwheels</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>A new feature of the <a href="https://www.python.org/dev/peps/pep-0503">Simple Repository API</a>, specified in
-              <a href="https://www.python.org/dev/peps/pep-0592">PEP-592</a> allows package maintainers to "yank" releases. The relevant
-              <strong>Yanked</strong> attribute is not currently supported by piwheels and the feature is being
-              discussed in <a href="https://github.com/piwheels/piwheels/issues/215">issue #215</a>.</p>
-              <p>Please <a href="https://github.com/piwheels/packages/issues/new/choose">open an issue</a>
-              if you see a package version which should have been yanked, and we will remove it.</p>
+              <p>If you delete a package or version from PyPI, it will also be deleted from piwheels, and any files relating to the package or version
+              will be removed.In the case of version removal, the project page will be updated to remove the version in question. In the case of package
+              deletion, the project page will be deleted.</p>
+              <p>Alternatively, package maintainers have the ability to "yank" releases from PyPI. Yanking a release allows authors to effectively delete
+              a version's files, without breaking things for people who have pinned to exactly a specific version. Releases yanked from PyPI will be
+              reflected in piwheels, both in the simple index and visually on the project page. Read more about "yank" in
+              <a href="https://www.python.org/dev/peps/pep-0592/">PEP-592</a></p>
+              <p>Previously, piwheels did not remove packages or versions which were deleted in PyPI, but this is no longer the case.</p>
             </div>
           </div>
 

@@ -92,6 +92,22 @@ def test_add_new_package_version(db_intf, db, with_package):
         "FROM versions").first() == (with_package, '0.1')
 
 
+def test_get_package_description(db_intf, db, with_package):
+    assert db_intf.get_package_description(with_package) == ''
+    db_intf.add_new_package('bar', description='blah blah')
+    assert db_intf.get_package_description('bar') == 'blah blah'
+
+
+def test_set_package_description(db_intf, db, with_package):
+    assert db.execute(
+        "SELECT description FROM packages "
+        "WHERE package = 'foo'").first() == ('',)
+    db_intf.set_package_description(with_package, 'a package')
+    assert db.execute(
+        "SELECT description FROM packages "
+        "WHERE package = 'foo'").first() == ('a package',)
+
+
 def test_skip_package(db_intf, db, with_package):
     assert db.execute(
         "SELECT skip FROM packages "
@@ -117,16 +133,69 @@ def test_skip_package_version(db_intf, db, with_package_version):
         "AND version = '0.1'").first() == ('binary only',)
 
 
+def test_delete_package(db_intf, db, with_package):
+    assert db.execute(
+        "SELECT count(*) FROM packages "
+        "WHERE package = 'foo'").first() == (1,)
+    db_intf.delete_package('foo')
+    assert db.execute(
+        "SELECT count(*) FROM packages "
+        "WHERE package = 'foo'").first() == (0,)
+
+
+def test_delete_version(db_intf, db, with_package_version):
+    assert db.execute(
+        "SELECT count(*) FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (1,)
+    db_intf.delete_version('foo', '0.1')
+    assert db.execute(
+        "SELECT count(*) FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (0,)
+
+
+def test_yank_version(db_intf, db, with_package_version):
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+    db_intf.yank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+
+
+def test_unyank_version(db_intf, db, with_package_version):
+    db_intf.yank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+    db_intf.unyank_version('foo', '0.1')
+    assert db.execute(
+        "SELECT yanked FROM versions "
+        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+
+
 def test_test_package(db_intf, db, with_build_abis):
     assert not db_intf.test_package('foo')
     db_intf.add_new_package('foo')
     assert db_intf.test_package('foo')
 
 
+def test_package_marked_deleted(db_intf, db, with_package):
+    assert not db_intf.package_marked_deleted(with_package)
+    db_intf.skip_package(with_package, 'deleted')
+    assert db_intf.package_marked_deleted(with_package)
+
+
 def test_test_package_version(db_intf, db, with_package):
     assert not db_intf.test_package_version(with_package, '0.1')
     db_intf.add_new_package_version(with_package, '0.1')
     assert db_intf.test_package_version(with_package, '0.1')
+
+
+def test_get_versions_deleted(db_intf, db, with_package_version):
+    assert not db_intf.get_versions_deleted('foo')
+    db_intf.skip_package_version('foo', '0.1', 'deleted')
+    assert db_intf.get_versions_deleted('foo') == {'0.1'}
 
 
 def test_log_download(db_intf, db, with_files, download_state):
@@ -313,13 +382,13 @@ def test_get_version_skip(db_intf, with_package_version):
 
 def test_get_project_versions(db_intf, with_files):
     assert list(db_intf.get_project_versions('foo')) == [
-        ('0.1', '', 'cp34m', ''),
+        ('0.1', '', 'cp34m', '', False),
     ]
 
 
 def test_get_project_files(db_intf, with_files, build_state_hacked):
     assert sorted(db_intf.get_project_files('foo'), key=itemgetter(2)) == sorted([
-        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash)
+        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash, False)
         for f in build_state_hacked.files.values()
     ], key=itemgetter(2))
 
@@ -351,7 +420,7 @@ def test_delete_build(db_intf, db, with_files, build_state_hacked):
 
 def test_store_rewrites_pending(db_intf, db, with_package):
     state = [
-        RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PKGPROJ'),
+        RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PROJECT'),
     ]
     assert db.execute(
         "SELECT COUNT(*) FROM rewrites_pending").first() == (0,)

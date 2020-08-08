@@ -29,6 +29,7 @@
 
 import os
 import json
+import cbor2 as cbor
 from unittest import mock
 from pathlib import Path
 from time import time, sleep
@@ -59,7 +60,7 @@ def task(request, zmq_context, master_config, db_queue):
 @pytest.fixture()
 def scribe_queue(request, zmq_context):
     queue = zmq_context.socket(
-        transport.PUSH, protocol=reversed(protocols.the_scribe))
+        transport.REQ, protocol=reversed(protocols.the_scribe))
     queue.hwm = 10
     queue.connect(const.SCRIBE_QUEUE)
     yield queue
@@ -210,38 +211,90 @@ def test_write_homepage(db_queue, task, scribe_queue, master_config, stats_data)
     db_queue.check()
     root = Path(master_config.output_path)
     assert (root / 'index.html').exists() and (root / 'index.html').is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
 def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGBOTH', 'foo')
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456123456'),
+                        123456, '123456123456', False),
         ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456123456'),
+                        123456, '123456123456', False),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
-        ProjectVersionsRow('0.1', False, 2, 0),
+        ProjectVersionsRow('0.1', False, 'cp34m', '', False),
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456123456'),
+                        123456, '123456123456', False),
         ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456123456'),
+                        123456, '123456123456', False),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
-    db_queue.send('OK', {'apt': {'libc6'}})
-    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {'libc6'})
+    db_queue.expect('GETDESC', 'foo')
     db_queue.send('OK', 'Some description')
-    task.once()
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert index.exists() and index.is_file()
+    assert contains_elem(
+        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
+    )
+    assert contains_elem(
+        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')]
+    )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', set())
+    task.once()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert not contains_elem(simple, 'a', [('href', 'foo')])
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 'cp34m', '', False),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {'libc6'})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    task.poll(0)
+    db_queue.check()
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
     index = root / 'simple' / 'foo' / 'index.html'
     assert index.exists() and index.is_file()
     assert contains_elem(
@@ -252,21 +305,22 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     )
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
 def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGPROJ', 'foo')
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
-        ProjectVersionsRow('0.1', False, 0, 1),
+        ProjectVersionsRow('0.1', False, 0, 1, False),
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [])
-    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.expect('GETDESC', 'foo')
     db_queue.send('OK', 'Some description')
-    task.once()
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
@@ -277,28 +331,29 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config)
     assert contains_elem(project, 'h2', content='foo')
     assert contains_elem(project, 'p', content='Some description')
     assert contains_elem(project, 'th', content='No files')
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
 def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGPROJ', 'foo')
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
-        ProjectVersionsRow('0.1', False, 0, 1),
+        ProjectVersionsRow('0.1', False, 0, 1, False),
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [
         ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456abcdef'),
+                        123456, '123456abcdef', True),
         ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456abcdef'),
+                        123456, '123456abcdef', True),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
     db_queue.send('OK', {})
-    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.expect('GETDESC', 'foo')
     db_queue.send('OK', 'Some description')
-    task.once()
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
@@ -319,28 +374,29 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
         'foo-0.1-cp34-cp34m-linux_armv6l.whl'
     )
     assert contains_elem(project, 'pre', content='sudo pip3 install foo')
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
 def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGPROJ', 'foo')
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
-        ProjectVersionsRow('0.1', False, 0, 1),
+        ProjectVersionsRow('0.1', False, 0, 1, False),
     ])
     db_queue.expect('PROJFILES', 'foo')
     db_queue.send('OK', [
         ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456abcdef'),
+                        123456, '123456abcdef', True),
         ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456abcdef'),
+                        123456, '123456abcdef', True),
     ])
-    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
     db_queue.send('OK', {'libfoo'})
-    db_queue.expect('GETPROJDESC', 'foo')
+    db_queue.expect('GETDESC', 'foo')
     db_queue.send('OK', 'Some description')
-    task.once()
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
@@ -361,62 +417,167 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
         'foo-0.1-cp34-cp34m-linux_armv6l.whl'
     )
     assert contains_elem(project, 'pre', content='sudo apt install libfoo\nsudo pip3 install foo')
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
+def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
-    scribe_queue.send_msg('PKGBOTH', 'bar')
-    db_queue.expect('PROJFILES', 'bar')
-    db_queue.send('OK', [
-        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456abcdef'),
-        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456abcdef'),
-    ])
-    db_queue.expect('PROJVERS', 'bar')
-    db_queue.send('OK', [
-        ProjectVersionsRow('1.0', False, 2, 1),
-    ])
-    db_queue.expect('PROJFILES', 'bar')
-    db_queue.send('OK', [
-        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv6l.whl',
-                        123456, '123456abcdef'),
-        ProjectFilesRow('1.0', 'cp34m', 'bar-1.0-cp34-cp34m-linux_armv7l.whl',
-                        123456, '123456abcdef'),
-    ])
-    db_queue.expect('FILEDEPS', 'bar-1.0-cp34-cp34m-linux_armv7l.whl')
-    db_queue.send('OK', {'apt': {'libc6'}})
-    db_queue.expect('GETPROJDESC', 'bar')
-    db_queue.send('OK', 'Some description')
     task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 0, 1, True),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef', True),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef', True),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
-    root_index = root / 'simple' / 'index.html'
-    pkg_index = root / 'simple' / 'bar' / 'index.html'
-    assert root_index.exists() and root_index.is_file()
-    assert contains_elem(root_index, 'a', [('href', 'bar')])
-    assert pkg_index.exists() and pkg_index.is_file()
-    assert contains_elem(
-        pkg_index, 'a', [('href', 'bar-1.0-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
-    )
-    assert contains_elem(
-        pkg_index, 'a', [('href', 'bar-1.0-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
-    )
-    project = root / 'project' / 'bar' / 'index.html'
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
+    assert contains_elem(
+        project, 'span',
+        [('class', 'yanked')],
+        'yanked'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')],
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(project, 'pre', content='sudo pip3 install foo')
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1a', False, 0, 1, False),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1a-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef', True),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1a-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef', True),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1a-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
+    assert contains_elem(
+        project, 'span',
+        [('class', 'prerelease')],
+        'pre-release'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1a-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
+        'foo-0.1a-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1a-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')],
+        'foo-0.1a-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(project, 'pre', content='sudo pip3 install foo')
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1a', False, 0, 1, True),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1a-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456abcdef', True),
+        ProjectFilesRow('1.0', 'cp34m', 'foo-0.1a-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456abcdef', True),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.1a-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo' / 'index.html'
+    assert not index.exists()
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    assert contains_elem(project, 'h2', content='foo')
+    assert contains_elem(project, 'p', content='Some description')
+    assert contains_elem(
+        project, 'span',
+        [('class', 'yanked')],
+        'yanked'
+    )
+    assert contains_elem(
+        project, 'span',
+        [('class', 'prerelease')],
+        'pre-release'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1a-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')],
+        'foo-0.1a-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project, 'a',
+        [('href', '/simple/foo/foo-0.1a-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')],
+        'foo-0.1a-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(project, 'pre', content='sudo pip3 install foo')
+    assert scribe_queue.recv_msg() == ('DONE', None)
 
 
 def test_write_search_index(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo', 'bar'})
+    task.once()
     search_index = {
         'foo': (10, 100),
         'bar': (0, 1),
     }
     scribe_queue.send_msg('SEARCH', search_index)
-    task.once()
     task.poll(0)
     db_queue.check()
     root = Path(master_config.output_path)
@@ -426,3 +587,260 @@ def test_write_search_index(db_queue, task, scribe_queue, master_config):
         pkg: (count_recent, count_all)
         for pkg, count_recent, count_all in json.load(packages_json.open('r'))
     }
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_package(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELPKG', 'foo')
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': 'deadbeef',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': 'deadbeef',
+    })
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo'
+    index.mkdir(parents=True)
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    (index / 'foo-0.1-cp34-cp34m-linux_armv6l.whl').touch()
+    task.poll(0)
+    db_queue.check()
+    assert not index.exists()
+    assert not project.exists()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_package_fail(db_queue, task, scribe_queue, master_config):
+    task.logger = mock.Mock()
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELPKG', 'foo')
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': 'deadbeef',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': 'deadbeef',
+    })
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'foo'
+    simple.mkdir(parents=True)
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    wheel_1 = simple / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    wheel_2 = simple / 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    wheel_3 = simple / 'foo-0.2-cp34-cp34m-linux_armv7l.whl'
+    simple_index = simple / 'index.html'
+    project_page = project / 'index.html'
+    for file in (wheel_1, wheel_2, wheel_3, simple_index, project_page):
+        file.touch()
+    task.poll(0)
+    db_queue.check()
+    assert not project.exists()
+    assert not wheel_1.exists()
+    assert not wheel_2.exists()
+    assert not simple_index.exists()
+    assert not project_page.exists()
+    assert task.logger.error.call_count == 1
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_package_missing_file(db_queue, task, scribe_queue, master_config):
+    task.logger = mock.Mock()
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELPKG', 'foo')
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': 'deadbeef',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': 'deadbeef',
+    })
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'foo'
+    simple.mkdir(parents=True)
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    wheel_1 = simple / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    wheel_2 = simple / 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    simple_index = simple / 'index.html'
+    project_page = project / 'index.html'
+    for file in (wheel_1, simple_index, project_page):
+        file.touch()
+    assert wheel_1.exists()
+    assert not wheel_2.exists()
+    task.poll(0)
+    db_queue.check()
+    assert not simple.exists()
+    assert not project.exists()
+    assert not wheel_1.exists()
+    assert not wheel_2.exists()
+    assert not project_page.exists()
+    assert task.logger.error.call_count == 1
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_version(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELVER', ['foo', '0.1'])
+    db_queue.expect('VERFILES', ['foo', '0.1'])
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': '123456123456',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': '123456123456',
+    })
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 'cp34m', '', False),
+        ProjectVersionsRow('0.2', False, 'cp34m', '', False),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.2-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'foo'
+    simple.mkdir(parents=True)
+    wheel_1 = simple / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    wheel_2 = simple / 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    wheel_3 = simple / 'foo-0.2-cp34-cp34m-linux_armv6l.whl'
+    wheel_4 = simple / 'foo-0.2-cp34-cp34m-linux_armv7l.whl'
+    wheel_1.touch()
+    wheel_2.touch()
+    wheel_3.touch()
+    wheel_4.touch()
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    project_page = project / 'index.html'
+    task.poll(0)
+    db_queue.check()
+    assert simple.exists()
+    assert project.exists()
+    assert project_page.exists()
+    assert not wheel_1.exists()
+    assert not wheel_2.exists()
+    assert wheel_3.exists()
+    assert wheel_4.exists()
+    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert not contains_elem(
+        project_page, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456123456')],
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert not contains_elem(
+        project_page, 'a',
+        [('href', '/simple/foo/foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')],
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert contains_elem(
+        project_page, 'a',
+        [('href', '/simple/foo/foo-0.2-cp34-cp34m-linux_armv6l.whl#sha256=123456123456')],
+        'foo-0.2-cp34-cp34m-linux_armv6l.whl'
+    )
+    assert contains_elem(
+        project_page, 'a',
+        [('href', '/simple/foo/foo-0.2-cp34-cp34m-linux_armv7l.whl#sha256=123456123456')],
+        'foo-0.2-cp34-cp34m-linux_armv7l.whl'
+    )
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_version_missing_file(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELVER', ['foo', '0.1'])
+    db_queue.expect('VERFILES', ['foo', '0.1'])
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': '123456123456',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': '123456123456',
+    })
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, 'cp34m', '', False),
+        ProjectVersionsRow('0.2', False, 'cp34m', '', False),
+    ])
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.1', 'cp34m', 'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv6l.whl',
+                        123456, '123456123456', False),
+        ProjectFilesRow('0.2', 'cp34m', 'foo-0.2-cp34-cp34m-linux_armv7l.whl',
+                        123456, '123456123456', False),
+    ])
+    db_queue.expect('FILEDEPS', 'foo-0.2-cp34-cp34m-linux_armv6l.whl')
+    db_queue.send('OK', {})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo'
+    index.mkdir(parents=True)
+    wheel_1 = index / 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    wheel_2 = index / 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    wheel_1.touch()
+    assert wheel_1.exists()
+    assert not wheel_2.exists()
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    task.poll(0)
+    db_queue.check()
+    assert index.exists()
+    assert project.exists()
+    assert not wheel_1.exists()
+    assert not wheel_2.exists()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_package_null(db_queue, task, scribe_queue, master_config):
+    # this should never happen, but just in case...
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {''})
+    task.once()
+    scribe_queue.send_msg('DELPKG', '')
+    root = Path(master_config.output_path)
+    index = root / 'simple'
+    project = root / 'project'
+    with pytest.raises(RuntimeError):
+        task.poll(0)
+    db_queue.check()
+    assert index.exists()
+    assert project.exists()

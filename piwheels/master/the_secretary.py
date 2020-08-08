@@ -44,7 +44,7 @@ UTC = timezone.utc
 IndexTask = namedtuple('IndexTask', ('package', 'timestamp'))
 
 
-class TheSecretary(tasks.Task):
+class TheSecretary(tasks.PausingTask):
     """
     This task buffers requests for the scribe, for the purpose of consolidating
     multiple consecutive (duplicate) requests.
@@ -69,13 +69,11 @@ class TheSecretary(tasks.Task):
         else:
             self.timeout = timedelta(minutes=1)
         web_queue = self.socket(
-            transport.PULL, protocol=protocols.the_scribe)
-        web_queue.hwm = 100
+            transport.REP, protocol=protocols.the_scribe)
         web_queue.bind(config.web_queue)
         self.register(web_queue, self.handle_input)
         self.output = self.socket(
-            transport.PUSH, protocol=reversed(protocols.the_scribe))
-        self.output.hwm = 100
+            transport.REQ, protocol=reversed(protocols.the_scribe))
         self.output.connect(const.SCRIBE_QUEUE)
         self.every(timedelta(seconds=1), self.handle_output)
         self.db = DbClient(config, self.logger)
@@ -98,57 +96,59 @@ class TheSecretary(tasks.Task):
             self.buffer.append(IndexTask(item.package, item.added_at))
             self.commands[item.package] = item.command
 
-    def handle_control(self, queue):
-        """
-        Handle incoming requests to the internal control queue.
-
-        Whilst :class:`TheSecretary` task is "pauseable", it can't simply stop
-        responding to requests from other components. Instead, its pause is
-        implemented as an internal flag. While paused it continues to accept
-        incoming requests to its internal buffer, but doesn't send anything
-        downstream to :class:`TheScribe`.
-        """
-        msg, data = queue.recv_msg()
-        if msg == 'QUIT':
-            raise tasks.TaskQuit
-        elif msg == 'PAUSE':
-            self.paused = True
-        elif msg == 'RESUME':
-            self.paused = False
-
     def handle_input(self, queue):
         """
         Handle incoming write requests with buffering and de-dupe.
 
-        Some incoming requests (current "HOME" and "SEARCH") are passed
-        directly through to :class:`TheScribe` as these are sufficiently rare
-        that no benefit is gained by buffering them.
+        Some incoming requests (currently "HOME", "SEARCH", "DELPKG", and
+        "DELVER") are passed directly through to :class:`TheScribe` as these
+        are either sufficiently rare ("HOME", "SEARCH") that no benefit is
+        gained by buffering them or sufficiently urgent ("DELPKG", "DELVER")
+        that they must be acted on immediately.
 
-        For other requests ("PKGPROJ" and "PKGBOTH"), requests can come thick
+        For other requests ("PROJECT" and "BOTH"), requests can come thick
         and fast in the case of multiple file registrations picked up by
         :class:`CloudGazer`. In this case, requests are buffered for a minute
         and de-duplicated; e.g. if several requests are made to re-write the
         project page for package "foo" within that period, they will be
         combined into a single request. After the minute of buffering, the
-        request is passed downstream to :class:`TheScribe`.
+        request is passed down to :class:`TheScribe`.
         """
         try:
             msg, data = queue.recv_msg()
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg in ['HOME', 'SEARCH']:
+            if msg in ('HOME', 'SEARCH', 'DELPKG', 'DELVER'):
                 self.output.send_msg(msg, data)
-            elif msg in ['PKGPROJ', 'PKGBOTH']:
+                if msg in ('DELPKG', 'DELVER'):
+                    # Expunge any pending updates of the package from the
+                    # buffer as we're going to do them immediately
+                    if msg == 'DELPKG':
+                        package, version = data, None
+                    else:
+                        package, version = data
+                    try:
+                        del self.commands[package]
+                    except KeyError:
+                        pass
+                    else:
+                        for index, entry in enumerate(self.buffer):
+                            if entry.package == package:
+                                del self.buffer[index]
+                                break
+                self.output.recv_msg()
+            elif msg in ('PROJECT', 'BOTH'):
                 package = data
                 if package in self.commands:
-                    if msg == 'PKGBOTH':
-                        # "Upgrade" PKGPROJ messages to PKGBOTH but leave the
+                    if msg == 'BOTH':
+                        # "Upgrade" PROJECT messages to BOTH but leave the
                         # timestamp alone
                         self.commands[package] = msg
                 else:
                     self.buffer.append(IndexTask(package, datetime.now(tz=UTC)))
                     self.commands[package] = msg
+            queue.send_msg('DONE')
 
     def handle_output(self):
         """
@@ -156,18 +156,16 @@ class TheSecretary(tasks.Task):
 
         This sub-task runs periodically to pluck things from the internal
         buffer that have reached the minute delay, and passes them downstream
-        to :class:`TheScribe`. The process stops when either we run out of
-        things that have expired or the downstream queue is filled.
+        to :class:`TheScribe`. The process stops when we run out of things that
+        have expired.
         """
         now = datetime.now(tz=UTC)
         while (
                 not self.paused and
                 self.buffer and
-                self.output.poll(0, transport.POLLOUT)
+                (now - self.buffer[0].timestamp > self.timeout)
         ):
-            if now - self.buffer[0].timestamp > self.timeout:
-                package = self.buffer.popleft().package
-                message = self.commands.pop(package)
-                self.output.send_msg(message, package)
-            else:
-                break
+            package = self.buffer.popleft().package
+            message = self.commands.pop(package)
+            self.output.send_msg(message, package)
+            self.output.recv_msg()
