@@ -257,6 +257,14 @@ class Socket:
         self._logger.debug('<< %s', buf)
         return buf
 
+    def drain(self):
+        """
+        Receives all pending messages in the queue and discards them. This
+        is typically useful during shutdown routines or for testing.
+        """
+        while self.poll(0):
+            self.recv()
+
     def send_multipart(self, msg_parts, flags=0):
         """
         Send *msg_parts*, a list of :class:`bytes` strings as a multi-part

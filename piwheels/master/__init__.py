@@ -271,8 +271,7 @@ write access to the output directory.
                         break
                     # Continue draining the incoming status queue to prevent
                     # any tasks from blocking while trying to update status
-                    while self.int_status_queue.poll(0):
-                        self.broadcast_status()
+                    self.int_status_queue.drain()
                 systemd.extend_timeout(10)
             self.logger.info('stopped all tasks')
             self.control_queue.close()

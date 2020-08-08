@@ -144,6 +144,48 @@ def test_buffer(task, web_queue, scribe_queue):
         scribe_queue.check()
 
 
+def test_delete_package(task, web_queue, scribe_queue):
+    with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
+            mock.patch('piwheels.tasks.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        web_queue.send_msg('DELPKG', 'foo')
+        scribe_queue.expect('DELPKG', 'foo')
+        scribe_queue.send('DONE')
+        task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
+        scribe_queue.check()
+
+
+def test_delete_unbuffered_version(task, web_queue, scribe_queue):
+    with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
+            mock.patch('piwheels.tasks.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        web_queue.send_msg('DELVER', ('foo', '0.1'))
+        scribe_queue.expect('DELVER', ('foo', '0.1'))
+        scribe_queue.send('DONE')
+        task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
+        scribe_queue.check()
+
+
+def test_delete_buffered_version(task, web_queue, scribe_queue):
+    with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
+            mock.patch('piwheels.tasks.datetime') as dt2:
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 0, 0, tzinfo=UTC)
+        web_queue.send_msg('PROJECT', 'foo')
+        task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
+        assert task.commands
+        dt1.now.return_value = dt2.now.return_value = datetime(2018, 1, 1, 12, 30, 0, tzinfo=UTC)
+        web_queue.send_msg('DELVER', ('foo', '0.1'))
+        scribe_queue.expect('DELVER', ('foo', '0.1'))
+        scribe_queue.send('DONE')
+        task.poll(0)
+        assert web_queue.recv_msg() == ('DONE', None)
+        assert not task.commands
+        scribe_queue.check()
+
+
 def test_upgrade(task, web_queue, scribe_queue):
     with mock.patch('piwheels.master.the_secretary.datetime') as dt1, \
             mock.patch('piwheels.tasks.datetime') as dt2:
