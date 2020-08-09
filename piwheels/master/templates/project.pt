@@ -5,8 +5,8 @@
   </div>
   <div metal:fill-slot="content">
     <script>
-    window.onload = function() {
-    showDownloads('${package}');
+    window.onload = () => {
+      showDownloads('${package}');
     };
     </script>
 

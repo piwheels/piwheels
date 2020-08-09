@@ -1,40 +1,30 @@
-function showHiddenRows(className) {
-  var rows = document.getElementsByClassName(className);
+const showHiddenRows = (className) => {
+  const rows = document.getElementsByClassName(className);
   while (rows.length > 0) {
-    var row = rows[0];
+    let row = rows[0];
     row.classList.remove(className);
   }
-  var showMore = document.getElementById('show-' + className + 's');
+  const showMore = document.getElementById(`show-${className}s`);
   showMore.classList.add('hidden-version');
-}
+};
 
-function numberWithCommas(n) {
+const numberWithCommas = (n) => {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
+};
 
-function getDownloads(data, package) {
-  for (var i=0; i<=data.length; i++) {
-    var packageData = data[i];
-    if (packageData[0] == package) {
-      return packageData;
-    }
-  }
-  console.error('Package not found in packages.json');
-  return [package, 0, 0];
-}
-
-function showDownloads(package) {
-  var downloadsAll = document.getElementById('downloads-all');
-  var downloads30 = document.getElementById('downloads-30');
-  $.getJSON("/packages.json")
-    .fail(function() {
-      console.error('Failed to load packages.json');
-      downloadsAll.textContent = '???';
-      downloads30.textContent = '???';
-    })
-    .done(function(data) {
-      var downloads = getDownloads(data, package);
-      downloadsAll.textContent = numberWithCommas(downloads[2]);
-      downloads30.textContent = numberWithCommas(downloads[1]);
-    })
-}
+const showDownloads = (package) => {
+  const downloadsAll = document.getElementById('downloads-all');
+  const downloads30 = document.getElementById('downloads-30');
+  fetch("/packages.json")
+  .then(response => response.json())
+  .then(packages => {
+    const pkgInfo = packages.filter(pkg => pkg[0] === package)[0];
+    downloadsAll.textContent = numberWithCommas(pkgInfo[2]);
+    downloads30.textContent = numberWithCommas(pkgInfo[1]);
+  })
+  .catch(error => {
+    console.error('Failed to load package info', error);
+    downloadsAll.textContent = 'failed to load';
+    downloads30.textContent = 'failed to load';
+  });
+};

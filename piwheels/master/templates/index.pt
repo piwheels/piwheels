@@ -4,13 +4,6 @@
     <script src="/blogposts.js"></script>
   </div>
   <div metal:fill-slot="content">
-    <script>
-    window.onload = function() {
-      var blogUrl = "https://blog.piwheels.org/";
-      var numPosts = 5;
-      showBlogPosts(blogUrl, numPosts);
-    };
-    </script>
     <div class="row">
       <div class="small-12 medium-8 columns">
         <h2>Python Wheels for the Raspberry Pi</h2>
