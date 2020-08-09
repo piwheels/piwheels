@@ -73,12 +73,11 @@ tar: $(DIST_TAR)
 
 dist: $(DIST_WHEEL) $(DIST_TAR) $(DIST_ZIP)
 
-develop: tags
+develop:
 	@# These have to be done separately to avoid a cockup...
 	$(PIP) install -U setuptools
 	$(PIP) install -U pip
 	$(PIP) install -e .[doc,test,master,slave,monitor,logger]
-	@# If we're in a venv, link the system's RTIMULib into it
 ifeq ($(VIRTUAL_ENV),)
 	@echo "Virtualenv not detected! You may need to link python3-apt manually"
 else
