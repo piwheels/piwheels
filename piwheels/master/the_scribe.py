@@ -394,18 +394,25 @@ class TheScribe(tasks.PauseableTask):
         files |= {
             pkg_dir / 'index.html',
             proj_dir / 'index.html',
-            canon_pkg_dir / 'index.html',
-            canon_proj_dir / 'index.html',
+            # Attempt to remove canonical sym-links (with unlink); if this
+            # fails that's okay (and ignorable) because it means we've run into
+            # one of the (rare) cases of a non-canonical and canonical package
+            # co-existing simultaneously (only for historic packages)
+            canon_pkg_dir,
+            canon_proj_dir,
         }
 
         for file_path in files:
             try:
                 file_path.unlink()
                 self.logger.debug('file deleted: %s', file_path)
+            except IsADirectoryError:
+                # See note above
+                pass
             except FileNotFoundError:
                 self.logger.error('file not found: %s', file_path)
 
-        for dir_path in {pkg_dir, proj_dir, canon_pkg_dir, canon_proj_dir}:
+        for dir_path in {pkg_dir, proj_dir}:
             try:
                 dir_path.rmdir()
             except OSError as e:
