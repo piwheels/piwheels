@@ -121,7 +121,7 @@ class MasterState:
                     return 'alert'
                 elif latest.swap_size and (latest.swap_free < latest.swap_size * 0.5):
                     return 'alert'
-                elif latest.load_avg > 4.0:
+                elif latest.load_average > 4.0:
                     return 'alert'
                 elif latest.cpu_temp > 70.0:
                     return 'alert'
@@ -235,7 +235,7 @@ class SlaveState:
                     return 'alert'
                 elif latest.swap_size and (latest.swap_free < latest.swap_size * 0.5):
                     return 'alert'
-                elif latest.load_avg > 4.0:
+                elif latest.load_average > 4.0:
                     return 'alert'
                 elif latest.cpu_temp > 70.0:
                     return 'alert'

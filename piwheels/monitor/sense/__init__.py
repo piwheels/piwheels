@@ -167,7 +167,7 @@ class ScreenTask(tasks.Task):
         status_queue.subscribe('')
         self.register(stick_queue, self.handle_stick)
         self.register(status_queue, self.handle_status)
-        self.every(timedelta(seconds=1/15), self.refresh)
+        self.every(timedelta(seconds=1/20), self.refresh)
         # NOTE: The following sleep seems to help the SUB socket get set up
         # before we ping the control socket with HELLO and get a flood of
         # data from the master

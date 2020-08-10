@@ -304,20 +304,24 @@ class HistoryStat(Stat):
         latest = timestamps[-1]
         offset = timedelta(0)
         try:
-            while True:
-                offset += timedelta(minutes=1)
+            for i in range(10):
+                offset = timedelta(minutes=i + 1)
                 index = bisect(timestamps[:last], latest - offset)
                 if index == last:
-                    break
-                # Can't slice a deque; use rotate instead
-                self._state.stats.rotate(-index)
-                stats = sorted(islice(self._state.stats, last - index),
-                               key=lambda stat:
-                               self.stat_value(stat, self.stat_raw(stat)))
-                self.update_from_stat(stats[len(stats) // 2])
-                self._state.stats.rotate(index)
-                yield self
-                last = index
+                    if not index:
+                        break
+                    else:
+                        yield self
+                else:
+                    # Can't slice a deque; use rotate instead
+                    self._state.stats.rotate(-index)
+                    stats = sorted(islice(self._state.stats, last - index),
+                                   key=lambda stat:
+                                   self.stat_value(stat, self.stat_raw(stat)))
+                    self.update_from_stat(stats[len(stats) // 2])
+                    self._state.stats.rotate(index)
+                    yield self
+                    last = index
         finally:
             self.update_from_stat(
                 self._state.stats[-1] if self._state.stats else None)

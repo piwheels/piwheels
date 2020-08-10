@@ -116,9 +116,9 @@ class MasterState(states.MasterState):
     @property
     def color(self):
         return {
-            'okay':   Color('#060'),
-            'silent': Color('#760'),
-            'dead':   Color('red'),
+            'okay':  Color('#060'),
+            'alert': Color('#760'),
+            'dead':  Color('red'),
         }[self.state]
 
 
@@ -137,6 +137,6 @@ class SlaveState(states.SlaveState):
             'building': Color('#060'),
             'sending':  Color('#007'),
             'cleaning': Color('#707'),
-            'silent':   Color('#760'),
+            'alert':    Color('#760'),
             'dead':     Color('red'),
         }[self.state]

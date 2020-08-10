@@ -332,6 +332,11 @@ class MainRenderer(Renderer):
 
     def _render_stats(self, buf):
         for x, stat in enumerate(self.controls):
+            if isinstance(stat, controls.LastSeen):
+                # Always ensure last-seen is updated as its value can change
+                # regardless of message arrival (and *should* change if message
+                # arrival has stopped)
+                stat.update(self.selected)
             # Scale the value to a range of 2, with an offset of 1
             # to ensure that the status line is never black
             value = (stat.value * 2) + 1
@@ -361,7 +366,7 @@ class MainRenderer(Renderer):
             yield waiting[:, offset:offset + 8]
 
         buf = array(Color('black'))
-        pulse = iter(bounce(range(15)))
+        pulse = iter(bounce(range(10)))
         while True:
             x, y = self.position
             with self.watch_selection():
@@ -468,6 +473,8 @@ class NodeRenderer(Renderer):
     def _update_graph(self):
         self.graph = array(shape=(5, 8))
         for x, stat in zip(reversed(range(8)), self.selected.history()):
+            if stat is None:
+                continue
             # Scale the value to the vertical size
             value = stat.value * self.graph.shape[0]
             for y in range(5):
@@ -502,7 +509,7 @@ class NodeRenderer(Renderer):
 
     def __iter__(self):
         buf = array(Color('black'))
-        pulse = iter(bounce(range(15)))
+        pulse = iter(bounce(range(10)))
         render_mode = {
             'text': self._render_text,
             'graph': self._render_graph,
