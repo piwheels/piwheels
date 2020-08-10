@@ -271,7 +271,7 @@ class MasterState(states.MasterState):
     @property
     def columns(self):
         return [
-            (self.state, '*'),
+            (self.state, '▪'),
             ('status', ''),
             ('status', ''),
             ('status', self.label),
@@ -305,7 +305,7 @@ class SlaveState(states.SlaveState):
         """
         return [
             ('status', TreeMarker),
-            (self.state, '*'),
+            (self.state, '▪'),
             ('status', str(self.slave_id)),
             ('status', self.label),
             ('status', self.abi),

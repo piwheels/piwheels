@@ -64,10 +64,11 @@ class PiWheelsMonitor:
     # pylint: disable=bad-whitespace
     palette = [
         ('idle',        'dark gray',       'default'),
+        ('okay',        'light green',     'default'),
         ('building',    'light green',     'default'),
         ('sending',     'light blue',      'default'),
         ('cleaning',    'light magenta',   'default'),
-        ('silent',      'yellow',          'default'),
+        ('alert',       'yellow',          'default'),
         ('dead',        'light red',       'default'),
 
         ('time',        'light gray',      'default'),

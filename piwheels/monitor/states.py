@@ -108,7 +108,23 @@ class MasterState:
     def state(self):
         if self.first_seen is not None:
             if datetime.now(tz=UTC) - self.last_seen > timedelta(seconds=30):
-                return 'silent'
+                return 'alert'
+            if self.stats:
+                latest = self.stats[-1]
+                if latest.builds_last_hour == 0:
+                    return 'alert'
+                elif latest.downloads_last_hour == 0:
+                    return 'alert'
+                elif latest.disk_free < latest.disk_size * 0.1:
+                    return 'alert'
+                elif latest.mem_free < latest.mem_size * 0.1:
+                    return 'alert'
+                elif latest.swap_size and (latest.swap_free < latest.swap_size * 0.5):
+                    return 'alert'
+                elif latest.load_avg > 4.0:
+                    return 'alert'
+                elif latest.cpu_temp > 70.0:
+                    return 'alert'
         if self.killed:
             return 'dead'
         return 'okay'
@@ -210,8 +226,20 @@ class SlaveState:
             if now - self.last_seen > self.busy_timeout:
                 return 'dead'
             elif now - self.last_seen > self.busy_timeout / 2:
-                return 'silent'
-            elif self.last_msg == 'DONE':
+                return 'alert'
+            elif self.stats:
+                latest = self.stats[-1]
+                if latest.disk_free < latest.disk_size * 0.1:
+                    return 'alert'
+                elif latest.mem_free < latest.mem_size * 0.1:
+                    return 'alert'
+                elif latest.swap_size and (latest.swap_free < latest.swap_size * 0.5):
+                    return 'alert'
+                elif latest.load_avg > 4.0:
+                    return 'alert'
+                elif latest.cpu_temp > 70.0:
+                    return 'alert'
+            if self.last_msg == 'DONE':
                 return 'cleaning'
             elif self.last_msg == 'SEND':
                 return 'sending'

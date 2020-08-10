@@ -63,7 +63,7 @@ class MasterStatsBox(wdg.WidgetWrap):
         self.serial_label = wdg.Text('-')
         self.os_label = wdg.Text('-')
         self.load_bar = wdg.TrendBar(
-            minimum=0.0, format=lambda x: '{:.3g}'.format(x))
+            minimum=0.0, maximum=4.0, format=lambda x: '{:.3g}'.format(x))
         self.temperature_bar = wdg.TrendBar(
             minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
             show_current=True)
@@ -164,7 +164,7 @@ class SlaveStatsBox(wdg.WidgetWrap):
         self.os_label = wdg.Text('-')
         self.clock_label = wdg.Text('-')
         self.load_bar = wdg.TrendBar(
-            minimum=0.0, format=lambda x: '{:.3g}'.format(x))
+            minimum=0.0, maximum=4.0, format=lambda x: '{:.3g}'.format(x))
         self.temperature_bar = wdg.TrendBar(
             minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
             show_current=True)
