@@ -157,6 +157,9 @@ class SlaveListWalker(wdg.ListWalker):
         :param data:
             Any data that went with the message.
         """
+        # All messages come from the master so every received message updates
+        # the master's last_seen
+        self.slaves[None].last_seen = timestamp
         try:
             state = self.slaves[slave_id]
         except KeyError:
