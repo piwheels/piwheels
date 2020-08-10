@@ -131,7 +131,7 @@ def test_pypi_buf_talks_to_servers(xml_server):
     # NOTE: Must use a serial after PYPI_EPOCH here to permit events thru,
     # and we must include at least 5 minutes worth of events
     buf = PyPIBuffer(pypi_xmlrpc=xml_url, serial=PYPI_EPOCH + 1000)
-    buf.transport.use_https = False
+    buf._transport.use_https = False
     xml_queue.put([
         ('bla', '0.0', 1531320000, 'create'),
     ] * PYPI_MARGIN + [
@@ -157,7 +157,7 @@ def test_pypi_buf_returns_empty_before_epoch(xml_server):
     # See notes in prior test
     xml_url, xml_queue = xml_server
     buf = PyPIBuffer(pypi_xmlrpc=xml_url, serial=0)
-    buf.transport.use_https = False
+    buf._transport.use_https = False
     xml_queue.put([
         ('bla', '0.0', ts, 'create')
         for ts in range(1531320000, 1531320000 + 1000)
@@ -172,7 +172,7 @@ def test_pypi_buf_returns_empty_before_serial(xml_server):
     # PyPIBuffer jumps back by (the margin)
     i = PYPI_EPOCH + PYPI_MARGIN + 1000
     buf = PyPIBuffer(pypi_xmlrpc=xml_url, serial=i)
-    buf.transport.use_https = False
+    buf._transport.use_https = False
     xml_queue.put([
         ('bla', '0.0', 1531320000, 'create'),
     ] * (PYPI_MARGIN - 1))
@@ -201,7 +201,7 @@ def test_pypi_buf_waits_for_more_events(xml_server):
     # PyPIBuffer jumps back by (the margin)
     i = PYPI_EPOCH + PYPI_MARGIN + 1000
     buf = PyPIBuffer(pypi_xmlrpc=xml_url, serial=i)
-    buf.transport.use_https = False
+    buf._transport.use_https = False
     xml_queue.put([
         ('bla', '0.0', 1531320000, 'create'),
     ] * (PYPI_MARGIN - 1))
@@ -241,7 +241,7 @@ def test_pypi_buf_raises_errors():
     server_thread.start()
     try:
         buf = PyPIBuffer(pypi_xmlrpc='http://127.0.0.1:8000/')
-        buf.transport.use_https = False
+        buf._transport.use_https = False
         with pytest.raises(ProtocolError):
             list(buf)
     finally:
@@ -380,8 +380,8 @@ def test_pypi_cache_expunge(mock_buffer, mock_json_server):
         ('bar', None,  dt('2018-07-11 16:43:09'), 'create', 'package bar'),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'create', 'package bar'),
     ]
-    assert ('foo', '0.1') not in events.versions
-    assert ('bar', '1.0') in events.versions
+    assert ('foo', '0.1') not in events._versions
+    assert ('bar', '1.0') in events._versions
 
 
 def test_pypi_ignore_dupes(mock_buffer, mock_json_server):

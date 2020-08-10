@@ -147,13 +147,33 @@ class PyPIBuffer:
     """
 
     def __init__(self, *, serial=0, pypi_xmlrpc='https://pypi.org/pypi'):
+        self._transport = PiWheelsTransport()
+        self._client = xmlrpc.client.ServerProxy(pypi_xmlrpc, self._transport)
         self.serial = serial
-        self.buffer = []
-        self.next_serial = max(0, (
-            0 if serial < PYPI_EPOCH else serial) - PYPI_MARGIN)
-        self.serial_timestamp = None
-        self.transport = PiWheelsTransport()
-        self.client = xmlrpc.client.ServerProxy(pypi_xmlrpc, self.transport)
+
+    @property
+    def serial(self):
+        """
+        The next smallest serial to yield. Defaults to 0. Can be set after
+        construction but doing so while actually start from a point some way
+        before the requested serial to deal with re-ordering of events. In
+        the case of pre-epoch events (see class documentation), the buffer will
+        actually read from the start anyway.
+
+        Note that the actual serial requested may not exist as PyPI can "skip"
+        serials (presumably due to transaction rollbacks), so this property
+        simply guarantees that the next returned serial will be greater than or
+        equal to the one requested.
+        """
+        return self._serial
+
+    @serial.setter
+    def serial(self, value):
+        self._serial = value
+        self._buffer = []
+        self._next_serial = max(0, (
+            0 if value < PYPI_EPOCH else value) - PYPI_MARGIN)
+        self._serial_timestamp = None
 
     def _get_events(self, serial):
         # On rare occasions we get some form of HTTP improper state, or DNS
@@ -163,7 +183,7 @@ class PyPIBuffer:
         try:
             return [
                 tuple(event) for event in
-                self.client.changelog_since_serial(serial)
+                self._client.changelog_since_serial(serial)
             ]
         except (OSError, http.client.ImproperConnectionState):
             return []
@@ -174,36 +194,36 @@ class PyPIBuffer:
                 raise
 
     def __iter__(self):
-        events = self._get_events(self.next_serial)
+        events = self._get_events(self._next_serial)
         if not events:
             return
         # Tuple layout is (package, version, timestamp, action, serial) and
         # output of _get_events is assumed to be sorted by serial
-        last_serial = self.next_serial
-        self.next_serial = events[-1][4]
-        if last_serial < self.serial <= self.next_serial:
+        last_serial = self._next_serial
+        self._next_serial = events[-1][4]
+        if last_serial < self._serial <= self._next_serial:
             # Find the timestamp of the event we want in the serial-sorted
             # events, so we can easily find it in the timestamp-sorted
             # buffer
-            assert self.serial_timestamp is None
-            self.serial_timestamp = events[
-                bisect_left([event[4] for event in events], self.serial)][2]
-        self.buffer.extend(events)
-        if self.next_serial <= PYPI_EPOCH:
+            assert self._serial_timestamp is None
+            self._serial_timestamp = events[
+                bisect_left([event[4] for event in events], self._serial)][2]
+        self._buffer.extend(events)
+        if self._next_serial <= PYPI_EPOCH:
             # Don't yield anything until we're past the epoch
             return
-        if self.serial_timestamp is None:
+        if self._serial_timestamp is None:
             # We haven't yet located the serial we're seeking in the buffered
             # events
             return
-        self.buffer.sort(key=itemgetter(2, 4))
-        finish_timestamp = self.buffer[-1][2] - (5 * 60)
-        if self.serial_timestamp >= finish_timestamp:
+        self._buffer.sort(key=itemgetter(2, 4))
+        finish_timestamp = self._buffer[-1][2] - (5 * 60)
+        if self._serial_timestamp >= finish_timestamp:
             # The serial we're seeking occurred within 5 minutes of the final
             # timestamp in the buffer; wait for more events
             return
-        times = [event[2] for event in self.buffer]
-        start = bisect_left(times, self.serial_timestamp)
+        times = [event[2] for event in self._buffer]
+        start = bisect_left(times, self._serial_timestamp)
         finish = bisect_left(times, finish_timestamp)
         # start is guaranteed to be at the same timestamp as serial, but
         # timestamps only have per-second resolution so there's likely to be
@@ -211,16 +231,16 @@ class PyPIBuffer:
         # find at least the serial as we're seeking (the serial we're seeking
         # isn't guaranteed to exist)
         while (
-                self.buffer[start][2] == self.serial_timestamp and
-                self.buffer[start][-1] < self.serial):
+                self._buffer[start][2] == self._serial_timestamp and
+                self._buffer[start][-1] < self._serial):
             start += 1
-        assert self.buffer[start][2] == self.serial_timestamp
+        assert self._buffer[start][2] == self._serial_timestamp
         assert start < finish
-        for row in self.buffer[start:finish]:
+        for row in self._buffer[start:finish]:
             yield row
-        self.serial_timestamp = self.buffer[finish][2]
-        self.serial = self.buffer[finish][4]
-        del self.buffer[:finish]
+        self._serial_timestamp = self._buffer[finish][2]
+        self._serial = self._buffer[finish][4]
+        del self._buffer[:finish]
 
 
 class PyPIEvents:
@@ -258,14 +278,21 @@ class PyPIEvents:
     def __init__(self, *, pypi_xmlrpc='https://pypi.org/pypi',
                  pypi_json='https://pypi.org/pypi',
                  serial=0, cache_size=1000):
-        self.serial = serial
-        self.buffer = PyPIBuffer(serial=serial, pypi_xmlrpc=pypi_xmlrpc)
-        self.next_read = datetime.now(tz=UTC)
+        self._buffer = PyPIBuffer(serial=serial, pypi_xmlrpc=pypi_xmlrpc)
+        self._next_read = datetime.now(tz=UTC)
         # Keep a list of the last cache_size (package, version) tuples so we
         # can make a vague attempt at reducing duplicate reports
-        self.versions = OrderedDict()
-        self.versions_size = cache_size
-        self.pypi_json = urlsplit(pypi_json)
+        self._versions = OrderedDict()
+        self._versions_size = cache_size
+        self._pypi_json = urlsplit(pypi_json)
+
+    @property
+    def serial(self):
+        return self._buffer.serial
+
+    @serial.setter
+    def serial(self, value):
+        self._buffer.serial = value
 
     @lru_cache(maxsize=100)
     def _get_description(self, package):
@@ -273,8 +300,8 @@ class PyPIEvents:
         Look up the project description for *package* using PyPI's legacy JSON
         API
         """
-        path = PosixPath(self.pypi_json.path) / package / 'json'
-        url = urlunsplit(self.pypi_json._replace(path=str(path)))
+        path = PosixPath(self._pypi_json.path) / package / 'json'
+        url = urlunsplit(self._pypi_json._replace(path=str(path)))
         resp = requests.get(url)
         if resp.status_code >= 500:
             # Server side error; probably a temporary service failure. Because
@@ -303,30 +330,29 @@ class PyPIEvents:
 
     def _check_new_version(self, package, version, timestamp, action):
         try:
-            self.versions.move_to_end((package, version))
+            self._versions.move_to_end((package, version))
         except KeyError:
-            self.versions[(package, version)] = (timestamp, action)
+            self._versions[(package, version)] = (timestamp, action)
             description = self._get_description(package)
             yield (package, version, timestamp, action, description)
         else:
             # This (package, version) combo was already cached; unless it's
             # a change from binary-only to source, don't bother emitting it
-            (last_timestamp, last_action) = self.versions[(package, version)]
+            (last_timestamp, last_action) = self._versions[(package, version)]
             description = self._get_description(package)
             if (last_action, action) == ('create', 'source'):
-                self.versions[(package, version)] = (last_timestamp, action)
+                self._versions[(package, version)] = (last_timestamp, action)
                 yield (package, version, last_timestamp, action, description)
-        while len(self.versions) > self.versions_size:
-            self.versions.popitem(last=False)
+        while len(self._versions) > self._versions_size:
+            self._versions.popitem(last=False)
 
     def __iter__(self):
         # The next_read flag is used to delay reads to PyPI once we get to the
         # end of the event log entries
-        if datetime.now(tz=UTC) > self.next_read:
-            events = list(self.buffer)
+        if datetime.now(tz=UTC) > self._next_read:
+            events = list(self._buffer)
             if events:
                 for (package, version, timestamp, action, serial) in events:
-                    self.serial = serial
                     timestamp = datetime.fromtimestamp(timestamp, tz=UTC)
                     match = self.add_file_re.search(action)
                     if match is not None:
@@ -343,7 +369,7 @@ class PyPIEvents:
                         # we could search and remove all corresponding versions
                         # from the cache but, frankly, it's not worth it
                         if version is not None:
-                            self.versions.pop((package, version), None)
+                            self._versions.pop((package, version), None)
                         yield (package, version, timestamp, 'remove', None)
                     elif self.yank_re.search(action) is not None:
                         yield (package, version, timestamp, 'yank', None)
@@ -353,4 +379,4 @@ class PyPIEvents:
                 # If the read is empty we've reached the end of the event log
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
-                self.next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
+                self._next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
