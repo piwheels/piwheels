@@ -156,7 +156,6 @@ table.package-issues tbody tr:nth-child(2n) {
   font-size: 10px;
   padding: 2px 6px;
   margin-left: 10px;
-  font-weight: 600;
 }
 
 .prerelease {
