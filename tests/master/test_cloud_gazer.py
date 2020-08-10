@@ -201,6 +201,35 @@ def test_new_ver(mock_events, db_queue, web_queue, task):
     assert task.serial == 4
 
 
+def test_new_ver_deleted(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 2)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        # bar is already deleted, so description is None
+        ('bar', None, dt('2018-07-11 16:43:07'), 'create', None),
+        ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', None),
+    ]
+    db_queue.expect('NEWPKG', ['bar', '', ''])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
+    db_queue.send('OK', True)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo", "bar"}
+    assert task.serial == 4
+
+
 def test_remove_ver(mock_events, db_queue, web_queue, skip_queue, task):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {"foo"})

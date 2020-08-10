@@ -99,7 +99,7 @@ class CloudGazer(tasks.PauseableTask):
                 if package not in self.packages:
                     self.packages.add(package)
                     if self.db.add_new_package(package, skip=self.skip_default,
-                                               description=description):
+                                               description=description or ''):
                         self.logger.info('added package %s', package)
                         self.web_queue.send_msg('BOTH', package)
                         self.web_queue.recv_msg()
