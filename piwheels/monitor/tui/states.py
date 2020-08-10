@@ -121,6 +121,16 @@ class SlaveListWalker(wdg.ListWalker):
             raise IndexError
         return position - 1
 
+    def positions(self, reverse=False):
+        """
+        Returns an iterable of valid positions (optionally reversed).
+
+        Contrary to the urwid docs, this definitely isn't optional (at least
+        if you want to able to hit Home / End in the list ;)
+        """
+        it = range(len(self.widgets))
+        return reversed(it) if reverse else it
+
     def set_focus(self, position):
         """
         Set the list focus to *position*, if valid.
@@ -192,11 +202,11 @@ class SlaveListWalker(wdg.ListWalker):
             self.focus = None
         self.update()
 
-    def tree_columns(self, row, columns):
+    def tree_columns(self, row, columns, last):
         return [
             (
                 style, (
-                    ('`-' if row == len(self.slaves) - 1 else '+-')
+                    ('└─' if last else '├─')
                     if content is TreeMarker else content
                 )
             )
@@ -207,8 +217,12 @@ class SlaveListWalker(wdg.ListWalker):
         """
         Called to update the list content with calculated column widths.
         """
+        try:
+            last_widget = self.widgets[-1]
+        except IndexError:
+            last_widget = None
         columns = [
-            self.tree_columns(row, state.columns)
+            self.tree_columns(row, state.columns, state.widget == last_widget)
             for row, state in enumerate(self.slaves.values())
         ]
         head_lens = [

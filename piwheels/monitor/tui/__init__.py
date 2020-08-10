@@ -240,12 +240,14 @@ class PiWheelsMonitor:
         if self.slave_list.focus is None:
             if box is not None:
                 self.frame.contents['footer'] = (None, options)
-        elif self.slave_list.focus == 0 and box is not self.master_box:
+        elif self.slave_list.focus == 0:
             self.master_box.update(self.slave_list.slaves[None])
-            self.frame.contents['footer'] = (self.master_box, options)
-        elif self.slave_list.focus > 0 and box is not self.slave_box:
+            if box is not self.master_box:
+                self.frame.contents['footer'] = (self.master_box, options)
+        elif self.slave_list.focus > 0:
             self.slave_box.update(self.slave_list.selected_slave)
-            self.frame.contents['footer'] = (self.slave_box, options)
+            if box is not self.slave_box:
+                self.frame.contents['footer'] = (self.slave_box, options)
 
     def help(self, widget=None):
         self.loop.widget.open_dialog(dialogs.HelpDialog())

@@ -443,6 +443,9 @@ class CPUTemp(HistoryStat):
         if stat:
             return stat.cpu_temp / 100
 
+    def stat_label(self, stat, raw):
+        return super().stat_label(stat, None if raw is None else raw * 100)
+
 
 class LoadAvg(HistoryStat):
     "Represents the 1-minute load average."
@@ -453,6 +456,9 @@ class LoadAvg(HistoryStat):
         # XXX Hard-coded 4...
         if stat:
             return stat.load_average / 4.0
+
+    def stat_label(self, stat, raw):
+        return super().stat_label(stat, None if raw is None else raw * 4.0)
 
 
 class ClockSkew(Stat):
