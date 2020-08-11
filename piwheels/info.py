@@ -37,6 +37,7 @@ import os
 import shlex
 import errno
 import struct
+from collections import namedtuple
 
 
 def _hexdump(filename, fmt='>L'):
@@ -63,6 +64,81 @@ def get_board_serial():
     Returns the board's serial number as a string.
     """
     return _hexdump('/proc/device-tree/system/linux,serial', '>Q')
+
+
+PiInfo = namedtuple('PiInfo', (
+    'model', 'pcb_revision', 'soc', 'manufacturer', 'memory'))
+
+def get_pi_info(revision):
+    # Shamelessly nicked from gpio-zero's data.py...
+    revision = int(revision, base=16)
+    if not revision & 0x800000:
+        raise ValueError('old or invalid pi')
+    # New-style revision, parse information from bit-pattern:
+    #
+    # MSB -----------------------> LSB
+    # uuuuuuuuFMMMCCCCPPPPTTTTTTTTRRRR
+    #
+    # uuuuuuuu - Unused
+    # F        - New flag (1=valid new-style revision, 0=old-style)
+    # MMM      - Memory size (0=256, 1=512, 2=1024)
+    # CCCC     - Manufacturer (0=Sony, 1=Egoman, 2=Embest, 3=Sony Japan, 4=Embest, 5=Stadium)
+    # PPPP     - Processor (0=2835, 1=2836, 2=2837)
+    # TTTTTTTT - Type (0=A, 1=B, 2=A+, 3=B+, 4=2B, 5=Alpha (??), 6=CM,
+    #                  8=3B, 9=Zero, 10=CM3, 12=Zero W, 13=3B+, 14=3A+)
+    # RRRR     - Revision (0, 1, 2, etc.)
+    _memory       = (revision & 0x700000) >> 20
+    _manufacturer = (revision & 0xf0000)  >> 16
+    _processor    = (revision & 0xf000)   >> 12
+    _type         = (revision & 0xff0)    >> 4
+    _revision     = (revision & 0x0f)
+    model = {
+        0:  'A',
+        1:  'B',
+        2:  'A+',
+        3:  'B+',
+        4:  '2B',
+        6:  'CM',
+        8:  '3B',
+        9:  'Zero',
+        10: 'CM3',
+        12: 'Zero W',
+        13: '3B+',
+        14: '3A+',
+        16: 'CM3+',
+        17: '4B',
+        }.get(_type, '???')
+    if model in ('A', 'B'):
+        pcb_revision = {
+            0: '1.0', # is this right?
+            1: '1.0',
+            2: '2.0',
+            }.get(_revision, 'Unknown')
+    else:
+        pcb_revision = '1.%d' % _revision
+    soc = {
+        0: 'BCM2835',
+        1: 'BCM2836',
+        2: 'BCM2837',
+        3: 'BCM2711',
+        }.get(_processor, 'Unknown')
+    manufacturer = {
+        0: 'Sony',
+        1: 'Egoman',
+        2: 'Embest',
+        3: 'Sony Japan',
+        4: 'Embest',
+        5: 'Stadium',
+        }.get(_manufacturer, 'Unknown')
+    memory = {
+        0: '256Mb',
+        1: '512Mb',
+        2: '1Gb',
+        3: '2Gb',
+        4: '4Gb',
+        5: '8Gb',
+        }.get(_memory, None)
+    return PiInfo(model, pcb_revision, soc, manufacturer, memory)
 
 
 def get_os_name_version():

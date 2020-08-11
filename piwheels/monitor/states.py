@@ -42,6 +42,7 @@ applications.
 from datetime import datetime, timedelta, timezone
 from collections import deque
 
+from ..info import get_pi_info
 from ..states import SlaveStats, MasterStats
 
 
@@ -65,6 +66,7 @@ class MasterState:
         self.os_name = '-'
         self.os_version = '-'
         self.board_revision = '-'
+        self.board_info = ''
         self.board_serial = '-'
 
     def update(self, timestamp, msg, data):
@@ -90,6 +92,7 @@ class MasterState:
                 self.board_revision,
                 self.board_serial,
             ) = data
+            self.board_info = format_revision(self.board_revision)
             self.stats.clear()
         elif msg == 'STATS':
             self.stats.append(MasterStats.from_message(data))
@@ -151,6 +154,7 @@ class SlaveState:
         self.os_name = '-'
         self.os_version = '-'
         self.board_revision = '-'
+        self.board_info = ''
         self.board_serial = '-'
         self.build_start = None
         self.first_seen = None
@@ -188,6 +192,7 @@ class SlaveState:
                 self.board_revision,
                 self.board_serial,
             ) = data
+            self.board_info = format_revision(self.board_revision)
             self.stats.clear()
         elif msg == 'STATS':
             data = SlaveStats.from_message(data)
@@ -248,3 +253,12 @@ class SlaveState:
         if self.killed:
             return 'dead'
         return 'idle'
+
+
+def format_revision(revision):
+    try:
+        return (
+            'Pi {i.model} rev{i.pcb_revision} {i.memory}'.format(
+                i=get_pi_info(revision)))
+    except ValueError:
+        return ''

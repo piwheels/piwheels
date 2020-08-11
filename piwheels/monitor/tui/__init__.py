@@ -78,6 +78,7 @@ class PiWheelsMonitor:
         ('footer',      'dark blue',       'default'),
 
         ('dialog',      'light gray',      'dark blue'),
+        ('dalert',      'yellow',          'dark blue'),
         ('hotkey',      'light cyan',      'dark blue'),
         ('disabled',    'light blue',      'dark blue'),
         ('bold',        'white',           'dark blue'),

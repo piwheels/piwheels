@@ -28,6 +28,7 @@
 
 "Defines the stats boxes for the master and slaves"
 
+from datetime import timedelta
 from operator import attrgetter
 
 from piwheels import widgets as wdg
@@ -62,17 +63,19 @@ class MasterStatsBox(wdg.WidgetWrap):
         self.board_label = wdg.Text('-')
         self.serial_label = wdg.Text('-')
         self.os_label = wdg.Text('-')
-        self.load_bar = wdg.TrendBar(
-            minimum=0.0, maximum=4.0, format=lambda x: '{:.3g}'.format(x))
-        self.temperature_bar = wdg.TrendBar(
-            minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
-            show_current=True)
-        self.disk_bar = wdg.TrendBar(minimum=0, format=format_size)
-        self.swap_bar = wdg.TrendBar(minimum=0, format=format_size)
-        self.memory_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.load_bar = wdg.GraphBar(
+            minimum=0.0, maximum=4.0, format=' {max:.1f}')
+        self.temperature_bar = wdg.GraphBar(
+            minimum=40, maximum=100, format=' {min}-{max}°C')
+        self.disk_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max))
+        self.swap_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max))
+        self.memory_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max))
         self.builds_bar = wdg.RatioBar()
         self.queue_bar = wdg.RatioBar()
-        self.downloads_bar = wdg.TrendBar(minimum=0)
+        self.downloads_bar = wdg.GraphBar(format=' {max}')
         self.builds_size_label = wdg.Text('-')
         self.builds_time_label = wdg.Text('-')
         self.files_count_label = wdg.Text('-')
@@ -99,22 +102,22 @@ class MasterStatsBox(wdg.WidgetWrap):
                             self.queue_bar,
                         ]),
                         (12, wdg.Pile([
+                            wdg.Text('Builds/hr'),
+                            wdg.Text('Downloads/hr'),
                             wdg.Text('Temperature'),
                             wdg.Text('Load Avg'),
                             wdg.Text('Disk'),
                             wdg.Text('Swap'),
                             wdg.Text('Memory'),
-                            wdg.Text('Downloads/hr'),
-                            wdg.Text('Builds/hr'),
                         ])),
                         wdg.Pile([
+                            self.builds_bar,
+                            self.downloads_bar,
                             self.temperature_bar,
                             self.load_bar,
                             self.disk_bar,
                             self.swap_bar,
                             self.memory_bar,
-                            self.downloads_bar,
-                            self.builds_bar,
                         ]),
                     ], dividechars=1),
                 ),
@@ -123,7 +126,11 @@ class MasterStatsBox(wdg.WidgetWrap):
         )
 
     def update(self, state):
-        self.board_label.set_text(state.board_revision)
+        if state.board_info:
+            self.board_label.set_text('{} ({})'.format(
+                state.board_info, state.board_revision))
+        else:
+            self.board_label.set_text(state.board_revision)
         self.serial_label.set_text(state.board_serial)
         self.os_label.set_text('{} {}'.format(state.os_name, state.os_version))
         if not state.stats:
@@ -163,14 +170,21 @@ class SlaveStatsBox(wdg.WidgetWrap):
         self.python_label = wdg.Text('-')
         self.os_label = wdg.Text('-')
         self.clock_label = wdg.Text('-')
-        self.load_bar = wdg.TrendBar(
-            minimum=0.0, maximum=4.0, format=lambda x: '{:.3g}'.format(x))
-        self.temperature_bar = wdg.TrendBar(
-            minimum=40, maximum=100, format=lambda x: '{:.3g}°C'.format(x),
-            show_current=True)
-        self.disk_bar = wdg.TrendBar(minimum=0, format=format_size)
-        self.swap_bar = wdg.TrendBar(minimum=0, format=format_size)
-        self.memory_bar = wdg.TrendBar(minimum=0, format=format_size)
+        self.load_bar = wdg.GraphBar(
+            minimum=0.0, maximum=4.0, delta=timedelta(seconds=15),
+            format=' {max:.1f}')
+        self.temperature_bar = wdg.GraphBar(
+            minimum=40, maximum=100, delta=timedelta(seconds=15),
+            format=' {min}-{max}°C')
+        self.disk_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max),
+            delta=timedelta(seconds=15))
+        self.swap_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max),
+            delta=timedelta(seconds=15))
+        self.memory_bar = wdg.GraphBar(
+            format=lambda min, max: ' ' + format_size(max),
+            delta=timedelta(seconds=15))
         super().__init__(
             wdg.AttrMap(
                 wdg.LineBox(
@@ -210,7 +224,11 @@ class SlaveStatsBox(wdg.WidgetWrap):
         )
 
     def update(self, state):
-        self.board_label.set_text(state.board_revision)
+        if state.board_info:
+            self.board_label.set_text('{} ({})'.format(
+                state.board_info, state.board_revision))
+        else:
+            self.board_label.set_text(state.board_revision)
         self.serial_label.set_text(state.board_serial)
         self.os_label.set_text('{} {}'.format(state.os_name, state.os_version))
         self.python_label.set_text('{} (on {})'.format(

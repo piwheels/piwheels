@@ -63,7 +63,7 @@ from urwid import (
 
 from .event_loop import ZMQEventLoop
 from .dialogs import DialogMaster, Dialog
-from .charts import TrendBar, RatioBar
+from .charts import TrendBar, RatioBar, GraphBar
 
 
 class SimpleButton(Button):

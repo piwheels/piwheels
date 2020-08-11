@@ -28,7 +28,8 @@
 
 "Defines some simple bar-chart widgets"
 
-from bisect import bisect
+from math import ceil
+from bisect import bisect, bisect_left
 from itertools import cycle
 from datetime import timedelta
 
@@ -48,7 +49,7 @@ class RatioBar(ur.Widget):
     _sizing = frozenset([ur.FLOW])
     ignore_focus = True
 
-    def __init__(self, left='[', right='] ', bar='=', sep='/'):
+    def __init__(self, left='┣', right='┫ ', bar='━', sep='╋'):
         super().__init__()
         self.left = left
         self.right = right
@@ -63,35 +64,41 @@ class RatioBar(ur.Widget):
     def update(self, stats):
         """
         Update the chart with current *stats* which is assumed to be a dict
-        mapping ABI names to their absolute size.
+        mapping part names to their absolute size.
         """
         self._total = sum(stats.values())
-        self._parts = [(abi, n) for abi, n in sorted(stats.items())]
+        self._parts = sorted(stats.items())
         self._invalidate()
 
     def render(self, size, focus=False):
         (maxcol,) = size
         if not self._total:
-            return ur.SolidCanvas('-', maxcol, 1)
+            return ur.SolidCanvas('╌', maxcol, 1)
         total_label = str(self._total)
 
         bar_len = maxcol - sum(
             len(s) for s in (self.left, self.right, total_label))
         bar_len -= len(self._parts) - 1  # separators
         if bar_len < len(self._parts):
-            # Bar is too short to be useful; just display >>>>
-            return ur.SolidCanvas('>', maxcol, 1)
+            # Bar is too short to be useful; just display ▸▸▸
+            return ur.SolidCanvas('▸', maxcol, 1)
 
-        part_lens = [round(bar_len * n / self._total) for abi, n in self._parts]
+        part_lens = [
+            round(bar_len * n / self._total)
+            for part, n in self._parts
+        ]
         if sum(part_lens) > bar_len:
             longest_ix = part_lens.index(max(part_lens))
             part_lens[longest_ix] -= 1
+        elif sum(part_lens) < bar_len:
+            shortest_ix = part_lens.index(min(part_lens))
+            part_lens[shortest_ix] += 1
         assert sum(part_lens) == bar_len
 
         bar = self.sep.join(
-            '{0:{fill}^{width}}'.format(abi, fill=bar_char, width=part_len)
-            if len(abi) + 2 <= part_len else bar_char * part_len
-            for (abi, count), part_len, bar_char
+            '{0:{fill}^{width}}'.format(part, fill=bar_char, width=part_len)
+            if len(part) + 2 <= part_len else bar_char * part_len
+            for (part, count), part_len, bar_char
             in zip(self._parts, part_lens, cycle(self.bar))
         )
         s = ''.join((self.left, bar, self.right, total_label))
@@ -109,11 +116,12 @@ class TrendBar(ur.Widget):
     _sizing = frozenset([ur.FLOW])
     ignore_focus = True
 
-    def __init__(self, minimum=None, maximum=None, format=str, left=' [',
-                 right='] ', back=' ', fore='=', rising='>', falling='<',
-                 current='.', show_current=False,
+    def __init__(self, minimum=None, maximum=None, format=str, left=' ┣',
+                 right='┫ ', back=' ', fore='━', rising='▸', falling='┅',
+                 current='•', show_current=False,
                  recent_period=timedelta(minutes=1),
-                 history_period=timedelta(minutes=5)):
+                 history_period=timedelta(minutes=5),
+                 label_width=5):
         if not (len(back) == len(fore) == len(rising) == len(falling) == len(current)):
             raise ValueError('back, fore, rising, falling, and current must '
                              'have equal length')
@@ -130,6 +138,7 @@ class TrendBar(ur.Widget):
         self.show_current = show_current
         self.recent_period = recent_period
         self.history_period = history_period
+        self.label_width = label_width
         self._format = format
         self._minimum = None
         self._maximum = None
@@ -172,14 +181,16 @@ class TrendBar(ur.Widget):
         (maxcol,) = size
         if self._recent is None:
             # No data; display nothing
-            return ur.SolidCanvas('-', maxcol, 1)
-        min_label = self._format(self._minimum)
-        max_label = self._format(self._maximum)
+            return ur.SolidCanvas('╌', maxcol, 1)
+        min_label = '{label:>{width}}'.format(
+            label=self._format(self._minimum), width=self.label_width)
+        max_label = '{label:<{width}}'.format(
+            label=self._format(self._maximum), width=self.label_width)
 
         bar_range = self._maximum - self._minimum
         if not bar_range:
             # Minimum and maximum are equal; display nothing
-            return ur.SolidCanvas('-', maxcol, 1)
+            return ur.SolidCanvas('╌', maxcol, 1)
 
         while True:
             bar_len = maxcol - sum(
@@ -198,7 +209,7 @@ class TrendBar(ur.Widget):
                     elif self._maximum in (1, 100) and max_label != '':
                         max_label = ''
                         continue
-                return ur.SolidCanvas('>', maxcol, 1)
+                return ur.SolidCanvas('▸', maxcol, 1)
 
         pre_len = clamp(0, bar_len, round(bar_len * (
             (min(self._recent, self._history) - self._minimum) / bar_range)))
@@ -226,5 +237,90 @@ class TrendBar(ur.Widget):
                 (self._latest - self._minimum) / bar_range)))
             s = s[:latest_pos] + self.current + s[latest_pos + 1:]
         s = ''.join((min_label, self.left, s, self.right, max_label))
+        text, cs = ur.apply_target_encoding(s)
+        return ur.TextCanvas([text], [cs], maxcol=maxcol)
+
+
+class GraphBar(ur.Widget):
+    """
+    A right-to-left scrolling historical bar-chart plotting the median of each
+    minute of a metric using unicode chars.
+    """
+    _sizing = frozenset([ur.FLOW])
+    ignore_focus = True
+
+    def __init__(self, minimum=None, maximum=None, format=' {min}-{max}',
+                 delta=timedelta(minutes=1), chars=' ▁▂▃▄▅▆▇█', bar_align='<'):
+        super().__init__()
+        self.minimum = minimum
+        self.maximum = maximum
+        self.delta = delta
+        self.chars = chars
+        self.bar_align = bar_align
+        self._format = format
+        self._minimum = None
+        self._maximum = None
+        self._history = None
+
+    def rows(self, size, focus=False):
+        return 1
+
+    def update(self, stats):
+        """
+        Update the graph with current *stats* which is assumed to be a list
+        of (timestamp, reading) tuples in ascending timestamp order.
+        """
+        if stats:
+            # Calculate the overall minimum and maximum of all available stats,
+            # then the median over the deltas of the history range
+            timestamps, readings = zip(*stats)
+            values = sorted(readings)
+            self._minimum = values[0]  if self.minimum is None else self.minimum
+            self._maximum = values[-1] if self.maximum is None else self.maximum
+            assert self._maximum >= self._minimum
+            finish = len(timestamps) - 1
+            value = readings[finish]
+            history = []
+            for i in range(ceil((timestamps[-1] - timestamps[0]) / self.delta)):
+                start = bisect_left(timestamps, timestamps[-1] - i * self.delta)
+                values = sorted(readings[start:finish])
+                if values:
+                    value = values[len(values) // 2]
+                history.append(value)
+                finish = start
+            self._history = history
+        else:
+            self._minimum = self._maximum = self._history = None
+        self._invalidate()
+
+    def render(self, size, focus=False):
+        (maxcol,) = size
+        if self._history is None:
+            # No data; display nothing
+            return ur.SolidCanvas('╌', maxcol, 1)
+        if self._minimum == self._maximum:
+            # Minimum and maximum are equal; display nothing
+            return ur.SolidCanvas('╌', maxcol, 1)
+
+        if isinstance(self._format, str):
+            label = self._format.format(min=self._minimum, max=self._maximum)
+        else:
+            label = self._format(self._minimum, self._maximum)
+        bar_len = maxcol - len(label)
+        if bar_len < 4:
+            # Bar is too short to be useful; just display ▸▸▸
+            return ur.SolidCanvas('▸', maxcol, 1)
+
+        step = (self._maximum - self._minimum) / len(self.chars)
+        bar_ranges = [
+            self._minimum + (i * step)
+            for i in range(len(self.chars))
+        ]
+        bar = ''.join(
+            self.chars[min(len(self.chars) - 1, bisect_left(bar_ranges, value))]
+            for value in reversed(self._history[:bar_len])
+        )
+        s = '{bar:{bar_align}{bar_len}s}{label}'.format(
+            bar=bar, bar_align=self.bar_align, bar_len=bar_len, label=label)
         text, cs = ur.apply_target_encoding(s)
         return ur.TextCanvas([text], [cs], maxcol=maxcol)
