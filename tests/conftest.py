@@ -688,3 +688,11 @@ def web_queue(request, zmq_context, master_config):
                     protocols.the_scribe)
     yield task
     task.close()
+
+
+@pytest.fixture()
+def skip_queue(request, zmq_context, master_config):
+    task = MockTask(zmq_context, transport.REP, const.SKIP_QUEUE,
+                    reversed(protocols.cloud_gazer))
+    yield task
+    task.close()

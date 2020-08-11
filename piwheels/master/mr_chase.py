@@ -69,6 +69,9 @@ class MrChase(tasks.PauseableTask):
         self.stats_queue = self.socket(
             transport.PUSH, protocol=reversed(protocols.big_brother))
         self.stats_queue.connect(config.stats_queue)
+        self.skip_queue = self.socket(
+            transport.REQ, protocol=protocols.cloud_gazer)
+        self.skip_queue.connect(const.SKIP_QUEUE)
         self.db = DbClient(config, self.logger)
         self.fs = FsClient(config, self.logger)
         self.states = {}
@@ -202,18 +205,44 @@ class MrChase(tasks.PauseableTask):
         remove a specific version of a package from the system.
         """
         package, version, reason = state
+        if version is None:
+            return self.do_remove_package(package, reason)
+        else:
+            return self.do_remove_version(package, version, reason)
+
+    def do_remove_package(self, package, reason):
+        if not self.db.test_package(package):
+            self.logger.error('unknown package %s', package)
+            return 'ERROR', 'unknown package %s' % package
+        self.logger.info('removing %s', package)
+        if reason:
+            self.db.skip_package(package, reason)
+        self.web_queue.send_msg('DELPKG', package)
+        self.skip_queue.send_msg('DELPKG', package)
+        self.web_queue.recv_msg()
+        self.skip_queue.recv_msg()
+        if reason:
+            for row in self.db.get_project_versions(package):
+                if row.builds_succeeded:
+                    self.db.delete_build(package, row.version)
+        else:
+            # FKs will take care of removing builds here
+            self.db.delete_package(package)
+        return 'DONE', protocols.NoData
+
+    def do_remove_version(self, package, version, reason):
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s-%s',
                               package, version)
             return 'ERROR', 'unknown package version %s-%s' % (
                 package, version)
-        self.logger.info('removing %s %s', package, version)
+        self.logger.info('removing %s-%s', package, version)
         if reason:
             self.db.skip_package_version(package, version, reason)
         self.web_queue.send_msg('DELVER', [package, version])
+        self.skip_queue.send_msg('DELVER', [package, version])
         self.web_queue.recv_msg()
-        # XXX Technically we ought to send DELVER to slave-driver's skip-queue
-        # here but let's not complicate the spider's web of connections!
+        self.skip_queue.recv_msg()
         if reason:
             self.db.delete_build(package, version)
         else:

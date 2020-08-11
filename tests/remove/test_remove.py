@@ -96,7 +96,17 @@ def test_abort(caplog):
     assert find_message(caplog.records, message='User aborted removal')
 
 
-def test_remove(mock_context, import_queue_name, import_queue):
+def test_remove_package(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMOVE', ['foo', None, ''])
+            import_queue.send_msg('DONE')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:

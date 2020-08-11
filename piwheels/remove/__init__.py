@@ -58,13 +58,17 @@ system. This script must be run on the same node as the piw-master script.
     parser.add_argument(
         'package', default=None, help="The name of the package to remove")
     parser.add_argument(
-        'version', default=None, help="The version of the package to remove")
+        'version', nargs='?', default=None,
+        help="The version of the package to remove; if omitted, removes the "
+        "entire package")
     parser.add_argument(
         '-y', '--yes', action='store_true',
         help="Run non-interactively; never prompt during operation")
     parser.add_argument(
         '-s', '--skip', action='store', default='', metavar='REASON',
-        help="Mark the version with a reason to prevent future build attempts")
+        help="Don't delete the package / version from the database, but mark "
+        "it with a reason to prevent future build attempts (wheels will still "
+        "be removed)")
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-remove (default: "
@@ -75,8 +79,13 @@ system. This script must be run on the same node as the piw-master script.
     logging.info("PiWheels Remover version %s", __version__)
 
     if not config.yes:
-        logging.warning("Preparing to remove all wheels for %s %s",
-                        config.package, config.version)
+        action = 'remove all wheels' if config.skip else 'delete'
+        if config.version is not None:
+            logging.warning("Preparing to %s for %s %s",
+                            action, config.package, config.version)
+        else:
+            logging.warning("Preparing to %s for %s",
+                            action, config.package)
         if not terminal.yes_no_prompt('Proceed?'):
             logging.warning('User aborted removal')
             return 2

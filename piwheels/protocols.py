@@ -324,7 +324,7 @@ file_juggler_fs = Protocol(recv={
 
 mr_chase = Protocol(recv={
     'IMPORT': _build_state,
-    'REMOVE': ExactSequence([str, str, str]),  # package, version, skip-reason
+    'REMOVE': ExactSequence([str, Any(str, None), str]),  # package, [version], skip-reason
     'REBUILD': Any(
         ExactSequence(['HOME']),
         ExactSequence(['SEARCH']),

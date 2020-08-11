@@ -33,6 +33,7 @@ import pytest
 from piwheels import protocols, transport
 from piwheels.master.mr_chase import MrChase
 from piwheels.master.slave_driver import build_armv6l_hack
+from piwheels.master.the_oracle import ProjectVersionsRow
 
 
 @pytest.fixture()
@@ -321,14 +322,36 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     assert task.logger.error.call_count == 1
 
 
-def test_normal_remove(db_queue, web_queue, task, import_queue,
-                       build_state_hacked):
+def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
+                        build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMOVE', [bsh.package, None, ''])
+    db_queue.expect('PKGEXISTS', bsh.package)
+    db_queue.send('OK', True)
+    web_queue.expect('DELPKG', bsh.package)
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', bsh.package)
+    skip_queue.send('OK')
+    db_queue.expect('DELPKG', bsh.package)
+    db_queue.send('OK', None)
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', None)
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+    skip_queue.check()
+
+
+def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
+                        build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_msg('REMOVE', [bsh.package, bsh.version, ''])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     web_queue.expect('DELVER', [bsh.package, bsh.version])
     web_queue.send('DONE')
+    skip_queue.expect('DELVER', [bsh.package, bsh.version])
+    skip_queue.send('OK')
     db_queue.expect('DELVER', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
@@ -336,10 +359,38 @@ def test_normal_remove(db_queue, web_queue, task, import_queue,
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
+    skip_queue.check()
 
 
-def test_remove_with_skip(db_queue, web_queue, task, import_queue,
-                          build_state_hacked):
+def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
+                      build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMOVE', [bsh.package, None, 'silly package'])
+    db_queue.expect('PKGEXISTS', bsh.package)
+    db_queue.send('OK', True)
+    db_queue.expect('SKIPPKG', [bsh.package, 'silly package'])
+    db_queue.send('OK', None)
+    web_queue.expect('DELPKG', bsh.package)
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', bsh.package)
+    skip_queue.send('OK')
+    db_queue.expect('PROJVERS', bsh.package)
+    db_queue.send('OK', [
+        ProjectVersionsRow(bsh.version, False, 'cp34m', '', False),
+        ProjectVersionsRow(bsh.version + 'a', False, '', 'cp35m', False),
+    ])
+    db_queue.expect('DELBUILD', [bsh.package, bsh.version])
+    db_queue.send('OK', None)
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', None)
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+    skip_queue.check()
+
+
+def test_skip_version(db_queue, web_queue, skip_queue, task, import_queue,
+                      build_state_hacked):
     bsh = build_state_hacked
     import_queue.send_msg('REMOVE', [bsh.package, bsh.version, 'broken version'])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -348,6 +399,8 @@ def test_remove_with_skip(db_queue, web_queue, task, import_queue,
     db_queue.send('OK', None)
     web_queue.expect('DELVER', [bsh.package, bsh.version])
     web_queue.send('DONE')
+    skip_queue.expect('DELVER', [bsh.package, bsh.version])
+    skip_queue.send('OK')
     db_queue.expect('DELBUILD', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
@@ -355,9 +408,25 @@ def test_remove_with_skip(db_queue, web_queue, task, import_queue,
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
+    skip_queue.check()
 
 
 def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
+    task.logger = mock.Mock()
+    build_state._slave_id = 0
+    bs = build_state
+
+    import_queue.send_msg('REMOVE', [bs.package, None, ''])
+    db_queue.expect('PKGEXISTS', bs.package)
+    db_queue.send('OK', False)
+    task.poll(0)
+    assert import_queue.recv_msg() == (
+        'ERROR', 'unknown package %s' % bs.package)
+    assert task.logger.error.call_count == 1
+    assert len(task.states) == 0
+
+
+def test_remove_unknown_ver(db_queue, task, import_queue, build_state):
     task.logger = mock.Mock()
     build_state._slave_id = 0
     bs = build_state

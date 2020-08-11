@@ -232,8 +232,8 @@ write access to the output directory.
                 TheSecretary,
                 BigBrother,
                 FileJuggler,
-                MrChase,
                 SlaveDriver,
+                MrChase,
                 TheArchitect,
                 CloudGazer,
             )

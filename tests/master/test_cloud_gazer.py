@@ -58,14 +58,6 @@ def mock_events(request):
         yield source
 
 
-@pytest.fixture()
-def skip_queue(request, zmq_context, master_config):
-    task = MockTask(zmq_context, transport.REP, const.SKIP_QUEUE,
-                    reversed(protocols.cloud_gazer))
-    yield task
-    task.close()
-
-
 @pytest.fixture(scope='function')
 def task(request, db_queue, web_queue, skip_queue, master_config):
     task = CloudGazer(master_config)
