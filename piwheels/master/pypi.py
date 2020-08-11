@@ -185,7 +185,7 @@ class PyPIBuffer:
                 tuple(event) for event in
                 self._client.changelog_since_serial(serial)
             ]
-        except (OSError, http.client.ImproperConnectionState):
+        except (OSError, http.client.ImproperConnectionState) as exc:
             return []
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
@@ -201,11 +201,10 @@ class PyPIBuffer:
         # output of _get_events is assumed to be sorted by serial
         last_serial = self._next_serial
         self._next_serial = events[-1][4]
-        if last_serial < self._serial <= self._next_serial:
+        if self._serial_timestamp is None and self._serial <= self._next_serial:
             # Find the timestamp of the event we want in the serial-sorted
             # events, so we can easily find it in the timestamp-sorted
             # buffer
-            assert self._serial_timestamp is None
             self._serial_timestamp = events[
                 bisect_left([event[4] for event in events], self._serial)][2]
         self._buffer.extend(events)
