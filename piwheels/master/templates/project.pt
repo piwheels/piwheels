@@ -98,14 +98,18 @@ sudo pip3 install ${package}</pre>
     </div>
 
     <div class="row">
-      <div class="small-12 columns">
+      <div class="small-12 medium-6 columns">
         <h3>Issues with this package?</h3>
         <table class="package-issues">
-          <tr><td>Check if there's an open issue</td><td><a class="button" href="https://github.com/piwheels/packages/issues?utf8=%E2%9C%93&q=is%3Aissue+${package}+is%3Aopen">Search</a></td></tr>
+          <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${package}')">Search</a></td></tr>
           <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${package}">New issue</a></td></tr>
           <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${package}">New issue</a></td></tr>
         </table>
-
+      </div>
+      <div id="issues" class="small-12 medium-6 columns"></div>
+    </div>
+    <div class="row">
+      <div class="small-12 columns">
         <p class="small"><small>Page last updated ${timestamp}</small></p>
       </div>
     </div>
