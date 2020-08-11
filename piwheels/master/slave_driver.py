@@ -64,8 +64,7 @@ class SlaveDriver(tasks.PausingTask):
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.slave_driver_control)
         self.abi_queues = {}
-        self.recent_builds = {}
-        self.recent_deletes = set()
+        self.excluded_builds = {}
         slave_queue = self.socket(
             transport.ROUTER, protocol=protocols.slave_driver)
         slave_queue.bind(config.slave_queue)
@@ -215,26 +214,26 @@ class SlaveDriver(tasks.PausingTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
+            self.logger.info('refreshing build-queue')
             now = datetime.now(tz=UTC)
-            # Prune expired entries from the recent_builds buffer and add empty
-            # dicts for new ABIs
+            # Prune expired entries from the excluded_builds buffer and add
+            # empty dicts for new ABIs
             for abi in new_queues:
-                if abi in self.recent_builds:
-                    self.recent_builds[abi] = {
+                if abi in self.excluded_builds:
+                    self.excluded_builds[abi] = {
                         key: expires
-                        for key, expires in self.recent_builds[abi].items()
+                        for key, expires in self.excluded_builds[abi].items()
                         if expires > now
                     }
                 else:
-                    self.recent_builds[abi] = {}
+                    self.excluded_builds[abi] = {}
             # Set up the new queues without recent builds (and converting
             # list-pairs into tuples)
             self.abi_queues = {
                 abi: [
                     (package, version) for package, version in new_queue
-                    if (package, version) not in self.recent_builds[abi]
-                    and (package, version) not in self.recent_deletes
-                    and (package, None) not in self.recent_deletes
+                    if (package, version) not in self.excluded_builds[abi]
+                    and (package, None) not in self.excluded_builds[abi]
                 ]
                 for abi, new_queue in new_queues.items()
             }
@@ -242,9 +241,6 @@ class SlaveDriver(tasks.PausingTask):
                 abi: len(queue)
                 for (abi, queue) in self.abi_queues.items()
             })
-            # Wipe the recent_deletes set; it only exists to prune recently
-            # deleted packages from in-flight build-queue queries
-            self.recent_deletes = set()
 
     def handle_delete(self, queue):
         """
@@ -262,11 +258,16 @@ class SlaveDriver(tasks.PausingTask):
             del_pkg, del_ver = data
         elif msg == 'DELPKG':
             del_pkg, del_ver = data, None
-        self.recent_deletes.add((del_pkg, del_ver))
+        self.logger.info('marking package %s %s as excluded', del_pkg, del_ver)
+        for abi in self.excluded_builds:
+            self.excluded_builds[abi][(del_pkg, del_ver)] = (
+                datetime.now(tz=UTC) + timedelta(hours=1))
         for slave in self.slaves.values():
             if slave.reply[0] == 'BUILD':
                 build_pkg, build_ver = slave.reply[1]
                 if build_pkg == del_pkg and del_ver in (None, build_ver):
+                    self.logger.info('skipping deleted package %s %s',
+                                     del_pkg, del_ver)
                     slave.skip()
         queue.send_msg('OK')
 
@@ -381,17 +382,17 @@ class SlaveDriver(tasks.PausingTask):
         else:
             try:
                 abi_queue = self.abi_queues[slave.native_abi]
-                recent_builds = self.recent_builds[slave.native_abi]
+                excluded_builds = self.excluded_builds[slave.native_abi]
             except KeyError:
                 abi_queue = []
             try:
                 while abi_queue:
                     package, version = abi_queue.pop(0)
-                    if (package, version) not in recent_builds:
+                    if (package, version) not in excluded_builds:
                         self.logger.info(
                             'slave %d (%s): build %s %s',
                             slave.slave_id, slave.label, package, version)
-                        recent_builds[(package, version)] = (
+                        excluded_builds[(package, version)] = (
                             datetime.now(tz=UTC) + slave.build_timeout)
                         return 'BUILD', [package, version]
                 self.logger.info(

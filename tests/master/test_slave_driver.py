@@ -621,7 +621,7 @@ def test_slave_says_built_failed(task, db_queue, web_queue, slave_queue,
     task.poll(0)
     db_queue.check()
     web_queue.check()
-    assert task.logger.info.call_count == 2
+    assert task.logger.info.call_count == 3
     assert slave_queue.recv_msg() == ('DONE', None)
 
 
@@ -652,7 +652,7 @@ def test_slave_says_built_failed_with_cont(
     task.poll(0)
     db_queue.check()
     web_queue.check()
-    assert task.logger.info.call_count == 2
+    assert task.logger.info.call_count == 3
     assert slave_queue.recv_msg() == ('DONE', None)
 
 
@@ -677,7 +677,7 @@ def test_slave_says_built_succeeded(task, fs_queue, slave_queue, builds_queue,
     fs_queue.send('OK', None)
     task.poll(0)
     fs_queue.check()
-    assert task.logger.info.call_count == 3
+    assert task.logger.info.call_count == 4
     assert slave_queue.recv_msg() == ('SEND', file_state.filename)
 
 
@@ -701,7 +701,7 @@ def test_slave_throws_away_skipped_builds(
         True, timedelta(seconds=5), 'Woohoo!', [file_state.as_message()]
     ])
     task.poll(0)
-    assert task.logger.info.call_count == 2
+    assert task.logger.info.call_count == 3
     assert slave_queue.recv_msg() == ('DONE', None)
 
 
