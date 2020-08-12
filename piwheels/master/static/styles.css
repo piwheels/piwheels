@@ -67,7 +67,7 @@ footer p {
   font-size: 11pt;
 }
 h1, h2, h3, h4, h5, h6 {
-    font-family: "Roboto Condensed", Arial, sans-serif;
+  font-family: "Roboto Condensed", Arial, sans-serif;
 }
 h2 {
   color: #77777a;
@@ -82,6 +82,10 @@ pre, code {
 code {
     background-color: transparent;
     border: 0;
+}
+
+ul {
+  list-style-type: square;
 }
 
 table.stats {
