@@ -1,0 +1,86 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: piwheels-test-suite
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-16.04
+            python: "3.5"
+            python-req: requirements_stretch.txt
+            python-apt: 1.1.0~beta1
+            experimental: false
+          - os: ubuntu-18.04
+            python: "3.6"
+            python-req: requirements_buster.txt
+            python-apt: 1.6.4
+            experimental: false
+          - os: ubuntu-18.04
+            python: "3.7"
+            python-req: requirements_buster.txt
+            python-apt: 1.6.4
+            experimental: false
+          - os: ubuntu-20.04
+            python: "3.8"
+            python-req: requirements_bullseye.txt
+            python-apt: 2.0.0
+            experimental: false
+          - os: ubuntu-20.04
+            python: "3.9"
+            python-req: requirements_bullseye.txt
+            python-apt: 2.0.0
+            experimental: true
+
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    steps:
+      - name: Install Python ${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready
+
+      - name: Create PostgreSQL user and database
+        run: |
+          sudo -u postgres psql -c "alter user postgres with password 'postgres'"
+          sudo -u postgres psql -c "create user piwheels password 'piwheels'" -c "\du"
+          sudo -u postgres psql -c "create database piwheels_test" -c "\l"
+
+      - name: Checkout piwheels
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          sudo sed -i -e '/^deb / { h; p; g; s/^deb /deb-src /; }' /etc/apt/sources.list
+          sudo apt update
+          sudo apt build-dep -y python3-apt
+          git clone -b $(echo ${{ matrix.python-apt }} | sed -e 's/~/_/') https://salsa.debian.org/apt-team/python-apt.git
+          pushd python-apt
+          DEBVER=${{ matrix.python-apt }} python setup.py install --user
+          popd
+          python -m pip install --upgrade setuptools pip wheel cython>=0.20
+          python -m pip install --user -r ${{ matrix.python-req }}
+          make develop
+
+      - name: Run tests
+        env:
+          PIWHEELS_HOST: localhost
+          PIWHEELS_SUPERPASS: postgres
+        run: |
+          make test
