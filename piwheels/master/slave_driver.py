@@ -262,6 +262,12 @@ class SlaveDriver(tasks.PausingTask):
         for abi in self.excluded_builds:
             self.excluded_builds[abi][(del_pkg, del_ver)] = (
                 datetime.now(tz=UTC) + timedelta(hours=1))
+        for abi, build_queue in self.abi_queues.items():
+            self.abi_queues[abi] = [
+                (pkg, ver)
+                for pkg, ver in build_queue
+                if (del_pkg, del_ver) not in ((pkg, ver), (pkg, None))
+            ]
         for slave in self.slaves.values():
             if slave.reply[0] == 'BUILD':
                 build_pkg, build_ver = slave.reply[1]
