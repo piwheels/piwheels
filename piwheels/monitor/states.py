@@ -242,7 +242,7 @@ class SlaveState:
                     return 'alert'
                 elif latest.load_average > 4.0:
                     return 'alert'
-                elif latest.cpu_temp > 70.0:
+                elif latest.cpu_temp > 78.0:
                     return 'alert'
             if self.last_msg == 'DONE':
                 return 'cleaning'

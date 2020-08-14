@@ -66,7 +66,7 @@ class MasterStatsBox(wdg.WidgetWrap):
         self.load_bar = wdg.GraphBar(
             minimum=0.0, maximum=4.0, format=' {max:.1f}')
         self.temperature_bar = wdg.GraphBar(
-            minimum=40, maximum=100, format=' {min}-{max}°C')
+            minimum=40, maximum=80, format=' {min}-{max}°C')
         self.disk_bar = wdg.GraphBar(
             format=lambda min, max: ' ' + format_size(max))
         self.swap_bar = wdg.GraphBar(
@@ -174,7 +174,7 @@ class SlaveStatsBox(wdg.WidgetWrap):
             minimum=0.0, maximum=4.0, delta=timedelta(seconds=15),
             format=' {max:.1f}')
         self.temperature_bar = wdg.GraphBar(
-            minimum=40, maximum=100, delta=timedelta(seconds=15),
+            minimum=40, maximum=80, delta=timedelta(seconds=15),
             format=' {min}-{max}°C')
         self.disk_bar = wdg.GraphBar(
             format=lambda min, max: ' ' + format_size(max),

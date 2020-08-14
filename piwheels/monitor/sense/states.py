@@ -77,9 +77,9 @@ class SlaveList:
     def prune(self):
         now = datetime.now(tz=UTC)
         for slave in self._sorted_list():
-            if slave.killed and (now - slave.last_seen > timedelta(seconds=5)):
-                # TODO Don't remove the master widget
-                del self.slaves[slave.slave_id]
+            if not isinstance(slave, MasterState):
+                if slave.killed and (now - slave.last_seen > timedelta(seconds=5)):
+                    del self.slaves[slave.slave_id]
 
     def message(self, slave_id, timestamp, msg, data):
         """

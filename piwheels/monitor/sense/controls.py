@@ -400,7 +400,7 @@ class Disk(HistoryStat):
     "Represents the disk usage."
     def __init__(self):
         super().__init__(template='Disk: {}', format='{:.1f}% full',
-                         okay=0.5, fail=0.9)
+                         okay=0.7, warn=0.8, fail=0.9)
 
     def stat_raw(self, stat):
         if stat and stat.disk_size:
@@ -414,7 +414,7 @@ class Swap(HistoryStat):
     "Represents the swap usage."
     def __init__(self):
         super().__init__(template='Swap: {}', format='{:.1f}% full',
-                         okay=0.0, warn=0.25, fail=0.5)
+                         okay=0.1, warn=0.25, fail=0.5)
 
     def stat_raw(self, stat):
         if stat and stat.swap_size:
@@ -445,10 +445,10 @@ class CPUTemp(HistoryStat):
 
     def stat_raw(self, stat):
         if stat:
-            return stat.cpu_temp / 100
+            return (stat.cpu_temp - 40) / 40
 
     def stat_label(self, stat, raw):
-        return super().stat_label(stat, None if raw is None else raw * 100)
+        return super().stat_label(stat, None if raw is None else (raw * 40) + 40)
 
 
 class LoadAvg(HistoryStat):
