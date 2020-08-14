@@ -102,7 +102,7 @@ def mock_buffer(request):
 def mock_json_server(request):
     with mock.patch('piwheels.master.pypi.requests.get') as get:
         packages = {}
-        def mock_get(url):
+        def mock_get(url, timeout=None):
             url = urlsplit(url)
             if url.path.endswith('/json'):
                 package = url.path.rsplit('/', 2)[1]
