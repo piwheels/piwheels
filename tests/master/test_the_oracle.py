@@ -353,23 +353,18 @@ def test_log_build(db, with_package_version, build_state_hacked, db_client):
         assert db.execute("SELECT COUNT(*) FROM files").scalar() == 2
 
 
-def test_get_file_apt_dependencies(db, with_files, db_client):
-    assert db_client.get_file_apt_dependencies('foo-0.1-cp34-cp34m-linux_armv7l.whl') == {
-        'libc6',
-    }
-
-
 def test_get_project_versions(db, with_files, db_client):
     assert db_client.get_project_versions('foo') == [
-        ('0.1', '', 'cp34m', '', False),
+        ('0.1', False, datetime(1970, 1, 1, tzinfo=UTC), '', 'cp34m', ''),
     ]
 
 
 def test_get_project_files(db, with_files, build_state_hacked, db_client):
-    assert sorted(db_client.get_project_files('foo'), key=itemgetter(2)) == sorted([
-        ('0.1', 'cp34m', f.filename, f.filesize, f.filehash, False)
+    assert sorted(db_client.get_project_files('foo'), key=itemgetter(1)) == sorted([
+        ('0.1', f.platform_tag, f.abi_tag, 'cp34m', f.filename, f.filesize,
+        f.filehash, False, ['libc6'])
         for f in build_state_hacked.files.values()
-    ], key=itemgetter(2))
+    ], key=itemgetter(1))
 
 
 def test_delete_build(db, with_build, db_client):

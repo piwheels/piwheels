@@ -72,7 +72,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
             </div>
           </div>
 
-          <div class="accordion-item" data-accordion-item>
+          <div class="accordion-item" data-accordion-item id="sudo">
             <a href="#" class="accordion-title">Should I use sudo? Should I use pip or pip3?</a>
 
             <div class="accordion-content" data-tab-content>

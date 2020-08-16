@@ -129,7 +129,7 @@ class TheOracle(tasks.NonStopTask):
                 'PKGDELETED':  lambda: self.do_pkgdeleted(data),
                 'VEREXISTS':   lambda: self.do_verexists(*data),
                 'VERSDELETED': lambda: self.do_versdeleted(data),
-                'GETABIS':     lambda: self.do_getabis(),
+                'GETABIS':     lambda: self.do_getabis(data),
                 'GETPYPI':     lambda: self.do_getpypi(),
                 'SETPYPI':     lambda: self.do_setpypi(data),
                 'GETSTATS':    lambda: self.do_getstats(),
@@ -365,12 +365,12 @@ class TheOracle(tasks.NonStopTask):
         """
         return self.db.get_versions_deleted(package)
 
-    def do_getabis(self):
+    def do_getabis(self, exclude_skipped):
         """
         Handler for "GETABIS" message, sent by :class:`DbClient` to request the
         list of all ABIs to build for.
         """
-        return self.db.get_build_abis()
+        return self.db.get_build_abis(exclude_skipped)
 
     def do_getpypi(self):
         """
@@ -401,15 +401,6 @@ class TheOracle(tasks.NonStopTask):
         (downloads_recent, downloads_all) tuples.
         """
         return self.db.get_search_index()
-
-    def do_filedeps(self, filename):
-        """
-        Handler for "FILEDEPS" message, sent by :class:`DbClient` to request
-        apt dependencies for *filename*, returned as a set of dependencies
-        excluding those which are preinstalled in the distro version with the
-        corresponding ABI tag.
-        """
-        return self.db.get_file_apt_dependencies(filename)
 
     def do_saverwp(self, queue):
         """
@@ -590,11 +581,11 @@ class DbClient:
         build_id = self._execute('LOGBUILD', build.as_message())
         build.logged(build_id)
 
-    def get_build_abis(self):
+    def get_build_abis(self, *, exclude_skipped=False):
         """
         See :meth:`.db.Database.get_build_abis`.
         """
-        return self._execute('GETABIS')
+        return self._execute('GETABIS', exclude_skipped)
 
     def get_pypi_serial(self):
         """
@@ -667,12 +658,6 @@ class DbClient:
         See :meth:`.db.Database.get_version_skip`.
         """
         return self._execute('GETSKIP', [package, version])
-
-    def get_file_apt_dependencies(self, filename):
-        """
-        See :meth:`.db.Database.get_file_apt_dependencies`.
-        """
-        return self._execute('FILEDEPS', filename)
 
     def delete_build(self, package, version):
         """

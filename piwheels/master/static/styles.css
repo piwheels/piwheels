@@ -11,6 +11,7 @@ header {
   margin-bottom: 2em;
   background: #444;
 }
+
 header .logo {
   background: url('piwheels-logo.opt.svg') no-repeat;
   width: 75px;
@@ -18,20 +19,34 @@ header .logo {
   display: inline-block;
   vertical-align: middle;
 }
+
 /* Oh the silly things you can do with CSS these days... */
 header .logo:hover {
   animation: 1s ease 0s 1 normal spin;
 }
+
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-720deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(-720deg);
+  }
 }
+
 header h1 {
   color: white;
   display: inline;
 }
-header div.top-bar, header div.top-bar ul { background: #444; }
-header .menu-text a { padding: 0; }
+
+header div.top-bar, header div.top-bar ul {
+  background: #444;
+}
+
+header .menu-text a {
+  padding: 0;
+}
 
 .menu .button {
   font-family: "Roboto Mono", monospace;
@@ -60,28 +75,36 @@ footer .row {
   padding-top: 1em;
   padding-right: 1em;
 }
+
 footer .row img {
   float: right;
 }
+
 footer p {
   font-size: 11pt;
 }
+
 h1, h2, h3, h4, h5, h6 {
   font-family: "Roboto Condensed", Arial, sans-serif;
 }
+
 h2 {
   color: #77777a;
   overflow-wrap: anywhere;
 }
-a { color: #222; text-decoration: underline; }
+
+a {
+  color: #222;
+  text-decoration: underline;
+}
 
 pre, code {
-    font-family: "Roboto Mono", monospace;
+  font-family: "Roboto Mono", monospace;
 }
 
 code {
-    background-color: transparent;
-    border: 0;
+  background-color: transparent;
+  border: 0;
 }
 
 ul {
@@ -97,13 +120,35 @@ table.stats {
   font-family: "Roboto Condensed", Arial, sans-serif;
 }
 
-table.stats tbody, table.stats tbody tr { background: transparent; }
-table.stats tbody th, table.stats tbody td { padding: 0; }
-table th, table td { text-align: left; padding: 0.25em; }
-table.empty th { text-align: center; }
-table tr.hidden-version, table tr.hidden-file { display: none; }
-table tbody tr#show-hidden-versions,
-table tbody tr#show-hidden-files { background-color: transparent; }
+table.stats tbody, table.stats tbody tr {
+  background: transparent;
+}
+
+table.stats tbody th, table.stats tbody td {
+  padding: 0;
+}
+
+table th, table td {
+  text-align: left;
+  padding: 0.25em;
+}
+
+table.empty th {
+  text-align: center;
+}
+
+table tr.hidden-version, table tr.hidden-file {
+  display: none;
+}
+
+table tbody tr#show-hidden-versions {
+  background-color: transparent;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
 
 pre {
   background: #ffdead;
@@ -117,6 +162,7 @@ pre {
   font-size: 125%;
   color: #77777a;
 }
+
 #faq a.accordion-title {
   background-color: #e6e6e6;
   color: #14679e;
@@ -124,7 +170,10 @@ pre {
   text-decoration: none;
   font-family: "Roboto Condensed", Arial, sans-serif;
 }
-#faq a.accordion-title:hover { background-color: #d6d6d6; }
+
+#faq a.accordion-title:hover {
+  background-color: #d6d6d6;
+}
 
 #status {
   font-weight: bold;
@@ -169,4 +218,55 @@ table.package-issues tbody tr:nth-child(2n) {
 .yanked {
   background: #d52d40;
   color: white;
+}
+
+th.center, td.center {
+  text-align: center;
+}
+
+.buildpassed, .buildfailed {
+  text-align: center;
+  line-height: 20px;
+  font-size: 40px;
+}
+
+.buildpassed {
+  background: url('success.png') center no-repeat;
+}
+
+.buildfailed {
+  background: url('fail.png') center no-repeat;
+}
+
+.buildskipped {
+  background: url('skip.png') center no-repeat;
+}
+
+.button.small {
+  min-width: 20px;
+  text-decoration: none;
+  margin: 0;
+  padding: 5px;
+}
+
+tr table#versions tbody tr:nth-child(2n),
+tr table#versions tbody tr:nth-child(2n+1) {
+  background: transparent;
+}
+
+tr table.files tbody tr:nth-child(2n),
+tr table.files tbody tr:nth-child(2n+1) {
+  background: transparent;
+}
+
+tr table#versions td.version {
+  font-weight: bold;
+}
+
+tr table.files {
+  margin-bottom: 0;
+}
+
+tr table.files tbody {
+  border: 0;
 }

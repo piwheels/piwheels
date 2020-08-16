@@ -12,7 +12,7 @@
 
     <div class="row">
       <div class="small-12 medium-6 columns">
-        <h2>${project}</h2>
+        <h2 id="package">${project}</h2>
         <p>${description}</p>
       </div>
 
@@ -23,12 +23,16 @@
             <td><a href="https://pypi.org/project/${project}">pypi.org/project/${project}</a></td>
           </tr>
           <tr>
+            <th>Project JSON</th>
+            <td><a href="/project/${package}/json">piwheels.org/project/${package}/json</a></td>
+          </tr>
+          <tr>
             <th>Versions</th>
-            <td>${'{:,}'.format(len(versions))}</td>
+            <td>${'{:,}'.format(len(releases))}</td>
           </tr>
           <tr>
             <th>Files</th>
-            <td>${'{:,}'.format(len(files))}</td>
+            <td>${'{:,}'.format(num_files)}</td>
           </tr>
           <tr>
             <th>Downloads (all time)</th>
@@ -44,55 +48,57 @@
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Install</h3>
-        <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
+        <h3 id="install">Install</h3>
+        <pre tal:condition="dependencies" id="installpre">sudo apt install ${' '.join(dependencies)}
 sudo pip3 install ${project}</pre>
-        <pre tal:condition="not dependencies">sudo pip3 install ${project}</pre>
+        <pre tal:condition="not dependencies" id="installpre">sudo pip3 install ${project}</pre>
+        <p class="small"><small><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></small></p>
       </div>
     </div>
 
     <div class="row">
       <div class="small-12 columns">
-        <h3>Versions</h3>
-        <table id="versions" tal:condition="versions">
-          <tr><th>Version</th><th>Successful builds</th><th>Failed builds</th><th>Skip</th></tr>
-          <span tal:repeat="row versions" tal:omit-tag="True">
+        <h3>Releases</h3>
+        <table id="versions" tal:condition="releases">
+          <tr>
+            <th>Version</th>
+            <th>Released</th>
+            <th class="center">Stretch</th>
+            <th class="center">Buster</th>
+            <th class="center">Files</th>
+          </tr>
+          <span tal:repeat="row releases" tal:omit-tag="True">
             <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
-              <td>
+              <td class="version">
                 ${row.version.original}
                 <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
                 <span tal:condition="row.yanked" class="yanked">yanked</span>
               </td>
-              <td>${row.builds_succeeded}</td>
-              <td>${row.builds_failed}</td>
-              <td>${row.skipped}</td>
+              <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
+              <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
+              <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
+              <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0">+</a></td>
+            </tr>
+            <tr id="files-${repeat.row.number}" class="hidden">
+              <td colspan="7">
+                <table class="files">
+                  <tr tal:repeat="file row.files">
+                    <td class="version hidden">${row.version.original}</td>
+                    <td><a href="/simple/${package}/${file.filename}#sha256=${file.filehash}">${file.filename}</a></td>
+                    <td>${format_size(file.filesize)}</td>
+                    <td><a class="button small" onclick="showInstall(this)">How to install this version</a></td>
+                    <td class="dependencies hidden">${' '.join(file.apt_dependencies)}</td>
+                  </tr>
+                </table>
+              </td>
             </tr>
           </span>
-          <tr tal:condition="len(versions) > 5" id="show-hidden-versions" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-version')">Show more versions</a></td></tr>
+          <tr tal:condition="len(releases) > 5" id="show-hidden-versions">
+            <td colspan="7" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
+          </tr>
         </table>
-        <table tal:condition="not:versions" class="empty">
-          <tr><th>No versions</th></tr>
-        </table>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="small-12 columns">
-        <h3>Files</h3>
-        <table tal:condition="files">
-          <tr><th>Version</th><th>ABI</th><th>Filename</th><th>Size</th></tr>
-          <span tal:repeat="row files" tal:omit-tag="True">
-            <tr class="${'hidden-file' if repeat.row.number > 5 else ''}">
-              <td>${row.version.original}</td>
-              <td>${row.abi_tag}</td>
-              <td><a href="${url(row.filename, row.filehash)}">${row.filename}</a></td>
-              <td>${format_size(row.filesize)}</td>
-            </tr>
-          </span>
-          <tr tal:condition="len(files) > 5" id="show-hidden-files" class="show-more"><td colspan="4"><a onclick="showHiddenRows('hidden-file')">Show more files</a></td></tr>
-        </table>
-        <table tal:condition="not:files" class="empty">
-          <tr><th>No files</th></tr>
+        <table tal:condition="not:releases" class="empty">
+          <tr><th>No releases</th></tr>
         </table>
       </div>
     </div>

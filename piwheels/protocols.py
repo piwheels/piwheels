@@ -398,7 +398,7 @@ the_oracle = Protocol(recv={
     'PKGDELETED':  str,                        # package
     'VEREXISTS':   ExactSequence([str, str]),  # package, version
     'VERSDELETED': str,                        # package
-    'GETABIS':     NoData,
+    'GETABIS':     bool,                       # exclude_skipped
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number
     'GETSTATS':    NoData,
