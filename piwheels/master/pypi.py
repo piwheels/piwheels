@@ -270,7 +270,7 @@ class PyPIEvents:
     # pylint: disable=too-few-public-methods
     add_file_re = re.compile(r'^add ([^ ]+) file')
     create_re = re.compile(r'^create$')
-    remove_re = re.compile(r'^remove(?: (?:package|release))?')
+    remove_re = re.compile(r'^remove(?: (?:project|release))?$')
     yank_re = re.compile(r'^yank release$')
     unyank_re = re.compile(r'^unyank release$')
 

@@ -429,11 +429,25 @@ def test_pypi_promote_binary_to_source(mock_buffer, mock_json_server):
     ]
 
 
+def test_pypi_ignore_removes(mock_buffer, mock_json_server):
+    mock_buffer[:] = [
+        ('foo', '0.1', 1531327388, 'create', 0),
+        ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
+        ('foo', '0.1', 1531327388, 'remove Owner foo', 2),
+    ]
+    mock_json_server['foo'] = 'package foo'
+    events = PyPIEvents()
+    assert list(events) == [
+        ('foo', None,  dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+        ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
+    ]
+
+
 def test_pypi_remove_version(mock_buffer, mock_json_server):
     mock_buffer[:] = [
         ('foo', '0.1', 1531327388, 'create', 0),
         ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
-        ('foo', '0.1', 1531327388, 'remove', 2),
+        ('foo', '0.1', 1531327388, 'remove project', 2),
     ]
     mock_json_server['foo'] = 'package foo'
     events = PyPIEvents()
@@ -448,7 +462,7 @@ def test_pypi_remove_package(mock_buffer, mock_json_server):
     mock_buffer[:] = [
         ('foo', '0.1', 1531327388, 'create', 0),
         ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
-        ('foo', None,  1531327388, 'remove', 2),
+        ('foo', None,  1531327388, 'remove release', 2),
     ]
     mock_json_server['foo'] = 'package foo'
     events = PyPIEvents()
