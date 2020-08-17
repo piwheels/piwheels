@@ -73,6 +73,30 @@ extra-index-url=https://www.piwheels.org/simple</pre>
           </div>
 
           <div class="accordion-item" data-accordion-item>
+            <a href="#" class="accordion-title">Should I use sudo? Should I use pip or pip3?</a>
+
+            <div class="accordion-content" data-tab-content>
+              <p>On Debian-based systems such as the Raspberry Pi OS, the <code>python</code> command
+              is Python 2, and <code>python3</code> is Python 3. Similarly, <code>pip</code> is for
+              Python 2, and <code>pip3</code> is for Python 3.</p>
+              <p>The exception to this is is when using a Python 3 virtual environment, when
+              <code>python</code> and <code>pip</code> refer to your virtual environment's Python and pip.</p>
+              <p>Usually, it's good practice to use a virtual environment rather than the system Python. However,
+              it's common to use the system Python on Raspberry Pi, because you can think of the whole SD card as
+              a "virtual environment" in that you are likely to reimage the SD card regularly, or swap to a
+              different SD card for a different project.</p>
+              <p>If you're using the system Python, use <code>sudo pip3</code>:</p>
+              <pre>sudo pip3 install numpy</pre>
+              <p>If you're in an active a virtual environment, you use <code>pip</code> not <code>pip3</code>,
+              and you don't use <code>sudo</code>:</p>
+              <pre>pip install numpy</pre>
+              <p>Alternatively, you can use the system Python but install packages for the current user only, which
+              doesn't require <code>sudo</code>:</p>
+              <pre>pip3 install numpy --user</pre>
+            </div>
+          </div>
+
+          <div class="accordion-item" data-accordion-item>
             <a href="#" class="accordion-title">piwheels doesn't have the latest
             version of a package I need. How do I install the newest version available from piwheels?</a>
 
@@ -616,12 +640,12 @@ sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
 
             <div class="accordion-content" data-tab-content>
               <p>If you delete a package or version from PyPI, it will also be deleted from piwheels, and any files relating to the package or version
-              will be removed.In the case of version removal, the project page will be updated to remove the version in question. In the case of package
+              will be removed. In the case of version removal, the project page will be updated to remove the version in question. In the case of package
               deletion, the project page will be deleted.</p>
               <p>Alternatively, package maintainers have the ability to "yank" releases from PyPI. Yanking a release allows authors to effectively delete
               a version's files, without breaking things for people who have pinned to exactly a specific version. Releases yanked from PyPI will be
               reflected in piwheels, both in the simple index and visually on the project page. Read more about "yank" in
-              <a href="https://www.python.org/dev/peps/pep-0592/">PEP-592</a></p>
+              <a href="https://www.python.org/dev/peps/pep-0592/">PEP-592</a>.</p>
               <p>Previously, piwheels did not remove packages or versions which were deleted in PyPI, but this is no longer the case.</p>
             </div>
           </div>
