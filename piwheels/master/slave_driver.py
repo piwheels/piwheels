@@ -216,17 +216,19 @@ class SlaveDriver(tasks.PausingTask):
         else:
             self.logger.info('refreshing build-queue')
             now = datetime.now(tz=UTC)
+            build_abis = self.db.get_build_abis()
             # Prune expired entries from the excluded_builds buffer and add
             # empty dicts for new ABIs
-            for abi in new_queues:
-                if abi in self.excluded_builds:
-                    self.excluded_builds[abi] = {
-                        key: expires
-                        for key, expires in self.excluded_builds[abi].items()
-                        if expires > now
-                    }
-                else:
-                    self.excluded_builds[abi] = {}
+            for abi in build_abis:
+                try:
+                    excluded = self.excluded_builds[abi]
+                except KeyError:
+                    excluded = {}
+                self.excluded_builds[abi] = {
+                    key: expires
+                    for key, expires in excluded.items()
+                    if expires > now
+                }
             # Set up the new queues without recent builds (and converting
             # list-pairs into tuples)
             self.abi_queues = {
@@ -237,6 +239,8 @@ class SlaveDriver(tasks.PausingTask):
                 ]
                 for abi, new_queue in new_queues.items()
             }
+            for abi in build_abis:
+                self.abi_queues.setdefault(abi, [])
             self.stats_queue.send_msg('STATBQ', {
                 abi: len(queue)
                 for (abi, queue) in self.abi_queues.items()
@@ -259,10 +263,18 @@ class SlaveDriver(tasks.PausingTask):
         elif msg == 'DELPKG':
             del_pkg, del_ver = data, None
         self.logger.info('marking package %s %s as excluded', del_pkg, del_ver)
-        for abi in self.excluded_builds:
-            self.excluded_builds[abi][(del_pkg, del_ver)] = (
+        for abi in self.db.get_build_abis():
+            try:
+                excluded = self.excluded_builds[abi]
+            except KeyError:
+                excluded = {}
+                self.excluded_builds[abi] = excluded
+            excluded[(del_pkg, del_ver)] = (
                 datetime.now(tz=UTC) + timedelta(hours=1))
-        for abi, build_queue in self.abi_queues.items():
+            try:
+                build_queue = self.abi_queues[abi]
+            except KeyError:
+                build_queue = []
             self.abi_queues[abi] = [
                 (pkg, ver)
                 for pkg, ver in build_queue
