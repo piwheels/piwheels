@@ -501,6 +501,72 @@ def test_slave_idle_after_delete_package(
     assert slave_queue.recv_msg() == ('DONE', None)
 
 
+def test_master_excludes_deleted_packages(
+        task, builds_queue, stats_queue, master_status_queue, master_config,
+        delete_queue):
+    task.logger = mock.Mock()
+    builds_queue.send_msg('QUEUE', {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 3})
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]}
+    assert task.excluded_builds == {'cp34m': {}}
+    delete_queue.send_msg('DELPKG', 'bar')
+    task.poll(0)
+    assert delete_queue.recv_msg() == ('OK', None)
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2')
+    ]}
+    assert task.excluded_builds.keys() == {'cp34m'}
+    assert task.excluded_builds['cp34m'].keys() == {('bar', None)}
+    builds_queue.send_msg('QUEUE', {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 2})
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2')
+    ]}
+    assert task.excluded_builds.keys() == {'cp34m'}
+    assert task.excluded_builds['cp34m'].keys() == {('bar', None)}
+
+
+def test_master_excludes_deleted_versions(
+        task, builds_queue, stats_queue, master_status_queue, master_config,
+        delete_queue):
+    task.logger = mock.Mock()
+    builds_queue.send_msg('QUEUE', {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 3})
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]}
+    assert task.excluded_builds == {'cp34m': {}}
+    delete_queue.send_msg('DELVER', ['foo', '0.1'])
+    task.poll(0)
+    assert delete_queue.recv_msg() == ('OK', None)
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.2'), ('bar', '0.1')
+    ]}
+    assert task.excluded_builds.keys() == {'cp34m'}
+    assert task.excluded_builds['cp34m'].keys() == {('foo', '0.1')}
+    builds_queue.send_msg('QUEUE', {'cp34m': [
+        ('foo', '0.1'), ('foo', '0.2'), ('bar', '0.1')
+    ]})
+    task.poll(0)
+    assert stats_queue.recv_msg() == ('STATBQ', {'cp34m': 2})
+    assert task.abi_queues == {'cp34m': [
+        ('foo', '0.2'), ('bar', '0.1')
+    ]}
+    assert task.excluded_builds.keys() == {'cp34m'}
+    assert task.excluded_builds['cp34m'].keys() == {('foo', '0.1')}
+
+
 def test_slave_delete_with_other_builds(
         task, slave_queue, slave2_queue, builds_queue, stats_queue,
         master_status_queue, master_config, delete_queue, hello_data):
