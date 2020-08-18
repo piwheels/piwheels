@@ -68,11 +68,11 @@ class MasterStatsBox(wdg.WidgetWrap):
         self.temperature_bar = wdg.GraphBar(
             minimum=40, maximum=80, format=' {min}-{max}°C')
         self.disk_bar = wdg.GraphBar(
-            format=lambda min, max: ' ' + format_size(max))
+            minimum=0, format=lambda min, max: ' ' + format_size(max))
         self.swap_bar = wdg.GraphBar(
-            format=lambda min, max: ' ' + format_size(max))
+            minimum=0, format=lambda min, max: ' ' + format_size(max))
         self.memory_bar = wdg.GraphBar(
-            format=lambda min, max: ' ' + format_size(max))
+            minimum=0, format=lambda min, max: ' ' + format_size(max))
         self.builds_bar = wdg.RatioBar()
         self.queue_bar = wdg.RatioBar()
         self.downloads_bar = wdg.GraphBar(format=' {max}')
@@ -178,13 +178,13 @@ class SlaveStatsBox(wdg.WidgetWrap):
             format=' {min}-{max}°C')
         self.disk_bar = wdg.GraphBar(
             format=lambda min, max: ' ' + format_size(max),
-            delta=timedelta(seconds=15))
+            minimum=0, delta=timedelta(seconds=15))
         self.swap_bar = wdg.GraphBar(
             format=lambda min, max: ' ' + format_size(max),
-            delta=timedelta(seconds=15))
+            minimum=0, delta=timedelta(seconds=15))
         self.memory_bar = wdg.GraphBar(
             format=lambda min, max: ' ' + format_size(max),
-            delta=timedelta(seconds=15))
+            minimum=0, delta=timedelta(seconds=15))
         super().__init__(
             wdg.AttrMap(
                 wdg.LineBox(
