@@ -15,29 +15,14 @@ PIP=pip
 PYBIND=pybind11-dev
 LIBZMQ=libzmq5
 
-if [ $ID = raspbian ]; then
-    if [ $VERSION_ID -eq 8 ]; then
-        PIP="pip==18.1"
-        LIBPNG_DEV=libpng12-dev
-        LIBMYSQL_DEV=libmysqlclient-dev
-        POSTGRES_SERVER_DEV=postgresql-server-dev-9.4
-        PYBIND=""
-        LIBZMQ=libzmq3
-    elif [ $VERSION_ID -eq 9 ]; then
-        POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
-    elif [ $VERSION_ID -eq 10 ]; then
-        LIBXLST=libxslt1-dev
-        POSTGRES_SERVER_DEV=postgresql-server-dev-11
-        LIBGLES=libgles2-mesa-dev
-        TURBOGEARS=python-turbogears2
-        SOUNDFONT=timgm6mb-soundfont
-    fi
-elif [ $ID = ubuntu ]; then
+if [ $VERSION_ID -eq 9 ]; then
+    POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
+elif [ $VERSION_ID -eq 10 ]; then
     LIBXLST=libxslt1-dev
+    POSTGRES_SERVER_DEV=postgresql-server-dev-11
+    LIBGLES=libgles2-mesa-dev
     TURBOGEARS=python-turbogears2
     SOUNDFONT=timgm6mb-soundfont
-    LIBGLES=libgles2-mesa-dev
-    POSTGRES_SERVER_DEV=postgresql-server-dev-10
 fi
 
 apt update
@@ -77,10 +62,8 @@ pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
 
-if [ $ID = raspbian ]; then
-    if [ $VERSION_ID -lt 10 ]; then
-        pip3 install pint==0.9  # requires python issue
-    fi
+if [ $VERSION_ID -lt 10 ]; then
+    pip3 install pint==0.9  # requires python issue
 fi
 
 pip3 install pypandoc versioneer kervi scikit-build cython \
