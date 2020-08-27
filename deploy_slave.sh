@@ -66,8 +66,8 @@ if [ $VERSION_ID -lt 10 ]; then
     pip3 install pint==0.9  # requires python issue
 fi
 
-pip3 install pypandoc versioneer kervi scikit-build cython \
-    --extra-index-url https://www.piwheels.org/simple --prefer-binary
+pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
+    --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
