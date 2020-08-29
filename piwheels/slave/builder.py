@@ -65,6 +65,10 @@ class Wheel:
 
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
+
+    :param set dependencies:
+        A set of dependencies that are required to use these particular wheel
+        files. Defaults to ``None``.
     """
     def __init__(self, path, dependencies=None):
         self.wheel_file = path
