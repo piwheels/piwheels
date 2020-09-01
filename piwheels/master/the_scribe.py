@@ -33,7 +33,6 @@ Defines the :class:`TheScribe` task; see class for more details.
     :members:
 """
 
-import re
 import io
 import os
 import shutil
@@ -51,6 +50,7 @@ from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
+from .pypi import canonicalize_name
 
 
 class PackageDeleted(ValueError):
@@ -289,29 +289,6 @@ class TheScribe(tasks.PauseableTask):
                 package=package,
                 files=files
             ))
-        try:
-            # Workaround for #20: after constructing the index for a package
-            # attempt to symlink the "canonicalized" package name to the actual
-            # package directory. The reasons for doing things this way are
-            # rather complex...
-            #
-            # The older package name must exist for the benefit of older
-            # versions of pip. If the symlink already exists *or is a
-            # directory* we ignore it. Yes, it's possible to have two packages
-            # which both have the same canonicalized name, and for each to have
-            # different contents. I don't quite know how PyPI handle this but
-            # their XML and JSON APIs already include such situations (in a
-            # small number of cases). This setup is designed to create
-            # canonicalized links where possible but not to clobber "real"
-            # packages if they exist.
-            #
-            # What about new packages that want to take the place of a
-            # canonicalized symlink? We (and TransferState.commit) handle that
-            # by removing the symlink and making a directory in its place.
-            canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
-            canon_dir.symlink_to(pkg_dir.name)
-        except FileExistsError:
-            pass
         if package not in self.package_cache:
             self.package_cache.add(package)
             self.write_simple_index()
@@ -347,14 +324,16 @@ class TheScribe(tasks.PauseableTask):
         else:
             dependencies = set()
         description = self.db.get_package_description(package)
+        project_name = self.db.get_project_display_name(package)
         self.logger.info('writing project page for %s', package)
-        pkg_dir = self.output_path / 'project' / package
-        mkdir_override_symlink(pkg_dir)
+        project_dir = self.output_path / 'project' / package
+        mkdir_override_symlink(project_dir)
         dt = datetime.now()
-        with AtomicReplaceFile(pkg_dir / 'index.html', encoding='utf-8') as index:
+        with AtomicReplaceFile(project_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
                 package=package,
+                project=project_name,
                 versions=versions,
                 files=files,
                 dependencies=dependencies,
@@ -365,12 +344,16 @@ class TheScribe(tasks.PauseableTask):
                     '/simple/{package}/{filename}#sha256={filehash}'.format(
                         package=package, filename=filename, filehash=filehash),
                 page='project'))
-        try:
-            # See write_package_index for explanation...
-            canon_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
-            canon_dir.symlink_to(pkg_dir.name)
-        except FileExistsError:
-            pass
+        project_aliases = self.db.get_package_aliases(package)
+        if project_aliases:
+            self.logger.info('creating %s symlinks for project %s',
+                             len(project_aliases), package)
+        for project_alias in project_aliases:
+            project_symlink = self.output_path / 'project' / project_alias
+            try:
+                project_symlink.symlink_to(project_dir.name)
+            except FileExistsError:
+                pass
 
     def delete_package(self, package):
         """
@@ -385,30 +368,28 @@ class TheScribe(tasks.PauseableTask):
             # refuse to delete /simple/ and /project/ by accident
             raise RuntimeError('Attempted to delete everything')
 
+        # remove any symlinks for project aliases
+        for project_alias in self.db.get_package_aliases(package):
+            project_symlink = self.output_path / 'project' / project_alias
+            try:
+                project_symlink.unlink()
+            except FileNotFoundError:
+                self.logger.error('symlink not found: %s', project_symlink)
+
         pkg_dir = self.output_path / 'simple' / package
         proj_dir = self.output_path / 'project' / package
-        canon_pkg_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
-        canon_proj_dir = pkg_dir.with_name(canonicalize_name(pkg_dir.name))
 
         files = {pkg_dir / f for f in self.db.get_package_files(package)}
         files |= {
             pkg_dir / 'index.html',
             proj_dir / 'index.html',
-            # Attempt to remove canonical sym-links (with unlink); if this
-            # fails that's okay (and ignorable) because it means we've run into
-            # one of the (rare) cases of a non-canonical and canonical package
-            # co-existing simultaneously (only for historic packages)
-            canon_pkg_dir,
-            canon_proj_dir,
         }
 
+        # try to delete every known wheel file, and the HTML files
         for file_path in files:
             try:
                 file_path.unlink()
                 self.logger.debug('file deleted: %s', file_path)
-            except IsADirectoryError:
-                # See note above
-                pass
             except FileNotFoundError:
                 self.logger.error('file not found: %s', file_path)
 
@@ -438,17 +419,6 @@ class TheScribe(tasks.PauseableTask):
                 self.logger.info('File deleted: %s', file)
             except FileNotFoundError:
                 self.logger.error('File not found: %s', file)
-
-
-# From pip/_vendor/packaging/utils.py
-# pylint: disable=invalid-name
-_canonicalize_regex = re.compile(r"[-_.]+")
-
-
-def canonicalize_name(name):
-    # pylint: disable=missing-docstring
-    # This is taken from PEP 503.
-    return _canonicalize_regex.sub("-", name).lower()
 
 
 # https://docs.python.org/3/library/itertools.html

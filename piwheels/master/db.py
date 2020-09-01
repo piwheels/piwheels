@@ -158,6 +158,38 @@ class Database:
                  released.astimezone(UTC).replace(tzinfo=None), skip)
             ).scalar()
 
+    def add_package_name(self, package, name, seen):
+        """
+        Add a new package alias or update the last seen timestamp.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (add_package_name(%s, %s, %s))",
+                (package, name, seen.astimezone(UTC).replace(tzinfo=None)))
+
+    def get_package_aliases(self, package):
+        """
+        Retrieve all aliases for *package* (not including the canonical name
+        itself).
+        """
+        with self._conn.begin():
+            return [
+                row.name
+                for row in self._conn.execute(
+                    "SELECT name FROM get_package_aliases(%s)", (package, )
+                )
+            ]
+
+    def get_project_display_name(self, package):
+        """
+        Retrieve the last seen name for *package*.
+        """
+        with self._conn.begin():
+            return self._conn.execute(
+                "VALUES (get_project_display_name(%s))",
+                (package, )
+            ).scalar()
+
     def set_package_description(self, package, description):
         """
         Update the description for *package* in the packages table.

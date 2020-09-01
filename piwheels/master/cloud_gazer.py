@@ -36,7 +36,7 @@ Defines the :class:`CloudGazer` task; see class for more details.
 from datetime import timedelta
 
 from .. import protocols, transport, tasks, const
-from .pypi import PyPIEvents
+from .pypi import PyPIEvents, canonicalize_name
 from .the_oracle import DbClient
 
 
@@ -74,8 +74,17 @@ class CloudGazer(tasks.PauseableTask):
         self.pypi.serial = self.serial = self.db.get_pypi_serial()
         self.logger.info('querying upstream')
 
+    def add_package_name(self, package, package_alias, timestamp):
+        if package_alias != package:
+            # add the canonical form as an alias, with no timestamp
+            # (gets logged as 1970) so it can't become the display name
+            self.db.add_package_name(package, package)
+        # add the used alias with the event timestamp
+        self.db.add_package_name(package, package_alias, timestamp)
+
     def read_pypi(self):
-        for package, version, timestamp, action, description in self.pypi:
+        for package_alias, version, timestamp, action, description in self.pypi:
+            package = canonicalize_name(package_alias)
             if action == 'remove':
                 if version is None:
                     self.logger.info('marking package %s for deletion', package)
@@ -101,10 +110,12 @@ class CloudGazer(tasks.PauseableTask):
                     if self.db.add_new_package(package, skip=self.skip_default,
                                                description=description or ''):
                         self.logger.info('added package %s', package)
+                        self.add_package_name(package, package_alias, timestamp)
                         self.web_queue.send_msg('BOTH', package)
                         self.web_queue.recv_msg()
                     elif description is not None:
                         self.db.set_package_description(package, description)
+                self.add_package_name(package, package_alias, timestamp)
                 if version is not None:
                     skip = '' if action == 'source' else 'binary only'
                     update = 'BOTH'

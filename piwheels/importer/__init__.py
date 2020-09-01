@@ -50,6 +50,7 @@ from ..format import format_size
 from ..states import FileState, BuildState
 from ..slave import duration
 from ..slave.builder import Wheel
+from ..master.pypi import canonicalize_name
 
 
 def main(args=None):
@@ -118,8 +119,8 @@ registered as produced by a *single* build.
     ]
     state = BuildState(
         slave_id=0,  # ignored
-        package=config.package if config.package is not None else
-            packages[0].metadata['Name'],
+        package=canonicalize_name(config.package) if config.package is not None else
+            canonicalize_name(packages[0].metadata['Name']),
         version=config.version if config.version is not None else
             packages[0].metadata['Version'],
         abi_tag=config.abi if config.abi is not None else
