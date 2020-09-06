@@ -1,5 +1,5 @@
 <div metal:use-macro="layout">
-  <div metal:fill-slot="title" tal:omit-tag="1">${package}</div>
+  <div metal:fill-slot="title" tal:omit-tag="1">${project}</div>
   <div metal:fill-slot="scripts" tal:omit-tag="1">
     <script src="/project.js"></script>
   </div>
@@ -12,7 +12,7 @@
 
     <div class="row">
       <div class="small-12 medium-6 columns">
-        <h2>${package}</h2>
+        <h2>${project}</h2>
         <p>${description}</p>
       </div>
 
@@ -20,7 +20,7 @@
         <table class="stats">
           <tr>
             <th>PyPI page</th>
-            <td><a href="https://pypi.org/project/${package}">pypi.org/project/${package}</a></td>
+            <td><a href="https://pypi.org/project/${project}">pypi.org/project/${project}</a></td>
           </tr>
           <tr>
             <th>Versions</th>
@@ -46,8 +46,8 @@
       <div class="small-12 columns">
         <h3>Install</h3>
         <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
-sudo pip3 install ${package}</pre>
-        <pre tal:condition="not dependencies">sudo pip3 install ${package}</pre>
+sudo pip3 install ${project}</pre>
+        <pre tal:condition="not dependencies">sudo pip3 install ${project}</pre>
       </div>
     </div>
 
@@ -101,9 +101,9 @@ sudo pip3 install ${package}</pre>
       <div class="small-12 medium-6 columns">
         <h3>Issues with this package?</h3>
         <table class="package-issues">
-          <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${package}')">Search</a></td></tr>
-          <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${package}">New issue</a></td></tr>
-          <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${package}">New issue</a></td></tr>
+          <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${project}')">Search</a></td></tr>
+          <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${project}">New issue</a></td></tr>
+          <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${project}">New issue</a></td></tr>
         </table>
       </div>
       <div id="issues" class="small-12 medium-6 columns"></div>

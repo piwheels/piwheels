@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.17');
+INSERT INTO configuration(id, version) VALUES (1, '0.18');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -39,6 +39,30 @@ CREATE TABLE packages (
 );
 
 GRANT SELECT ON packages TO {username};
+
+-- package_names
+-------------------------------------------------------------------------------
+-- The "package_names" table defines all known aliases names for a package (e.g.
+-- Pi_Wheels or pi.wheels as well as the canonical pi-wheels). The date each
+-- name was last seen is recorded so we can designate the most recently used
+-- alias as the "display name" on the project page. Even if it's never used by
+-- the maintainer, the canonical name is always stored here too. The canonical
+-- name is always used as the directory name in /simple/ and /project/ but
+-- symlinks are created using all known aliases.
+-------------------------------------------------------------------------------
+
+CREATE TABLE package_names (
+    package VARCHAR(200) NOT NULL,
+    name    VARCHAR(200) NOT NULL,
+    seen    TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
+
+    CONSTRAINT package_names_pk PRIMARY KEY (name),
+    CONSTRAINT package_names_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE CASCADE
+);
+
+CREATE INDEX package_names_package ON package_names(package, seen DESC);
+GRANT SELECT ON package_names TO {username};
 
 -- versions
 -------------------------------------------------------------------------------
@@ -545,6 +569,77 @@ REVOKE ALL ON FUNCTION add_new_package_version(
 GRANT EXECUTE ON FUNCTION add_new_package_version(
     TEXT, TEXT, TIMESTAMP, TEXT
     ) TO {username};
+
+-- add_package_name(canon_name, alt_name, last_seen)
+-------------------------------------------------------------------------------
+-- Called to add a new package alias or update the last seen timestamp.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION add_package_name(
+    canon_name TEXT,
+    alt_name TEXT,
+    last_seen TIMESTAMP
+)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    INSERT INTO package_names (package, name, seen)
+    VALUES (canon_name, alt_name, last_seen)
+    ON CONFLICT (name) DO
+        UPDATE SET seen = last_seen
+$sql$;
+
+REVOKE ALL ON FUNCTION add_package_name(TEXT, TEXT, TIMESTAMP) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION add_package_name(TEXT, TEXT, TIMESTAMP) TO {username};
+
+-- get_project_display_name(package)
+-------------------------------------------------------------------------------
+-- Retrieve the last seen name for *package*.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_project_display_name(pkg TEXT)
+    RETURNS TEXT
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT name
+    FROM package_names
+    WHERE package = pkg
+    ORDER BY seen DESC
+    LIMIT 1
+$sql$;
+
+REVOKE ALL ON FUNCTION get_project_display_name(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_project_display_name(TEXT) TO {username};
+
+-- get_package_aliases(package)
+-------------------------------------------------------------------------------
+-- Retrieve all aliases for *package* (not including the canonical name
+-- itself).
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_package_aliases(pkg TEXT)
+    RETURNS TABLE(
+        name package_names.name%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT name
+    FROM package_names
+    WHERE package = pkg
+    AND name != pkg
+$sql$;
+
+REVOKE ALL ON FUNCTION get_package_aliases(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_package_aliases(TEXT) TO {username};
 
 -- set_package_description(package, description)
 -------------------------------------------------------------------------------

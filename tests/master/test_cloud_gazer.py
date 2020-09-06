@@ -80,28 +80,29 @@ def test_init(mock_events, db_queue, task):
 def test_new_pkg(mock_events, db_queue, web_queue, task):
     assert task.skip_default == ''
     db_queue.expect('ALLPKGS')
-    db_queue.send('OK', {"foo"})
+    db_queue.send('OK', set())
     db_queue.expect('GETPYPI')
     db_queue.send('OK', 0)
     task.once()
     db_queue.check()
     mock_events[:] = [
-        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
-        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'some description'),
     ]
-    db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), ''])
+    db_queue.expect('NEWPKG', ['foo', '', 'some description'])
     db_queue.send('OK', True)
-    db_queue.expect('SETDESC', ['foo', 'package foo'])
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:08')])
     db_queue.send('OK', None)
     web_queue.expect('BOTH', 'foo')
     web_queue.send('DONE')
-    db_queue.expect('SETPYPI', 2)
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
+    db_queue.expect('SETPYPI', 1)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
     web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 2
+    assert task.serial == 1
 
 
 def test_dev_mode(dev_mode, mock_events, db_queue, web_queue, task):
@@ -113,29 +114,27 @@ def test_dev_mode(dev_mode, mock_events, db_queue, web_queue, task):
     task.once()
     db_queue.check()
     mock_events[:] = [
-        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
-        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'some description'),
     ]
-    db_queue.expect('NEWPKG', ['foo', 'development mode', 'package foo'])
+    db_queue.expect('NEWPKG', ['foo', 'development mode', 'some description'])
     db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
     web_queue.expect('BOTH', 'foo')
     web_queue.send('DONE')
-    db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), ''])
-    db_queue.send('OK', True)
-    db_queue.expect('SETDESC', ['foo', 'package foo'])
-    db_queue.send('OK', True)
-    web_queue.expect('BOTH', 'foo')
-    web_queue.send('DONE')
-    db_queue.expect('SETPYPI', 2)
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
+    db_queue.expect('SETPYPI', 1)
     db_queue.send('OK', None)
     task.poll(0)
     db_queue.check()
     web_queue.check()
     assert task.packages == {"foo"}
-    assert task.serial == 2
+    assert task.serial == 1
 
 
-def test_existing_ver(mock_events, db_queue, web_queue, task):
+def test_new_pkg_non_canon_name(mock_events, db_queue, web_queue, task):
+    assert task.skip_default == ''
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', set())
     db_queue.expect('GETPYPI')
@@ -143,14 +142,47 @@ def test_existing_ver(mock_events, db_queue, web_queue, task):
     task.once()
     db_queue.check()
     mock_events[:] = [
-        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'package foo'),
-        ('foo', '0.2', dt('2018-07-11 16:43:08'), 'create', 'package foo'),
+        ('Foo', None, dt('2018-07-11 16:43:08'), 'create', 'some description'),
     ]
-    db_queue.expect('NEWPKG', ['foo', '', 'package foo'])
-    db_queue.send('OK', False)
-    db_queue.expect('SETDESC', ['foo', 'package foo'])
+    db_queue.expect('NEWPKG', ['foo', '', 'some description'])
+    db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('1970-01-01 00:00:00')])
     db_queue.send('OK', None)
-    db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:08'), 'binary only'])
+    db_queue.expect('NEWPKGNAME', ['foo', 'Foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', 'foo')
+    web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('1970-01-01 00:00:00')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['foo', 'Foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
+    db_queue.expect('SETPYPI', 1)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo"}
+    assert task.serial == 1
+
+
+def test_existing_ver(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 0)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('foo', None, dt('2018-07-11 16:43:08'), 'create', 'some description'),
+        ('foo', '0.2', dt('2018-07-11 16:43:09'), 'create', 'some description'),
+    ]
+    # event 1
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:08')])
+    db_queue.send('OK', None)
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWVER', ['foo', '0.2', dt('2018-07-11 16:43:09'), 'binary only'])
     db_queue.send('OK', False)
     web_queue.expect('BOTH', 'foo')
     web_queue.send('DONE')
@@ -174,10 +206,62 @@ def test_new_ver(mock_events, db_queue, web_queue, task):
         ('bar', None, dt('2018-07-11 16:43:07'), 'create', 'some description'),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
     ]
+    # event 1
     db_queue.expect('NEWPKG', ['bar', '', 'some description'])
+    db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
+    # event 2
+    db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
+    db_queue.send('OK', True)
+    db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    db_queue.expect('SETPYPI', 4)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+    web_queue.check()
+    assert task.packages == {"foo", "bar"}
+    assert task.serial == 4
+
+
+def test_new_ver_non_canon_pkg_name(mock_events, db_queue, web_queue, task):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {"foo"})
+    db_queue.expect('GETPYPI')
+    db_queue.send('OK', 2)
+    task.once()
+    db_queue.check()
+    mock_events[:] = [
+        ('Bar', None, dt('2018-07-11 16:43:07'), 'create', 'some description'),
+        ('Bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
+    ]
+    # event 1
+    db_queue.expect('NEWPKG', ['bar', '', 'some description'])
+    db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('1970-01-01 00:00:00')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['bar', 'Bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', 'bar')
+    web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('1970-01-01 00:00:00')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['bar', 'Bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('1970-01-01 00:00:00')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['bar', 'Bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
     db_queue.expect('SETDESC', ['bar', 'some description'])
@@ -205,10 +289,18 @@ def test_new_ver_deleted(mock_events, db_queue, web_queue, task):
         ('bar', None, dt('2018-07-11 16:43:07'), 'create', None),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', None),
     ]
+    # event 1
     db_queue.expect('NEWPKG', ['bar', '', ''])
     db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'bar')
@@ -230,20 +322,29 @@ def test_remove_ver(mock_events, db_queue, web_queue, skip_queue, task):
     task.once()
     db_queue.check()
     mock_events[:] = [
-        ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('bar', None, dt('2018-07-11 16:43:07'), 'create', 'some description'),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
         ('bar', '1.0', dt('2018-07-11 16:43:11'), 'remove', None),
     ]
+    # event 1
     db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
     db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    # event 3
     db_queue.expect('SKIPVER', ['bar', '1.0', 'deleted'])
     db_queue.send('OK', True)
     web_queue.expect('DELVER', ['bar', '1.0'])
@@ -269,20 +370,29 @@ def test_remove_pkg(mock_events, db_queue, web_queue, skip_queue, task):
     task.once()
     db_queue.check()
     mock_events[:] = [
-        ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
+        ('bar', None, dt('2018-07-11 16:43:07'), 'create', 'some description'),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
         ('bar', None, dt('2018-07-11 16:43:11'), 'remove', None),
     ]
+    # event 1
     db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:07')])
+    db_queue.send('OK', None)
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
     db_queue.expect('SETDESC', ['bar', 'some description'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    # event 3
     db_queue.expect('SKIPPKG', ['bar', 'deleted'])
     db_queue.send('OK', True)
     web_queue.expect('DELPKG', 'bar')
@@ -340,18 +450,27 @@ def test_remove_pkg_before_insert(mock_events, db_queue, web_queue, skip_queue,
         ('bar', None, dt('2018-07-11 16:43:09'), 'create', 'some description'),
         ('bar', '1.0', dt('2018-07-11 16:43:09'), 'source', 'some description'),
     ]
+    # event 1
     db_queue.expect('SKIPPKG', ['bar', 'deleted'])
-    db_queue.send('OK', True)
+    db_queue.send('OK', None)
     web_queue.expect('DELPKG', 'bar')
     web_queue.send('DONE')
     skip_queue.expect('DELPKG', 'bar')
     skip_queue.send('OK')
     db_queue.expect('DELPKG', 'bar')
     db_queue.send('OK', None)
+    # event 2
     db_queue.expect('NEWPKG', ['bar', '', 'some description'])
     db_queue.send('OK', True)
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     web_queue.expect('BOTH', 'bar')
     web_queue.send('DONE')
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
+    # event 3
+    db_queue.expect('NEWPKGNAME', ['bar', 'bar', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['bar', '1.0', dt('2018-07-11 16:43:09'), ''])
     db_queue.send('OK', True)
     db_queue.expect('SETDESC', ['bar', 'some description'])
@@ -378,12 +497,18 @@ def test_enable_ver(mock_events, db_queue, web_queue, task):
         ('foo', '1.0', dt('2018-07-11 16:43:09'), 'create', 'some description'),
         ('foo', '1.0', dt('2018-07-11 16:43:11'), 'source', 'some description'),
     ]
+    # event 1
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:09')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['foo', '1.0', dt('2018-07-11 16:43:09'), 'binary only'])
     db_queue.send('OK', True)
     db_queue.expect('SETDESC', ['foo', 'some description'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'foo')
     web_queue.send('DONE')
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:11')])
+    db_queue.send('OK', None)
     db_queue.expect('NEWVER', ['foo', '1.0', dt('2018-07-11 16:43:11'), ''])
     db_queue.send('OK', False)
     db_queue.expect('GETSKIP', ['foo', '1.0'])
@@ -411,6 +536,8 @@ def test_yank_ver(mock_events, db_queue, web_queue, task):
     mock_events[:] = [
         ('foo', '1.0', dt('2018-07-11 16:43:11'), 'yank', None),
     ]
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:11')])
+    db_queue.send('OK', None)
     db_queue.expect('YANKVER', ['foo', '1.0'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'foo')
@@ -434,6 +561,8 @@ def test_unyank_ver(mock_events, db_queue, web_queue, task):
     mock_events[:] = [
         ('foo', '1.0', dt('2018-07-11 16:43:11'), 'unyank', None),
     ]
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:11')])
+    db_queue.send('OK', None)
     db_queue.expect('UNYANKVER', ['foo', '1.0'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'foo')
@@ -458,10 +587,16 @@ def test_yank_unyank_ver(mock_events, db_queue, web_queue, task):
         ('foo', '1.0', dt('2018-07-11 16:43:11'), 'yank', None),
         ('foo', '1.0', dt('2018-07-11 16:43:12'), 'unyank', None),
     ]
+    # event 1
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:11')])
+    db_queue.send('OK', None)
     db_queue.expect('YANKVER', ['foo', '1.0'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'foo')
     web_queue.send('DONE')
+    # event 2
+    db_queue.expect('NEWPKGNAME', ['foo', 'foo', dt('2018-07-11 16:43:12')])
+    db_queue.send('OK', None)
     db_queue.expect('UNYANKVER', ['foo', '1.0'])
     db_queue.send('OK', True)
     web_queue.expect('BOTH', 'foo')

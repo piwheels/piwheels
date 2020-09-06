@@ -66,6 +66,7 @@ def log_sample():
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:07:11:29 +0100] "GET / HTTP/1.1" 200 6297 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/ici/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/pyjokes/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
+2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/Flask/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 """
     entries =[
         ('LOGSEARCH', [
@@ -191,6 +192,12 @@ def log_sample():
         ]),
         ('LOGPROJECT', [
             'pyjokes',
+            '2a00:1098:0:82:1000:3b:1:1',
+            datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
+            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+        ]),
+        ('LOGPROJECT', [
+            'flask',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
             'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',

@@ -49,13 +49,14 @@ from fnmatch import fnmatchcase
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
 from .. import __version__, terminal, const, protocols, transport
+from ..master.pypi import canonicalize_name
 
 
 # Workaround: lars bug; User-Agent instead of User-agent
 COMBINED = '%h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-Agent}i"'
 UTC = timezone.utc
 
-get_package_name = lambda path: str(path).split('/')[2]
+get_package_name = lambda path: canonicalize_name(str(path).split('/')[2])
 get_access_ip = lambda rh: str(rh)
 get_access_time = lambda dt: dt.replace(tzinfo=UTC)
 get_arch = lambda ud: ud.get('cpu')

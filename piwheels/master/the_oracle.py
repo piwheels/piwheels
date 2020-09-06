@@ -37,10 +37,15 @@ to it.
     :members:
 """
 
+from datetime import datetime, timezone
+
 from .. import const, protocols, transport, tasks
 from ..states import (
     BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)
 from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
+
+
+UTC = timezone.utc
 
 
 class TheOracle(tasks.NonStopTask):
@@ -97,6 +102,9 @@ class TheOracle(tasks.NonStopTask):
                 'ALLVERS':     lambda: self.do_allvers(),
                 'NEWPKG':      lambda: self.do_newpkg(*data),
                 'NEWVER':      lambda: self.do_newver(*data),
+                'NEWPKGNAME':  lambda: self.do_newpkgname(*data),
+                'GETPKGNAMES': lambda: self.do_getpkgnames(data),
+                'GETPROJNAME': lambda: self.do_getprojname(data),
                 'SETDESC':     lambda: self.do_setdesc(*data),
                 'GETDESC':     lambda: self.do_getdesc(data),
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
@@ -165,6 +173,27 @@ class TheOracle(tasks.NonStopTask):
         new (package, version) tuple.
         """
         return self.db.add_new_package_version(package, version, released, skip)
+
+    def do_newpkgname(self, package, name, seen):
+        """
+        Handler for "NEWPKGNAME" message, sent by :class:`DbClient` to register
+        a new package alias or update the last seen timestamp.
+        """
+        return self.db.add_package_name(package, name, seen)
+
+    def do_getpkgnames(self, package):
+        """
+        Handler for "GETPKGNAMES" message, sent by :class:`DbClient` to retrieve
+        all aliases for *package* (not including the canonical name itself).
+        """
+        return self.db.get_package_aliases(package)
+
+    def do_getprojname(self, package):
+        """
+        Handler for "GETPROJNAME" message, sent by :class:`DbClient` to retrieve
+        the last seen name for *package*.
+        """
+        return self.db.get_project_display_name(package)
 
     def do_setdesc(self, package, description):
         """
@@ -433,6 +462,24 @@ class DbClient:
         See :meth:`.db.Database.add_new_package_version`.
         """
         return self._execute('NEWVER', [package, version, released, skip])
+
+    def add_package_name(self, package, name, seen=datetime(1970, 1, 1, tzinfo=UTC)):
+        """
+        See :meth:`.db.Database.add_package_name`.
+        """
+        return self._execute('NEWPKGNAME', [package, name, seen])
+
+    def get_package_aliases(self, package):
+        """
+        See :meth:`.db.Database.get_package_aliases`.
+        """
+        return self._execute('GETPKGNAMES', package)
+
+    def get_project_display_name(self, package):
+        """
+        See :meth:`.db.Database.get_project_display_name`.
+        """
+        return self._execute('GETPROJNAME', package)
 
     def set_package_description(self, package, description):
         """

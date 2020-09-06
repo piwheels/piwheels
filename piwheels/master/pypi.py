@@ -59,6 +59,16 @@ logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logger = logging.getLogger('master.pypi')
 
+# From pip/_vendor/packaging/utils.py
+# pylint: disable=invalid-name
+_canonicalize_regex = re.compile(r"[-_.]+")
+
+
+def canonicalize_name(name):
+    # pylint: disable=missing-docstring
+    # This is taken from PEP 503.
+    return _canonicalize_regex.sub("-", name).lower()
+
 
 class PiWheelsTransport(xmlrpc.client.SafeTransport):
     """
@@ -109,7 +119,7 @@ class PyPIBuffer:
     seconds but by several days or even years in some cases. This leads to all
     sorts of fun including deletions before packages exist, and so on. Even
     after #628000, timestamps can go backwards but never by more than 3 minutes
-    (than I've seen so far).
+    (that I've seen so far).
 
     To work around this this class does several things. Considering #628000 as
     the "epoch" of reliability:
