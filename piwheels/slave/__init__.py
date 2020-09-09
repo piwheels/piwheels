@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # The piwheels project
 #   Copyright (c) 2017 Ben Nuttall <https://github.com/bennuttall>
 #   Copyright (c) 2017 Dave Jones <dave@waveform.org.uk>
@@ -385,6 +383,3 @@ def sig_term(signo, stack_frame):
 
 
 main = PiWheelsSlave()  # pylint: disable=invalid-name
-
-if __name__ == '__main__':
-    main()
