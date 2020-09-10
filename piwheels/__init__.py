@@ -107,5 +107,6 @@ __entry_points__ = {
         'piw-logger = piwheels.logger:main',
         'piw-monitor = piwheels.monitor.tui:main',
         'piw-sense = piwheels.monitor.sense:main',
+        'piw-audit = piwheels.audit:main',
     ],
 }
