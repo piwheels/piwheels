@@ -92,7 +92,7 @@ master is active, deletions may cause false negatives.
 
 def check_simple_index(config):
     logging.info('checking simple index')
-    path = config.output_path
+    path = config.output_path / 'simple'
     index = path / 'index.html'
     try:
         for href, text in parse_links(index):
@@ -103,7 +103,7 @@ def check_simple_index(config):
 
 def check_package_index(config, package):
     logging.info('checking %s', package)
-    path = config.output_path / package
+    path = config.output_path / 'simple' / package
     index = path / 'index.html'
     all_files = set(path.iterdir())
     try:
@@ -136,7 +136,7 @@ def check_wheel_hash(config, package, filename, filehash):
         logging.error('invalid algorithm %s in package index %s',
                       algorithm, package)
     else:
-        wheel = config.output_path / package / filename
+        wheel = config.output_path / 'simple' / package / filename
         with wheel.open('rb') as f:
             while True:
                 buf = f.read(4096)
@@ -149,6 +149,7 @@ def check_wheel_hash(config, package, filename, filehash):
 
 
 # TODO Test JSON data
+# TODO Test project dirs
 # TODO Test wheel metadata?
 
 

@@ -42,18 +42,24 @@ from piwheels.audit import main
 
 
 @pytest.fixture()
-def simple_dir(tmpdir):
+def output(tmpdir):
     return Path(str(tmpdir))
 
 
 @pytest.fixture()
-def missing(simple_dir):
-    return simple_dir / 'missing.txt'
+def simple(output):
+    (output / 'simple').mkdir()
+    return output / 'simple'
 
 
 @pytest.fixture()
-def extra(simple_dir):
-    return simple_dir / 'extra.txt'
+def missing(simple):
+    return simple / 'missing.txt'
+
+
+@pytest.fixture()
+def extra(simple):
+    return simple / 'extra.txt'
 
 
 def test_help(capsys):
@@ -72,36 +78,36 @@ def test_version(capsys):
     assert out.strip() == __version__
 
 
-def test_missing_simple_index(simple_dir, caplog, missing, extra):
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra)])
+def test_missing_simple_index(output, simple, caplog, missing, extra):
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
-    assert missing.read_text() == str(simple_dir / 'index.html') + '\n'
+    assert missing.read_text() == str(simple / 'index.html') + '\n'
     assert extra.read_text() == ''
 
 
-def test_missing_package_index(simple_dir, caplog, missing, extra):
-    (simple_dir / 'index.html').write_text("""\
+def test_missing_package_index(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra)])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == str(package_dir / 'index.html') + '\n'
     assert extra.read_text() == ''
 
 
-def test_missing_wheel_file(simple_dir, caplog, missing, extra):
-    (simple_dir / 'index.html').write_text("""\
+def test_missing_wheel_file(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
     (package_dir / 'index.html').write_text("""\
 <html>
@@ -109,20 +115,20 @@ def test_missing_wheel_file(simple_dir, caplog, missing, extra):
 <a href="foo-0.1-py3-none-any.whl#sha256=abcdefghijkl">foo-0.1-py3-none-any.whl</a>
 </body>
 </html>""")
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra)])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == str(package_dir / 'foo-0.1-py3-none-any.whl') + '\n'
     assert extra.read_text() == ''
 
 
-def test_unchecked_wheel_file(simple_dir, caplog, missing, extra):
-    (simple_dir / 'index.html').write_text("""\
+def test_unchecked_wheel_file(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
     (package_dir / 'index.html').write_text("""\
 <html>
@@ -131,20 +137,20 @@ def test_unchecked_wheel_file(simple_dir, caplog, missing, extra):
 </body>
 </html>""")
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra)])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 0
     assert missing.read_text() == ''
     assert extra.read_text() == ''
 
 
-def test_extraneous_wheel_file(simple_dir, caplog, missing, extra):
-    (simple_dir / 'index.html').write_text("""\
+def test_extraneous_wheel_file(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
     (package_dir / 'index.html').write_text("""\
 <html>
@@ -154,20 +160,20 @@ def test_extraneous_wheel_file(simple_dir, caplog, missing, extra):
 </html>""")
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
     (package_dir / 'foo-0.2-py3-none-any.whl').touch()
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra)])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == ''
     assert extra.read_text() == str(package_dir / 'foo-0.2-py3-none-any.whl') + '\n'
 
 
-def test_invalid_wheel_file(simple_dir, caplog, missing, extra):
-    (simple_dir / 'index.html').write_text("""\
+def test_invalid_wheel_file(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
     (package_dir / 'index.html').write_text("""\
 <html>
@@ -176,21 +182,21 @@ def test_invalid_wheel_file(simple_dir, caplog, missing, extra):
 </body>
 </html>""")
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra), '-V'])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-V'])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == ''
     assert extra.read_text() == ''
 
 
-def test_good_wheel_file(simple_dir, caplog, missing, extra):
+def test_good_wheel_file(output, simple, caplog, missing, extra):
     sha256 = hashlib.sha256()
-    (simple_dir / 'index.html').write_text("""\
+    (simple / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo">foo</a>
 </body>
 </html>""")
-    package_dir = simple_dir / 'foo'
+    package_dir = simple / 'foo'
     package_dir.mkdir()
     (package_dir / 'index.html').write_text("""\
 <html>
@@ -199,7 +205,7 @@ def test_good_wheel_file(simple_dir, caplog, missing, extra):
 </body>
 </html>""".format(hash=sha256.hexdigest()))
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
-    main(['-o', str(simple_dir), '-m', str(missing), '-e', str(extra), '-V'])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-V'])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 0
     assert missing.read_text() == ''
     assert extra.read_text() == ''
