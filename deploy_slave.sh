@@ -17,6 +17,7 @@ LIBZMQ=libzmq5
 
 if [ $VERSION_ID -eq 9 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
+    PIP="pip<21"
 elif [ $VERSION_ID -eq 10 ]; then
     LIBXLST=libxslt1-dev
     POSTGRES_SERVER_DEV=postgresql-server-dev-11
