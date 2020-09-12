@@ -114,15 +114,14 @@ def check_package_index(config, package):
         for href, text in parse_links(index):
             filename, filehash = href.rsplit('#', 1)
             try:
-                all_files.remove(filename)
+                all_files.remove(path / filename)
             except KeyError:
                 report_missing(config, 'wheel', path / filename)
             else:
                 if config.verify:
-                    check_wheel_hash(config, package, filename)
-    if all_files:
-        for filename in all_files:
-            report_extra(config, 'file', path / filename)
+                    check_wheel_hash(config, package, filename, filehash)
+    for filename in all_files:
+        report_extra(config, 'file', path / filename)
 
 
 def check_wheel_hash(config, package, filename, filehash):
@@ -150,6 +149,7 @@ def check_wheel_hash(config, package, filename, filehash):
 
 
 # TODO Test JSON data
+# TODO Test wheel metadata?
 
 
 def report_missing(config, label, path):
@@ -168,6 +168,7 @@ def report_extra(config, label, path):
 
 class IndexParser(HTMLParser):
     def __init__(self, queue):
+        super().__init__()
         self.queue = queue
         self.href = None
         self.data = None
@@ -204,6 +205,6 @@ def parse_links(path):
             parser.feed(buf)
             while True:
                 try:
-                    yield q.get()
+                    yield q.get(block=False)
                 except Empty:
                     break
