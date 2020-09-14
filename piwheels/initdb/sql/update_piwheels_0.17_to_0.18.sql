@@ -5,13 +5,112 @@ CREATE TABLE package_names (
     name    VARCHAR(200) NOT NULL,
     seen    TIMESTAMP DEFAULT '1970-01-01 00:00:00' NOT NULL,
 
-    CONSTRAINT package_names_pk PRIMARY KEY (name),
-    CONSTRAINT package_names_package_fk FOREIGN KEY (package)
-        REFERENCES packages ON DELETE CASCADE
+    CONSTRAINT package_names_pk PRIMARY KEY (name)
 );
 
 CREATE INDEX package_names_package ON package_names(package, seen DESC);
 GRANT SELECT ON package_names TO {username};
+
+CREATE TEMPORARY TABLE source
+AS
+    SELECT
+        regexp_replace(LOWER(p.package), '[_.-]+', '-', 'g') AS package,
+        p.package AS name,
+        COALESCE(MIN(v.released), '1970-01-01 00:00:00') AS seen
+    FROM
+        packages p
+        LEFT JOIN versions v USING (package)
+    GROUP BY package, name;
+
+ALTER TABLE source ADD PRIMARY KEY (package, name);
+
+CREATE TEMPORARY TABLE only_canon
+AS
+    SELECT package FROM source WHERE package = name
+    EXCEPT
+    SELECT package FROM source WHERE package <> name;
+
+ALTER TABLE only_canon ADD PRIMARY KEY (package);
+
+CREATE TEMPORARY TABLE only_non_canon
+AS
+    SELECT package FROM source WHERE package <> name
+    EXCEPT
+    SELECT package FROM source WHERE package = name;
+
+ALTER TABLE only_non_canon ADD PRIMARY KEY (package);
+
+CREATE TEMPORARY TABLE both_names
+AS
+    SELECT package FROM source
+    EXCEPT (
+        SELECT package FROM only_canon
+        UNION ALL
+        SELECT package FROM only_non_canon
+    );
+
+ALTER TABLE both_names ADD PRIMARY KEY (package);
+
+INSERT INTO package_names
+    SELECT s.package, s.name, s.seen
+    FROM source s JOIN only_canon c USING (package)
+
+    UNION
+
+    SELECT s.package, s.name, s.seen
+    FROM source s JOIN only_non_canon c USING (package)
+
+    UNION
+
+    SELECT s.package, s.package AS name, MIN(s.seen) AS seen
+    FROM source s JOIN only_non_canon c USING (package)
+    GROUP BY s.package
+
+    UNION
+
+    SELECT s.package, s.package AS name, MIN(s.seen) AS seen
+    FROM source s JOIN both_names c USING (package)
+    GROUP BY s.package
+
+    UNION
+
+    SELECT s.package, s.name, s.seen
+    FROM source s JOIN both_names c USING (package)
+    WHERE s.package <> s.name;
+
+-- Fix up names in packages / versions / builds
+ALTER TABLE builds
+    DROP CONSTRAINT builds_versions_fk;
+ALTER TABLE versions
+    DROP CONSTRAINT versions_package_fk;
+
+UPDATE builds SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+
+DELETE FROM versions v
+    USING both_names c, source s
+    WHERE v.package = s.name
+    AND c.package = s.package
+    AND s.package <> s.name;
+
+UPDATE versions SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+
+DELETE FROM packages p
+    USING both_names c, source s
+    WHERE p.package = s.name
+    AND c.package = s.package
+    AND s.package <> s.name;
+
+UPDATE packages SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+
+ALTER TABLE package_names
+    ADD CONSTRAINT package_names_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE CASCADE;
+ALTER TABLE versions
+    ADD CONSTRAINT versions_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE CASCADE;
+ALTER TABLE builds
+    ADD CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
+        REFERENCES versions ON DELETE CASCADE;
 
 CREATE FUNCTION add_package_name(
     canon_name TEXT,
