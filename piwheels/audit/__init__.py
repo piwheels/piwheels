@@ -79,9 +79,11 @@ master is active, deletions may cause false negatives.
         help="If specified, the path of a file to which all missing "
         "filenames (files which should exist, but don't) will be written")
     parser.add_argument(
-        '-V', '--verify', action='store_true',
-        help="If specified, verify hashes of all wheels found against their "
-        "index; warning: this is an extremely slow operation on a full index")
+        '-b', '--broken', metavar='FILE', type=argparse.FileType('w'),
+        help="If specified, the path of a file to which all filenames of "
+        "corrupted wheels will be written; warning: this is an extremely "
+        "slow operation on a full index which is avoided if this option is "
+        "not specified")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
 
@@ -118,7 +120,7 @@ def check_package_index(config, package):
             except KeyError:
                 report_missing(config, 'wheel', path / filename)
             else:
-                if config.verify:
+                if config.broken:
                     check_wheel_hash(config, package, filename, filehash)
     for filename in all_files:
         report_extra(config, 'file', path / filename)
@@ -144,8 +146,7 @@ def check_wheel_hash(config, package, filename, filehash):
                     break
                 state.update(buf)
         if state.hexdigest().lower() != filehash.lower():
-            logging.error('invalid hash for %s; expected %s but found %s',
-                          wheel, filehash, state.hexdigest())
+            report_broken(config, 'wheel', wheel)
 
 
 # TODO Test JSON data
@@ -153,18 +154,20 @@ def check_wheel_hash(config, package, filename, filehash):
 # TODO Test wheel metadata?
 
 
-def report_missing(config, label, path):
-    logging.error('missing %s %s', label, path)
-    if config.missing:
-        config.missing.write(str(path))
-        config.missing.write('\n')
+def report(file, prefix, label, path):
+    logging.error('%s %s %s', prefix, label, path)
+    if file:
+        file.write(str(path))
+        file.write('\n')
 
+def report_missing(config, label, path):
+    report(config.missing, 'missing', label, path)
 
 def report_extra(config, label, path):
-    logging.error('extraneous %s %s', label, path)
-    if config.extraneous:
-        config.extraneous.write(str(path))
-        config.extraneous.write('\n')
+    report(config.extraneous, 'extraneous', label, path)
+
+def report_broken(config, label, path):
+    report(config.broken, 'corrupted', label, path)
 
 
 class IndexParser(HTMLParser):

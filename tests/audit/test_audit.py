@@ -62,6 +62,11 @@ def extra(simple):
     return simple / 'extra.txt'
 
 
+@pytest.fixture()
+def broken(simple):
+    return simple / 'broken.txt'
+
+
 def test_help(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
@@ -166,7 +171,7 @@ def test_extraneous_wheel_file(output, simple, caplog, missing, extra):
     assert extra.read_text() == str(package_dir / 'foo-0.2-py3-none-any.whl') + '\n'
 
 
-def test_invalid_wheel_file(output, simple, caplog, missing, extra):
+def test_invalid_wheel_file(output, simple, caplog, missing, extra, broken):
     (simple / 'index.html').write_text("""\
 <html>
 <body>
@@ -182,13 +187,14 @@ def test_invalid_wheel_file(output, simple, caplog, missing, extra):
 </body>
 </html>""")
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
-    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-V'])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-b', str(broken)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == ''
     assert extra.read_text() == ''
+    assert broken.read_text() == str(package_dir / 'foo-0.1-py3-none-any.whl') + '\n'
 
 
-def test_good_wheel_file(output, simple, caplog, missing, extra):
+def test_good_wheel_file(output, simple, caplog, missing, extra, broken):
     sha256 = hashlib.sha256()
     (simple / 'index.html').write_text("""\
 <html>
@@ -205,7 +211,8 @@ def test_good_wheel_file(output, simple, caplog, missing, extra):
 </body>
 </html>""".format(hash=sha256.hexdigest()))
     (package_dir / 'foo-0.1-py3-none-any.whl').touch()
-    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-V'])
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-b', str(broken)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 0
     assert missing.read_text() == ''
     assert extra.read_text() == ''
+    assert broken.read_text() == ''
