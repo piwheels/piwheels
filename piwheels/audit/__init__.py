@@ -63,10 +63,6 @@ master should preferably be shut down during operation of this script. If the
 master is active, deletions may cause false negatives.
 """)
     parser.add_argument(
-        '--hashes', default=False, action='store_true',
-        help="If specified, verify all index hashes against files on disk; "
-        "be warned that on a full index this will take a *very* long time")
-    parser.add_argument(
         '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
         help="The path under which the website has been written; must be "
         "readable by the current user")
@@ -107,23 +103,27 @@ def check_package_index(config, package):
     logging.info('checking %s', package)
     path = config.output_path / 'simple' / package
     index = path / 'index.html'
-    all_files = set(path.iterdir())
     try:
-        all_files.remove(index)
-    except KeyError:
-        report_missing(config, 'package index', index)
+        all_files = set(path.iterdir())
+    except OSError:
+        report_missing(config, 'package dir', path)
     else:
-        for href, text in parse_links(index):
-            filename, filehash = href.rsplit('#', 1)
-            try:
-                all_files.remove(path / filename)
-            except KeyError:
-                report_missing(config, 'wheel', path / filename)
-            else:
-                if config.broken:
-                    check_wheel_hash(config, package, filename, filehash)
-    for filename in all_files:
-        report_extra(config, 'file', path / filename)
+        try:
+            all_files.remove(index)
+        except KeyError:
+            report_missing(config, 'package index', index)
+        else:
+            for href, text in parse_links(index):
+                filename, filehash = href.rsplit('#', 1)
+                try:
+                    all_files.remove(path / filename)
+                except KeyError:
+                    report_missing(config, 'wheel', path / filename)
+                else:
+                    if config.broken:
+                        check_wheel_hash(config, package, filename, filehash)
+        for filename in all_files:
+            report_extra(config, 'file', path / filename)
 
 
 def check_wheel_hash(config, package, filename, filehash):
