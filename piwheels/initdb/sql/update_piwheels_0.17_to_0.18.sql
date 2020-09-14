@@ -84,7 +84,9 @@ ALTER TABLE builds
 ALTER TABLE versions
     DROP CONSTRAINT versions_package_fk;
 
-UPDATE builds SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+UPDATE builds
+    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
+    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
 
 DELETE FROM versions v
     USING both_names c, source s
@@ -92,7 +94,9 @@ DELETE FROM versions v
     AND c.package = s.package
     AND s.package <> s.name;
 
-UPDATE versions SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+UPDATE versions
+    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
+    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
 
 DELETE FROM packages p
     USING both_names c, source s
@@ -100,7 +104,9 @@ DELETE FROM packages p
     AND c.package = s.package
     AND s.package <> s.name;
 
-UPDATE packages SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+UPDATE packages
+    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
+    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
 
 ALTER TABLE package_names
     ADD CONSTRAINT package_names_package_fk FOREIGN KEY (package)
