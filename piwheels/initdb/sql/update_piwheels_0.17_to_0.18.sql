@@ -1,5 +1,8 @@
 UPDATE configuration SET version = '0.18';
 
+DELETE FROM packages WHERE skip = 'deleted';
+DELETE FROM versions WHERE skip = 'deleted';
+
 CREATE TABLE package_names (
     package VARCHAR(200) NOT NULL,
     name    VARCHAR(200) NOT NULL,
@@ -16,7 +19,7 @@ AS
     SELECT
         regexp_replace(LOWER(p.package), '[_.-]+', '-', 'g') AS package,
         p.package AS name,
-        COALESCE(MIN(v.released), '1970-01-01 00:00:00') AS seen
+        COALESCE(MAX(v.released), '1970-01-01 00:00:00') AS seen
     FROM
         packages p
         LEFT JOIN versions v USING (package)
@@ -78,15 +81,21 @@ INSERT INTO package_names
     FROM source s JOIN both_names c USING (package)
     WHERE s.package <> s.name;
 
--- Fix up names in packages / versions / builds
-ALTER TABLE builds
-    DROP CONSTRAINT builds_versions_fk;
 ALTER TABLE versions
     DROP CONSTRAINT versions_package_fk;
 
-UPDATE builds
-    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
-    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+WITH dupes AS (
+    SELECT s.package, v.version, MAX(released) AS last_release
+    FROM versions v JOIN source s ON v.package = s.name
+    GROUP BY s.package, v.version
+    HAVING COUNT(*) > 1
+)
+DELETE FROM versions v
+    USING source s, dupes d
+    WHERE v.package = s.name
+    AND s.package = d.package
+    AND v.version = d.version
+    AND v.released < d.last_release;
 
 DELETE FROM versions v
     USING both_names c, source s
@@ -94,9 +103,21 @@ DELETE FROM versions v
     AND c.package = s.package
     AND s.package <> s.name;
 
-UPDATE versions
-    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
-    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+ALTER TABLE builds
+    DROP CONSTRAINT builds_versions_fk;
+
+WITH dupes AS (
+    SELECT s.package, MIN(p.package) AS min_package
+    FROM packages p JOIN source s ON p.package = s.name
+    GROUP BY s.package
+    HAVING COUNT(*) > 1
+)
+DELETE FROM packages p
+    USING source s, dupes d
+    WHERE p.package = s.name
+    AND s.package = d.package
+    AND p.package > min_package
+    AND p.package <> s.package;
 
 DELETE FROM packages p
     USING both_names c, source s
@@ -108,15 +129,25 @@ UPDATE packages
     SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
     WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
 
-ALTER TABLE package_names
-    ADD CONSTRAINT package_names_package_fk FOREIGN KEY (package)
-        REFERENCES packages ON DELETE CASCADE;
+UPDATE versions
+    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
+    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+
 ALTER TABLE versions
     ADD CONSTRAINT versions_package_fk FOREIGN KEY (package)
         REFERENCES packages ON DELETE CASCADE;
+
+UPDATE builds
+    SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g')
+    WHERE package <> regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
+
 ALTER TABLE builds
     ADD CONSTRAINT builds_versions_fk FOREIGN KEY (package, version)
         REFERENCES versions ON DELETE CASCADE;
+
+ALTER TABLE package_names
+    ADD CONSTRAINT package_names_package_fk FOREIGN KEY (package)
+        REFERENCES packages ON DELETE CASCADE;
 
 CREATE FUNCTION add_package_name(
     canon_name TEXT,
