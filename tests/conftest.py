@@ -75,6 +75,12 @@ def find_message(records, **kwargs):
             return record
 
 
+def find_messages(records, **kwargs):
+    for record in records:
+        if all(getattr(record, key) == value for key, value in kwargs.items()):
+            yield record
+
+
 @pytest.fixture()
 def file_content(request):
     return b'\x01\x02\x03\x04\x05\x06\x07\x08' * 15432  # 123456 bytes
