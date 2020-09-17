@@ -203,3 +203,6 @@ $sql$;
 
 REVOKE ALL ON FUNCTION get_package_aliases(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_package_aliases(TEXT) TO {username};
+
+UPDATE project_page_hits
+SET package = regexp_replace(LOWER(package), '[_.-]+', '-', 'g');
