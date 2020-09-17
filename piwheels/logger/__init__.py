@@ -76,6 +76,7 @@ log_type_patterns = (
     (None,    '/project/', None),
     ('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
     ('pip/*', '/simple/*', 'LOGSEARCH'),
+    (None,    '/simple/*', None),
     (None,    '/project/*/json/', 'LOGJSON'),
     (None,    '/project/*/json/index.json', 'LOGJSON'),
     (None,    '/project/*', 'LOGPROJECT'),
