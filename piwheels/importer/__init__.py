@@ -186,6 +186,7 @@ def print_state(state):
         logging.warning('  ABI tag:      %s', wheel.abi_tag)
         logging.warning('  Python tag:   %s', wheel.py_version_tag)
         logging.warning('  Platform tag: %s', wheel.platform_tag)
+        logging.warning('  Requires-Python: %s', wheel.requires_python)
 
 
 def do_import(config, packages, state):

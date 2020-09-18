@@ -190,6 +190,7 @@ CREATE TABLE files (
     py_version_tag      VARCHAR(100) NOT NULL,
     abi_tag             VARCHAR(100) NOT NULL,
     platform_tag        VARCHAR(100) NOT NULL,
+    requires_python     VARCHAR(100) NULL,
 
     CONSTRAINT files_pk PRIMARY KEY (filename),
     CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
@@ -1115,7 +1116,8 @@ BEGIN
         package_version_tag,
         py_version_tag,
         abi_tag,
-        platform_tag
+        platform_tag,
+        requires_python
     )
         SELECT
             b.filename,
@@ -1126,7 +1128,8 @@ BEGIN
             b.package_version_tag,
             b.py_version_tag,
             b.abi_tag,
-            b.platform_tag
+            b.platform_tag,
+            b.requires_python
         FROM
             UNNEST(build_files) AS b;
     INSERT INTO dependencies (
@@ -1603,6 +1606,7 @@ CREATE FUNCTION get_project_files(pkg TEXT)
         filesize files.filesize%TYPE,
         filehash files.filehash%TYPE,
         yanked versions.yanked%TYPE,
+        requires_python files.requires_python%TYPE,
         dependencies VARCHAR ARRAY
     )
     LANGUAGE SQL
@@ -1619,6 +1623,7 @@ AS $sql$
         f.filesize,
         f.filehash,
         v.yanked,
+        f.requires_python,
         ARRAY_AGG(d.dependency)
             FILTER (WHERE d.dependency IS NOT NULL) AS dependencies
     FROM
@@ -1633,7 +1638,7 @@ AS $sql$
     AND b.package = pkg
     GROUP BY (
         version, platform_tag, builder_abi, file_abi_tag, filename, filesize,
-        filehash, yanked
+        filehash, yanked, requires_python
     );
 $sql$;
 

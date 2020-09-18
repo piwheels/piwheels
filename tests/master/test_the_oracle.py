@@ -362,7 +362,7 @@ def test_get_project_versions(db, with_files, db_client):
 def test_get_project_files(db, with_files, build_state_hacked, db_client):
     assert sorted(db_client.get_project_files('foo'), key=itemgetter(1)) == sorted([
         ('0.1', f.platform_tag, f.abi_tag, 'cp34m', f.filename, f.filesize,
-        f.filehash, False, ['libc6'])
+        f.filehash, False, f.requires_python, ['libc6'])
         for f in build_state_hacked.files.values()
     ], key=itemgetter(1))
 

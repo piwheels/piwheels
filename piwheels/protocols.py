@@ -166,6 +166,7 @@ _file_state = ExactSequence([
     str,            # py_version_tag
     str,            # abi_tag
     str,            # platform_tag
+    Any(str, None), # requires_python
     {str: [str]},   # dependencies
     # NOTE: the optional transferred field is never included. It is effectively
     # internal to whatever is tracking the file state
