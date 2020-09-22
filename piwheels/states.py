@@ -128,6 +128,9 @@ class FileState:
         The platform tag extracted from the filename (last "-" separated
         component).
 
+    :param str requires_python:
+        The ``Requires-Python`` specification for the file.
+
     :param set dependencies:
         The set of dependencies that are required to use this particular
         wheel.
@@ -138,7 +141,7 @@ class FileState:
     """
     def __init__(self, filename, filesize, filehash, package_tag,
                  package_version_tag, py_version_tag, abi_tag, platform_tag,
-                 dependencies, transferred=False):
+                 requires_python, dependencies, transferred=False):
         self._filename = filename
         self._filesize = filesize
         self._filehash = filehash
@@ -147,6 +150,7 @@ class FileState:
         self._py_version_tag = py_version_tag
         self._abi_tag = abi_tag
         self._platform_tag = platform_tag
+        self._requires_python = requires_python
         self._dependencies = dependencies
         self._transferred = transferred
 
@@ -166,7 +170,7 @@ class FileState:
         return cls(*value)
 
     def __len__(self):
-        return 10
+        return 11
 
     def __getitem__(self, index):
         return (
@@ -178,6 +182,7 @@ class FileState:
             self._py_version_tag,
             self._abi_tag,
             self._platform_tag,
+            self._requires_python,
             self._dependencies,
             self._transferred,
         )[index]
@@ -230,6 +235,10 @@ class FileState:
     @property
     def dependencies(self):
         return self._dependencies
+
+    @property
+    def requires_python(self):
+        return self._requires_python
 
     @property
     def transferred(self):

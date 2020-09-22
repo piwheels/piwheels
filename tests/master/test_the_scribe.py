@@ -223,10 +223,10 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
         ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -253,7 +253,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config):
         simple_index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
     )
     assert contains_elem(
-        simple_index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
+        simple_index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')]
     )
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
@@ -275,10 +275,10 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
         ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -303,10 +303,174 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config):
         index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
     )
     assert contains_elem(
-        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef')]
+        index, 'a', [('href', 'foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef')]
     )
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
+                        '123456abcdef', True, None, ['libfoo']),
+        ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
+                        '123456abcdef', True, None, ['libfoo']),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', True, datetime(1970, 1, 1, tzinfo=UTC), '',
+                           'cp34m', ''),
+    ])
+    db_queue.expect('GETABIS', True)
+    db_queue.send('OK', {'cp34m', 'cp35m'})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    db_queue.expect('GETPROJNAME', 'foo')
+    db_queue.send('OK', 'foo')
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert simple_index.exists() and simple_index.is_file()
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef'),
+            ('data-yanked', ''),
+        ]
+    )
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef'),
+            ('data-yanked', ''),
+        ]
+    )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    project_json = root / 'project' / 'foo' / 'json' / 'index.json'
+    assert project_json.exists() and project_json.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
+                        '123456abcdef', False, '>=3', ['libfoo']),
+        ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
+                        '123456abcdef', False, '>=3', ['libfoo']),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', False, datetime(1970, 1, 1, tzinfo=UTC), '',
+                           'cp34m', ''),
+    ])
+    db_queue.expect('GETABIS', True)
+    db_queue.send('OK', {'cp34m', 'cp35m'})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    db_queue.expect('GETPROJNAME', 'foo')
+    db_queue.send('OK', 'foo')
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert simple_index.exists() and simple_index.is_file()
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef'),
+            ('data-requires-python', '>=3'),
+        ]
+    )
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef'),
+            ('data-requires-python', '>=3'),
+        ]
+    )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    project_json = root / 'project' / 'foo' / 'json' / 'index.json'
+    assert project_json.exists() and project_json.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_index_with_yanked_files_and_requires_python(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJFILES', 'foo')
+    db_queue.send('OK', [
+        ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
+                        '123456abcdef', True, '>=3', ['libfoo']),
+        ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
+                        'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
+                        '123456abcdef', True, '>=3', ['libfoo']),
+    ])
+    db_queue.expect('PROJVERS', 'foo')
+    db_queue.send('OK', [
+        ProjectVersionsRow('0.1', True, datetime(1970, 1, 1, tzinfo=UTC), '',
+                           'cp34m', ''),
+    ])
+    db_queue.expect('GETABIS', True)
+    db_queue.send('OK', {'cp34m', 'cp35m'})
+    db_queue.expect('GETDESC', 'foo')
+    db_queue.send('OK', 'Some description')
+    db_queue.expect('GETPROJNAME', 'foo')
+    db_queue.send('OK', 'foo')
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert simple_index.exists() and simple_index.is_file()
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv7l.whl#sha256=123456abcdef'),
+            ('data-yanked', ''),
+            ('data-requires-python', '>=3'),
+        ]
+    )
+    assert contains_elem(
+        simple_index, 'a', [
+            ('href', 'foo-0.1-cp34-cp34m-linux_armv6l.whl#sha256=123456abcdef'),
+            ('data-yanked', ''),
+            ('data-requires-python', '>=3'),
+        ]
+    )
+    project = root / 'project' / 'foo' / 'index.html'
+    assert project.exists() and project.is_file()
+    project_json = root / 'project' / 'foo' / 'json' / 'index.json'
+    assert project_json.exists() and project_json.is_file()
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
@@ -360,10 +524,10 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, []),
+                        '123456abcdef', False, '>=3', []),
         ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, []),
+                        '123456abcdef', False, '>=3', []),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -419,10 +583,10 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
         ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -478,10 +642,10 @@ def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', [
         ProjectFilesRow('0.1', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', True, '>=3', ['libfoo']),
         ProjectFilesRow('0.1', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', True, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -544,10 +708,10 @@ def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_confi
     db_queue.send('OK', [
         ProjectFilesRow('0.1a', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1a-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
         ProjectFilesRow('0.1a', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1a-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -610,10 +774,10 @@ def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue, maste
     db_queue.send('OK', [
         ProjectFilesRow('0.1a', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.1a-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', True, '>=3', ['libfoo']),
         ProjectFilesRow('0.1a', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.1a-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', True, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -821,10 +985,10 @@ def test_delete_version(db_queue, task, scribe_queue, master_config):
     db_queue.send('OK', [
         ProjectFilesRow('0.2', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.2-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, []),
+                        '123456abcdef', False, '>=3', []),
         ProjectFilesRow('0.2', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.2-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, []),
+                        '123456abcdef', False, '>=3', []),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [
@@ -900,10 +1064,10 @@ def test_delete_version_missing_file(db_queue, task, scribe_queue, master_config
     db_queue.send('OK', [
         ProjectFilesRow('0.2', 'linux_armv6l', 'cp34m', 'cp34m',
                         'foo-0.2-cp34-cp34m-linux_armv6l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
         ProjectFilesRow('0.2', 'linux_armv7l', 'cp34m', 'cp34m',
                         'foo-0.2-cp34-cp34m-linux_armv7l.whl', 123456,
-                        '123456abcdef', False, ['libfoo']),
+                        '123456abcdef', False, '>=3', ['libfoo']),
     ])
     db_queue.expect('PROJVERS', 'foo')
     db_queue.send('OK', [

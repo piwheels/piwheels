@@ -97,7 +97,8 @@ class Wheel:
             self.py_version_tag,
             self.abi_tag,
             self.platform_tag,
-            self.dependencies
+            self.requires_python,
+            self.dependencies,
         )
 
     @property
@@ -185,6 +186,14 @@ class Wheel:
         Open the wheel in binary mode and return the open file object.
         """
         return self.wheel_file.open('rb')
+
+    @property
+    def requires_python(self):
+        """
+        Return the contents of the ``Requires-Python`` specification from the
+        wheel metadata.
+        """
+        return self.metadata['Requires-Python']
 
     @property
     def dependencies(self):

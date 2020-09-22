@@ -55,7 +55,7 @@ ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
     'version', 'yanked', 'released', 'skip', 'builds_succeeded', 'builds_failed'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
     'version', 'platform_tag', 'builder_abi', 'file_abi_tag', 'filename',
-    'filesize', 'filehash', 'yanked', 'dependencies'))
+    'filesize', 'filehash', 'yanked', 'requires_python', 'dependencies'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
@@ -419,6 +419,7 @@ class Database:
                             file.py_version_tag,
                             file.abi_tag,
                             file.platform_tag,
+                            file.requires_python,
                         )
                         for file in build.files.values()],
                         [(
@@ -594,7 +595,8 @@ class Database:
                 ProjectFilesRow(*row)
                 for row in self._conn.execute(
                     "SELECT version, platform_tag, builder_abi, file_abi_tag, "
-                    "filename, filesize, filehash, yanked, dependencies "
+                    "filename, filesize, filehash, yanked, requires_python, "
+                    "dependencies "
                     "FROM get_project_files(%s)", (package,)
                 )
             ]

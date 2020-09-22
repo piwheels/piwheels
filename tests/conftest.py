@@ -93,7 +93,7 @@ def file_state(request, file_content):
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
         h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
-        {'apt': ['libc6']})
+        '>=3', {'apt': ['libc6']})
 
 
 @pytest.fixture()
@@ -103,7 +103,7 @@ def file_state_hacked(request, file_content):
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv6l.whl', len(file_content),
         h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l',
-        {'apt': ['libc6']}, transferred=True)
+        '>=3', {'apt': ['libc6']}, transferred=True)
 
 
 @pytest.fixture()
@@ -114,11 +114,11 @@ def file_states_deps(request, file_content):
         FileState(
             'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
             h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
-            {'apt': ['libc', 'libfoo4']}),
+            '>=3', {'apt': ['libc', 'libfoo4']}),
         FileState(
             'foo-0.1-cp35-cp35m-linux_armv7l.whl', len(file_content),
             h.hexdigest().lower(), 'foo', '0.1', 'cp35', 'cp35m', 'linux_armv7l',
-            {'apt': ['libc', 'libfoo5']}),
+            '>=3', {'apt': ['libc', 'libfoo5']}),
     ]
 
 
@@ -305,11 +305,12 @@ def with_files(request, db, with_build, file_state, file_state_hacked):
     with db.begin():
         db.execute(
             "INSERT INTO files "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             file_state.filename, with_build.build_id,
             file_state.filesize, file_state.filehash, file_state.package_tag,
             file_state.package_version_tag, file_state.py_version_tag,
-            file_state.abi_tag, file_state.platform_tag)
+            file_state.abi_tag, file_state.platform_tag,
+            file_state.requires_python)
         for tool, dependencies in file_state.dependencies.items():
             for dependency in dependencies:
                 db.execute(
@@ -318,13 +319,13 @@ def with_files(request, db, with_build, file_state, file_state_hacked):
                     file_state.filename, tool, dependency)
         db.execute(
             "INSERT INTO files "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             file_state_hacked.filename, with_build.build_id,
             file_state_hacked.filesize, file_state_hacked.filehash,
             file_state_hacked.package_tag,
             file_state_hacked.package_version_tag,
             file_state_hacked.py_version_tag, file_state_hacked.abi_tag,
-            file_state_hacked.platform_tag)
+            file_state_hacked.platform_tag, file_state_hacked.requires_python)
         for tool, dependencies in file_state_hacked.dependencies.items():
             for dependency in dependencies:
                 db.execute(

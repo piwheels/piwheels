@@ -160,9 +160,9 @@ class TheScribe(tasks.PauseableTask):
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](
-                        layout=self.templates['layout']['layout'],
-                        page=filename.replace('.pt', '')
-                    )
+                    layout=self.templates['layout']['layout'],
+                    page=filename.replace('.pt', '')
+                )
                 with AtomicReplaceFile(
                         (self.output_path / filename).with_suffix('.html'),
                         encoding='utf-8') as f:
@@ -570,6 +570,7 @@ class TheScribe(tasks.PauseableTask):
                     'builder_abi': f.builder_abi,
                     'file_abi_tag': f.file_abi_tag,
                     'platform': f.platform_tag,
+                    'requires_python': f.requires_python,
                     'apt_dependencies': sorted(f.dependencies) if f.dependencies else [],
                 }
                 for f in files
