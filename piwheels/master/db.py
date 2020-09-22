@@ -52,9 +52,10 @@ UTC = timezone.utc
 
 
 ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'skipped', 'builds_succeeded', 'builds_failed', 'yanked'))
+    'version', 'yanked', 'released', 'skip', 'builds_succeeded', 'builds_failed'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
-    'version', 'abi_tag', 'filename', 'filesize', 'filehash', 'yanked'))
+    'version', 'platform_tag', 'builder_abi', 'file_abi_tag', 'filename',
+    'filesize', 'filehash', 'yanked', 'dependencies'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
@@ -442,14 +443,17 @@ class Database:
                     )).scalar()
             build.logged(build_id)
 
-    def get_build_abis(self):
+    def get_build_abis(self, exclude_skipped=False):
         """
-        Return the set of ABIs that the master should attempt to build.
+        Return a set of ABIs. If **exclude_skipped** is ``False``, return all
+        ABIs from the build_abis table, otherwise return only active ABIs (not
+        skipped).
         """
         with self._conn.begin():
             return {
                 rec.abi_tag
                 for rec in self._conn.execute(self._build_abis.select())
+                if rec.skip == '' or not exclude_skipped
             }
 
     def get_pypi_serial(self):
@@ -574,7 +578,8 @@ class Database:
             return [
                 ProjectVersionsRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, skipped, builds_succeeded, builds_failed, yanked "
+                    "SELECT version, yanked, released, skip, builds_succeeded, "
+                    "builds_failed "
                     "FROM get_project_versions(%s)", (package,)
                 )
             ]
@@ -588,7 +593,8 @@ class Database:
             return [
                 ProjectFilesRow(*row)
                 for row in self._conn.execute(
-                    "SELECT version, abi_tag, filename, filesize, filehash, yanked "
+                    "SELECT version, platform_tag, builder_abi, file_abi_tag, "
+                    "filename, filesize, filehash, yanked, dependencies "
                     "FROM get_project_files(%s)", (package,)
                 )
             ]
@@ -603,19 +609,6 @@ class Database:
                 where(self._versions.c.package == package).
                 where(self._versions.c.version == version)
             )
-
-    def get_file_apt_dependencies(self, filename):
-        """
-        Returns a set of the apt dependencies for the specified *filename*.
-        """
-        with self._conn.begin():
-            return {
-                row['dependency']
-                for row in self._conn.execute(
-                    "SELECT dependency "
-                    "FROM get_file_apt_dependencies(%s)", (filename,)
-                )
-            }
 
     def delete_build(self, package, version):
         """

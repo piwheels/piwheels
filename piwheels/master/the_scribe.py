@@ -38,9 +38,10 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import zip_longest
 from operator import attrgetter
+from collections import namedtuple
 
 import pkg_resources
 from chameleon import PageTemplateLoader
@@ -51,6 +52,35 @@ from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
 from .pypi import canonicalize_name
+
+UTC = timezone.utc
+
+
+ProjectRelease = namedtuple('ProjectRelease', (
+    'version', 'yanked', 'released', 'skip', 'abis', 'files',
+    'builds_succeeded', 'builds_failed'))
+
+def _is_compatible_with_abi(abi, builds_succeeded, files):
+    return abi in builds_succeeded or any(
+        f['file_abi_tag'] == 'none' and abi >= f['builder_abi']
+        for f in files
+    )
+
+def _get_abi_status(abi, builds_succeeded, builds_failed, files, skip):
+    status = {
+        'css_class': '',
+        'title': '',
+    }
+    if abi in builds_failed:
+        status['css_class'] = 'buildfailed'
+        status['title'] = 'Build failed'
+    elif _is_compatible_with_abi(abi, builds_succeeded, files):
+        status['css_class'] = 'buildpassed'
+        status['title'] = 'Build succeeded'
+    elif skip:
+        status['css_class'] = 'buildskipped'
+        status['title'] = 'Skipped: {}'.format(skip)
+    return status
 
 
 class PackageDeleted(ValueError):
@@ -126,7 +156,7 @@ class TheScribe(tasks.PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', '404.pt'}
+        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', 'json.pt', '404.pt'}
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
                 source = self.templates[filename](
@@ -166,8 +196,9 @@ class TheScribe(tasks.PauseableTask):
             if msg in ('BOTH', 'PROJECT'):
                 package = data
                 if msg == 'BOTH':
-                    self.write_package_index(package)
-                self.write_project_page(package)
+                    self.write_pages(package, both=True)
+                else:
+                    self.write_pages(package)
             elif msg == 'HOME':
                 self.write_homepage(MasterStats.from_message(data))
                 self.write_sitemap()
@@ -177,8 +208,8 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'DELVER':
                 package, version = data
                 self.delete_version(package, version)
-                self.write_package_index(package, exclude={version})
-                self.write_project_page(package, exclude={version})
+                pages = ('index', 'project')
+                self.write_pages(package, both=True, exclude={version})
             elif msg == 'DELPKG':
                 package = data
                 self.package_cache.discard(package)
@@ -195,12 +226,12 @@ class TheScribe(tasks.PauseableTask):
             A dict containing statistics obtained by :class:`BigBrother`.
         """
         self.logger.info('writing homepage')
-        dt = datetime.now()
+        dt = datetime.now(tz=UTC)
         with AtomicReplaceFile(self.output_path / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['index'](
                 layout=self.templates['layout']['layout'],
-                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
+                timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
                 page='home',
                 stats=statistics))
 
@@ -263,7 +294,36 @@ class TheScribe(tasks.PauseableTask):
             index.file.write(self.templates['simple_index'](
                 packages=self.package_cache))
 
-    def write_package_index(self, package, *, exclude=None):
+    def write_pages(self, package, *, both=False, exclude=None):
+        """
+        (Re)writes the project page and project JSON file (and simple index if
+        *both* is True) for the specified *package*.
+
+        :param str package:
+            The name of the package to write the pages for
+
+        :param bool both:
+            Write both the project page and the simple page if True, otherwise
+            only write the project page. Note project page also includes project
+            JSON.
+
+        :type exclude: set or None
+        :param exclude:
+            The set of (deleted) versions to exclude from pages. Defaults to
+            ``None``.
+        """
+        if exclude is None:
+            exclude = set()
+        files = self.get_files(package, exclude)
+        if both:
+            self.write_package_index(package, files)
+        versions = self.get_versions(package, exclude)
+        releases = self.get_releases(versions, files)
+        description = self.db.get_package_description(package)
+        self.write_project_page(package, releases, description)
+        self.write_project_json(package, releases, description)
+
+    def write_package_index(self, package, files):
         """
         (Re)writes the index of the specified package. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
@@ -271,18 +331,13 @@ class TheScribe(tasks.PauseableTask):
 
         :param str package:
             The name of the package to write the index for
+
+        :param str files:
+            The list of files to include in the index
         """
-        if exclude is None:
-            exclude = set()
         self.logger.info('writing index for %s', package)
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
-        files = [
-            row._replace(version=parse_version(row.version))
-            for row in self.db.get_project_files(package)
-            if row.version not in exclude
-        ]
-        files = sorted(files, key=attrgetter('version'), reverse=True)
         with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['simple_package'](
@@ -293,56 +348,45 @@ class TheScribe(tasks.PauseableTask):
             self.package_cache.add(package)
             self.write_simple_index()
 
-    def write_project_page(self, package, *, exclude=None):
+    def write_project_page(self, package, releases, description):
         """
         (Re)writes the project page of the specified package.
 
         :param str package:
             The name of the package to write the project page for
+
+        :param str releases:
+            The list of releases to include in the project page
+
+        :param str description:
+            The project summary text
         """
-        if exclude is None:
-            exclude = set()
-        versions = [
-            row._replace(version=parse_version(row.version))
-            for row in self.db.get_project_versions(package)
-            if row.version not in exclude
-        ]
-        versions = sorted(versions, key=attrgetter('version'), reverse=True)
-        files = [
-            row._replace(version=parse_version(row.version))
-            for row in self.db.get_project_files(package)
-            if row.version not in exclude
-        ]
-        files = sorted(files, key=attrgetter('version'), reverse=True)
-        release_files = [
-            f.filename
-            for f in files
-            if not f.version.is_prerelease
-        ]
-        if release_files:
-            dependencies = self.db.get_file_apt_dependencies(release_files[0])
-        else:
-            dependencies = set()
-        description = self.db.get_package_description(package)
-        project_name = self.db.get_project_display_name(package)
         self.logger.info('writing project page for %s', package)
+        num_files = sum(len(release.files) for release in releases)
+        release_files = [
+            release.files
+            for release in releases
+            if not (release.version.is_prerelease or release.yanked)
+        ]
+        try:
+            dependencies = release_files[0][0]['apt_dependencies']
+        except IndexError:
+            dependencies = set()
+        project_name = self.db.get_project_display_name(package)
         project_dir = self.output_path / 'project' / package
         mkdir_override_symlink(project_dir)
-        dt = datetime.now()
+        dt = datetime.now(tz=UTC)
         with AtomicReplaceFile(project_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(self.templates['project'](
                 layout=self.templates['layout']['layout'],
                 package=package,
                 project=project_name,
-                versions=versions,
-                files=files,
+                releases=releases,
+                num_files=num_files,
                 dependencies=dependencies,
                 format_size=format_size,
-                timestamp=dt.strftime('%Y-%m-%d %H:%M'),
+                timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
                 description=description,
-                url=lambda filename, filehash:
-                    '/simple/{package}/{filename}#sha256={filehash}'.format(
-                        package=package, filename=filename, filehash=filehash),
                 page='project'))
         project_aliases = self.db.get_package_aliases(package)
         if project_aliases:
@@ -354,6 +398,49 @@ class TheScribe(tasks.PauseableTask):
                 project_symlink.symlink_to(project_dir.name)
             except FileExistsError:
                 pass
+
+    def write_project_json(self, package, releases, description):
+        """
+        (Re)writes the project JSON file of the specified package.
+
+        :param str package:
+            The name of the package to write the project page for
+
+        :param str releases:
+            The list of releases to include in the project page
+
+        :param str description:
+            The project summary text
+        """
+        self.logger.info('writing project json for %s', package)
+        releases_dict = {
+            release.version.original: {
+                'released': release.released.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                'prerelease': release.version.is_prerelease,
+                'yanked': release.yanked,
+                'skip_reason': release.skip,
+                'files': {
+                    file['filename']: {
+                        k: v
+                        for k, v in file.items()
+                        if k != 'filename'
+                    }
+                    for file in release.files
+                }
+            }
+            for release in releases
+        }
+        project_data = {
+            'package': package,
+            'summary': description,
+            'pypi_url': 'https://pypi.org/project/{}'.format(package),
+            'piwheels_url': 'https://www.piwheels.org/project/{}'.format(package),
+            'releases': releases_dict,
+        }
+        pkg_dir = self.output_path / 'project' / package / 'json'
+        mkdir_override_symlink(pkg_dir)
+        with AtomicReplaceFile(pkg_dir / 'index.json', encoding='utf-8') as index:
+            json.dump(project_data, index)
 
     def delete_package(self, package):
         """
@@ -378,14 +465,16 @@ class TheScribe(tasks.PauseableTask):
 
         pkg_dir = self.output_path / 'simple' / package
         proj_dir = self.output_path / 'project' / package
+        proj_json_dir = proj_dir / 'json'
 
         files = {pkg_dir / f for f in self.db.get_package_files(package)}
         files |= {
             pkg_dir / 'index.html',
             proj_dir / 'index.html',
+            proj_json_dir / 'index.json',
         }
 
-        # try to delete every known wheel file, and the HTML files
+        # try to delete every known wheel file, the HTML files and JSON file
         for file_path in files:
             try:
                 file_path.unlink()
@@ -393,11 +482,12 @@ class TheScribe(tasks.PauseableTask):
             except FileNotFoundError:
                 self.logger.error('file not found: %s', file_path)
 
-        for dir_path in {pkg_dir, proj_dir}:
+        for dir_path in (pkg_dir, proj_json_dir, proj_dir):
             try:
                 dir_path.rmdir()
             except OSError as e:
-                self.logger.error('failed to remove directory: %s', repr(e))
+                self.logger.error('failed to remove directory %s: %s',
+                                  dir_path, repr(e))
 
     def delete_version(self, package, version):
         """
@@ -419,6 +509,92 @@ class TheScribe(tasks.PauseableTask):
                 self.logger.info('File deleted: %s', file)
             except FileNotFoundError:
                 self.logger.error('File not found: %s', file)
+
+    def get_versions(self, package, exclude):
+        """
+        Retrieves a sorted list of versions and associated data for *package*
+        excluding any versions in *exclude*.
+
+        :param str package:
+            The name of the package to get versions for.
+
+        :type exclude: set or None
+        :param exclude:
+            Set of versions to exclude from results.
+        """
+        versions = [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_versions(package)
+            if row.version not in exclude
+        ]
+        return sorted(versions, key=attrgetter('version'), reverse=True)
+
+    def get_files(self, package, exclude):
+        """
+        Retrieves a list of files and associated data for *package* excluding
+        any files from versions in *exclude*.
+
+        :param str package:
+            The name of the package to get versions for.
+
+        :type exclude: set or None
+        :param exclude:
+            Set of versions to exclude from results.
+        """
+        return [
+            row._replace(version=parse_version(row.version))
+            for row in self.db.get_project_files(package)
+            if row.version not in exclude
+        ]
+
+    def get_releases(self, versions, files):
+        """
+        Combines the given *files* and *versions* for a project into a list of
+        releases containing all the release information required to write out
+        the project page and project JSON file for the given package. Returns
+        the list of releases.
+
+        :param list versions:
+            The name of the package to get versions for.
+
+        :param list files:
+            Set of versions to exclude from results.
+        """
+        releases = []
+        for version in versions:
+            version_files = [
+                {
+                    'filename': f.filename,
+                    'filehash': f.filehash,
+                    'filesize': f.filesize,
+                    'builder_abi': f.builder_abi,
+                    'file_abi_tag': f.file_abi_tag,
+                    'platform': f.platform_tag,
+                    'apt_dependencies': sorted(f.dependencies) if f.dependencies else [],
+                }
+                for f in files
+                if f.version.original == version.version.original
+            ]
+            builds_succeeded = [abi for abi in version.builds_succeeded.split(',') if abi]
+            builds_failed = [abi for abi in version.builds_failed.split(',') if abi]
+            abis = {
+                abi: _get_abi_status(
+                    abi, builds_succeeded, builds_failed, version_files,
+                    version.skip)
+                for abi in self.db.get_build_abis(exclude_skipped=True)
+            }
+            release = ProjectRelease(
+                version=version.version,
+                yanked=version.yanked,
+                released=version.released,
+                skip=version.skip,
+                abis=abis,
+                files=version_files,
+                builds_succeeded=builds_succeeded,
+                builds_failed=builds_failed,
+            )
+            releases.append(release)
+        return releases
 
 
 # https://docs.python.org/3/library/itertools.html

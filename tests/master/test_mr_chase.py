@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from unittest import mock
+from datetime import datetime, timezone
 
 import pytest
 
@@ -34,6 +35,9 @@ from piwheels import protocols, transport
 from piwheels.master.mr_chase import MrChase
 from piwheels.master.slave_driver import build_armv6l_hack
 from piwheels.master.the_oracle import ProjectVersionsRow
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -86,7 +90,7 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
     bs._slave_id = bsh._slave_id = 0
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
@@ -123,7 +127,7 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
         f._transferred = False
 
     import_queue.send_msg('IMPORT', bsh.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
@@ -168,7 +172,7 @@ def test_import_resend_file(db_queue, web_queue, fs_queue, task, import_queue,
     bs._slave_id = bsh._slave_id = 0
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
@@ -205,7 +209,7 @@ def test_import_default_abi(db_queue, fs_queue, task, import_queue,
     bs._slave_id = bsh._slave_id = 0
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     bsh._abi_tag = 'cp34m'
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
@@ -230,7 +234,7 @@ def test_import_bad_abi(db_queue, task, import_queue, build_state):
     bs._abi_tag = 'cp36m'
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     task.poll(0)
     assert import_queue.recv_msg() == ('ERROR', 'invalid ABI: cp36m')
@@ -267,7 +271,7 @@ def test_import_unknown_pkg(db_queue, task, import_queue, build_state):
     bs = build_state
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bs.package, bs.version])
     db_queue.send('OK', False)
@@ -285,7 +289,7 @@ def test_import_failed_log(db_queue, task, import_queue, build_state,
     bs._slave_id = 0
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
@@ -304,7 +308,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
     bs._slave_id = bsh._slave_id = 0
 
     import_queue.send_msg('IMPORT', bs.as_message())
-    db_queue.expect('GETABIS')
+    db_queue.expect('GETABIS', False)
     db_queue.send('OK', {'cp34m', 'cp35m'})
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
@@ -376,8 +380,8 @@ def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
     skip_queue.send('OK')
     db_queue.expect('PROJVERS', bsh.package)
     db_queue.send('OK', [
-        ProjectVersionsRow(bsh.version, False, 'cp34m', '', False),
-        ProjectVersionsRow(bsh.version + 'a', False, '', 'cp35m', False),
+        ProjectVersionsRow(bsh.version, False, datetime(1970, 1, 1, tzinfo=UTC), '', 'cp34m', ''),
+        ProjectVersionsRow(bsh.version + 'a', False, datetime(1970, 1, 1, tzinfo=UTC), 'cp35m', '', ''),
     ])
     db_queue.expect('DELBUILD', [bsh.package, bsh.version])
     db_queue.send('OK', None)
