@@ -1,30 +1,35 @@
 <div metal:use-macro="layout">
+  <div metal:fill-slot="title" tal:omit-tag="1">${project}</div>
+
+  <div metal:fill-slot="head" tal:omit-tag="1">
+    <link rel="canonical" href="https://www.piwheels.org/project/${project}/" />
+    <meta name="description" content="The piwheels project page for ${project}: ${description}" />
+  </div>
+
   <div metal:fill-slot="scripts" tal:omit-tag="1">
     <script src="/project.js"></script>
+    <script>showDownloads('${package}');</script>
   </div>
-  <div metal:fill-slot="content">
-    <script>
-    window.onload = () => {
-      showDownloads('${package}');
-    };
-    </script>
 
-    <div class="row">
-      <div class="small-12 medium-6 columns">
+  <div metal:fill-slot="content" tal:omit-tag="1">
+    <section>
+      <div class="content">
         <h2 id="package">${project}</h2>
         <p>${description}</p>
+
+        <h3 id="install">Installation</h3>
+        <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
+sudo pip3 install ${project}</pre>
+        <pre tal:condition="not dependencies">sudo pip3 install ${project}</pre>
+        <p><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></p>
       </div>
 
-      <div class="small-12 medium-6 columns">
-        <table class="stats">
-          <tr>
-            <th>PyPI page</th>
-            <td><a href="https://pypi.org/project/${project}">pypi.org/project/${project}</a></td>
-          </tr>
-          <tr>
-            <th>Project JSON</th>
-            <td><a href="/project/${package}/json">piwheels.org/project/${package}/json</a></td>
-          </tr>
+      <div class="sidebar">
+        <table class="stats highlight">
+          <tr><th colspan="2">PyPI page</th></tr>
+          <tr><td colspan="2"><a href="https://pypi.org/project/${project}">pypi.org/<wbr />project/<wbr />${project}</a></td></tr>
+          <tr><th colspan="2">Project JSON</th></tr>
+          <tr><td colspan="2"><a href="/project/${package}/json">piwheels.org/<wbr />project/<wbr />${package}/<wbr />json</a></td></tr>
           <tr>
             <th>Versions</th>
             <td>${'{:,}'.format(len(releases))}</td>
@@ -34,55 +39,56 @@
             <td>${'{:,}'.format(num_files)}</td>
           </tr>
           <tr>
-            <th>Downloads (all time)</th>
+            <th>Downloads<wbr /> (all time)</th>
             <td id="downloads-all">loading...</td>
           </tr>
           <tr>
-            <th>Downloads (last 30 days)</th>
+            <th>Downloads<wbr /> (last 30 days)</th>
             <td id="downloads-30">loading...</td>
           </tr>
         </table>
       </div>
-    </div>
+    </section>
 
-    <div class="row">
-      <div class="small-12 columns">
-        <h3 id="install">Install</h3>
-        <pre tal:condition="dependencies" id="installpre">sudo apt install ${' '.join(dependencies)}
-sudo pip3 install ${project}</pre>
-        <pre tal:condition="not dependencies" id="installpre">sudo pip3 install ${project}</pre>
-        <p class="small"><small><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></small></p>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="small-12 columns">
+    <section>
+      <div class="content no-sidebar">
         <h3>Releases</h3>
-
-        <table id="versions" tal:condition="releases">
+        <table class="versions" tal:condition="releases">
           <tr>
             <th>Version</th>
             <th>Released</th>
-            <th class="center">Stretch<br>(Python 3.5)</th>
-            <th class="center">Buster<br>(Python 3.7)</th>
-            <th class="center">Bullseye<br>(Python 3.9)</th>
-            <th class="center">Files</th>
+            <th>Stretch<br />(Python 3.5)</th>
+            <th>Buster<br />(Python 3.7)</th>
+            <th>Bullseye<br />(Python 3.9)</th>
+            <th>Files</th>
           </tr>
           <span tal:repeat="row releases" tal:omit-tag="True">
-            <tr class="${'hidden-version' if repeat.row.number > 5 else ''}">
+            <tr class="${'hidden-version' if repeat.row.number > 5 else None}">
               <td class="version">
                 ${row.version.original}
                 <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
                 <span tal:condition="row.yanked" class="yanked">yanked</span>
               </td>
-              <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
-              <td data-tooltip class="top status-icon ${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
-              <td data-tooltip class="top status-icon ${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
-              <td data-tooltip class="top status-icon ${row.abis['cp39'].css_class if 'cp39' in row.abis else ''}" title="${row.abis['cp39'].title if 'cp39' in row.abis else ''}"></td>
-              <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0" title="Show files">+</a></td>
+              <td title="${row.released.strftime(
+                           '%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
+              <td class="${row.abis['cp35m'].css_class
+                           if 'cp35m' in row.abis else None}"
+                  title="${row.abis['cp35m'].title
+                           if 'cp35m' in row.abis else None}"></td>
+              <td class="${row.abis['cp37m'].css_class
+                           if 'cp37m' in row.abis else None}"
+                  title="${row.abis['cp37m'].title
+                           if 'cp37m' in row.abis else None}"></td>
+              <td class="${row.abis['cp39m'].css_class
+                           if 'cp39m' in row.abis else None}"
+                  title="${row.abis['cp39m'].title
+                           if 'cp39m' in row.abis else None}"></td>
+              <td><a class="button small"
+                  onclick="toggleFiles(this, 'files-${repeat.row.number}')"
+                  tal:condition="len(row.files) > 0">+</a></td>
             </tr>
             <tr id="files-${repeat.row.number}" class="hidden">
-              <td colspan="8">
+              <td colspan="5">
                 <table class="files">
                   <tr tal:repeat="file row.files">
                     <td class="version hidden">${row.version.original}</td>
@@ -96,12 +102,13 @@ sudo pip3 install ${project}</pre>
             </tr>
           </span>
           <tr tal:condition="len(releases) > 5" id="show-hidden-versions">
-            <td colspan="8" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
+            <td colspan="6"><a onclick="showHiddenVersions()">Show more releases</a></td>
           </tr>
         </table>
         <table tal:condition="not:releases" class="empty">
           <tr><th>No releases</th></tr>
         </table>
+
 
         <table id="builds-key">
           <tr><th colspan="2">Key</th></tr>
@@ -113,21 +120,16 @@ sudo pip3 install ${project}</pre>
       </div>
     </div>
 
-    <div class="row">
-      <div class="small-12 medium-6 columns">
         <h3>Issues with this package?</h3>
         <table class="package-issues">
           <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${project}')">Search</a></td></tr>
           <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${project}&labels=missing+package&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
           <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Missing+package:+${project}&labels=package+issue&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
         </table>
+        <div id="issues"></div>
+
+        <p><small>Page last updated ${timestamp}</small></p>
       </div>
-      <div id="issues" class="small-12 medium-6 columns"></div>
-    </div>
-    <div class="row">
-      <div class="small-12 columns">
-        <p class="small"><small>Page last updated ${timestamp}</small></p>
-      </div>
-    </div>
+    </section>
   </div>
 </div>

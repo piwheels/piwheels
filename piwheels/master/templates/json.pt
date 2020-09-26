@@ -1,99 +1,109 @@
 <div metal:use-macro="layout">
-  <div metal:fill-slot="content">
-    <div class="row">
-      <div class="small-12 medium-8 columns">
-<h2>JSON API</h2>
-<p>piwheels.org provides a JSON API for information about packages we host.</p>
+  <div metal:fill-slot="title" tal:omit-tag="1">JSON API</div>
 
-<h3>Package information</h3>
+  <div metal:fill-slot="head" tal:omit-tag="1">
+    <meta name="description" content="A description of the piwheels JSON API
+      for those wishing to query the repository of wheels" />
+  </div>
 
-<p>Package information can be found at <strong>piwheels.org/project/&lt;package&gt;/json</strong>,
-e.g. <a href="https://www.piwheels.org/project/numpy/json">piwheels.org/project/numpy/json</a>.
-This data includes information about every released version of the
-package, the status of any build attempts made by piwheels, which ABIs
-and platforms we have built files for, and information about these
-files, including filename, filesize, hash, build duration and any apt
-dependencies.</p>
+  <section metal:fill-slot="content">
+    <div class="content no-sidebar">
+      <h2>JSON API</h2>
 
-<p>The project pages themselves (e.g. <a href="https://www.piwheels.org/project/numpy">piwheels.org/project/numpy</a>)
-are made up from a subset of the data in this JSON file, and additional
-data is available to that shown on those pages. It is also useful to be
-able to access the data for a package in a structured way from within a
-program, as well as the human readable method via the project page.</p>
+      <p>piwheels.org provides a JSON API for information about packages we
+      host.</p>
 
-<p>Schema of the JSON data for a project:</p>
+      <h3>Package information</h3>
 
-<pre>{
-   'package': &lt;str&gt;,
-   'summary': &lt;str&gt;,
-   'pypi_url': &lt;str&gt;,
-   'piwheels_url': &lt;str&gt;,
-   'releases': {
-      &lt;str&gt;: {
-         'skip_reason': &lt;str&gt;,
-         'prerelease': True|False,
-         'released': &lt;str YYYY-MM-DD HH:MM:SS UTC&gt;,
-         'yanked': True|False,
-         'files': {
-            &lt;str&gt;: {
-               'filesize': &lt;int&gt;,
-               'apt_dependencies': [&lt;str&gt;, ...],
-               'filehash': &lt;str&gt;,
-               'platform': &lt;str&gt;,
-               'builder_abi': &lt;str&gt;,
-               'file_abi_tag': &lt;str&gt;
-            }
-         }
-      }
-   }
+      <p>Package information can be found at
+      <strong>piwheels.org/project/&lt;package&gt;/json</strong>, e.g. <a
+      href="https://www.piwheels.org/project/numpy/json">piwheels.org/project/numpy/json</a>.
+      This data includes information about every released version of the
+      package, the status of any build attempts made by piwheels, which ABIs
+      and platforms we have built files for, and information about these
+      files, including filename, filesize, hash, build duration and any apt
+      dependencies.</p>
+
+      <p>The project pages themselves (e.g. <a
+      href="https://www.piwheels.org/project/numpy">piwheels.org/project/numpy</a>)
+      are made up from a subset of the data in this JSON file, and additional
+      data is available to that shown on those pages. It is also useful to be
+      able to access the data for a package in a structured way from within a
+      program, as well as the human readable method via the project page.</p>
+
+      <p>Schema of the JSON data for a project:</p>
+
+      <pre>{
+ 'package': &lt;str&gt;,
+ 'summary': &lt;str&gt;,
+ 'pypi_url': &lt;str&gt;,
+ 'piwheels_url': &lt;str&gt;,
+ 'releases': {
+    &lt;str&gt;: {
+       'skip_reason': &lt;str&gt;,
+       'prerelease': True|False,
+       'released': &lt;str YYYY-MM-DD HH:MM:SS UTC&gt;,
+       'yanked': True|False,
+       'files': {
+          &lt;str&gt;: {
+             'filesize': &lt;int&gt;,
+             'apt_dependencies': [&lt;str&gt;, ...],
+             'filehash': &lt;str&gt;,
+             'platform': &lt;str&gt;,
+             'builder_abi': &lt;str&gt;,
+             'file_abi_tag': &lt;str&gt;
+          }
+       }
+    }
+ }
 }</pre>
 
-<p>Example usage from a Python script:</p>
+      <p>Example usage from a Python script:</p>
 
-<pre>import requests
+      <pre>import requests
 
 url = "https://www.piwheels.org/project/numpy/json"
 package = requests.get(url).json()
 
 for version, release in package['releases'].items():
-    print(version, release['released'])</pre>
+  print(version, release['released'])</pre>
 
-        <pre>import requests
+      <pre>import requests
 
 url = "https://www.piwheels.org/project/numpy/json"
 package = requests.get(url).json()
 
 for version, info in package['releases'].items():
-    if info['files']:
-        print('{}: {} files'.format(version, len(info['files'])))
-    else:
-        print('{}: No files'.format(version))
+  if info['files']:
+      print('{}: {} files'.format(version, len(info['files'])))
+  else:
+      print('{}: No files'.format(version))
 </pre>
 
-<p>Note that we intend to maintain the API structure, and to only add fields,
-not remove or change fields. In the unlikely event of compatability changes in
-future.</p>
+      <p>Note that we intend to maintain the API structure, and to only add
+      fields, not remove or change fields. In the unlikely event of
+      compatability changes in future.</p>
 
-<p>Also note that packages and versions can be deleted, and can be recreated, so
-it's inadvisable to expect such data not to change. Similarly, piwheels builds
-can be deleted and rebuilt.</p>
+      <p>Also note that packages and versions can be deleted, and can be
+      recreated, so it's inadvisable to expect such data not to change.
+      Similarly, piwheels builds can be deleted and rebuilt.</p>
 
-<h3>Download stats</h3>
+      <h3>Download stats</h3>
 
-<p>Basic package download stats (total, and last 30 days) are provided separately
-at <a href="https://www.piwheels.org/packages.json">piwheels.org/packages.json</a>.
-(We strongly recommend not opening this link in a web browser - it's <em>very
-large</em>).</p>
+      <p>Basic package download stats (total, and last 30 days) are provided
+      separately at <a href="https://www.piwheels.org/packages.json">piwheels.org/packages.json</a>.
+      (We strongly recommend not opening this link in a web browser - it's
+      <em>very large</em>).</p>
 
-<p>Example usage from a Python script:</p>
+      <p>Example usage from a Python script:</p>
 
-<pre>import requests
+      <pre>import requests
 
 url = "https://www.piwheels.org/packages.json"
 packages = requests.get(url).json()
 packages = {
-    pkg: (d_month, d_all)
-    for pkg, d_month, d_all, *_ in packages
+  pkg: (d_month, d_all)
+  for pkg, d_month, d_all, *_ in packages
 }
 
 package = 'numpy'
@@ -102,11 +112,9 @@ d_month, d_all = packages[package]
 print(package, "has had", d_month, "downloads in the last month")
 print(package, "has had", d_all, "downloads in total")</pre>
 
-<p>Note the <a href="https://docs.python.org/3/reference/simple_stmts.html#assignment-statements"><code>*_</code></a>
-assignment is optional here but protects against any additional fields being
-added in future.</p>
-
-      </div>
+      <p>Note the <a href="https://docs.python.org/3/reference/simple_stmts.html#assignment-statements"><code>*_</code></a>
+      assignment is optional here but protects against any additional fields
+      being added in future.</p>
     </div>
-  </div>
+  </section>
 </div>
