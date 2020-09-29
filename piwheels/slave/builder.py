@@ -52,6 +52,7 @@ from collections import defaultdict
 import apt
 
 from .. import proc
+from ..format import canonicalize_name
 
 
 class BuildTerminated(Exception):

@@ -48,10 +48,9 @@ from chameleon import PageTemplateLoader
 import simplejson as json
 
 from .. import const, protocols, tasks, transport
-from ..format import format_size
+from ..format import format_size, canonicalize_name
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
-from .pypi import canonicalize_name
 
 UTC = timezone.utc
 

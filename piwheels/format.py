@@ -35,6 +35,7 @@ user interfaces.
 .. autofunction:: format_size
 """
 
+import re
 from math import log
 from datetime import timedelta
 
@@ -52,3 +53,13 @@ def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0 B',
 
 def format_timedelta(delta):
     return str(timedelta(seconds=int(delta.total_seconds())))
+
+
+# From pip/_vendor/packaging/utils.py
+# pylint: disable=invalid-name
+_canonicalize_regex = re.compile(r"[-_.]+")
+
+def canonicalize_name(name):
+    # pylint: disable=missing-docstring
+    # This is taken from PEP 503.
+    return _canonicalize_regex.sub("-", name).lower()
