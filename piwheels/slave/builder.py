@@ -467,8 +467,11 @@ class Builder(Thread):
                         if is_elf:
                             whl_libs.add(zip_dir.extract(info, path=tempdir))
             for lib in whl_libs:
-                out = proc.check_output(['ldd', lib],
-                                        timeout=30, event=self._stopped)
+                try:
+                    out = proc.check_output(['ldd', lib],
+                                            timeout=30, event=self._stopped)
+                except proc.CalledProcessError:
+                    continue
                 out = out.decode('ascii', 'replace')
                 for line in out.splitlines():
                     match = find_re.search(line)
