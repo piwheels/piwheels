@@ -143,6 +143,14 @@ class Wheel:
         return self._parts[0]
 
     @property
+    def package_canon(self):
+        """
+        Return the package part of the wheel's filename, canonicalized
+        according to PyPI's rules.
+        """
+        return canonicalize_name(self.package_tag)
+
+    @property
     def package_version_tag(self):
         """
         Return the version part of the wheel's filename (the second "-"
@@ -212,14 +220,30 @@ class Wheel:
         """
         if self._metadata is None:
             with zipfile.ZipFile(self.open()) as wheel:
-                filename = (
+                filenames = {
                     '{self.package_tag}-'
                     '{self.package_version_tag}.dist-info/'
-                    'METADATA'.format(self=self)
-                )
-                with wheel.open(filename) as metadata:
-                    parser = email.parser.BytesParser()
-                    self._metadata = parser.parse(metadata)
+                    'METADATA'.format(self=self),
+                    '{self.package_canon}-'
+                    '{self.package_version_tag}.dist-info/'
+                    'METADATA'.format(self=self),
+                }
+                for filename in filenames:
+                    try:
+                        with wheel.open(filename) as metadata:
+                            parser = email.parser.BytesParser()
+                            self._metadata = parser.parse(metadata)
+                    except KeyError:
+                        pass
+                    else:
+                        break
+                if self._metadata is None:
+                    raise RuntimeError(
+                        'Unable to locate METADATA in %s; attempted: %r; '
+                        'possible files: %r' % (
+                            self.wheel_file, filenames, {
+                                info.filename for info in wheel.infolist()
+                                if info.filename.endswith('METADATA')}))
         return self._metadata
 
     def transfer(self, queue, slave_id):
