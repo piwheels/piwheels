@@ -36,7 +36,8 @@ Defines the :class:`CloudGazer` task; see class for more details.
 from datetime import timedelta
 
 from .. import protocols, transport, tasks, const
-from .pypi import PyPIEvents, canonicalize_name
+from ..format import canonicalize_name
+from .pypi import PyPIEvents
 from .the_oracle import DbClient
 
 

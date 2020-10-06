@@ -228,7 +228,6 @@ def test_pypi_buf_waits_for_more_events(xml_server):
     ]
 
 
-
 def test_pypi_buf_raises_errors():
     class BadXMLHandler(BaseHTTPRequestHandler):
         def do_POST(self):

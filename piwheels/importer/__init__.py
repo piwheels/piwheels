@@ -44,11 +44,10 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
-from ..format import format_size
+from ..format import format_size, canonicalize_name
 from ..states import FileState, BuildState
 from ..slave import duration
 from ..slave.builder import Wheel
-from ..master.pypi import canonicalize_name
 
 
 def main(args=None):
