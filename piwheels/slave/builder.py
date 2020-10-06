@@ -222,11 +222,11 @@ class Wheel:
             with zipfile.ZipFile(self.open()) as wheel:
                 filenames = {
                     '{self.package_tag}-'
-                    '{self.package_version_tag}.dist-info/'
-                    'METADATA'.format(self=self),
+                        '{self.package_version_tag}.dist-info/'
+                        'METADATA'.format(self=self),
                     '{self.package_canon}-'
-                    '{self.package_version_tag}.dist-info/'
-                    'METADATA'.format(self=self),
+                        '{self.package_version_tag}.dist-info/'
+                        'METADATA'.format(self=self),
                 }
                 for filename in filenames:
                     try:
