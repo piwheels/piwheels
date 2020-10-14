@@ -30,7 +30,7 @@ import datetime as dt
 
 import pytest
 
-from piwheels.format import format_size, format_timedelta
+from piwheels.format import *
 
 
 def test_format_zero():
@@ -70,3 +70,9 @@ def test_format_timedelta():
     assert format_timedelta(dt.timedelta(seconds=5)) == '0:00:05'
     assert format_timedelta(dt.timedelta(minutes=1)) == '0:01:00'
     assert format_timedelta(dt.timedelta(hours=1, microseconds=1)) == '1:00:00'
+
+
+def test_canonicalize_name():
+    assert canonicalize_name('foo') == 'foo'
+    assert canonicalize_name('Foo') == 'foo'
+    assert canonicalize_name('foo_bar') == 'foo-bar'

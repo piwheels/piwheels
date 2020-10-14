@@ -45,8 +45,8 @@ import requests
 from requests.exceptions import RequestException
 from simplejson.errors import JSONDecodeError
 
-
 from .. import __version__
+from ..format import canonicalize_name
 
 
 UTC = timezone.utc
@@ -58,16 +58,6 @@ PYPI_MARGIN = 2000
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logger = logging.getLogger('master.pypi')
-
-# From pip/_vendor/packaging/utils.py
-# pylint: disable=invalid-name
-_canonicalize_regex = re.compile(r"[-_.]+")
-
-
-def canonicalize_name(name):
-    # pylint: disable=missing-docstring
-    # This is taken from PEP 503.
-    return _canonicalize_regex.sub("-", name).lower()
 
 
 class PiWheelsTransport(xmlrpc.client.SafeTransport):

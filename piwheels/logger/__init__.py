@@ -47,7 +47,7 @@ from fnmatch import fnmatchcase
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
 from .. import __version__, terminal, const, protocols, transport
-from ..master.pypi import canonicalize_name
+from ..format import canonicalize_name
 
 
 # Workaround: lars bug; User-Agent instead of User-agent

@@ -158,6 +158,21 @@ def test_package_metadata(mock_package):
     assert pkg.metadata['Version'] == '0.1'
 
 
+def test_package_metadata_bad_name(mock_package):
+    path = Path('/tmp/abc123/Foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert pkg.metadata['Metadata-Version'] == '2.0'
+    assert pkg.metadata['Name'] == 'foo'
+    assert pkg.metadata['Version'] == '0.1'
+
+
+def test_package_metadata_wrong_name(mock_package):
+    path = Path('/tmp/abc123/Foo_Bar-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    with pytest.raises(RuntimeError):
+        pkg.metadata
+
+
 def test_package_transfer(mock_archive, mock_package, transfer_thread):
     filesize, filehash = mock_package
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
