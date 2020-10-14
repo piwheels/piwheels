@@ -39,6 +39,7 @@
                 <li><a class="button" href="/packages.html">Packages</a></li>
                 <li><a class="button" href="https://github.com/piwheels/packages/issues">Package Issues</a></li>
                 <li><a class="button" href="/faq.html">FAQ</a></li>
+                <li><a class="button" href="/json.html">JSON API</a></li>
                 <li><a class="button" href="/stats.html">Stats</a></li>
                 <li><a class="button" href="https://blog.piwheels.org/">Blog</a></li>
                 <li><a class="button" href="https://github.com/piwheels">GitHub</a></li>
@@ -67,7 +68,7 @@
           <div class="small-12 medium-8 columns">
             <p>piwheels is a community project by <a href="https://twitter.com/ben_nuttall">Ben Nuttall</a>
               and <a href="https://twitter.com/waveform80">Dave Jones</a>.
-              Hosting is kindly donated by <a href="https://www.mythic-beasts.com/">Mythic Beasts</a>.
+              Powered by the <a href="https://www.mythic-beasts.com/">Mythic Beasts Pi Cloud</a>.
               Project <a href="https://github.com/piwheels/piwheels">source code</a> is available from GitHub.</p>
           </div>
           <div class="small-12 medium-4 columns">

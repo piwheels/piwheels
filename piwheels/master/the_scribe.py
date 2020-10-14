@@ -261,7 +261,7 @@ class TheScribe(tasks.PauseableTask):
         """
         self.logger.info('writing sitemap')
 
-        pages = ['index.html', 'packages.html', 'faq.html', 'stats.html']
+        pages = ['index.html', 'packages.html', 'faq.html', 'json.html', 'stats.html']
         with AtomicReplaceFile(self.output_path / 'sitemap0.xml',
                                encoding='utf-8') as page:
             page.file.write(self.templates['sitemap_static'](pages=pages))
