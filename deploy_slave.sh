@@ -55,7 +55,8 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
     libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
-    $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ portaudio19-dev
+    $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ portaudio19-dev \
+    coinor-libipopt-dev
 
 apt purge python3-cryptography -y
 
