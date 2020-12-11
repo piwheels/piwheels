@@ -354,16 +354,14 @@ class PyPIEvents:
             self._versions.move_to_end((package, version))
         except KeyError:
             self._versions[(package, version)] = (timestamp, action)
-            description = self._get_description(package)
-            yield (package, version, timestamp, action, description)
+            yield (package, version, timestamp, action)
         else:
             # This (package, version) combo was already cached; unless it's
             # a change from binary-only to source, don't bother emitting it
             (last_timestamp, last_action) = self._versions[(package, version)]
-            description = self._get_description(package)
             if (last_action, action) == ('create', 'source'):
                 self._versions[(package, version)] = (last_timestamp, action)
-                yield (package, version, last_timestamp, action, description)
+                yield (package, version, last_timestamp, action)
         while len(self._versions) > self._versions_size:
             self._versions.popitem(last=False)
 
@@ -380,8 +378,11 @@ class PyPIEvents:
                         action = (
                             'source' if match.group(1) == 'source' else
                             'create')
-                        yield from self._check_new_version(
-                            package, version, timestamp, action)
+                        for package, version, timestamp, action in \
+                            self._check_new_version(
+                                package, version, timestamp, action):
+                            description = self._get_description(package)
+                            yield (package, version, timestamp, action, description)
                     elif self.create_re.search(action) is not None:
                         description = self._get_description(package)
                         yield (package, None, timestamp, 'create', description)
