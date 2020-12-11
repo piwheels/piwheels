@@ -311,22 +311,29 @@ class PyPIEvents:
         """
         path = PosixPath(self._pypi_json.path) / package / 'json'
         url = urlunsplit(self._pypi_json._replace(path=str(path)))
-        resp = requests.get(url, timeout=10)
-        if resp.status_code >= 500:
-            # Server side error; probably a temporary service failure. Because
-            # the package description isn't critical just ignore it and return
-            # None for now and assume we'll pick it up at a later point
-            return None
-        elif resp.status_code == 404:
-            # We may be requesting a description for a package that was
-            # subsequently deleted; return None
-            return None
         try:
+            resp = requests.get(url, timeout=10)
             resp.raise_for_status()
         except requests.Timeout:
-            # Request timed out; as above this isn't critical so just return
-            # None and assume we'll pick it up later
+            # SSL connection or read timed out; this isn't critical so just
+            # return None and assume we'll pick it up later
             return None
+        except requests.HTTPError as exc:
+            if exc.response.status_code >= 500:
+                # Server side error; probably a temporary service failure.
+                # Because the package description isn't critical just ignore it
+                # and return None for now and assume we'll pick it up at a
+                # later point
+                return None
+            elif exc.response.status_code == 404:
+                # We may be requesting a description for a package that was
+                # subsequently deleted; return None
+                return None
+            elif exc.response.status_code == 443:
+                # Another timeout type; again just return None as above
+                return None
+            else:
+                raise
         data = resp.json()
         try:
             description = data['info']['summary']
