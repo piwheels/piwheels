@@ -42,6 +42,7 @@ from urllib.parse import urlsplit, urlunsplit
 from pathlib import PosixPath
 
 import requests
+from urllib3.exceptions import TimeoutError
 from requests.exceptions import RequestException
 from simplejson.errors import JSONDecodeError
 
@@ -195,7 +196,7 @@ class PyPIBuffer:
                 tuple(event) for event in
                 self._client.changelog_since_serial(serial)
             ]
-        except (OSError, http.client.ImproperConnectionState) as exc:
+        except (OSError, http.client.ImproperConnectionState, TimeoutError) as exc:
             return []
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
