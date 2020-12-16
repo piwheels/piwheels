@@ -52,9 +52,10 @@ from collections import defaultdict
 import apt
 
 from .. import proc
+from ..format import canonicalize_name
 
 
-class BuildTerminated(Exception):
+class BadWheel(Exception):
     pass
 
 
@@ -74,7 +75,6 @@ class Wheel:
         self.wheel_file = path
         self._filesize = path.stat().st_size
         self._filehash = None
-        self._metadata = None
         if dependencies is None:
             dependencies = {}
         self._dependencies = dependencies
@@ -82,6 +82,27 @@ class Wheel:
         # Fix up retired tags (noabi->none)
         if self._parts[-2] == 'noabi':
             self._parts[-2] = 'none'
+        # We read metadata now rather than lazily evaluating it to ensure that
+        # we can report corrupt (or invalid) wheels upon construction rather
+        # than waiting to find out later when metadata is queried
+        with zipfile.ZipFile(self.open()) as wheel:
+            filenames = (
+                '{self.package_tag}-{self.package_version_tag}.dist-info/'
+                'METADATA'.format(self=self),
+                '{self.package_canon_tag}-{self.package_version_tag}.dist-info/'
+                'METADATA'.format(self=self),
+            )
+            for filename in filenames:
+                try:
+                    with wheel.open(filename) as metadata:
+                        parser = email.parser.BytesParser()
+                        self._metadata = parser.parse(metadata)
+                except KeyError:
+                    pass
+                else:
+                    break
+            else:
+                raise BadWheel('could not locate METADATA in wheel')
 
     def as_message(self):
         """
@@ -121,6 +142,8 @@ class Wheel:
         """
         Return an SHA256 digest of the wheel's contents.
         """
+        # This is lazily evaluated as we can be sure that we can always
+        # calculate it (unless the FS itself is unreadable)
         if self._filehash is None:
             s = hashlib.sha256()
             with self.wheel_file.open('rb') as f:
@@ -140,6 +163,13 @@ class Wheel:
         separated element).
         """
         return self._parts[0]
+
+    @property
+    def package_canon_tag(self):
+        """
+        Return the canonicalized version of the :attr:`package_tag`.
+        """
+        return canonicalize_name(self.package_tag)
 
     @property
     def package_version_tag(self):
@@ -209,16 +239,6 @@ class Wheel:
         """
         Return the contents of the :file:`METADATA` file inside the wheel.
         """
-        if self._metadata is None:
-            with zipfile.ZipFile(self.open()) as wheel:
-                filename = (
-                    '{self.package_tag}-'
-                    '{self.package_version_tag}.dist-info/'
-                    'METADATA'.format(self=self)
-                )
-                with wheel.open(filename) as metadata:
-                    parser = email.parser.BytesParser()
-                    self._metadata = parser.parse(metadata)
         return self._metadata
 
     def transfer(self, queue, slave_id):
@@ -511,6 +531,11 @@ class Builder(Thread):
                     if exc.output is not None:
                         log_file.write('\n')
                         log_file.write(exc.output.decode('ascii', 'replace'))
+                    log_file.write('\n')
+                    log_file.write(str(exc))
+                except BadWheel as exc:
+                    self.stop()
+                    log_file.seek(0, os.SEEK_END)
                     log_file.write('\n')
                     log_file.write(str(exc))
                 if self._stopped.wait(0):
