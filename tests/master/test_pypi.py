@@ -43,7 +43,7 @@ import pytest
 import http.client
 import xmlrpc.client
 import simplejson as json
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, HTTPError
 from simplejson.errors import JSONDecodeError
 
 from piwheels.master.pypi import *
@@ -102,24 +102,35 @@ def mock_buffer(request):
 def mock_json_server(request):
     with mock.patch('piwheels.master.pypi.requests.get') as get:
         packages = {}
+        def mock_response(status_code, json=None):
+            resp = mock.Mock(
+                status_code=status_code,
+                json=mock.Mock(return_value=json))
+            if status_code >= 400:
+                resp.raise_for_status = mock.Mock(
+                    side_effect=HTTPError(response=resp))
+            else:
+                resp.raise_for_status = mock.Mock(return_value=None)
+            return resp
         def mock_get(url, timeout=None):
             url = urlsplit(url)
             if url.path.endswith('/json'):
                 package = url.path.rsplit('/', 2)[1]
                 try:
                     if package == 'pypi-err':
-                        return mock.Mock(status_code=503)
+                        return mock_response(status_code=503)
                     else:
                         description = packages[package]
                 except KeyError:
-                    return mock.Mock(status_code=404)
+                    return mock_response(status_code=404)
                 else:
                     if package == 'pypi-bad':
-                        return mock.Mock(status_code=200, json=mock.Mock(
-                            return_value={'info': {}}))
+                        return mock_response(
+                            status_code=200, json={'info': {}})
                     else:
-                        return mock.Mock(status_code=200, json=mock.Mock(
-                            return_value={'info': {'summary': description}}))
+                        return mock_response(
+                            status_code=200,
+                            json={'info': {'summary': description}})
             else:
                 return mock.Mock(status=404)
         get.side_effect = mock_get

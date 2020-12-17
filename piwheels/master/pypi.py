@@ -42,6 +42,7 @@ from urllib.parse import urlsplit, urlunsplit
 from pathlib import PosixPath
 
 import requests
+from urllib3.exceptions import TimeoutError
 from requests.exceptions import RequestException
 from simplejson.errors import JSONDecodeError
 
@@ -185,7 +186,7 @@ class PyPIBuffer:
                 tuple(event) for event in
                 self._client.changelog_since_serial(serial)
             ]
-        except (OSError, http.client.ImproperConnectionState) as exc:
+        except (OSError, http.client.ImproperConnectionState, TimeoutError) as exc:
             return []
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
@@ -301,22 +302,29 @@ class PyPIEvents:
         """
         path = PosixPath(self._pypi_json.path) / package / 'json'
         url = urlunsplit(self._pypi_json._replace(path=str(path)))
-        resp = requests.get(url, timeout=10)
-        if resp.status_code >= 500:
-            # Server side error; probably a temporary service failure. Because
-            # the package description isn't critical just ignore it and return
-            # None for now and assume we'll pick it up at a later point
-            return None
-        elif resp.status_code == 404:
-            # We may be requesting a description for a package that was
-            # subsequently deleted; return None
-            return None
         try:
+            resp = requests.get(url, timeout=10)
             resp.raise_for_status()
         except requests.Timeout:
-            # Request timed out; as above this isn't critical so just return
-            # None and assume we'll pick it up later
+            # SSL connection or read timed out; this isn't critical so just
+            # return None and assume we'll pick it up later
             return None
+        except requests.HTTPError as exc:
+            if exc.response.status_code >= 500:
+                # Server side error; probably a temporary service failure.
+                # Because the package description isn't critical just ignore it
+                # and return None for now and assume we'll pick it up at a
+                # later point
+                return None
+            elif exc.response.status_code == 404:
+                # We may be requesting a description for a package that was
+                # subsequently deleted; return None
+                return None
+            elif exc.response.status_code == 443:
+                # Another timeout type; again just return None as above
+                return None
+            else:
+                raise
         data = resp.json()
         try:
             description = data['info']['summary']
@@ -337,16 +345,14 @@ class PyPIEvents:
             self._versions.move_to_end((package, version))
         except KeyError:
             self._versions[(package, version)] = (timestamp, action)
-            description = self._get_description(package)
-            yield (package, version, timestamp, action, description)
+            yield (package, version, timestamp, action)
         else:
             # This (package, version) combo was already cached; unless it's
             # a change from binary-only to source, don't bother emitting it
             (last_timestamp, last_action) = self._versions[(package, version)]
-            description = self._get_description(package)
             if (last_action, action) == ('create', 'source'):
                 self._versions[(package, version)] = (last_timestamp, action)
-                yield (package, version, last_timestamp, action, description)
+                yield (package, version, last_timestamp, action)
         while len(self._versions) > self._versions_size:
             self._versions.popitem(last=False)
 
@@ -363,8 +369,11 @@ class PyPIEvents:
                         action = (
                             'source' if match.group(1) == 'source' else
                             'create')
-                        yield from self._check_new_version(
-                            package, version, timestamp, action)
+                        for package, version, timestamp, action in \
+                            self._check_new_version(
+                                package, version, timestamp, action):
+                            description = self._get_description(package)
+                            yield (package, version, timestamp, action, description)
                     elif self.create_re.search(action) is not None:
                         description = self._get_description(package)
                         yield (package, None, timestamp, 'create', description)
