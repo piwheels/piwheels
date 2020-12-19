@@ -309,6 +309,11 @@ class PyPIEvents:
             # SSL connection or read timed out; this isn't critical so just
             # return None and assume we'll pick it up later
             return None
+        except requests.ConnectionError:
+            # Failed to establish connection; usually "Connection refused"
+            # which means we're hammering PyPI too much; give up for now and
+            # assume we'll pick it up later
+            return None
         except requests.HTTPError as exc:
             if exc.response.status_code >= 500:
                 # Server side error; probably a temporary service failure.
@@ -320,7 +325,7 @@ class PyPIEvents:
                 # We may be requesting a description for a package that was
                 # subsequently deleted; return None
                 return None
-            elif exc.response.status_code == 443:
+            elif exc.response.status_code == 408:
                 # Another timeout type; again just return None as above
                 return None
             else:
