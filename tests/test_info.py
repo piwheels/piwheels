@@ -34,16 +34,7 @@ from unittest import mock
 
 import pytest
 
-from piwheels.info import (
-    get_board_revision,
-    get_board_serial,
-    get_os_name_version,
-    get_cpu_count,
-    get_disk_stats,
-    get_swap_stats,
-    get_mem_stats,
-    get_cpu_temp,
-)
+from piwheels.info import *
 
 
 def test_get_board_revision():
@@ -151,3 +142,9 @@ def test_get_cpu_temp():
         assert get_cpu_temp() == 76.543
         m.return_value.__enter__.side_effect = FileNotFoundError
         assert get_cpu_temp() == 0.0
+
+
+def test_get_pi_info():
+    assert get_pi_info('a02082') == PiInfo('3B', '1.2', 'BCM2837', 'Sony', '1Gb')
+    assert get_pi_info('a020d3') == PiInfo('3B+', '1.3', 'BCM2837', 'Sony', '1Gb')
+    assert get_pi_info('c03111') == PiInfo('4B', '1.1', 'BCM2711', 'Sony', '4Gb')

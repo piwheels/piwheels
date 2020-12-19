@@ -89,7 +89,7 @@ class Wheel:
             filenames = (
                 '{self.package_tag}-{self.package_version_tag}.dist-info/'
                 'METADATA'.format(self=self),
-                '{self.package_canon_tag}-{self.package_version_tag}.dist-info/'
+                '{self.package_canon}-{self.package_version_tag}.dist-info/'
                 'METADATA'.format(self=self),
             )
             for filename in filenames:
@@ -102,7 +102,12 @@ class Wheel:
                 else:
                     break
             else:
-                raise BadWheel('could not locate METADATA in wheel')
+                raise BadWheel(
+                    'Unable to locate METADATA in %s; attempted: %r; '
+                    'possible files: %r' % (
+                        self.wheel_file, filenames, {
+                            info.filename for info in wheel.infolist()
+                            if info.filename.endswith('METADATA')}))
 
     def as_message(self):
         """
@@ -165,9 +170,10 @@ class Wheel:
         return self._parts[0]
 
     @property
-    def package_canon_tag(self):
+    def package_canon(self):
         """
-        Return the canonicalized version of the :attr:`package_tag`.
+        Return the package part of the wheel's filename, canonicalized
+        according to PyPI's rules.
         """
         return canonicalize_name(self.package_tag)
 
@@ -462,8 +468,11 @@ class Builder(Thread):
                         if is_elf:
                             whl_libs.add(zip_dir.extract(info, path=tempdir))
             for lib in whl_libs:
-                out = proc.check_output(['ldd', lib],
-                                        timeout=30, event=self._stopped)
+                try:
+                    out = proc.check_output(['ldd', lib],
+                                            timeout=30, event=self._stopped)
+                except proc.CalledProcessError:
+                    continue
                 out = out.decode('ascii', 'replace')
                 for line in out.splitlines():
                     match = find_re.search(line)

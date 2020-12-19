@@ -46,8 +46,8 @@ from urllib3.exceptions import TimeoutError
 from requests.exceptions import RequestException
 from simplejson.errors import JSONDecodeError
 
-
 from .. import __version__
+from ..format import canonicalize_name
 
 
 UTC = timezone.utc
