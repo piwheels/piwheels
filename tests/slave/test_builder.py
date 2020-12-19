@@ -452,4 +452,4 @@ def test_builder_bad_metadata(bad_archive, tmpdir):
         assert not b.is_alive()
         assert not b.status
         assert not b.wheels
-        assert re.search(r'could not locate METADATA in wheel$', b.output)
+        assert re.search(r'Unable to locate METADATA in', b.output)
