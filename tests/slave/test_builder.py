@@ -44,7 +44,7 @@ from piwheels.slave import builder
 
 
 @pytest.fixture()
-def mock_archive(request):
+def bad_archive(request):
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as arc:
         arc.writestr('foo/__init__.py', b'\x00' * 123456)
@@ -52,7 +52,18 @@ def mock_archive(request):
                      b'\x7FELF' + b'\xFF' * 123456)
         arc.writestr('foo/im.not.really.a.library.so.there',
                      b'blah' * 4096)
-        arc.writestr('foo-0.1.dist-info/METADATA', """\
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
 Metadata-Version: 2.0
 Name: foo
 Version: 0.1
@@ -70,6 +81,18 @@ Classifier: Programming Language :: Python
 
 """)
     return archive.getvalue()
+
+
+@pytest.fixture()
+def bad_package(request, bad_archive):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(bad_archive), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(bad_archive)
+        h = sha256()
+        h.update(bad_archive)
+        yield len(bad_archive), h.hexdigest().lower()
 
 
 @pytest.fixture()
@@ -158,7 +181,7 @@ def test_package_metadata(mock_package):
     assert pkg.metadata['Version'] == '0.1'
 
 
-def test_package_metadata_bad_name(mock_package):
+def test_package_metadata_canon(mock_package):
     path = Path('/tmp/abc123/Foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
     assert pkg.metadata['Metadata-Version'] == '2.0'
@@ -166,11 +189,10 @@ def test_package_metadata_bad_name(mock_package):
     assert pkg.metadata['Version'] == '0.1'
 
 
-def test_package_metadata_wrong_name(mock_package):
-    path = Path('/tmp/abc123/Foo_Bar-0.1-cp34-cp34m-linux_armv7l.whl')
-    pkg = builder.Wheel(path)
-    with pytest.raises(RuntimeError):
-        pkg.metadata
+def test_package_bad_metadata(bad_package):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    with pytest.raises(builder.BadWheel):
+        builder.Wheel(path)
 
 
 def test_package_transfer(mock_archive, mock_package, transfer_thread):
@@ -412,3 +434,22 @@ def test_builder_dependencies_stopped(mock_archive, tmpdir):
         assert not b.is_alive()
         assert not b.status
         assert re.search(r'Command .* was terminated early by event$', b.output)
+
+
+def test_builder_bad_metadata(bad_archive, tmpdir):
+    with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
+            mock.patch('piwheels.slave.builder.proc.call') as call_mock:
+        tmpdir_mock().name = str(tmpdir)
+        tmpdir_mock().__enter__.return_value = str(tmpdir)
+        def call(*args, **kwargs):
+            with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
+                f.write(bad_archive)
+            return 0
+        call_mock.side_effect = call
+        b = builder.Builder('foo', '0.1')
+        b.start()
+        b.join(1)
+        assert not b.is_alive()
+        assert not b.status
+        assert not b.wheels
+        assert re.search(r'Unable to locate METADATA in', b.output)
