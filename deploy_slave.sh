@@ -56,7 +56,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
     libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
     $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ portaudio19-dev \
-    coinor-libipopt-dev libsrtp2-dev
+    coinor-libipopt-dev libsrtp2-dev cargo
 
 apt purge python3-cryptography -y
 
