@@ -102,16 +102,36 @@ const toggleFiles = (btn, filesTableId) => {
 const showInstall = btn => {
   const package = document.getElementById('package').innerHTML;
   const row = btn.parentNode.parentNode;
-  const dependencies = row.getElementsByClassName('dependencies')[0].innerHTML;
+  const aptDeps = row.getElementsByClassName('aptdeps')[0].innerHTML;
+  const pipDeps = row.getElementsByClassName('pipdep');
   const version = row.getElementsByClassName('version')[0].innerHTML;
   const pre = document.getElementById('installpre');
-  const pip = `sudo pip3 install ${package}==${version}`;
+  const dependencies = document.getElementById('dependencies');
+  const pipCmd = `sudo pip3 install ${package}==${version}`;
+  const pipDepsList = document.getElementById('pipdeps');
 
-  if (dependencies.length > 1) {
-    const apt = `sudo apt install ${dependencies}\r`;
-    pre.innerHTML = apt + pip;
+  if (aptDeps.length > 1) {
+    const aptCmd = `sudo apt install ${aptDeps}\r`;
+    pre.innerHTML = aptCmd + pipCmd;
   } else {
-    pre.innerHTML = pip;
+    pre.innerHTML = pipCmd;
+  }
+
+  pipDepsList.innerHTML = '';
+  if (pipDeps.length > 0) {
+    Array.from(pipDeps).map(span => {
+      let pkg = span.innerHTML;
+      let li = document.createElement('li');
+      let a = document.createElement('a');
+      a.innerHTML = pkg;
+      a.href = `/project/${pkg}/`;
+      li.appendChild(a);
+      pipDepsList.appendChild(li);
+    });
+  } else {
+    let li = document.createElement('li');
+    li.innerHTML = "None";
+    pipDepsList.appendChild(li);
   }
   location.hash = '#install';
 };

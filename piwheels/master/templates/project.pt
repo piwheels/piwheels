@@ -49,10 +49,15 @@
     <div class="row">
       <div class="small-12 columns">
         <h3 id="install">Install</h3>
-        <pre tal:condition="dependencies" id="installpre">sudo apt install ${' '.join(dependencies)}
+        <pre tal:condition="apt_dependencies" id="installpre">sudo apt install ${' '.join(apt_dependencies)}
 sudo pip3 install ${project}</pre>
-        <pre tal:condition="not dependencies" id="installpre">sudo pip3 install ${project}</pre>
+        <pre tal:condition="not apt_dependencies" id="installpre">sudo pip3 install ${project}</pre>
         <p class="small"><small><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></small></p>
+        <h3 id="dependencies">Dependencies</h3>
+        <ul id="pipdeps">
+            <li tal:repeat="pkg pip_dependencies"><a href="/project/${pkg}/">${pkg}</a></li>
+            <li tal:condition="not pip_dependencies">None</li>
+        </ul>
       </div>
     </div>
 
@@ -82,21 +87,22 @@ sudo pip3 install ${project}</pre>
               <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0">+</a></td>
             </tr>
             <tr id="files-${repeat.row.number}" class="hidden">
-              <td colspan="8">
+              <td colspan="6">
                 <table class="files">
                   <tr tal:repeat="file row.files">
                     <td class="version hidden">${row.version.original}</td>
                     <td><a href="/simple/${package}/${file.filename}#sha256=${file.filehash}">${file.filename}</a></td>
                     <td>${format_size(file.filesize)}</td>
-                    <td><a class="button small" onclick="showInstall(this)">How to install this version</a></td>
-                    <td class="dependencies hidden">${' '.join(file.apt_dependencies)}</td>
+                    <td><a class="button small" onclick="showInstall(this)">Show this version</a></td>
+                    <td class="aptdeps hidden">${' '.join(file.apt_dependencies)}</td>
+                    <td class="hidden"><span class="pipdep" tal:repeat="pkg file.pip_dependencies">${pkg}</span></td>
                   </tr>
                 </table>
               </td>
             </tr>
           </span>
           <tr tal:condition="len(releases) > 5" id="show-hidden-versions">
-            <td colspan="8" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
+            <td colspan="6" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
           </tr>
         </table>
         <table tal:condition="not:releases" class="empty">

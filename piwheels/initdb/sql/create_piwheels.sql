@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.19');
+INSERT INTO configuration(id, version) VALUES (1, '0.20');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -1591,6 +1591,29 @@ $sql$;
 REVOKE ALL ON FUNCTION get_file_apt_dependencies(VARCHAR) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_file_apt_dependencies(VARCHAR) TO {username};
 
+-- get_file_pip_dependencies(filename)
+-------------------------------------------------------------------------------
+-- Returns pip dependencies registered against the specified *filename*.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_file_pip_dependencies(fn VARCHAR)
+    RETURNS TABLE(
+        dependency dependencies.dependency%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT dependency
+        FROM dependencies
+        WHERE filename = fn
+        AND tool = 'pip';
+$sql$;
+
+REVOKE ALL ON FUNCTION get_file_pip_dependencies(VARCHAR) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_file_pip_dependencies(VARCHAR) TO {username};
+
 -- get_project_files(package)
 -------------------------------------------------------------------------------
 -- Return details about all files built for the given *package*.
@@ -1607,7 +1630,8 @@ CREATE FUNCTION get_project_files(pkg TEXT)
         filehash files.filehash%TYPE,
         yanked versions.yanked%TYPE,
         requires_python files.requires_python%TYPE,
-        dependencies VARCHAR ARRAY
+        apt_dependencies VARCHAR ARRAY,
+        pip_dependencies VARCHAR ARRAY
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1624,8 +1648,10 @@ AS $sql$
         f.filehash,
         v.yanked,
         f.requires_python,
-        ARRAY_AGG(d.dependency)
-            FILTER (WHERE d.dependency IS NOT NULL) AS dependencies
+        ARRAY_AGG(ad.dependency)
+            FILTER (WHERE ad.dependency IS NOT NULL) AS apt_dependencies,
+        ARRAY_AGG(pd.dependency)
+            FILTER (WHERE pd.dependency IS NOT NULL) AS pip_dependencies
     FROM
         builds b
         JOIN files f USING (build_id)
@@ -1633,7 +1659,11 @@ AS $sql$
         LEFT JOIN LATERAL (
             SELECT f.filename, d.dependency
             FROM get_file_apt_dependencies(f.filename) AS d
-        ) d USING (filename)
+        ) ad USING (filename)
+        LEFT JOIN LATERAL (
+            SELECT f.filename, d.dependency
+            FROM get_file_pip_dependencies(f.filename) AS d
+        ) pd USING (filename)
     WHERE b.status
     AND b.package = pkg
     GROUP BY (

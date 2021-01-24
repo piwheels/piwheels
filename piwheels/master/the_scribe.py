@@ -368,9 +368,11 @@ class TheScribe(tasks.PauseableTask):
             if not (release.version.is_prerelease or release.yanked)
         ]
         try:
-            dependencies = release_files[0][0]['apt_dependencies']
+            apt_dependencies = release_files[0][0]['apt_dependencies']
+            pip_dependencies = release_files[0][0]['pip_dependencies']
         except IndexError:
-            dependencies = set()
+            apt_dependencies = set()
+            pip_dependencies = set()
         project_name = self.db.get_project_display_name(package)
         project_dir = self.output_path / 'project' / package
         mkdir_override_symlink(project_dir)
@@ -382,7 +384,8 @@ class TheScribe(tasks.PauseableTask):
                 project=project_name,
                 releases=releases,
                 num_files=num_files,
-                dependencies=dependencies,
+                apt_dependencies=apt_dependencies,
+                pip_dependencies=pip_dependencies,
                 format_size=format_size,
                 timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
                 description=description,
@@ -570,7 +573,8 @@ class TheScribe(tasks.PauseableTask):
                     'file_abi_tag': f.file_abi_tag,
                     'platform': f.platform_tag,
                     'requires_python': f.requires_python,
-                    'apt_dependencies': sorted(f.dependencies) if f.dependencies else [],
+                    'apt_dependencies': sorted(f.apt_dependencies) if f.apt_dependencies else [],
+                    'pip_dependencies': sorted(f.pip_dependencies) if f.pip_dependencies else [],
                 }
                 for f in files
                 if f.version.original == version.version.original

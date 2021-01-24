@@ -55,7 +55,8 @@ ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
     'version', 'yanked', 'released', 'skip', 'builds_succeeded', 'builds_failed'))
 ProjectFilesRow = namedtuple('ProjectFilesRow', (
     'version', 'platform_tag', 'builder_abi', 'file_abi_tag', 'filename',
-    'filesize', 'filehash', 'yanked', 'requires_python', 'dependencies'))
+    'filesize', 'filehash', 'yanked', 'requires_python', 'apt_dependencies',
+    'pip_dependencies'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
@@ -572,8 +573,8 @@ class Database:
 
     def get_project_versions(self, package):
         """
-        Returns all details required to build the versions table in the
-        project page of the specified *package*.
+        Returns all details required to list all versions in the releases table
+        in the project page of the specified *package*.
         """
         with self._conn.begin():
             return [
@@ -587,8 +588,8 @@ class Database:
 
     def get_project_files(self, package):
         """
-        Returns all details required to build the files table in the project
-        page of the specified *package*.
+        Returns all details required to list all files for all versions in the
+        releases table in the project page of the specified *package*.
         """
         with self._conn.begin():
             return [
@@ -596,7 +597,7 @@ class Database:
                 for row in self._conn.execute(
                     "SELECT version, platform_tag, builder_abi, file_abi_tag, "
                     "filename, filesize, filehash, yanked, requires_python, "
-                    "dependencies "
+                    "apt_dependencies, pip_dependencies "
                     "FROM get_project_files(%s)", (package,)
                 )
             ]
