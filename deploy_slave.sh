@@ -69,6 +69,7 @@ if [ $VERSION_ID -lt 10 ]; then
 fi
 
 pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
+    setuptools_rust conan
     --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
 getent passwd piwheels && userdel -fr piwheels
