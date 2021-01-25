@@ -30,7 +30,7 @@
       <div class="small-12 medium-8 columns">
         <h2>Configuration</h2>
 
-        <p><a href="https://www.raspberrypi.org/downloads/raspbian/">Raspberry Pi OS</a>
+        <p><a href="https://www.raspberrypi.org/software/operating-systems/">Raspberry Pi OS</a>
         (formerly known as Raspbian) includes configuration for <code>pip</code>
         to use piwheels by default, which lives at <code>/etc/pip.conf</code>:</p>
 
