@@ -110,4 +110,6 @@ fi
 
 rm -f /etc/pip.conf
 
+byobu-enable
+
 reboot
