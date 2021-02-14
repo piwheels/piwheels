@@ -2,6 +2,15 @@
 
 set -eu
 
+if [ $# -ne 2 ]; then
+    echo "Usage: deploy_slave.sh HOSTNAME MASTER_IP"
+    exit 1
+fi
+
+echo $1 > /etc/hostname
+echo "[slave]" > /etc/piwheels.conf
+echo "master=$2" >> /etc/piwheels.conf
+
 source /etc/os-release
 
 LIBXLST=libxslt-dev
@@ -68,10 +77,6 @@ pip3 install setuptools --upgrade
 pip3 install $PIP --upgrade
 hash -r
 
-if [ $VERSION_ID -lt 10 ]; then
-    pip3 install pint==0.9  # requires python issue
-fi
-
 pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
     setuptools_rust conan \
     --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
@@ -106,3 +111,5 @@ swapon /dev/loop0\
 fi
 
 rm -f /etc/pip.conf
+
+reboot
