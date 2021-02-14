@@ -2,6 +2,8 @@
 
 set -eu
 
+sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+
 if [ $# -ne 2 ]; then
     echo "Usage: deploy_slave.sh HOSTNAME MASTER_IP"
     exit 1
