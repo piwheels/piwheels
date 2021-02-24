@@ -188,6 +188,11 @@ class PyPIBuffer:
             ]
         except (OSError, http.client.ImproperConnectionState, TimeoutError) as exc:
             return []
+        except xmlrpc.client.Fault as exc:
+            if exc.faultCode == -32500:
+                return []  # HTTPTooManyRequests; back off and try again
+            else:
+                raise
         except xmlrpc.client.ProtocolError as exc:
             if exc.errcode >= 500:
                 return []
