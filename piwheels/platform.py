@@ -44,6 +44,9 @@ except TypeError:
 else:
     get_platform = bdist_wheel.get_platform
 
+try:
+    get_impl_ver = bdist_wheel.get_impl_ver
+except AttributeError:
+    from wheel.vendored.packaging.tags import interpreter_version as get_impl_ver
 
-get_impl_ver = bdist_wheel.get_impl_ver
 get_abi_tag = bdist_wheel.get_abi_tag
