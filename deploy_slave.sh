@@ -2,8 +2,6 @@
 
 set -eu
 
-sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-
 if [ $# -ne 2 ]; then
     echo "Usage: deploy_slave.sh HOSTNAME MASTER_IP"
     exit 1
@@ -15,61 +13,60 @@ echo "master=$2" >> /etc/piwheels.conf
 
 DEBIAN_FRONTEND=noninteractive
 
+sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+
 source /etc/os-release
 
-LIBXLST=libxslt-dev
-SOUNDFONT=musescore-soundfont-gm
-LIBPNG_DEV=libpng-dev
-LIBMYSQL_DEV=libmariadbclient-dev
-LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
-TURBOGEARS=python-turbogears
-SOUNDFONT=musescore-soundfont-gm
+LIBXLST=libxslt1-dev
+LIBGLES=libgles2-mesa-dev
+TURBOGEARS=
 PIP=pip
-PYBIND=pybind11-dev
-LIBZMQ=libzmq5
+SOUNDFONT=timgm6mb-soundfont
+POSTGRES_SERVER_DEV=postgresql-server-dev-13
+PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
+    python-pandas python-yaml libpng-dev python-lxml python-cffi python-bs4 \
+    python-click python-sqlalchemy python-pil python-pymongo python-django \
+    python-flask python-cherrypy python-tornado python-redis python-dateutil \
+    python-dnspython python-sphinx python-boto python-gi python-gi-cairo \
+    python-cairocffi python-numpy"
+QMAKE=qt4-qmake
 
 if [ $VERSION_ID -eq 9 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
     PIP="pip<21"
+    LIBXLST=libxslt-dev
+    TURBOGEARS=python-turbogears
+    SOUNDFONT=musescore-soundfont-gm
+    LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
 elif [ $VERSION_ID -eq 10 ]; then
-    LIBXLST=libxslt1-dev
     POSTGRES_SERVER_DEV=postgresql-server-dev-11
-    LIBGLES=libgles2-mesa-dev
     TURBOGEARS=python-turbogears2
-    SOUNDFONT=timgm6mb-soundfont
+elif [ $VERSION_ID -eq 11 ]; then
+    PYTHON2_PACKAGES=
+    QMAKE=qt5-qmake
 fi
 
 apt update
 apt -y upgrade
 apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
-    gfortran ipython ipython3 git qt4-qmake qt5-qmake python-dev python3-dev \
-    $LIBPNG_DEV $LIBMYSQL_DEV $LIBGLES $LIBXLST $TURBOGEARS $SOUNDFONT \
-    $POSTGRES_SERVER_DEV zlib1g-dev libpq-dev libffi-dev libxml2-dev \
-    libhdf5-dev libldap2-dev libjpeg-dev libbluetooth-dev libusb-dev \
-    libhidapi-dev libfreetype6-dev liblcms2-dev libzbar-dev libbz2-dev \
-    libblas-dev liblapack-dev liblapacke-dev libcurl4-openssl-dev libgmp-dev \
-    libgstreamer1.0-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
-    libsdl2-ttf-dev libssl-dev libsasl2-dev libldap2-dev libavcodec-dev \
-    libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
-    libgtk2.0-dev libgtk-3-dev libatlas-base-dev python-numpy python3-numpy \
-    python-scipy python3-scipy python-matplotlib python3-matplotlib \
-    python-pandas python3-pandas python-yaml python3-yaml \
-    python-lxml python3-lxml python-cffi python3-cffi python-bs4 python3-bs4 \
-    python-click python3-click python-sqlalchemy python3-sqlalchemy \
-    python-pil python3-pil python-pymongo python3-pymongo python-django \
-    python3-django python-flask python3-flask python-cherrypy \
-    python3-cherrypy3 python-tornado python3-tornado python-pip python3-pip \
-    python-redis python3-redis python-dateutil python3-dateutil python3-apt \
-    python-dnspython python3-dnspython python-sphinx python3-sphinx \
-    python-boto python3-boto python-gi python3-gi python-gi-cairo \
-    python3-gi-cairo python-cairocffi python3-cairocffi libsdl-image1.2-dev \
+    gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
+    zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
+    libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev
+    liblcms2-dev libzbar-dev libbz2-dev libblas-dev liblapack-dev \
+    liblapacke-dev libcurl4-openssl-dev libgmp-dev libgstreamer1.0-dev \
+    libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libssl-dev \
+    libsasl2-dev libldap2-dev libavcodec-dev libavformat-dev libswscale-dev \
+    libv4l-dev libxvidcore-dev libx264-dev libgtk2.0-dev libgtk-3-dev \
+    libatlas-base-dev python3-numpy python3-cairocffi libsdl-image1.2-dev \
     libsdl-mixer1.2-dev libsdl-ttf2.0-dev libsdl1.2-dev libportmidi-dev \
     libtiff5-dev libx11-6 libx11-dev xfonts-base xfonts-100dpi xfonts-75dpi \
     xfonts-cyrillic fluid-soundfont-gm libsystemd-dev libusb-1.0-0-dev \
-    libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev \
-    libadios-dev libavfilter-dev libavutil-dev libcec-dev lsb-release \
-    $PYBIND libsnappy-dev libpcap0.8-dev swig $LIBZMQ portaudio19-dev \
-    coinor-libipopt-dev libsrtp2-dev cargo golang
+    libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev libadios-dev \
+    libavfilter-dev libavutil-dev libcec-dev lsb-release pybind11-dev \
+    libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev \
+    coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev cargo golang \
+    $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
+    $PYTHON2_PACKAGES $QMAKE
 
 apt purge python3-cryptography -y
 
