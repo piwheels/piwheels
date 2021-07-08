@@ -13,6 +13,8 @@ echo $1 > /etc/hostname
 echo "[slave]" > /etc/piwheels.conf
 echo "master=$2" >> /etc/piwheels.conf
 
+DEBIAN_FRONTEND=noninteractive
+
 source /etc/os-release
 
 LIBXLST=libxslt-dev
