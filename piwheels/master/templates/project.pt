@@ -65,6 +65,7 @@ sudo pip3 install ${project}</pre>
             <th>Released</th>
             <th class="center">Stretch</th>
             <th class="center">Buster</th>
+            <th class="center">Bullseye</th>
             <th class="center">Files</th>
           </tr>
           <span tal:repeat="row releases" tal:omit-tag="True">
@@ -77,10 +78,11 @@ sudo pip3 install ${project}</pre>
               <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
               <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
               <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
+              <td class="${row.abis['cp39'].css_class if 'cp39' in row.abis else ''}" title="${row.abis['cp39'].title if 'cp39' in row.abis else ''}"></td>
               <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0">+</a></td>
             </tr>
             <tr id="files-${repeat.row.number}" class="hidden">
-              <td colspan="7">
+              <td colspan="8">
                 <table class="files">
                   <tr tal:repeat="file row.files">
                     <td class="version hidden">${row.version.original}</td>
@@ -94,7 +96,7 @@ sudo pip3 install ${project}</pre>
             </tr>
           </span>
           <tr tal:condition="len(releases) > 5" id="show-hidden-versions">
-            <td colspan="7" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
+            <td colspan="8" class="center"><a onclick="showHiddenVersions()">Show more releases</a></td>
           </tr>
         </table>
         <table tal:condition="not:releases" class="empty">
