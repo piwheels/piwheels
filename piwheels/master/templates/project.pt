@@ -110,8 +110,8 @@ sudo pip3 install ${project}</pre>
         <h3>Issues with this package?</h3>
         <table class="package-issues">
           <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${project}')">Search</a></td></tr>
-          <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.md&title=Missing+package:+${project}">New issue</a></td></tr>
-          <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.md&title=${project}">New issue</a></td></tr>
+          <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${project}&labels=missing+package&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
+          <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Missing+package:+${project}&labels=package+issue&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
         </table>
       </div>
       <div id="issues" class="small-12 medium-6 columns"></div>
