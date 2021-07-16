@@ -155,12 +155,21 @@ class TheScribe(tasks.PauseableTask):
             source = pkg_resources.resource_stream(__name__, 'static/' + filename)
             with AtomicReplaceFile(self.output_path / filename) as f:
                 shutil.copyfileobj(source, f)
-        startup_templates = {'faq.pt', 'packages.pt', 'stats.pt', 'json.pt', '404.pt'}
+        startup_templates = {
+            'faq.pt': ('FAQ', 'frequently asked questions about the piwheels project'),
+            'packages.pt': ('Package search', 'search for packages in the piwheels repository'),
+            'stats.pt': ('Stats', 'piwheels usage statistics'),
+            'json.pt': ('JSON API', 'information about the piwheels JSON API'),
+            '404.pt': ('404 - file not found', 'file not found'),
+        }
         for filename in pkg_resources.resource_listdir(__name__, 'templates'):
             if filename in startup_templates:
+                title, description = startup_templates[filename]
                 source = self.templates[filename](
                     layout=self.templates['layout']['layout'],
-                    page=filename.replace('.pt', '')
+                    page=filename.replace('.pt', ''),
+                    title=title,
+                    description=description,
                 )
                 with AtomicReplaceFile(
                         (self.output_path / filename).with_suffix('.html'),
@@ -232,7 +241,10 @@ class TheScribe(tasks.PauseableTask):
                 layout=self.templates['layout']['layout'],
                 timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
                 page='home',
-                stats=statistics))
+                title='Home',
+                description='Python package repository providing wheels for Raspberry Pi',
+                stats=statistics,
+            ))
 
     def write_search_index(self, search_index):
         """
@@ -385,6 +397,7 @@ class TheScribe(tasks.PauseableTask):
                 dependencies=dependencies,
                 format_size=format_size,
                 timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
+                title=project_name,
                 description=description,
                 page='project'))
         project_aliases = self.db.get_package_aliases(package)

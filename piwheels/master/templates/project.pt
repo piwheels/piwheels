@@ -1,5 +1,4 @@
 <div metal:use-macro="layout">
-  <div metal:fill-slot="title" tal:omit-tag="1">${project}</div>
   <div metal:fill-slot="scripts" tal:omit-tag="1">
     <script src="/project.js"></script>
   </div>

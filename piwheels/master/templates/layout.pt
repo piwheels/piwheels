@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>piwheels - <span metal:define-slot="title" /></title>
+    <title>piwheels - ${title}</title>
     <link rel="stylesheet" href="/foundation-float.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Condensed">
@@ -13,6 +13,13 @@
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link tal:condition="page == 'project'" href="https://www.piwheels.org/project/${project}/" rel="canonical">
+    <!-- TWITTER CARD -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@piwheels" />
+    <meta name="twitter:title" content="piwheels - ${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="https://www.piwheels.org/piwheels-logo-large.png" />
+    <!-- END TWITTER CARD -->
   </head>
   <body>
     <header>
