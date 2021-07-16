@@ -30,8 +30,8 @@
         <h2>Configuration</h2>
 
         <p><a href="https://www.raspberrypi.org/software/operating-systems/">Raspberry Pi OS</a>
-        (formerly known as Raspbian) includes configuration for <code>pip</code>
-        to use piwheels by default, which lives at <code>/etc/pip.conf</code>:</p>
+        includes configuration for <code>pip</code> to use piwheels by default, which lives at
+        <code>/etc/pip.conf</code>:</p>
 
         <pre>[global]
 extra-index-url=https://www.piwheels.org/simple</pre>
@@ -66,15 +66,20 @@ $ rm -rf testpip/</pre>
       <div class="small-12 medium-8 columns">
         <h2>Support</h2>
 
-        <p>Wheels provided support all Raspberry Pi models (Pi 4, Pi 3,
-        Pi 2, Pi 1 and Pi Zero). Wheels are provided for Raspbian Jessie
-        (Python 3.4), Raspbian Stretch (Python 3.5) and Raspberry Pi OS /
-        Raspbian Buster (Python 3.7) &mdash; though currently only the
-        32-bit OS is supported, not 64-bit.</p>
+        <p>Wheels are provided to support all Raspberry Pi models: Pi 4, Pi 400, Pi 3, Pi 2
+        (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero (<code>linux_armv6l</code> wheels) for
+        32-bit Raspberry Pi OS only for the version of Python provided by each OS version.</p>
 
-        <p>See each package's <a href="/packages.html">project page</a>
-        for information on available wheels, and see the <a href="/faq.html">FAQ</a>
-        for more technical details.</p>
+        <table>
+          <tr><th>Raspberry Pi OS version</th><th>Python version</th><th class="center">Status</th></tr>
+          <tr><td>Jessie</td><td>Python 3.4</td><td class="buildskipped" title="Inactive (end of life)"></td></tr>
+          <tr><td>Stretch</td><td>Python 3.5</td><td class="buildpassed" title="Active"></td></tr>
+          <tr><td>Buster</td><td>Python 3.7</td><td class="buildpassed" title="Active"></td></tr>
+          <tr><td>Bullseye</td><td>Python 3.9</td><td class="buildpassed" title="Active"></td></tr>
+        </table>
+
+        <p>See each package's <a href="/packages.html">project page</a> for information on available
+        wheels, and see the <a href="/faq.html">FAQ</a> for further technical details.</p>
 
         <p class="small"><small>Page last updated ${timestamp}</small></p>
       </div>
