@@ -62,9 +62,9 @@ sudo pip3 install ${project}</pre>
           <tr>
             <th>Version</th>
             <th>Released</th>
-            <th class="center">Stretch</th>
-            <th class="center">Buster</th>
-            <th class="center">Bullseye</th>
+            <th class="center">Stretch<br>(Python 3.5)</th>
+            <th class="center">Buster<br>(Python 3.7)</th>
+            <th class="center">Bullseye<br>(Python 3.9)</th>
             <th class="center">Files</th>
           </tr>
           <span tal:repeat="row releases" tal:omit-tag="True">
