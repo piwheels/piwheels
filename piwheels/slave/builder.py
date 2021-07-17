@@ -429,11 +429,18 @@ class Builder(Thread):
             '--index-url={}'.format(self.pypi_index),
             '--wheel-dir={}'.format(self._wheel_dir.name),
             '--log={}'.format(log_file.name),
-            '--no-deps',                    # don't build dependencies
-            '--no-cache-dir',               # disable the cache directory
-            '--no-binary=:all:',            # never get binary wheels
-            '--exists-action=w',            # wipe existing paths
-            '--disable-pip-version-check',  # don't check for new pip
+            '--no-deps',                   # don't build dependencies
+            '--no-cache-dir',              # disable the cache directory
+            '--no-binary={}'.format(self.package), # always build the specified
+                                           #package from source
+            '--prefer-binary',             # prefer binary packages over source
+                                           # (for build dependencies)
+            '--extra-index-url=https://www.piwheels.org/simple',
+                                           # get binaries of build dependencies
+                                           # from piwheels
+            '--exists-action=w',           # wipe existing paths
+            '--no-python-version-warning', # don't warn about python version
+            '--disable-pip-version-check', # don't check for new pip
             '{}=={}'.format(self.package, self.version),
         ]
 
