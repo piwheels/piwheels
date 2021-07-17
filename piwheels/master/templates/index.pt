@@ -11,7 +11,7 @@
         repository providing Arm platform <a href="https://pythonwheels.com/">wheels</a>
         (pre-compiled binary Python packages) specifically for the
         <a href="https://www.raspberrypi.org/">Raspberry Pi</a>, making pip installations
-        much faster. Packages are natively compiled on Raspberry Pi 3 hardware using the
+        much faster. Packages are natively compiled on Raspberry Pi 3 and 4 hardware using the
         <a href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts Pi cloud</a>.</p>
       </div>
 
