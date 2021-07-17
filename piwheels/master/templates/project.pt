@@ -58,6 +58,7 @@ sudo pip3 install ${project}</pre>
     <div class="row">
       <div class="small-12 columns">
         <h3>Releases</h3>
+
         <table id="versions" tal:condition="releases">
           <tr>
             <th>Version</th>
@@ -78,7 +79,7 @@ sudo pip3 install ${project}</pre>
               <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
               <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
               <td class="${row.abis['cp39'].css_class if 'cp39' in row.abis else ''}" title="${row.abis['cp39'].title if 'cp39' in row.abis else ''}"></td>
-              <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0">+</a></td>
+              <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0" title="Show files">+</a></td>
             </tr>
             <tr id="files-${repeat.row.number}" class="hidden">
               <td colspan="8">
@@ -100,6 +101,13 @@ sudo pip3 install ${project}</pre>
         </table>
         <table tal:condition="not:releases" class="empty">
           <tr><th>No releases</th></tr>
+        </table>
+
+        <table id="builds-key">
+          <tr><th colspan="2">Key</th></tr>
+          <tr><td class="buildpassed"></td><td>Build succeeded</td></tr>
+          <tr><td class="buildfailed"></td><td>Build failed</td></tr>
+          <tr><td class="buildskipped"></td><td>Build skipped</td></tr>
         </table>
       </div>
     </div>

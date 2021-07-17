@@ -92,10 +92,12 @@ const toggleFiles = (btn, filesTableId) => {
     const filesTable = document.getElementById(filesTableId);
     filesTable.classList.remove('hidden');
     btn.innerHTML = '-';
+    btn.title = 'Hide files';
   } else {
     const filesTable = document.getElementById(filesTableId);
     filesTable.classList.add('hidden');
     btn.innerHTML = '+';
+    btn.title = 'Show files';
   }
 };
 

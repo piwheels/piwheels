@@ -224,10 +224,8 @@ th.center, td.center {
   text-align: center;
 }
 
-.buildpassed, .buildfailed {
-  text-align: center;
-  line-height: 20px;
-  font-size: 40px;
+.buildpassed, .buildfailed, .buildskipped {
+  min-width: 42px;
 }
 
 .buildpassed {
@@ -261,6 +259,23 @@ tr table.files tbody tr:nth-child(2n+1) {
 
 tr table#versions td.version {
   font-weight: bold;
+}
+
+table#builds-key {
+  width: 200px;
+  float: right;
+}
+
+table#builds-key th {
+  background: #f1f1f1;
+}
+
+table#builds-key tr:nth-child(2n) {
+  background: transparent;
+}
+
+table#builds-key  {
+  background: transparent;
 }
 
 tr table.files {
