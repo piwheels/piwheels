@@ -51,7 +51,7 @@ apt -y upgrade
 apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
     zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
-    libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev
+    libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev \
     liblcms2-dev libzbar-dev libbz2-dev libblas-dev liblapack-dev \
     liblapacke-dev libcurl4-openssl-dev libgmp-dev libgstreamer1.0-dev \
     libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libssl-dev \
