@@ -67,15 +67,16 @@ $ rm -rf testpip/</pre>
         <h2>Support</h2>
 
         <p>Wheels are provided to support all Raspberry Pi models: Pi 4, Pi 400, Pi 3, Pi 2
-        (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero (<code>linux_armv6l</code> wheels) for
-        32-bit Raspberry Pi OS only for the version of Python provided by each OS version.</p>
+        (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero (<code>linux_armv6l</code> wheels).
+        Our wheels are only supported under 32-bit (<code>armhf</code>) Raspberry Pi OS, and only
+        for the version of Python provided by each OS release:</p>
 
         <table>
           <tr><th>Raspberry Pi OS version</th><th>Python version</th><th class="center">Status</th></tr>
-          <tr><td>Jessie</td><td>Python 3.4</td><td class="buildskipped" title="Inactive (end of life)"></td></tr>
-          <tr><td>Stretch</td><td>Python 3.5</td><td class="buildpassed" title="Active"></td></tr>
-          <tr><td>Buster</td><td>Python 3.7</td><td class="buildpassed" title="Active"></td></tr>
-          <tr><td>Bullseye</td><td>Python 3.9</td><td class="buildpassed" title="Active"></td></tr>
+          <tr><td>Jessie</td><td>Python 3.4</td><td data-tooltip class="top status-icon inactive" title="Inactive (end of life)"></td></tr>
+          <tr><td>Stretch</td><td>Python 3.5</td><td data-tooltip class="top status-icon active" title="Active"></td></tr>
+          <tr><td>Buster</td><td>Python 3.7</td><td data-tooltip class="top status-icon active" title="Active"></td></tr>
+          <tr><td>Bullseye</td><td>Python 3.9</td><td data-tooltip class="top status-icon active" title="Active"></td></tr>
         </table>
 
         <p>See each package's <a href="/packages.html">project page</a> for information on available

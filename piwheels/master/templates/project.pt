@@ -76,9 +76,9 @@ sudo pip3 install ${project}</pre>
                 <span tal:condition="row.yanked" class="yanked">yanked</span>
               </td>
               <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
-              <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
-              <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
-              <td class="${row.abis['cp39'].css_class if 'cp39' in row.abis else ''}" title="${row.abis['cp39'].title if 'cp39' in row.abis else ''}"></td>
+              <td data-tooltip class="top status-icon ${row.abis['cp35m'].css_class if 'cp35m' in row.abis else ''}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else ''}"></td>
+              <td data-tooltip class="top status-icon ${row.abis['cp37m'].css_class if 'cp37m' in row.abis else ''}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else ''}"></td>
+              <td data-tooltip class="top status-icon ${row.abis['cp39'].css_class if 'cp39' in row.abis else ''}" title="${row.abis['cp39'].title if 'cp39' in row.abis else ''}"></td>
               <td class="center"><a class="button small" onclick="toggleFiles(this, 'files-${repeat.row.number}')" tal:condition="len(row.files) > 0" title="Show files">+</a></td>
             </tr>
             <tr id="files-${repeat.row.number}" class="hidden">
@@ -105,9 +105,10 @@ sudo pip3 install ${project}</pre>
 
         <table id="builds-key">
           <tr><th colspan="2">Key</th></tr>
-          <tr><td class="buildpassed"></td><td>Build succeeded</td></tr>
-          <tr><td class="buildfailed"></td><td>Build failed</td></tr>
-          <tr><td class="buildskipped"></td><td>Build skipped</td></tr>
+          <tr><td class="status-icon success"></td><td>Build succeeded</td></tr>
+          <tr><td class="status-icon fail"></td><td>Build failed</td></tr>
+          <tr><td class="status-icon skip"></td><td>Build skipped</td></tr>
+          <tr><td class="status-icon pending"></td><td>Build pending</td></tr>
         </table>
       </div>
     </div>

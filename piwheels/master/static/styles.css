@@ -224,20 +224,31 @@ th.center, td.center {
   text-align: center;
 }
 
-.buildpassed, .buildfailed, .buildskipped {
+.status-icon {
   min-width: 42px;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.buildpassed {
-  background: url('success.png') center no-repeat;
+.status-icon.success, .status-icon.active {
+  background-image: url('success.png');
 }
 
-.buildfailed {
-  background: url('fail.png') center no-repeat;
+.status-icon.fail {
+  background-image: url('fail.png');
 }
 
-.buildskipped {
-  background: url('skip.png') center no-repeat;
+.status-icon.skip, .status-icon.inactive {
+  background-image: url('skip.png');
+}
+
+.status-icon.pending {
+  background-image: url('pending.png');
+}
+
+.status-icon.has-tip {
+  display: table-cell;
+  border-bottom: none;
 }
 
 .button.small {

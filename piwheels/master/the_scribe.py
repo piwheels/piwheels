@@ -67,17 +67,17 @@ def _is_compatible_with_abi(abi, builds_succeeded, files):
 
 def _get_abi_status(abi, builds_succeeded, builds_failed, files, skip):
     status = {
-        'css_class': '',
-        'title': '',
+        'css_class': 'pending',
+        'title': 'Build pending',
     }
     if abi in builds_failed:
-        status['css_class'] = 'buildfailed'
+        status['css_class'] = 'fail'
         status['title'] = 'Build failed'
     elif _is_compatible_with_abi(abi, builds_succeeded, files):
-        status['css_class'] = 'buildpassed'
+        status['css_class'] = 'success'
         status['title'] = 'Build succeeded'
     elif skip:
-        status['css_class'] = 'buildskipped'
+        status['css_class'] = 'skip'
         status['title'] = 'Skipped: {}'.format(skip)
     return status
 
