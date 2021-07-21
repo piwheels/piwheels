@@ -254,7 +254,7 @@ def test_builder_build_success(mock_archive, tmpdir):
         assert not b.is_alive()
         assert b.status
         args, kwargs = proc_mock.call.call_args
-        assert args[0][-1] == 'foo==0.1'
+        assert args[0][2] == 'foo==0.1'
         assert len(b.wheels) == 1
         assert b.wheels[0].filename == 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
 
@@ -275,7 +275,7 @@ def test_builder_build_timeout(tmpdir):
         assert not b.is_alive()
         assert not b.status
         args, kwargs = proc_mock.call.call_args
-        assert args[0][-1] == 'foo==0.1'
+        assert args[0][2] == 'foo==0.1'
         assert len(b.wheels) == 0
 
 
