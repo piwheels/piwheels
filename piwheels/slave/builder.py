@@ -294,19 +294,27 @@ class Builder(Thread):
         The URL of the :pep:`503` compliant repository from which to fetch
         packages for building.
 
+    :param str extra_index:
+        The URL of another :pep:`503` compliant repository from which to fetch
+        packages. This is intended to make binary packages available when
+        installing build dependencies.
+
     :param str dir:
         The directory in which to store wheel and log output.
     """
     apt_cache = None
 
     def __init__(self, package, version, timeout=timedelta(minutes=5),
-                 pypi_index='https://pypi.python.org/simple', dir=None):
+                 pypi_index='https://pypi.python.org/simple',
+                 extra_index='https://www.piwheels.org/simple',
+                 dir=None):
         super().__init__()
         self._wheel_dir = tempfile.TemporaryDirectory(dir=dir)
         self._package = package
         self._version = version
         self._timeout = timeout
         self._pypi_index = pypi_index
+        self._extra_index = extra_index
         self._duration = None
         self._output = ''
         self._wheels = []
@@ -350,6 +358,15 @@ class Builder(Thread):
         obtain the source to build.
         """
         return self._pypi_index
+
+    @property
+    def extra_index(self):
+        """
+        The URL of an additional index from which the builder will also check
+        when retrieving packages. This is intended to be used for fetching
+        compiled platform wheels for specified *build dependencies*.
+        """
+        return self._extra_index
 
     @property
     def wheels(self):
@@ -432,10 +449,10 @@ class Builder(Thread):
             '--no-deps',                   # don't build dependencies
             '--no-cache-dir',              # disable the cache directory
             '--no-binary={}'.format(self.package), # always build the specified
-                                           #package from source
+                                           # package from source
             '--prefer-binary',             # prefer binary packages over source
                                            # (for build dependencies)
-            '--extra-index-url=https://www.piwheels.org/simple',
+            '--extra-index-url={}'.format(self.extra_index),
                                            # get binaries of build dependencies
                                            # from piwheels
             '--exists-action=w',           # wipe existing paths
