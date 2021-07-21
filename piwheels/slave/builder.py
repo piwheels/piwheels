@@ -294,19 +294,27 @@ class Builder(Thread):
         The URL of the :pep:`503` compliant repository from which to fetch
         packages for building.
 
+    :param str extra_index:
+        The URL of another :pep:`503` compliant repository from which to fetch
+        packages. This is intended to make binary packages available when
+        installing build dependencies.
+
     :param str dir:
         The directory in which to store wheel and log output.
     """
     apt_cache = None
 
     def __init__(self, package, version, timeout=timedelta(minutes=5),
-                 pypi_index='https://pypi.python.org/simple', dir=None):
+                 index_url='https://pypi.python.org/simple',
+                 extra_index_urls={'https://www.piwheels.org/simple'},
+                 dir=None):
         super().__init__()
         self._wheel_dir = tempfile.TemporaryDirectory(dir=dir)
         self._package = package
         self._version = version
         self._timeout = timeout
-        self._pypi_index = pypi_index
+        self._index_url = index_url
+        self._extra_index_urls = extra_index_urls
         self._duration = None
         self._output = ''
         self._wheels = []
@@ -344,12 +352,21 @@ class Builder(Thread):
         return self._timeout
 
     @property
-    def pypi_index(self):
+    def index_url(self):
         """
-        The URL of the PyPI server from which the builder will attempt to
-        obtain the source to build.
+        The URL of primary index from which the builder will attempt to obtain
+        the source to build.
         """
-        return self._pypi_index
+        return self._index_url
+
+    @property
+    def extra_index_urls(self):
+        """
+        The URL of any additional indexes from which the builder will also check
+        when retrieving packages. This is intended to be used for fetching
+        compiled platform wheels for specified *build dependencies*.
+        """
+        return self._extra_index_urls
 
     @property
     def wheels(self):
@@ -424,18 +441,26 @@ class Builder(Thread):
         """
         Generate the pip command line used to run the build.
         """
-        return [
+        cmd = [
             'pip3', 'wheel',
-            '--index-url={}'.format(self.pypi_index),
+            '{}=={}'.format(self.package, self.version),
             '--wheel-dir={}'.format(self._wheel_dir.name),
             '--log={}'.format(log_file.name),
-            '--no-deps',                    # don't build dependencies
-            '--no-cache-dir',               # disable the cache directory
-            '--no-binary=:all:',            # never get binary wheels
-            '--exists-action=w',            # wipe existing paths
-            '--disable-pip-version-check',  # don't check for new pip
-            '{}=={}'.format(self.package, self.version),
+            '--no-deps',                   # don't build dependencies
+            '--no-cache-dir',              # disable the cache directory
+            '--no-binary={}'.format(self.package), # always build the specified
+                                                   # package from source
+            '--prefer-binary',             # prefer binary packages over source
+                                           # (for build dependencies)
+            '--exists-action=w',           # wipe existing paths
+            '--no-python-version-warning', # don't warn about python version
+            '--disable-pip-version-check', # don't check for new pip
+            '--index-url={}'.format(self.index_url),
         ]
+
+        for url in self._extra_index_urls:
+            cmd.append('--extra-index-url={}'.format(url))
+        return cmd
 
     def build_wheel(self, log_file):
         """
