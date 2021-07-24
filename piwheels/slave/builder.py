@@ -290,14 +290,13 @@ class Builder(Thread):
         The number of seconds to wait for ``pip`` to finish before raising
         :exc:`subprocess.TimeoutExpired`.
 
-    :param str pypi_index:
+    :param str index_url:
         The URL of the :pep:`503` compliant repository from which to fetch
         packages for building.
 
-    :param str extra_index:
-        The URL of another :pep:`503` compliant repository from which to fetch
-        packages. This is intended to make binary packages available when
-        installing build dependencies.
+    :param set extra_index_urls:
+        The URLs of any additional :pep:`503` compliant repositories from which
+        to fetch packages.
 
     :param str dir:
         The directory in which to store wheel and log output.
@@ -362,8 +361,8 @@ class Builder(Thread):
     @property
     def extra_index_urls(self):
         """
-        The URL of any additional indexes from which the builder will also check
-        when retrieving packages. This is intended to be used for fetching
+        The URLs of any additional indexes from which the builder will also
+        check when retrieving packages. This is intended to be used for fetching
         compiled platform wheels for specified *build dependencies*.
         """
         return self._extra_index_urls
