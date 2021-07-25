@@ -277,7 +277,7 @@ def test_import_unknown_pkg(db_queue, task, import_queue, build_state):
     db_queue.send('OK', False)
     task.poll(0)
     assert import_queue.recv_msg() == (
-        'ERROR', 'unknown package version %s-%s' % (bs.package, bs.version))
+        'ERROR', 'unknown package version %s %s' % (bs.package, bs.version))
     assert task.logger.error.call_count == 1
     assert len(task.states) == 0
 
@@ -440,7 +440,7 @@ def test_remove_unknown_ver(db_queue, task, import_queue, build_state):
     db_queue.send('OK', False)
     task.poll(0)
     assert import_queue.recv_msg() == (
-        'ERROR', 'unknown package version %s-%s' % (bs.package, bs.version))
+        'ERROR', 'unknown package version %s %s' % (bs.package, bs.version))
     assert task.logger.error.call_count == 1
     assert len(task.states) == 0
 

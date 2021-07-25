@@ -146,9 +146,9 @@ class MrChase(tasks.PauseableTask):
             self.logger.error('invalid ABI: %s', state.abi_tag)
             return 'ERROR', 'invalid ABI: %s' % state.abi_tag
         if not self.db.test_package_version(state.package, state.version):
-            self.logger.error('unknown package version %s-%s',
+            self.logger.error('unknown package version %s %s',
                               state.package, state.version)
-            return 'ERROR', 'unknown package version %s-%s' % (
+            return 'ERROR', 'unknown package version %s %s' % (
                 state.package, state.version)
         try:
             self.db.log_build(state)
@@ -232,11 +232,11 @@ class MrChase(tasks.PauseableTask):
 
     def do_remove_version(self, package, version, reason):
         if not self.db.test_package_version(package, version):
-            self.logger.error('unknown package version %s-%s',
+            self.logger.error('unknown package version %s %s',
                               package, version)
-            return 'ERROR', 'unknown package version %s-%s' % (
+            return 'ERROR', 'unknown package version %s %s' % (
                 package, version)
-        self.logger.info('removing %s-%s', package, version)
+        self.logger.info('removing %s %s', package, version)
         if reason:
             self.db.skip_package_version(package, version, reason)
         self.web_queue.send_msg('DELVER', [package, version])
