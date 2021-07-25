@@ -570,7 +570,7 @@ class TheScribe(tasks.PauseableTask):
             The name of the package to get versions for.
 
         :param list files:
-            Set of versions to exclude from results.
+            List of files that exist for the package.
         """
         releases = []
         for version in versions:

@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.19');
+INSERT INTO configuration(id, version) VALUES (1, '0.20');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -91,7 +91,7 @@ GRANT SELECT ON versions TO {username};
 -------------------------------------------------------------------------------
 -- The "build_abis" table defines the set of CPython ABIs that the master
 -- should attempt to build. This table must be populated with rows for anything
--- to be built. In addition, there must be at least one slave for each defined
+-- to be built. In addition, there must be at least one slave for each active
 -- ABI. Typical values are "cp34m", "cp35m", etc. Special ABIs like "none" must
 -- NOT be included in the table.
 -------------------------------------------------------------------------------
@@ -99,6 +99,10 @@ GRANT SELECT ON versions TO {username};
 CREATE TABLE build_abis (
     abi_tag         VARCHAR(100) NOT NULL,
     skip            VARCHAR(100) DEFAULT '' NOT NULL,
+    python_name     VARCHAR(100) DEFAULT '' NOT NULL,
+    python_major    INTEGER NOT NULL,
+    python_minor    INTEGER NOT NULL,
+    os_release      VARCHAR(100) DEFAULT '' NOT NULL,
 
     CONSTRAINT build_abis_pk PRIMARY KEY (abi_tag),
     CONSTRAINT build_abis_none_ck CHECK (abi_tag <> 'none')
