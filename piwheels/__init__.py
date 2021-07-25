@@ -54,6 +54,8 @@ scripts are defined:
 * ``piw-logger`` - bridges Apache (or similar web-servers) to the master,
   permitting downloads to be tracked in the database.
 
+* ``piw-add`` - a simple tool for adding packages to the service.
+
 * ``piw-remove`` - a simple tool for removing packages from the service.
 
 * ``piw-import`` - a simple tool for injecting manually built wheels into the
@@ -103,6 +105,7 @@ __entry_points__ = {
         'piw-initdb = piwheels.initdb:main',
         'piw-import = piwheels.importer:main',
         'piw-rebuild = piwheels.rebuild:main',
+        'piw-add = piwheels.add:main',
         'piw-remove = piwheels.remove:main',
         'piw-logger = piwheels.logger:main',
         'piw-monitor = piwheels.monitor.tui:main',

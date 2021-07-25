@@ -38,6 +38,7 @@ import sys
 import logging
 
 from .. import __version__, terminal, const, transport, protocols
+from ..format import canonicalize_name
 
 
 def main(args=None):
@@ -63,27 +64,31 @@ system. This script must be run on the same node as the piw-master script.
         '-y', '--yes', action='store_true',
         help="Run non-interactively; never prompt during operation")
     parser.add_argument(
+        '-b', '--builds', action='store_true',
+        help="Remove builds and files for this package / version, but don't "
+        "delete from the database (requeue unless --skip also given)")
+    parser.add_argument(
         '-s', '--skip', action='store', default='', metavar='REASON',
-        help="Don't delete the package / version from the database, but mark "
-        "it with a reason to prevent future build attempts (wheels will still "
-        "be removed)")
+        help="Mark the package / version as skipped to prevent future build "
+        "attempts (remove and skip if --builds also given)")
+    parser.add_argument(
+        '--yank', action='store_true', help="Mark a version as yanked")
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-remove (default: "
         "(%(default)s); this should always be an ipc address")
     config = parser.parse_args(args)
+    config.package = canonicalize_name(config.package)
     terminal.configure_logging(config.log_level, config.log_file)
 
     logging.info("PiWheels Remover version %s", __version__)
 
     if not config.yes:
-        action = 'remove all wheels' if config.skip else 'delete'
-        if config.version is not None:
-            logging.warning("Preparing to %s for %s %s",
-                            action, config.package, config.version)
+        if config.version is None:
+            logging.warning("Preparing to remove/alter %s", config.package)
         else:
-            logging.warning("Preparing to %s for %s",
-                            action, config.package)
+            logging.warning("Preparing to remove/alter %s %s",
+                            config.package, config.version)
         if not terminal.yes_no_prompt('Proceed?'):
             logging.warning('User aborted removal')
             return 2
@@ -94,7 +99,7 @@ system. This script must be run on the same node as the piw-master script.
 
 def do_remove(config):
     """
-    Handles constructing and sending the "REMOVE" message to
+    Handles constructing and sending the REMPKG/REMVER message to
     :class:`..master.mr_chase.MrChase`.
 
     :param config:
@@ -105,13 +110,40 @@ def do_remove(config):
     queue.hwm = 10
     queue.connect(config.import_queue)
     try:
-        queue.send_msg('REMOVE', [
-            config.package, config.version, config.skip])
+        if config.version is None:
+            queue.send_msg('REMPKG', [
+                config.package, config.builds, config.skip
+            ])
+        else:
+            queue.send_msg('REMVER', [
+                config.package, config.version, config.builds, config.skip,
+                config.yank
+            ])
         msg, data = queue.recv_msg()
+
         if msg == 'ERROR':
+            if data == 'NOPKG':
+                raise RuntimeError('Package {} does not exist'.format(config.package))
+            elif data == 'NOVER':
+                raise RuntimeError('Version {} {} does not exist'.format(config.package, config.version))
             raise RuntimeError(data)
-        logging.info('Removed builds successfully')
-        if msg != 'DONE':
+        
+        if msg == 'DONE':
+            if data == 'DELPKG':
+                logging.warning('Removed package successfully')
+            elif data == 'DELVER':
+                logging.warning('Removed version successfully')
+            elif data == 'DELPKGBLD':
+                logging.warning('Removed builds for package successfully')
+            elif data == 'DELVERBLD':
+                logging.warning('Removed builds for version successfully')
+            elif data == 'SKIPPKG':
+                logging.warning('Skipped package successfully')
+            elif data == 'SKIPVER':
+                logging.warning('Skipped version successfully')
+            elif data == 'YANKVER':
+                logging.warning('Yanked version successfully')
+        else:
             raise RuntimeError('Unexpected response from master')
     finally:
         queue.close()
