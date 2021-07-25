@@ -34,4 +34,4 @@ Development
 If you're interested in developing with piwheels, or running your own instance,
 see the project documentation at `piwheels.readthedocs.io`_.
 
-.. _piwheels.readthedocs.org: https://piwheels.readthedocs.io/
+.. _piwheels.readthedocs.io: https://piwheels.readthedocs.io/
