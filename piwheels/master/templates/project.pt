@@ -25,28 +25,32 @@ sudo pip3 install ${project}</pre>
       </div>
 
       <div class="sidebar">
-        <table class="stats highlight">
-          <tr><th colspan="2">PyPI page</th></tr>
-          <tr><td colspan="2"><a href="https://pypi.org/project/${project}">pypi.org/<wbr />project/<wbr />${project}</a></td></tr>
-          <tr><th colspan="2">Project JSON</th></tr>
-          <tr><td colspan="2"><a href="/project/${package}/json">piwheels.org/<wbr />project/<wbr />${package}/<wbr />json</a></td></tr>
-          <tr>
-            <th>Versions</th>
-            <td>${'{:,}'.format(len(releases))}</td>
-          </tr>
-          <tr>
-            <th>Files</th>
-            <td>${'{:,}'.format(num_files)}</td>
-          </tr>
-          <tr>
-            <th>Downloads<wbr /> (all time)</th>
-            <td id="downloads-all">loading...</td>
-          </tr>
-          <tr>
-            <th>Downloads<wbr /> (last 30 days)</th>
-            <td id="downloads-30">loading...</td>
-          </tr>
-        </table>
+        <div class="stats highlight">
+          <dl>
+            <dt>PyPI page</dt>
+            <dd><a href="https://pypi.org/project/${project}">pypi.org/<wbr />project/<wbr />${project}</a></dd>
+          </dl>
+          <dl>
+            <dt>Project JSON</dt>
+            <dd><a href="/project/${package}/json">piwheels.org/<wbr />project/<wbr />${package}/<wbr />json</a></dd>
+          </dl>
+          <dl>
+            <dt>Versions</dt>
+            <dd>${'{:,}'.format(len(releases))}</dd>
+          </dl>
+          <dl>
+            <dt>Files</dt>
+            <dd>${'{:,}'.format(num_files)}</dd>
+          </dl>
+          <dl>
+            <dt>Downloads<wbr /> (all time)</dt>
+            <dd id="downloads-all">loading...</dd>
+          </dl>
+          <dl>
+            <dt>Downloads<wbr /> (last 30 days)</dt>
+            <dd id="downloads-30">loading...</dd>
+          </dl>
+        </div>
       </div>
     </section>
 
@@ -109,7 +113,6 @@ sudo pip3 install ${project}</pre>
           <tr><th>No releases</th></tr>
         </table>
 
-
         <table id="builds-key">
           <tr><th colspan="2">Key</th></tr>
           <tr><td class="status-icon success"></td><td>Build succeeded</td></tr>
@@ -117,8 +120,6 @@ sudo pip3 install ${project}</pre>
           <tr><td class="status-icon skip"></td><td>Build skipped</td></tr>
           <tr><td class="status-icon pending"></td><td>Build pending</td></tr>
         </table>
-      </div>
-    </div>
 
         <h3>Issues with this package?</h3>
         <table class="package-issues">

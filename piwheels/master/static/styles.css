@@ -269,8 +269,24 @@ footer #mythic {
 
 /** SPECIFIC STYLES **********************************************************/
 
-table.stats { width: 100%; }
-table.stats td { text-align: right; }
+.stats { margin-bottom: 1.5rem; }
+
+.stats dl {
+  display: flex;
+  justify-content: space-between;
+  flex-flow: wrap;
+  margin: 0;
+}
+
+.stats dl dt {
+  font-weight: bold;
+}
+
+.stats dl dd {
+  flex-grow: 1;
+  text-align: right;
+  margin: 0;
+}
 
 .status-icon {
   min-width: 42px;
