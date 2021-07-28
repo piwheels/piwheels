@@ -75,7 +75,7 @@ pip3 install $PIP --upgrade
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
-    setuptools_rust conan \
+    setuptools_rust conan cbor2 \
     --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
 
 getent passwd piwheels && userdel -fr piwheels
