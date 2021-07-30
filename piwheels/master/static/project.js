@@ -116,4 +116,36 @@
     }
     location.hash = '#install';
   }
+
+  function toggleShade(ev) {
+    if (!('files' in this)) return;
+    if (this.files.classList.contains('shaded')) {
+      unshadeElement(this.files);
+      this.parentElement.classList.remove('expandable');
+      this.parentElement.classList.add('collapsible');
+    }
+    else {
+      shadeElement(this.files);
+      this.parentElement.classList.add('expandable');
+      this.parentElement.classList.remove('collapsible');
+    }
+    ev.stopPropagation();
+  }
+
+  window.addEventListener('load', function(ev) {
+    for (let filesList of document.querySelectorAll('ul.files')) {
+      if (filesList.children.length) {
+        let filesCell = filesList
+          .parentElement
+          .parentElement
+          .previousElementSibling
+          .lastElementChild;
+        let icon = filesCell.appendChild(document.createElement('div'));
+        filesCell.classList.add('expandable');
+        filesList.classList.add('shaded');
+        icon.files = filesList;
+        icon.addEventListener('click', toggleShade);
+      }
+    }
+  });
 })();

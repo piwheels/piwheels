@@ -1,7 +1,7 @@
 (function() {
   function toggleShade(ev) {
     if (!('faq' in this)) return;
-    if (this.faq.dataset.shaded === 'true') {
+    if (this.faq.classList.contains('shaded')) {
       unshadeElement(this.faq);
       this.classList.remove('expandable');
       this.classList.add('collapsible');
@@ -21,18 +21,15 @@
       let icon = question.insertAdjacentElement(
         'afterbegin', document.createElement('div'));
       question.faq = faq;
-      faq.classList.add('shaded');
       if (question === selected) {
-        faq.dataset.shaded = 'false';
         faq.style.height = 'auto';
         question.classList.add('collapsible');
       }
       else {
-        faq.dataset.shaded = 'true';
+        faq.classList.add('shaded');
         question.classList.add('expandable');
       }
       question.addEventListener('click', toggleShade);
-      icon.addEventListener('click', toggleShade);
     }
     if (selected)
       selected.scrollIntoView();

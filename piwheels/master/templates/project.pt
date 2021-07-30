@@ -58,67 +58,66 @@ sudo pip3 install ${project}</pre>
       <div class="content no-sidebar">
         <h3>Releases</h3>
         <table class="versions" tal:condition="releases">
-          <tr>
-            <th>Version</th>
-            <th>Released</th>
-            <th>Stretch<br />(Python 3.5)</th>
-            <th>Buster<br />(Python 3.7)</th>
-            <th>Bullseye<br />(Python 3.9)</th>
-            <th>Files</th>
-          </tr>
-          <span tal:repeat="row releases" tal:omit-tag="True">
-            <tr class="${'hidden-version' if repeat.row.number > 5 else None}">
-              <td class="version">
-                ${row.version.original}
-                <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
-                <span tal:condition="row.yanked" class="yanked">yanked</span>
-              </td>
-              <td title="${row.released.strftime(
-                           '%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
-              <td class="${row.abis['cp35m'].css_class
-                           if 'cp35m' in row.abis else None}"
-                  title="${row.abis['cp35m'].title
-                           if 'cp35m' in row.abis else None}"></td>
-              <td class="${row.abis['cp37m'].css_class
-                           if 'cp37m' in row.abis else None}"
-                  title="${row.abis['cp37m'].title
-                           if 'cp37m' in row.abis else None}"></td>
-              <td class="${row.abis['cp39m'].css_class
-                           if 'cp39m' in row.abis else None}"
-                  title="${row.abis['cp39m'].title
-                           if 'cp39m' in row.abis else None}"></td>
-              <td><a class="button small"
-                  onclick="toggleFiles(this, 'files-${repeat.row.number}')"
-                  tal:condition="len(row.files) > 0">+</a></td>
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Released</th>
+              <th>Stretch<br />(Python 3.5)</th>
+              <th>Buster<br />(Python 3.7)</th>
+              <th>Bullseye<br />(Python 3.9)</th>
+              <th>Files</th>
             </tr>
-            <tr id="files-${repeat.row.number}" class="hidden">
-              <td colspan="5">
-                <table class="files">
-                  <tr tal:repeat="file row.files">
-                    <td class="version hidden">${row.version.original}</td>
-                    <td><a href="/simple/${package}/${file.filename}#sha256=${file.filehash}">${file.filename}</a></td>
-                    <td>${format_size(file.filesize)}</td>
-                    <td><a class="button small" onclick="showInstall(this)">How to install this version</a></td>
-                    <td class="dependencies hidden">${' '.join(file.apt_dependencies)}</td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </span>
-          <tr tal:condition="len(releases) > 5" id="show-hidden-versions">
-            <td colspan="6"><a onclick="showHiddenVersions()">Show more releases</a></td>
-          </tr>
+          </thead>
+          <tbody>
+            <span tal:repeat="row releases" tal:omit-tag="True">
+              <tr>
+                <td>
+                  ${row.version.original}
+                  <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
+                  <span tal:condition="row.yanked" class="yanked">yanked</span>
+                </td>
+                <td title="${row.released.strftime(
+                             '%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
+                <td class="${row.abis['cp35m'].css_class
+                             if 'cp35m' in row.abis else None}"
+                    title="${row.abis['cp35m'].title
+                             if 'cp35m' in row.abis else None}"></td>
+                <td class="${row.abis['cp37m'].css_class
+                             if 'cp37m' in row.abis else None}"
+                    title="${row.abis['cp37m'].title
+                             if 'cp37m' in row.abis else None}"></td>
+                <td class="${row.abis['cp39m'].css_class
+                             if 'cp39m' in row.abis else None}"
+                    title="${row.abis['cp39m'].title
+                             if 'cp39m' in row.abis else None}"></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td colspan="6">
+                  <ul class="files">
+                    <li tal:repeat="file row.files"
+                       data-dependencies="${' '.join(file.apt_dependencies)}">
+                      <span>
+                        <a href="/simple/${package}/${file.filename}#sha256=${file.filehash}">${file.filename}</a>
+                        (${format_size(file.filesize)})
+                      </span>
+                    </li>
+                  </ul>
+                </td>
+              </tr>
+            </span>
+          </tbody>
         </table>
-        <table tal:condition="not:releases" class="empty">
+        <table tal:condition="not releases" class="empty">
           <tr><th>No releases</th></tr>
         </table>
 
+        <h4>Key</h4>
         <table id="builds-key">
-          <tr><th colspan="2">Key</th></tr>
-          <tr><td class="status-icon success"></td><td>Build succeeded</td></tr>
-          <tr><td class="status-icon fail"></td><td>Build failed</td></tr>
-          <tr><td class="status-icon skip"></td><td>Build skipped</td></tr>
-          <tr><td class="status-icon pending"></td><td>Build pending</td></tr>
+          <tr><td class="success"></td><td>Build succeeded</td></tr>
+          <tr><td class="fail"></td><td>Build failed</td></tr>
+          <tr><td class="skip"></td><td>Build skipped</td></tr>
+          <tr><td class="pending"></td><td>Build pending</td></tr>
         </table>
 
         <h3>Issues with this package?</h3>
