@@ -20,7 +20,7 @@ source /etc/os-release
 LIBXLST=libxslt1-dev
 LIBGLES=libgles2-mesa-dev
 TURBOGEARS=
-PIP=pip
+PIP="pip==21.1.3"
 SOUNDFONT=timgm6mb-soundfont
 POSTGRES_SERVER_DEV=postgresql-server-dev-13
 PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
