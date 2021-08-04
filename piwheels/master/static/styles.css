@@ -2,7 +2,7 @@
 
 /* Use border-box sizing for easier calculation */
 html { box-sizing: border-box; }
-*, *:before, *:after { box-sizing: inherit; }
+*, *::before, *::after { box-sizing: inherit; }
 
 body {
   font: 1em/1.5 "Roboto", Arial, sans-serif;
@@ -18,6 +18,8 @@ ul, ol, dd, p, pre, table, hr, input {
   margin-top: 0;
   margin-bottom: 1.5rem;
 }
+
+table { width: 100%; }
 
 ul ul, ul ol,
 ol ol, ol ul {
@@ -36,7 +38,11 @@ h4 { font-size: 1.5em; }
 h5 { font-size: 1.25em; }
 h6 { font-size: 1em; }
 
-a { color: #222; }
+a {
+  color: #222;
+  cursor: pointer;
+  text-decoration: underline;
+}
 a:hover { color: #14679e; }
 
 pre, code {
@@ -67,7 +73,7 @@ li pre {
 table th,
 table td {
   text-align: left;
-  vertical-align: top;
+  vertical-align: bottom;
 }
 
 input {
@@ -267,7 +273,7 @@ footer #mythic {
   margin: 0 auto;
 }
 
-/** SPECIFIC STYLES **********************************************************/
+/** SIDEBAR STATS ************************************************************/
 
 .stats { margin-bottom: 1.5rem; }
 
@@ -288,31 +294,12 @@ footer #mythic {
   margin: 0;
 }
 
-.status-icon {
-  min-width: 42px;
-  background-position: center;
-  background-repeat: no-repeat;
-}
+/** GENERAL STYLES ***********************************************************/
 
-.status-icon.success, .status-icon.active {
-  background-image: url('success.png');
-}
-
-.status-icon.fail {
-  background-image: url('fail.png');
-}
-
-.status-icon.skip, .status-icon.inactive {
-  background-image: url('skip.png');
-}
-
-.status-icon.pending {
-  background-image: url('pending.png');
-}
-
-.status-icon.has-tip {
-  display: table-cell;
-  border-bottom: none;
+.box {
+  border-radius: 5px;
+  background: #f1f1f1;
+  padding: 1em;
 }
 
 .highlight {
@@ -321,9 +308,47 @@ footer #mythic {
   padding: 1em;
 }
 
-.highlight > :last-child {
-  margin-bottom: 0;
+.highlight > :last-child { margin-bottom: 0; }
+
+.button {
+  cursor: pointer;
+  color: white;
+  background-color: #1779ba;
+  border-radius: 5px;
+  transition: background-color 0.25s;
+  padding: 5px;
+  text-decoration: none;
 }
+.button a { text-decoration: none; }
+.button:hover { color: white; background-color: #14679e; }
+
+.prerelease { background-color: #ffdf76; }
+.yanked { color: white; background-color: #d52d40; }
+.prerelease,
+.yanked {
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
+  margin-left: 1em;
+  vertical-align: middle;
+}
+
+.skip { background-image: url('skip.svg'); }
+.fail { background-image: url('fail.svg'); }
+.success { background-image: url('success.svg'); }
+.pending { background-image: url('pending.svg'); }
+.skip,
+.fail,
+.success,
+.pending {
+  cursor: help;
+  min-width: 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/** SHADING STYLES ***********************************************************/
 
 .shaded {
   transition: height 0.5s;
@@ -333,12 +358,12 @@ footer #mythic {
 
 .expandable,
 .collapsible {
-  cursor: pointer;
   margin-left: calc(30px + 0.5em);
 }
 
-.expandable div,
-.collapsible div {
+.expandable > div,
+.collapsible > div {
+  cursor: pointer;
   display: inline-block;
   margin-left: calc(-30px - 0.5em);
   margin-right: 0.5em;
@@ -347,33 +372,10 @@ footer #mythic {
   transition: background-color 0.25s;
 }
 
-.collapsible div {
-  background-color: #77777a;
-}
+.collapsible > div { background-color: #77777a; }
 
-table#builds-key {
-  width: 200px;
-  float: right;
-}
-
-table#builds-key th {
-  background: #f1f1f1;
-}
-
-table#builds-key tr:nth-child(2n) {
-  background: transparent;
-}
-
-table#builds-key  {
-  background: transparent;
-}
-
-tr table.files {
-  margin-bottom: 0;
-}
-
-.expandable div::before,
-.collapsible div::before {
+.expandable > div::before,
+.collapsible > div::before {
   content: '✕';
   color: white;
   width: 30px;
@@ -383,4 +385,58 @@ tr table.files {
   transition: transform 0.25s;
 }
 
-.collapsible div::before { transform: rotate(0deg); }
+.collapsible > div::before { transform: rotate(0deg); }
+
+/** SPECIFIC STYLES **********************************************************/
+
+#support ~ table th:nth-child(3) { text-align: center; }
+
+#releases ~ table:first-of-type {
+  width: 100%;
+  background-color: #f1f1f1;
+  border-spacing: 0;
+  border-radius: 5px;
+}
+#releases ~ table:first-of-type td { padding: 0; }
+#releases ~ table:first-of-type tr.hidden { display: none; }
+#releases ~ table:first-of-type th:nth-child(1n+3),
+#releases ~ table:first-of-type td:nth-child(1n+3) { text-align: center; }
+#releases ~ table:first-of-type tbody tr:nth-child(4n+1) td,
+#releases ~ table:first-of-type tbody tr:nth-child(4n+2) td { background-color: white; }
+
+#releases ~ table:first-of-type tbody tr.more td {
+  cursor: pointer;
+  background: #e0e0e0;
+  border-radius: 0 0 5px 5px;
+}
+#releases ~ table:first-of-type tbody tr.more td:hover {
+  color: #14679e;
+  text-decoration: underline;
+}
+
+#releases ~ table:first-of-type tbody tr:nth-child(2n+1) td { padding: 5px 0; }
+#releases ~ table:first-of-type thead tr th:first-child,
+#releases ~ table:first-of-type tbody tr td:first-child { padding-left: 1em; }
+#releases ~ table:first-of-type thead tr th:last-child,
+#releases ~ table:first-of-type tbody tr td:last-child { padding-right: 1em; }
+
+#releases ~ table:first-of-type td.collapsible > div,
+#releases ~ table:first-of-type td.expandable > div { margin: 0; }
+#releases ~ table:first-of-type ul { margin-bottom: 0; padding-left: 0; }
+#releases ~ table:first-of-type ul li {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  list-style-type: none;
+  padding: 8px 0;
+}
+#releases ~ table:first-of-type ul li span.install { 
+  margin-left: 1em;
+  font-size: 0.75rem;
+  padding: 3px 5px;
+}
+
+#key ~ ul:first-of-type { list-style-type: none; }
+#key ~ ul:first-of-type li { background-position: left; padding-left: 30px; }
+
+#timestamp { text-align: right; color: #99999b; }

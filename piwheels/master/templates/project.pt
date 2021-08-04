@@ -8,13 +8,12 @@
 
   <div metal:fill-slot="scripts" tal:omit-tag="1">
     <script src="/project.js"></script>
-    <script>showDownloads('${package}');</script>
   </div>
 
   <div metal:fill-slot="content" tal:omit-tag="1">
     <section>
       <div class="content">
-        <h2 id="package">${project}</h2>
+        <h2 id="package" data-package="${package}">${project}</h2>
         <p>${description}</p>
 
         <h3 id="install">Installation</h3>
@@ -55,16 +54,16 @@ sudo pip3 install ${project}</pre>
     </section>
 
     <section>
-      <div class="content no-sidebar">
-        <h3>Releases</h3>
-        <table class="versions" tal:condition="releases">
+      <div class="content">
+        <h3 id="releases">Releases</h3>
+        <table tal:condition="releases">
           <thead>
             <tr>
               <th>Version</th>
               <th>Released</th>
-              <th>Stretch<br />(Python 3.5)</th>
-              <th>Buster<br />(Python 3.7)</th>
-              <th>Bullseye<br />(Python 3.9)</th>
+              <th>Stretch<br /><small>Python 3.5</small></th>
+              <th>Buster<br /><small>Python 3.7</small></th>
+              <th>Bullseye<br /><small>Python 3.9</small></th>
               <th>Files</th>
             </tr>
           </thead>
@@ -94,7 +93,7 @@ sudo pip3 install ${project}</pre>
               </tr>
               <tr>
                 <td colspan="6">
-                  <ul class="files">
+                  <ul>
                     <li tal:repeat="file row.files"
                        data-dependencies="${' '.join(file.apt_dependencies)}">
                       <span>
@@ -108,27 +107,30 @@ sudo pip3 install ${project}</pre>
             </span>
           </tbody>
         </table>
-        <table tal:condition="not releases" class="empty">
-          <tr><th>No releases</th></tr>
-        </table>
+        <p tal:condition="not releases">There are no releases of this package yet</p>
 
-        <h4>Key</h4>
-        <table id="builds-key">
+        <h3 id="issues">Issues with this package?</h3>
+        <ul>
+          <li><a href="https://github.com/piwheels/packages/issues?q=is:issue+is:open+${project}">Search issues</a> for this package</li>
+          <li>Package or version missing? <a href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${project}&labels=missing+package&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
+          <li>Something else? <a href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Problem+with+package:+${project}&labels=package+issue&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
+        </ul>
+
+      </div>
+      <div class="sidebar">
+        <h4 id="key">Key</h4>
+        <table>
           <tr><td class="success"></td><td>Build succeeded</td></tr>
           <tr><td class="fail"></td><td>Build failed</td></tr>
           <tr><td class="skip"></td><td>Build skipped</td></tr>
           <tr><td class="pending"></td><td>Build pending</td></tr>
         </table>
+      </div>
+    </section>
 
-        <h3>Issues with this package?</h3>
-        <table class="package-issues">
-          <tr><td>Check if there's an open issue</td><td><a class="button" id="search-btn" onclick="getIssues('${project}')">Search</a></td></tr>
-          <tr><td>Package or version missing?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${project}&labels=missing+package&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
-          <tr><td>Something else?</td><td><a class="button" href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Missing+package:+${project}&labels=package+issue&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${project}/">New issue</a></td></tr>
-        </table>
-        <div id="issues"></div>
-
-        <p><small>Page last updated ${timestamp}</small></p>
+    <section>
+      <div class="content no-sidebar">
+        <p id="timestamp">Page last updated ${timestamp}</p>
       </div>
     </section>
   </div>
