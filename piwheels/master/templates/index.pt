@@ -23,7 +23,7 @@
       Pi 3 and 4 hardware using the <a href="https://www.mythic-beasts.com/order/rpi">Mythic
       Beasts Pi cloud</a>.</p>
 
-      <h2>Configuration</h2>
+      <h2 id="configuration">Configuration</h2>
 
       <p><a href="https://www.raspberrypi.org/downloads/raspbian/">Raspberry Pi OS</a>
       includes configuration for <code>pip</code>
@@ -47,26 +47,24 @@ $ source testpip/bin/activate
 (testpip) $ deactivate
 $ rm -rf testpip/</pre>
 
-      <h2>Support</h2>
+      <h2 id="support">Support</h2>
 
       <p>Wheels provided support all Raspberry Pi models: Pi 400, Pi 4, Pi 3,
       Pi 2 (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero (<code>linux_armv6l</code> wheels).
       Our wheels are only supported under 32-bit (<code>armhf</code>) Raspberry Pi OS, and only
       for the version of Python provided by each OS release:
 
-      <table>
+      <table class="box">
         <tr><th>Raspberry Pi OS version</th><th>Python version</th><th>Status</th></tr>
-        <tr><td>Jessie</td><td>Python 3.4</td><td title="Inactive (end of life)"></td></tr>
-        <tr><td>Stretch</td><td>Python 3.5</td><td title="Active"></td></tr>
-        <tr><td>Buster</td><td>Python 3.7</td><td title="Active"></td></tr>
-        <tr><td>Bullseye</td><td>Python 3.9</td><td title="Active"></td></tr>
+        <tr><td>Jessie</td><td>Python 3.4</td><td class="skip" title="Inactive (end of life)"></td></tr>
+        <tr><td>Stretch</td><td>Python 3.5</td><td class="success" title="Active"></td></tr>
+        <tr><td>Buster</td><td>Python 3.7</td><td class="success" title="Active"></td></tr>
+        <tr><td>Bullseye</td><td>Python 3.9</td><td class="success" title="Active"></td></tr>
       </table>
 
       <p>See each package's <a href="/packages.html">project page</a> for
       information on available wheels, and see the <a href="/faq.html">FAQ</a>
       for more technical details.</p>
-
-      <p class="small"><small>Page last updated ${timestamp}</small></p>
     </div>
 
     <div class="sidebar">
@@ -79,6 +77,12 @@ $ rm -rf testpip/</pre>
 
       <h3>Latest blog posts</h3>
       <ul id="latest-blog-posts"><li>loading...</li></ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="content no-sidebar">
+      <p id="timestamp"><small>Page last updated ${timestamp}</p>
     </div>
   </section>
 </div>

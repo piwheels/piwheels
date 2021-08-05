@@ -7,6 +7,7 @@
   </div>
 
   <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/shade.js"></script>
     <script src="/project.js"></script>
   </div>
 
@@ -119,7 +120,7 @@ sudo pip3 install ${project}</pre>
       </div>
       <div class="sidebar">
         <h4 id="key">Key</h4>
-        <table>
+        <table class="box">
           <tr><td class="success"></td><td>Build succeeded</td></tr>
           <tr><td class="fail"></td><td>Build failed</td></tr>
           <tr><td class="skip"></td><td>Build skipped</td></tr>
