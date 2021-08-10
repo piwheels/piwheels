@@ -303,7 +303,7 @@ class Builder(Thread):
     """
     apt_cache = None
 
-    def __init__(self, package, version, timeout=timedelta(minutes=5),
+    def __init__(self, package, version, *, timeout=timedelta(minutes=5),
                  index_url='https://pypi.python.org/simple',
                  extra_index_urls={'https://www.piwheels.org/simple'},
                  dir=None):

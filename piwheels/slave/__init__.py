@@ -282,8 +282,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         assert self.slave_id is not None, 'BUILD before ACK'
         assert not self.builder, 'Last build still exists'
         self.logger.warning('Building package %s version %s', package, version)
-        self.builder = Builder(package, version, self.config.timeout,
-                               self.pypi_url, self.config.dir)
+        self.builder = Builder(package, version, timeout=self.config.timeout,
+                               index_url=self.pypi_url, dir=self.config.dir)
         self.builder.start()
         return 'BUSY', self.get_status()
 
