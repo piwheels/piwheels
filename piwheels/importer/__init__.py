@@ -105,7 +105,7 @@ registered as produced by a *single* build.
         "(%(default)s); this should always be an ipc address")
     parser.add_argument(
         '--dependencies', metavar='FILE', default=None, type=terminal.FileType('r'),
-        help="The filename containing the dependencies of the wheels to be "
+        help="The filename containing the apt dependencies of the wheels to be "
         "imported ")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
@@ -116,11 +116,10 @@ registered as produced by a *single* build.
     # to calculate the hash of the file which requires reading it)
     if config.dependencies:
         apt_dependencies = config.dependencies.read().split()
-        dependencies = {'apt': apt_dependencies}
     else:
-        dependencies = {}
+        apt_dependencies = None
     packages = [
-        Wheel(Path(filename), dependencies=dependencies)
+        Wheel(Path(filename), apt_dependencies=apt_dependencies)
         for filename in config.files
     ]
     state = BuildState(
@@ -162,9 +161,9 @@ def print_state(state):
     """
     file = next(iter(state.files.values()))
     if file.dependencies:
-        dependencies = file.dependencies['apt']
+        apt_dependencies = file.dependencies['apt']
     else:
-        dependencies = 'None'
+        apt_dependencies = 'None'
 
     logging.warning('Preparing to import build')
     logging.warning('Package:  %s', state.package)
@@ -174,7 +173,7 @@ def print_state(state):
     logging.warning('Duration: %s', state.duration)
     logging.warning('Output:   %d line(s)', len(state.output.splitlines()))
     logging.warning('Files:    %d', len(state.files))
-    logging.warning('Dependencies: %s', len(dependencies))
+    logging.warning('Dependencies: %s', len(apt_dependencies))
     for wheel in state.files.values():
         logging.warning('')
         logging.warning('Filename: %s', wheel.filename)
