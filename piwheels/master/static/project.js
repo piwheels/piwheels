@@ -5,7 +5,7 @@
     const releasesDiv = document.querySelector('#releases').parentElement;
     const issuesHeader = document.querySelector('#issues');
     const keyHeader = document.querySelector('#key');
-    const keyList = document.querySelector('#key ~ ul');
+    const keyList = document.querySelector('#key ~ table');
     const keyDiv = keyHeader.parentElement;
 
     issuesHeader.before(keyHeader, keyList);
