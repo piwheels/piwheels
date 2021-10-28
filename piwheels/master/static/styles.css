@@ -391,52 +391,53 @@ footer #mythic {
 
 #support ~ table th:nth-child(3) { text-align: center; }
 
-#releases ~ table:first-of-type {
+#releases + table:first-of-type {
   width: 100%;
   background-color: #f1f1f1;
   border-spacing: 0;
   border-radius: 5px;
 }
-#releases ~ table:first-of-type td { padding: 0; }
-#releases ~ table:first-of-type tr.hidden { display: none; }
-#releases ~ table:first-of-type th:nth-child(1n+3),
-#releases ~ table:first-of-type td:nth-child(1n+3) { text-align: center; }
-#releases ~ table:first-of-type tbody tr:nth-child(4n+1) td,
-#releases ~ table:first-of-type tbody tr:nth-child(4n+2) td { background-color: white; }
+#releases + table td { padding: 0; }
+#releases + table tr.hidden { display: none; }
+#releases + table th:nth-child(1n+3),
+#releases + table td:nth-child(1n+3) { text-align: center; }
+#releases + table tbody tr:nth-child(4n+1) td,
+#releases + table tbody tr:nth-child(4n+2) td { background-color: white; }
 
-#releases ~ table:first-of-type tbody tr.more td {
+#releases + table tbody tr.more td {
   cursor: pointer;
   background: #e0e0e0;
   border-radius: 0 0 5px 5px;
 }
-#releases ~ table:first-of-type tbody tr.more td:hover {
+#releases + table tbody tr.more td:hover {
   color: #14679e;
   text-decoration: underline;
 }
 
-#releases ~ table:first-of-type tbody tr:nth-child(2n+1) td { padding: 5px 0; }
-#releases ~ table:first-of-type thead tr th:first-child,
-#releases ~ table:first-of-type tbody tr td:first-child { padding-left: 1em; }
-#releases ~ table:first-of-type thead tr th:last-child,
-#releases ~ table:first-of-type tbody tr td:last-child { padding-right: 1em; }
+#releases + table tbody tr:nth-child(2n+1) td { padding: 5px 0; }
+#releases + table thead tr th:first-child,
+#releases + table tbody tr td:first-child { padding-left: 1em; }
+#releases + table thead tr th:last-child,
+#releases + table tbody tr td:last-child { padding-right: 1em; }
 
-#releases ~ table:first-of-type td.collapsible > div,
-#releases ~ table:first-of-type td.expandable > div { margin: 0; }
-#releases ~ table:first-of-type ul { margin-bottom: 0; padding-left: 0; }
-#releases ~ table:first-of-type ul li {
+#releases + table td.collapsible > div,
+#releases + table td.expandable > div { margin: 0; }
+#releases + table ul { margin-bottom: 0; padding-left: 0; }
+#releases + table ul li {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   list-style-type: none;
   padding: 8px 0;
 }
-#releases ~ table:first-of-type ul li span.install { 
+#releases + table ul li span.install { 
   margin-left: 1em;
   font-size: 0.75rem;
   padding: 3px 5px;
 }
 
-#key ~ ul:first-of-type { list-style-type: none; }
-#key ~ ul:first-of-type li { background-position: left; padding-left: 30px; }
+#key + table td:first-child {
+  width: 1.5rem;
+}
 
 #timestamp { text-align: right; color: #99999b; }
