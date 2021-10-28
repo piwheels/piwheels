@@ -6,10 +6,8 @@
     <loc>https://www.piwheels.org/sitemap0.xml</loc>
     <lastmod>${timestamp}</lastmod>
   </sitemap>
-  <span tal:repeat="page pages" tal:omit-tag="1">
-    <sitemap>
-      <loc>https://www.piwheels.org/sitemap${page+1}.xml</loc>
-      <lastmod>${timestamp}</lastmod>
-    </sitemap>
-  </span>
+  <sitemap tal:repeat="page pages">
+    <loc>https://www.piwheels.org/sitemap${page+1}.xml</loc>
+    <lastmod>${timestamp}</lastmod>
+  </sitemap>
 </sitemapindex>
