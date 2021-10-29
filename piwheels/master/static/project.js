@@ -95,7 +95,8 @@
       .parentElement
       .previousElementSibling
       .firstElementChild
-      .textContent;
+      .textContent
+      .trim();
 
     let commands = `sudo pip3 install ${project}==${version}`;
     if (dependencies.length)
