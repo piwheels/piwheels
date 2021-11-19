@@ -111,7 +111,7 @@ def test_normal_import(db_queue, fs_queue, web_queue, task, import_queue,
     web_queue.expect('BOTH', bsh.package)
     web_queue.send('DONE')
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'IMPORT')
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
@@ -159,7 +159,7 @@ def test_import_dual_files(db_queue, fs_queue, web_queue, task, import_queue,
     web_queue.expect('BOTH', bsh.package)
     web_queue.send('DONE')
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'IMPORT')
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
@@ -196,7 +196,7 @@ def test_import_resend_file(db_queue, web_queue, fs_queue, task, import_queue,
     web_queue.expect('BOTH', bsh.package)
     web_queue.send('DONE')
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'IMPORT')
     assert len(task.states) == 0
     db_queue.check()
     fs_queue.check()
