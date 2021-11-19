@@ -415,8 +415,7 @@ def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
     db_queue.expect('PKGEXISTS', bs.package)
     db_queue.send('OK', False)
     task.poll(0)
-    assert import_queue.recv_msg() == (
-        'ERROR', 'unknown package %s' % bs.package)
+    assert import_queue.recv_msg() == ('ERROR', 'NOPKG')
     assert task.logger.error.call_count == 1
     assert len(task.states) == 0
 
@@ -426,12 +425,11 @@ def test_remove_unknown_ver(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMVER', [bs.package, bs.version, '', False, ''])
+    import_queue.send_msg('REMVER', [bs.package, bs.version, False, '', False])
     db_queue.expect('VEREXISTS', [bs.package, bs.version])
     db_queue.send('OK', False)
     task.poll(0)
-    assert import_queue.recv_msg() == (
-        'ERROR', 'unknown package version %s %s' % (bs.package, bs.version))
+    assert import_queue.recv_msg() == ('ERROR', 'NOVER')
     assert task.logger.error.call_count == 1
     assert len(task.states) == 0
 
