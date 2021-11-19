@@ -216,6 +216,9 @@ class MrChase(tasks.PauseableTask):
         """
         display_name, description, skip, unskip, aliases = state
         package = canonicalize_name(display_name)
+        aliases = set(aliases) | {package, display_name}
+        # Ensure display_name sorts last, so it is treated as display name
+        aliases = sorted(aliases, key=lambda s: s == display_name)
         self.logger.info('adding package %s', package)
         if self.db.add_new_package(package, skip, description):
             rewrite = 'BOTH'
@@ -231,7 +234,7 @@ class MrChase(tasks.PauseableTask):
             rewrite = 'PROJECT'
             msg, data = 'DONE', 'UPDPKG'
 
-        self.do_add_package_aliases(package, display_name, aliases)
+        self.do_add_package_aliases(package, aliases)
         self.web_queue.send_msg(rewrite, package)
         self.web_queue.recv_msg()
         return msg, data
@@ -241,8 +244,14 @@ class MrChase(tasks.PauseableTask):
         Handler for the remover's "ADDVER" message, indicating a request to
         add a specific version of a package to the system, or update it.
         """
-        display_name, version, skip, unskip, released, yank, unyank, aliases = state
+        (
+            display_name, version, skip, unskip, released,
+            yank, unyank, aliases
+        ) = state
         package = canonicalize_name(display_name)
+        aliases = set(aliases) | {package, display_name}
+        # Ensure display_name sorts last, so it is treated as display name
+        aliases = sorted(aliases, key=lambda s: s == display_name)
         self.logger.info('adding version %s %s', package, version)
         if not self.db.test_package(package):
             return 'ERROR', 'NOPKG'
@@ -264,20 +273,15 @@ class MrChase(tasks.PauseableTask):
             rewrite = 'BOTH'
             msg, data = 'DONE', 'UPDVER'
 
-        self.do_add_package_aliases(package, display_name, aliases)
+        self.do_add_package_aliases(package, aliases)
         self.web_queue.send_msg(rewrite, package)
         self.web_queue.recv_msg()
         return msg, data
 
-    def do_add_package_aliases(self, package_canon, display_name, aliases):
+    def do_add_package_aliases(self, package, aliases):
         "Add aliases for a package name"
-        # add canonical name first
-        self.db.add_package_name(package_canon, package_canon)
-        # add any given aliases
         for alias in aliases:
-            self.db.add_package_name(package_canon, alias, datetime.now(tz=UTC))
-        # add the given name last so it becomes the display name
-        self.db.add_package_name(package_canon, display_name, datetime.now(tz=UTC))
+            self.db.add_package_name(package, alias, datetime.now(tz=UTC))
 
     def do_remove_package(self, state):
         """
