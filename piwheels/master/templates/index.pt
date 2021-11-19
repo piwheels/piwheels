@@ -18,14 +18,14 @@
       <p>piwheels is a <a href="https://python.org">Python</a> package
       repository providing Arm platform <a href="https://pythonwheels.com/">wheels</a>
       (pre-compiled binary Python packages) specifically for the
-      <a href="https://www.raspberrypi.org/">Raspberry Pi</a>, making pip
+      <a href="https://www.raspberrypi.com/">Raspberry Pi</a>, making pip
       installations much faster. Packages are natively compiled on Raspberry
       Pi 3 and 4 hardware using the <a href="https://www.mythic-beasts.com/order/rpi">Mythic
       Beasts Pi cloud</a>.</p>
 
       <h2 id="configuration">Configuration</h2>
 
-      <p><a href="https://www.raspberrypi.org/downloads/raspbian/">Raspberry Pi OS</a>
+      <p><a href=", Pi ">Raspberry Pi OS</a>
       includes configuration for <code>pip</code>
       to use piwheels by default, which lives at <code>/etc/pip.conf</code>:</p>
 
@@ -50,9 +50,10 @@ $ rm -rf testpip/</pre>
       <h2 id="support">Support</h2>
 
       <p>Wheels provided support all Raspberry Pi models: Pi 400, Pi 4, Pi 3,
-      Pi 2 (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero (<code>linux_armv6l</code> wheels).
-      Our wheels are only supported under 32-bit (<code>armhf</code>) Raspberry Pi OS, and only
-      for the version of Python provided by each OS release:
+      Pi 2, Pi Zero 2 (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero
+      (<code>linux_armv6l</code> wheels). Our wheels are only supported under
+      32-bit (<code>armhf</code>) Raspberry Pi OS, and only for the version of
+      Python provided by each OS release:
 
       <table class="box">
         <tr><th>Raspberry Pi OS version</th><th>Python version</th><th>Status</th></tr>

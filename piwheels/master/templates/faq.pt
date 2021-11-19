@@ -194,7 +194,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
       <h5>Which Raspberry Pi models are supported by packages provided by
         piwheels?</h5>
       <div>
-        <p>All current Raspberry Pi models (as of July 2021) are
+        <p>All current Raspberry Pi models (as of November 2021) are
         supported:</p>
 
         <ul>
@@ -204,6 +204,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
           <li>Raspberry Pi 2</li>
           <li>Raspberry Pi 1 (including B+/A+)</li>
           <li>Raspberry Pi Zero</li>
+          <li>Raspberry Pi Zero 2</li>
         </ul>
 
         <p>Please also observe answers to questions relating to operating
@@ -234,7 +235,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         Debian releases:</p>
 
         <ul>
-          <li>Jessie - Python 3.4</li>
+          <li>Jessie - Python 3.4 (end of life)</li>
           <li>Stretch - Python 3.5</li>
           <li>Buster - Python 3.7</li>
           <li>Bullseye - Python 3.9</li>
@@ -280,14 +281,14 @@ extra-index-url=https://www.piwheels.org/simple</pre>
       <h5>Why are the wheel files are tagged with Armv6 and Armv7?</h5>
       <div>
         <p>While the hardware in Raspberry Pi 1 and Zero is Armv6, Pi 2 is
-        Armv7, Pi 3 and 4 are Armv8, the (32-bit) operating system images
-        provided on raspberrypi.org are made to support all three
+        Armv7, Pi 3, 4, 400 and Zero 2 are Armv8, the (32-bit) operating system
+        images provided on raspberrypi.com are made to support all three
         architectures (and are compatible with all Raspberry Pi products to
         date) by operating in Armv6 userland.</p>
 
         <p>However, wheels built on a Raspberry Pi 2/3/4 running the 32-bit
         OS are tagged <code>armv7l</code>. Since wheels built on a Raspberry
-        Pi 3/4 will work on a Pi 4, 3, 2, 1 or Zero, we simply provide Pi
+        Pi 3/4 will work on a Pi 4, 3, 2, 1, Zero or Zero 2, we simply provide Pi
         3/4-built wheels renamed <code>armv6l</code>, with a few exceptions
         (some packages, like opencv and tensorflow, are built with
         optimisations available on Pi 3/4).</p>
@@ -457,7 +458,7 @@ python3 -m pip download \
       <h5>How can I force installation of Armv6 wheels?</h5>
       <div>
         <p>Sometimes you need to install the Armv6 wheels, even if you're on
-        a Pi 2/3/4, because you intend to use the SD card on multiple models,
+        a Pi 2/3/4/400/Zero 2, because you intend to use the SD card on multiple models,
         including Pi 1/Zero.</p>
         <p>Note that in almost all cases, the Armv6 and Armv7 wheels are
         identical, and compatible on both architectures. The only exceptions
