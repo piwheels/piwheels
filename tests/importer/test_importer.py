@@ -272,7 +272,7 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
@@ -298,7 +298,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
@@ -330,7 +330,7 @@ def test_import_override_abi(mock_wheel_no_abi, mock_wheel_no_abi_stats, import_
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-none-any.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
@@ -355,7 +355,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
