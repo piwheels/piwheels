@@ -371,4 +371,4 @@ class MrChase(tasks.PauseableTask):
                 self.web_queue.recv_msg()
             else:
                 return 'ERROR', 'unknown package %s' % package
-        return 'DONE', protocols.NoData
+        return 'DONE', 'REBUILD'
