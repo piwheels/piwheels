@@ -173,13 +173,13 @@ def do_add(config):
 
         if msg == 'DONE':
             if data == 'NEWPKG':
-                logging.warning('Added package successfully')
+                logging.info('Added package successfully')
             elif data == 'UPDPKG':
-                logging.warning('Updated package successfully')
+                logging.info('Updated package successfully')
             elif data == 'NEWVER':
-                logging.warning('Added version successfully')
+                logging.info('Added version successfully')
             elif data == 'UPDVER':
-                logging.warning('Updated version successfully')
+                logging.info('Updated version successfully')
         else:
             raise RuntimeError('Unexpected response from master')
     finally:

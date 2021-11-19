@@ -132,19 +132,19 @@ def do_remove(config):
 
         if msg == 'DONE':
             if data == 'DELPKG':
-                logging.warning('Removed package successfully')
+                logging.info('Removed package successfully')
             elif data == 'DELVER':
-                logging.warning('Removed version successfully')
+                logging.info('Removed version successfully')
             elif data == 'DELPKGBLD':
-                logging.warning('Removed builds for package successfully')
+                logging.info('Removed builds for package successfully')
             elif data == 'DELVERBLD':
-                logging.warning('Removed builds for version successfully')
+                logging.info('Removed builds for version successfully')
             elif data == 'SKIPPKG':
-                logging.warning('Skipped package successfully')
+                logging.info('Skipped package successfully')
             elif data == 'SKIPVER':
-                logging.warning('Skipped version successfully')
+                logging.info('Skipped version successfully')
             elif data == 'YANKVER':
-                logging.warning('Yanked version successfully')
+                logging.info('Yanked version successfully')
         else:
             raise RuntimeError('Unexpected response from master')
     finally:
