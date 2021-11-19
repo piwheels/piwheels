@@ -347,6 +347,13 @@ footer #mythic {
   background-repeat: no-repeat;
   background-position: center;
 }
+.key.box .skip,
+.key.box .fail,
+.key.box .success,
+.key.box .pending {
+  cursor: default;
+}
+
 
 /** SHADING STYLES ***********************************************************/
 
