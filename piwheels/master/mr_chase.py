@@ -305,7 +305,7 @@ class MrChase(tasks.PauseableTask):
             # FKs will take care of removing builds here
             self.db.delete_package(package)
             msg = 'DELPKG'
-        if msg in ('DELPKG', 'DELPKGBLD'):
+        if msg in ('SKIPPKG', 'DELPKG', 'DELPKGBLD'):
             self.web_queue.send_msg('DELPKG', package)
             self.skip_queue.send_msg('DELPKG', package)
             self.web_queue.recv_msg()
@@ -342,7 +342,7 @@ class MrChase(tasks.PauseableTask):
             self.logger.info('removing %s %s', package, version)
             self.db.delete_version(package, version)
             msg = 'DELVER'
-        if msg in ('DELVER', 'DELVERBLD'):
+        if msg in ('SKIPVER', 'DELVER', 'DELVERBLD'):
             self.web_queue.send_msg('DELVER', [package, version])
             self.skip_queue.send_msg('DELVER', [package, version])
             self.web_queue.recv_msg()

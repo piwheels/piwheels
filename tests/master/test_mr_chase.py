@@ -329,7 +329,7 @@ def test_import_transfer_goes_wrong(db_queue, fs_queue, task, import_queue,
 def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
                         build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMOVE', [bsh.package, None, ''])
+    import_queue.send_msg('REMPKG', [bsh.package, False, ''])
     db_queue.expect('PKGEXISTS', bsh.package)
     db_queue.send('OK', True)
     web_queue.expect('DELPKG', bsh.package)
@@ -339,7 +339,7 @@ def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
     db_queue.expect('DELPKG', bsh.package)
     db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REMPKG')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
@@ -349,7 +349,7 @@ def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
 def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
                         build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMOVE', [bsh.package, bsh.version, ''])
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, '', False])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     web_queue.expect('DELVER', [bsh.package, bsh.version])
@@ -359,7 +359,7 @@ def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
     db_queue.expect('DELVER', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REMVER')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
@@ -369,7 +369,7 @@ def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
 def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
                       build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMOVE', [bsh.package, None, 'silly package'])
+    import_queue.send_msg('REMPKG', [bsh.package, False, 'silly package'])
     db_queue.expect('PKGEXISTS', bsh.package)
     db_queue.send('OK', True)
     db_queue.expect('SKIPPKG', [bsh.package, 'silly package'])
@@ -378,15 +378,8 @@ def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
     web_queue.send('DONE')
     skip_queue.expect('DELPKG', bsh.package)
     skip_queue.send('OK')
-    db_queue.expect('PROJVERS', bsh.package)
-    db_queue.send('OK', [
-        ProjectVersionsRow(bsh.version, False, datetime(1970, 1, 1, tzinfo=UTC), '', 'cp34m', ''),
-        ProjectVersionsRow(bsh.version + 'a', False, datetime(1970, 1, 1, tzinfo=UTC), 'cp35m', '', ''),
-    ])
-    db_queue.expect('DELBUILD', [bsh.package, bsh.version])
-    db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'SKIPPKG')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
@@ -396,7 +389,7 @@ def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
 def test_skip_version(db_queue, web_queue, skip_queue, task, import_queue,
                       build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMOVE', [bsh.package, bsh.version, 'broken version'])
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, 'broken version', False])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     db_queue.expect('SKIPVER', [bsh.package, bsh.version, 'broken version'])
@@ -405,10 +398,8 @@ def test_skip_version(db_queue, web_queue, skip_queue, task, import_queue,
     web_queue.send('DONE')
     skip_queue.expect('DELVER', [bsh.package, bsh.version])
     skip_queue.send('OK')
-    db_queue.expect('DELBUILD', [bsh.package, bsh.version])
-    db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'SKIPVER')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
