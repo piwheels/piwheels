@@ -37,7 +37,7 @@
 
     <footer>
       <nav>
-        <a id="github" href="https://github.com/piwheels"><div></div>Source</a>
+        <a id="github" href="https://github.com/piwheels"><div></div>GitHub</a>
         <a id="readthedocs" href="https://piwheels.readthedocs.io/"><div></div>Docs</a>
         <a id="twitter" href="https://twitter.com/piwheels"><div></div>Twitter</a>
       </nav>
