@@ -326,7 +326,7 @@ file_juggler_fs = Protocol(recv={
 mr_chase = Protocol(recv={
     # package, description, skip reason, unskip, aliases
     'ADDPKG': ExactSequence([str, str, str, bool, [str]]),
-    # package, version, skip reason, unskip, description, yank, unyank, aliases
+    # package, version, skip reason, unskip, released, yank, unyank, aliases
     'ADDVER': ExactSequence([str, str, str, bool, dt.datetime, bool, bool, [str]]),
     'IMPORT': _build_state,
     'REMPKG': ExactSequence([str, bool, str]),  # package, builds, skip reason
