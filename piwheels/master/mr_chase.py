@@ -200,7 +200,7 @@ class MrChase(tasks.PauseableTask):
             if state.transfers_done:
                 self.web_queue.send_msg('BOTH', state.package)
                 self.web_queue.recv_msg()
-                return 'DONE', protocols.NoData
+                return 'DONE', 'IMPORT'
             else:
                 self.fs.expect(0, state.files[state.next_file])
                 self.logger.info('send %s', state.next_file)
