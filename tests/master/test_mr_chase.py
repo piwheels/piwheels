@@ -339,7 +339,7 @@ def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
     db_queue.expect('DELPKG', bsh.package)
     db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', 'REMPKG')
+    assert import_queue.recv_msg() == ('DONE', 'DELPKG')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
@@ -359,7 +359,7 @@ def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
     db_queue.expect('DELVER', [bsh.package, bsh.version])
     db_queue.send('OK', None)
     task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', 'REMVER')
+    assert import_queue.recv_msg() == ('DONE', 'DELVER')
     assert len(task.states) == 0
     db_queue.check()
     web_queue.check()
@@ -411,7 +411,7 @@ def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMOVE', [bs.package, None, ''])
+    import_queue.send_msg('REMPKG', [bs.package, False, ''])
     db_queue.expect('PKGEXISTS', bs.package)
     db_queue.send('OK', False)
     task.poll(0)
@@ -426,7 +426,7 @@ def test_remove_unknown_ver(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMOVE', [bs.package, bs.version, ''])
+    import_queue.send_msg('REMVER', [bs.package, bs.version, '', False, ''])
     db_queue.expect('VEREXISTS', [bs.package, bs.version])
     db_queue.send('OK', False)
     task.poll(0)
@@ -440,7 +440,7 @@ def test_rebuild_home(task, import_queue, stats_queue):
     import_queue.send_msg('REBUILD', ['HOME'])
     task.poll(0)
     assert stats_queue.recv_msg() == ('HOME', None)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REBUILD')
     assert len(task.states) == 0
 
 
@@ -448,7 +448,7 @@ def test_rebuild_search(task, import_queue, stats_queue):
     import_queue.send_msg('REBUILD', ['SEARCH'])
     task.poll(0)
     assert stats_queue.recv_msg() == ('HOME', None)
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REBUILD')
     assert len(task.states) == 0
 
 
@@ -462,7 +462,7 @@ def test_rebuild_package_project(db_queue, web_queue, task, import_queue,
     task.poll(0)
     db_queue.check()
     web_queue.check()
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REBUILD')
     assert len(task.states) == 0
 
 
@@ -476,7 +476,7 @@ def test_rebuild_package_index(db_queue, web_queue, task, import_queue,
     task.poll(0)
     db_queue.check()
     web_queue.check()
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REBUILD')
     assert len(task.states) == 0
 
 
@@ -491,7 +491,7 @@ def test_rebuild_all_indexes(db_queue, web_queue, task, import_queue):
     task.poll(0)
     db_queue.check()
     web_queue.check()
-    assert import_queue.recv_msg() == ('DONE', None)
+    assert import_queue.recv_msg() == ('DONE', 'REBUILD')
     assert len(task.states) == 0
 
 
