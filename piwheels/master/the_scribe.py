@@ -427,7 +427,7 @@ class TheScribe(tasks.PauseableTask):
         self.logger.info('writing project json for %s', package)
         releases_dict = {
             release.version.original: {
-                'released': release.released.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                'released': release.released.strftime('%Y-%m-%d %H:%M:%S'),
                 'prerelease': release.version.is_prerelease,
                 'yanked': release.yanked,
                 'skip_reason': release.skip,

@@ -42,7 +42,7 @@
     &lt;str&gt;: {
        'skip_reason': &lt;str&gt;,
        'prerelease': True|False,
-       'released': &lt;str YYYY-MM-DD HH:MM:SS UTC&gt;,
+       'released': &lt;str YYYY-MM-DD HH:MM:SS&gt;,
        'yanked': True|False,
        'files': {
           &lt;str&gt;: {
