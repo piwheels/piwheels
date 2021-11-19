@@ -38,7 +38,6 @@ import sys
 import logging
 
 from .. import __version__, terminal, const, transport, protocols
-from ..format import canonicalize_name
 
 
 def main(args=None):
@@ -78,7 +77,6 @@ system. This script must be run on the same node as the piw-master script.
         help="The address of the queue used by piw-remove (default: "
         "(%(default)s); this should always be an ipc address")
     config = parser.parse_args(args)
-    config.package = canonicalize_name(config.package)
     terminal.configure_logging(config.log_level, config.log_file)
 
     logging.info("PiWheels Remover version %s", __version__)

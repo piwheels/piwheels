@@ -285,6 +285,7 @@ class MrChase(tasks.PauseableTask):
         remove or alter a whole package.
         """
         package, builds, skip = state
+        package = canonicalize_name(package)
         if not self.db.test_package(package):
             self.logger.error('unknown package %s', package)
             return 'ERROR', 'NOPKG'
