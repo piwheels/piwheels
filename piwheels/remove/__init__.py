@@ -123,11 +123,13 @@ def do_remove(config):
 
         if msg == 'ERROR':
             if data == 'NOPKG':
-                raise RuntimeError('Package {} does not exist'.format(config.package))
+                raise RuntimeError('Package {} does not exist'.format(
+                    config.package))
             elif data == 'NOVER':
-                raise RuntimeError('Version {} {} does not exist'.format(config.package, config.version))
+                raise RuntimeError('Version {} {} does not exist'.format(
+                    config.package, config.version))
             raise RuntimeError(data)
-        
+
         if msg == 'DONE':
             if data == 'DELPKG':
                 logging.warning('Removed package successfully')

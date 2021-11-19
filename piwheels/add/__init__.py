@@ -89,11 +89,12 @@ system. This script must be run on the same node as the piw-master script.
         help="The version's release date (can only be provided for a new "
         "version, cannot be updated)")
     parser.add_argument(
-        '--yank', action='store_true', help="Mark the version as yanked (can "
-        "only be applied to a new version - use piw-remove to yank a known "
-        "version")
+        '--yank', action='store_true',
+        help="Mark the version as yanked (can only be applied to a new "
+        "version - use piw-remove to yank a known version")
     parser.add_argument(
-        '--unyank', action='store_true', help="Mark a known version as not yanked")
+        '--unyank', action='store_true',
+        help="Mark a known version as not yanked")
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-add (default: "
@@ -114,12 +115,14 @@ system. This script must be run on the same node as the piw-master script.
             logging.warning('User aborted addition')
             return 2
     logging.info('Connecting to master at %s', config.import_queue)
-    config.released = datetime.strptime(config.released, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+    config.released = datetime.strptime(
+        config.released, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
     if config.version is None and config.description is None:
         config.description = _get_package_description(package)
     for alias in config.aliases:
         if canonicalize_name(alias) != package:
-            raise RuntimeError("Alias {} does not match canon: {}".format(alias, package))
+            raise RuntimeError("Alias {} does not match canon: {}".format(
+                alias, package))
     do_add(config)
     return 0
 
@@ -136,7 +139,7 @@ def do_add(config):
     queue = ctx.socket(transport.REQ, protocol=reversed(protocols.mr_chase))
     queue.hwm = 10
     queue.connect(config.import_queue)
-    
+
     try:
         if config.version is None:
             queue.send_msg('ADDPKG', [
@@ -151,15 +154,23 @@ def do_add(config):
         msg, data = queue.recv_msg()
         if msg == 'ERROR':
             if data == 'NOPKG':
-                raise RuntimeError('Package {} does not exist - add it with piw-add first'.format(config.package))
+                raise RuntimeError(
+                    'Package {} does not exist - add it with piw-add '
+                    'first'.format(config.package))
             elif data == 'SKIPPKG':
-                raise RuntimeError('Cannot skip a known package with piw-add - use piw-remove instead')
+                raise RuntimeError(
+                    'Cannot skip a known package with piw-add - use '
+                    'piw-remove instead')
             elif data == 'SKIPVER':
-                raise RuntimeError('Cannot skip a known version with piw-add - use piw-remove instead')
+                raise RuntimeError(
+                    'Cannot skip a known version with piw-add - use '
+                    'piw-remove instead')
             elif data == 'YANKVER':
-                raise RuntimeError('Cannot yank a known version with piw-add - use piw-remove instead')
+                raise RuntimeError(
+                    'Cannot yank a known version with piw-add - use '
+                    'piw-remove instead')
             raise RuntimeError(data)
-        
+
         if msg == 'DONE':
             if data == 'NEWPKG':
                 logging.warning('Added package successfully')
