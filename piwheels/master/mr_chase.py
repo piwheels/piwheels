@@ -321,6 +321,7 @@ class MrChase(tasks.PauseableTask):
         remove or alter a specific package version.
         """
         package, version, builds, skip, yank = state
+        package = canonicalize_name(package)
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s %s',
                               package, version)
