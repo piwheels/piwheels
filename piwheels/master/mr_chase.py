@@ -334,9 +334,8 @@ class MrChase(tasks.PauseableTask):
             if yank:
                 self.logger.info('yanking %s %s', package, version)
                 self.db.yank_version(package, version)
-                self.web_queue.send_msg('BOTH', [package, version])
+                self.web_queue.send_msg('BOTH', package)
                 self.web_queue.recv_msg()
-                self.skip_queue.recv_msg()
                 msg = 'YANKVER'
             if builds:
                 self.logger.info('deleting all builds for %s %s', package, version)

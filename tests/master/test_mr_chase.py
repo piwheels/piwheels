@@ -368,38 +368,6 @@ def test_add_existing_package(db_queue, web_queue, task, import_queue):
         web_queue.check()
 
 
-def test_skip_existing_package(db_queue, task, import_queue):
-    import_queue.send_msg('ADDPKG', ['Foo', 'foos things', 'broken', False, []])
-    db_queue.expect('NEWPKG', ['foo', 'broken', 'foos things'])
-    db_queue.send('OK', False)
-    task.poll(0)
-    assert import_queue.recv_msg() == ('ERROR', 'SKIPPKG')
-    assert len(task.states) == 0
-    db_queue.check()
-
-
-def test_unskip_existing_package(db_queue, web_queue, task, import_queue):
-    now = datetime.now(tz=UTC)
-    with mock.patch('piwheels.master.mr_chase.datetime') as dt:
-        dt.now.side_effect = [now, now + timedelta(seconds=1)]
-        import_queue.send_msg('ADDPKG', ['Foo', '', '', True, []])
-        db_queue.expect('NEWPKG', ['foo', '', ''])
-        db_queue.send('OK', False)
-        db_queue.expect('SKIPPKG', ['foo', ''])
-        db_queue.send('OK', None)
-        db_queue.expect('NEWPKGNAME', ['foo', 'foo', now])
-        db_queue.send('OK', True)
-        db_queue.expect('NEWPKGNAME', ['foo', 'Foo', now + timedelta(seconds=1)])
-        db_queue.send('OK', True)
-        web_queue.expect('PROJECT', 'foo')
-        web_queue.send('DONE')
-        task.poll(0)
-        assert import_queue.recv_msg() == ('DONE', 'UPDPKG')
-        assert len(task.states) == 0
-        db_queue.check()
-        web_queue.check()
-
-
 def test_add_new_version(db_queue, web_queue, task, import_queue):
     now = datetime.now(tz=UTC)
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
@@ -459,20 +427,7 @@ def test_add_version_no_package(db_queue, task, import_queue):
     db_queue.check()
 
 
-def test_skip_existing_version(db_queue, task, import_queue):
-    released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
-    import_queue.send_msg('ADDVER', ['Foo', '0.1', 'broken', False, released, False, False, []])
-    db_queue.expect('PKGEXISTS', 'foo')
-    db_queue.send('OK', True)
-    db_queue.expect('NEWVER', ['foo', '0.1', released, 'broken'])
-    db_queue.send('OK', False)
-    task.poll(0)
-    assert import_queue.recv_msg() == ('ERROR', 'SKIPVER')
-    assert len(task.states) == 0
-    db_queue.check()
-
-
-def test_unskip_existing_version(db_queue, web_queue, task, import_queue):
+def test_unskip_version(db_queue, web_queue, task, import_queue):
     now = datetime.now(tz=UTC)
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
     with mock.patch('piwheels.master.mr_chase.datetime') as dt:
@@ -497,7 +452,7 @@ def test_unskip_existing_version(db_queue, web_queue, task, import_queue):
         web_queue.check()
 
 
-def test_yank_existing_version(db_queue, task, import_queue):
+def test_yank_version_wrong(db_queue, task, import_queue):
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
     import_queue.send_msg('ADDVER', ['Foo', '0.1', '', False, released, True, False, []])
     db_queue.expect('PKGEXISTS', 'foo')
@@ -510,7 +465,26 @@ def test_yank_existing_version(db_queue, task, import_queue):
     db_queue.check()
 
 
-def test_unyank_existing_version(db_queue, web_queue, task, import_queue):
+def test_yank_version(db_queue, web_queue, task, import_queue):
+    now = datetime.now(tz=UTC)
+    released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
+    with mock.patch('piwheels.master.mr_chase.datetime') as dt:
+        dt.now.side_effect = [now, now + timedelta(seconds=1)]
+        import_queue.send_msg('REMVER', ['Foo', '0.1', False, '', True])
+        db_queue.expect('VEREXISTS', ['foo', '0.1'])
+        db_queue.send('OK', True)
+        db_queue.expect('YANKVER', ['foo', '0.1'])
+        db_queue.send('OK', None)
+        web_queue.expect('BOTH', 'foo')
+        web_queue.send('DONE')
+        task.poll(0)
+        assert import_queue.recv_msg() == ('DONE', 'YANKVER')
+        assert len(task.states) == 0
+        db_queue.check()
+        web_queue.check()
+
+
+def test_unyank_version(db_queue, web_queue, task, import_queue):
     now = datetime.now(tz=UTC)
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
     with mock.patch('piwheels.master.mr_chase.datetime') as dt:
@@ -575,26 +549,6 @@ def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
     skip_queue.check()
 
 
-def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
-                      build_state_hacked):
-    bsh = build_state_hacked
-    import_queue.send_msg('REMPKG', [bsh.package, False, 'silly package'])
-    db_queue.expect('PKGEXISTS', bsh.package)
-    db_queue.send('OK', True)
-    db_queue.expect('SKIPPKG', [bsh.package, 'silly package'])
-    db_queue.send('OK', None)
-    web_queue.expect('DELPKG', bsh.package)
-    web_queue.send('DONE')
-    skip_queue.expect('DELPKG', bsh.package)
-    skip_queue.send('OK')
-    task.poll(0)
-    assert import_queue.recv_msg() == ('DONE', 'SKIPPKG')
-    assert len(task.states) == 0
-    db_queue.check()
-    web_queue.check()
-    skip_queue.check()
-
-
 def test_remove_package_builds(db_queue, web_queue, skip_queue, task,
                                import_queue, build_state_hacked):
     bsh = build_state_hacked
@@ -621,6 +575,71 @@ def test_remove_package_builds(db_queue, web_queue, skip_queue, task,
     db_queue.check()
     web_queue.check()
     skip_queue.check()
+
+
+def test_skip_package_wrong(db_queue, task, import_queue):
+    import_queue.send_msg('ADDPKG', ['Foo', 'foos things', 'broken', False, []])
+    db_queue.expect('NEWPKG', ['foo', 'broken', 'foos things'])
+    db_queue.send('OK', False)
+    task.poll(0)
+    assert import_queue.recv_msg() == ('ERROR', 'SKIPPKG')
+    assert len(task.states) == 0
+    db_queue.check()
+
+
+def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
+                      build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMPKG', [bsh.package, False, 'silly package'])
+    db_queue.expect('PKGEXISTS', bsh.package)
+    db_queue.send('OK', True)
+    db_queue.expect('SKIPPKG', [bsh.package, 'silly package'])
+    db_queue.send('OK', None)
+    web_queue.expect('DELPKG', bsh.package)
+    web_queue.send('DONE')
+    skip_queue.expect('DELPKG', bsh.package)
+    skip_queue.send('OK')
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', 'SKIPPKG')
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+    skip_queue.check()
+
+
+def test_unskip_package(db_queue, web_queue, task, import_queue):
+    now = datetime.now(tz=UTC)
+    with mock.patch('piwheels.master.mr_chase.datetime') as dt:
+        dt.now.side_effect = [now, now + timedelta(seconds=1)]
+        import_queue.send_msg('ADDPKG', ['Foo', '', '', True, []])
+        db_queue.expect('NEWPKG', ['foo', '', ''])
+        db_queue.send('OK', False)
+        db_queue.expect('SKIPPKG', ['foo', ''])
+        db_queue.send('OK', None)
+        db_queue.expect('NEWPKGNAME', ['foo', 'foo', now])
+        db_queue.send('OK', True)
+        db_queue.expect('NEWPKGNAME', ['foo', 'Foo', now + timedelta(seconds=1)])
+        db_queue.send('OK', True)
+        web_queue.expect('PROJECT', 'foo')
+        web_queue.send('DONE')
+        task.poll(0)
+        assert import_queue.recv_msg() == ('DONE', 'UPDPKG')
+        assert len(task.states) == 0
+        db_queue.check()
+        web_queue.check()
+
+
+def test_skip_version_wrong(db_queue, task, import_queue):
+    released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
+    import_queue.send_msg('ADDVER', ['Foo', '0.1', 'broken', False, released, False, False, []])
+    db_queue.expect('PKGEXISTS', 'foo')
+    db_queue.send('OK', True)
+    db_queue.expect('NEWVER', ['foo', '0.1', released, 'broken'])
+    db_queue.send('OK', False)
+    task.poll(0)
+    assert import_queue.recv_msg() == ('ERROR', 'SKIPVER')
+    assert len(task.states) == 0
+    db_queue.check()
 
 
 def test_skip_version(db_queue, web_queue, skip_queue, task, import_queue,
@@ -657,7 +676,7 @@ def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
     assert len(task.states) == 0
 
 
-def test_remove_unknown_ver(db_queue, task, import_queue, build_state):
+def test_remove_unknown_version(db_queue, task, import_queue, build_state):
     task.logger = mock.Mock()
     build_state._slave_id = 0
     bs = build_state
