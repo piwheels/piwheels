@@ -308,11 +308,10 @@ class MrChase(tasks.PauseableTask):
             # FKs will take care of removing builds here
             self.db.delete_package(package)
             msg = 'DELPKG'
-        if msg in ('SKIPPKG', 'DELPKG', 'DELPKGBLD'):
-            self.web_queue.send_msg('DELPKG', package)
-            self.skip_queue.send_msg('DELPKG', package)
-            self.web_queue.recv_msg()
-            self.skip_queue.recv_msg()
+        self.web_queue.send_msg('DELPKG', package)
+        self.skip_queue.send_msg('DELPKG', package)
+        self.web_queue.recv_msg()
+        self.skip_queue.recv_msg()
         return 'DONE', msg
 
     def do_remove_version(self, state):
