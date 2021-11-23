@@ -143,6 +143,8 @@ def do_remove(config):
                 logging.info('Skipped version successfully')
             elif data == 'YANKVER':
                 logging.info('Yanked version successfully')
+            else:
+                assert False
         else:
             raise RuntimeError('Unexpected response from master')
     finally:
