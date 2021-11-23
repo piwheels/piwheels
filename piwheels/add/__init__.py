@@ -169,9 +169,10 @@ def do_add(config):
                 raise RuntimeError(
                     'Cannot yank a known version with piw-add - use '
                     'piw-remove instead')
-            raise RuntimeError(data)
+            else:
+                assert False, 'invalid data from master'
 
-        if msg == 'DONE':
+        elif msg == 'DONE':
             if data == 'NEWPKG':
                 logging.info('Added package successfully')
             elif data == 'UPDPKG':
@@ -180,8 +181,10 @@ def do_add(config):
                 logging.info('Added version successfully')
             elif data == 'UPDVER':
                 logging.info('Updated version successfully')
+            else:
+                assert False, 'invalid operation from master'
         else:
-            raise RuntimeError('Unexpected response from master')
+            assert False, 'invalid response from master'
     finally:
         queue.close()
         ctx.close()

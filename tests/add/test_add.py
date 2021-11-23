@@ -67,12 +67,20 @@ class AddThread(Thread):
         except Exception as e:
             self.exception = e
 
+    def join(self, timeout):
+        super().join(timeout)
+        if self.exception:
+            raise self.exception  # re-raise in the main thread
+
     def __enter__(self):
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.join(10)
+        try:
+            self.join(10)
+        except Exception:
+            pass  # ignore any re-raise
         assert not self.is_alive()
 
 
@@ -173,9 +181,9 @@ def test_add_package_with_bad_alias(mock_context, import_queue_name, import_queu
         with mock.patch('piwheels.add.requests') as requests:
             requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
             with AddThread(['--import-queue', import_queue_name, 'foobar', '-a', 'Foo-Bar']) as thread:
-                thread.join(10)
-                assert isinstance(thread.exception, RuntimeError)
-                assert 'Alias Foo-Bar does not match canon: foobar' in str(thread.exception)
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Alias Foo-Bar does not match canon: foobar' in str(exc.value)
 
 
 def test_skip_known_package(mock_context, import_queue_name, import_queue):
@@ -188,9 +196,9 @@ def test_skip_known_package(mock_context, import_queue_name, import_queue):
                     ['foo', 'DESCRIPTION', 'skip', False, []]
                 )
                 import_queue.send_msg('ERROR', 'SKIPPKG')
-                thread.join(10)
-                assert isinstance(thread.exception, RuntimeError)
-                assert 'Cannot skip a known package with piw-add - use piw-remove instead' in str(thread.exception)
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Cannot skip a known package with piw-add - use piw-remove instead' in str(exc.value)
 
 
 def test_unskip_known_package(mock_context, import_queue_name, import_queue):
@@ -295,9 +303,9 @@ def test_add_version_for_unknown_package(mock_context, import_queue_name, import
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
                 ])
                 import_queue.send_msg('ERROR', 'NOPKG')
-                thread.join(10)
-                assert isinstance(thread.exception, RuntimeError)
-                assert 'Package foo does not exist - add it with piw-add first' in str(thread.exception)
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Package foo does not exist - add it with piw-add first' in str(exc.value)
 
 
 def test_skip_known_version(mock_context, import_queue_name, import_queue):
@@ -311,10 +319,10 @@ def test_skip_known_version(mock_context, import_queue_name, import_queue):
                     'foo', '0.1', 'legal', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
                 ])
-                import_queue.send_msg('ERROR', 'SKIPPKG')
-                thread.join(10)
-                assert isinstance(thread.exception, RuntimeError)
-                assert 'Cannot skip a known package with piw-add - use piw-remove instead' in str(thread.exception)
+                import_queue.send_msg('ERROR', 'SKIPVER')
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Cannot skip a known version with piw-add - use piw-remove instead' in str(exc.value)
 
 
 def test_unskip_known_version(mock_context, import_queue_name, import_queue):
@@ -345,9 +353,9 @@ def test_yank_known_version(mock_context, import_queue_name, import_queue):
                     datetime(2021, 1, 1, tzinfo=UTC), True, False, []
                 ])
                 import_queue.send_msg('ERROR', 'YANKVER')
-                thread.join(10)
-                assert isinstance(thread.exception, RuntimeError)
-                assert 'Cannot yank a known version with piw-add - use piw-remove instead' in str(thread.exception)
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Cannot yank a known version with piw-add - use piw-remove instead' in str(exc.value)
 
 
 def test_unyank_known_version(mock_context, import_queue_name, import_queue):
@@ -364,16 +372,3 @@ def test_unyank_known_version(mock_context, import_queue_name, import_queue):
                 import_queue.send_msg('DONE', 'UPDVER')
                 thread.join(10)
                 assert thread.exitcode == 0
-
-
-def test_unexpected(mock_context, import_queue_name, import_queue):
-    with mock.patch('piwheels.add.requests') as requests:
-        requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-        with AddThread(['--import-queue', import_queue_name, 'foo', '--yes']) as thread:
-            assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foo', 'DESCRIPTION', '', False, []]
-                )
-            import_queue.send_msg('SEND', 'foo.whl')
-            thread.join(10)
-            assert isinstance(thread.exception, RuntimeError)
-            assert 'Unexpected response from master' in str(thread.exception)
