@@ -64,12 +64,20 @@ class RemoveThread(Thread):
         except Exception as e:
             self.exception = e
 
+    def join(self, timeout):
+        super().join(timeout)
+        if self.exception:
+            raise self.exception  # re-raise in the main thread
+
     def __enter__(self):
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.join(10)
+        try:
+            self.join(10)
+        except Exception:
+            pass  # ignore any re-raise
         assert not self.is_alive()
 
 
@@ -106,6 +114,17 @@ def test_remove_package(mock_context, import_queue_name, import_queue):
             assert thread.exitcode == 0
 
 
+def test_remove_missing_package(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            import_queue.send_msg('ERROR', 'NOPKG')
+            with pytest.raises(RuntimeError) as exc:
+                thread.join(10)
+            assert 'Package foo does not exist' in str(exc.value)
+
+
 def test_remove_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
@@ -140,15 +159,15 @@ def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
         assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
         import_queue.send_msg('ERROR', 'Package foo does not exist')
-        thread.join(10)
-        assert isinstance(thread.exception, RuntimeError)
-        assert 'Package foo does not exist' in str(thread.exception)
+        with pytest.raises(RuntimeError) as exc:
+            thread.join(10)
+        assert 'Package foo does not exist' in str(exc.value)
 
 
 def test_unexpected(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
         assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
         import_queue.send_msg('SEND', 'foo.whl')
-        thread.join(10)
-        assert isinstance(thread.exception, RuntimeError)
-        assert 'Unexpected response from master' in str(thread.exception)
+        with pytest.raises(RuntimeError) as exc:
+            thread.join(10)
+        assert 'Unexpected response from master' in str(exc.value)
