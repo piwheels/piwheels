@@ -126,9 +126,10 @@ def do_remove(config):
             elif data == 'NOVER':
                 raise RuntimeError('Version {} {} does not exist'.format(
                     config.package, config.version))
-            raise RuntimeError(data)
+            else:
+                assert False, 'invalid data from master'
 
-        if msg == 'DONE':
+        elif msg == 'DONE':
             if data == 'DELPKG':
                 logging.info('Removed package successfully')
             elif data == 'DELVER':
@@ -144,9 +145,9 @@ def do_remove(config):
             elif data == 'YANKVER':
                 logging.info('Yanked version successfully')
             else:
-                assert False
+                assert False, 'invalid operation from master'
         else:
-            raise RuntimeError('Unexpected response from master')
+            assert False, 'invalid response from master'
     finally:
         queue.close()
         ctx.close()

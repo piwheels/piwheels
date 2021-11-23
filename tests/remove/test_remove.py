@@ -199,16 +199,7 @@ def test_yank_version(mock_context, import_queue_name, import_queue):
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
         assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
-        import_queue.send_msg('ERROR', 'Package foo does not exist')
+        import_queue.send_msg('ERROR', 'NOPKG')
         with pytest.raises(RuntimeError) as exc:
             thread.join(10)
         assert 'Package foo does not exist' in str(exc.value)
-
-
-def test_unexpected(mock_context, import_queue_name, import_queue):
-    with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
-        import_queue.send_msg('SEND', 'foo.whl')
-        with pytest.raises(RuntimeError) as exc:
-            thread.join(10)
-        assert 'Unexpected response from master' in str(exc.value)
