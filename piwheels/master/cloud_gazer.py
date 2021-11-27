@@ -37,7 +37,7 @@ from datetime import timedelta
 
 from .. import protocols, transport, tasks, const
 from ..format import canonicalize_name
-from .pypi import PyPIEvents
+from ..pypi import PyPIEvents
 from .the_oracle import DbClient
 
 

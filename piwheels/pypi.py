@@ -46,8 +46,8 @@ from urllib3.exceptions import TimeoutError
 from requests.exceptions import RequestException
 from simplejson.errors import JSONDecodeError
 
-from .. import __version__
-from ..format import canonicalize_name
+from . import __version__
+from .format import canonicalize_name
 
 
 UTC = timezone.utc
@@ -58,7 +58,7 @@ PYPI_MARGIN = 2000
 
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
-logger = logging.getLogger('master.pypi')
+logger = logging.getLogger('pypi')
 
 
 class PiWheelsTransport(xmlrpc.client.SafeTransport):
@@ -289,7 +289,7 @@ class PyPIEvents:
         # can make a vague attempt at reducing duplicate reports
         self._versions = OrderedDict()
         self._versions_size = cache_size
-        self._pypi_json = urlsplit(pypi_json)
+        self._pypi_json = pypi_json
 
     @property
     def serial(self):
@@ -299,56 +299,12 @@ class PyPIEvents:
     def serial(self, value):
         self._buffer.serial = value
 
-    @lru_cache(maxsize=100)
     def _get_description(self, package):
         """
         Look up the project description for *package* using PyPI's legacy JSON
         API
         """
-        path = PosixPath(self._pypi_json.path) / package / 'json'
-        url = urlunsplit(self._pypi_json._replace(path=str(path)))
-        try:
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-        except requests.Timeout:
-            # SSL connection or read timed out; this isn't critical so just
-            # return None and assume we'll pick it up later
-            return None
-        except requests.ConnectionError:
-            # Failed to establish connection; usually "Connection refused"
-            # which means we're hammering PyPI too much; give up for now and
-            # assume we'll pick it up later
-            return None
-        except requests.HTTPError as exc:
-            if exc.response.status_code >= 500:
-                # Server side error; probably a temporary service failure.
-                # Because the package description isn't critical just ignore it
-                # and return None for now and assume we'll pick it up at a
-                # later point
-                return None
-            elif exc.response.status_code == 404:
-                # We may be requesting a description for a package that was
-                # subsequently deleted; return None
-                return None
-            elif exc.response.status_code == 408:
-                # Another timeout type; again just return None as above
-                return None
-            else:
-                raise
-        data = resp.json()
-        try:
-            description = data['info']['summary']
-        except KeyError as exc:
-            logger.error('%s missing when getting description for %s',
-                         exc, package)
-            return None
-        else:
-            if description is None:
-                return ''
-            elif len(description) > 200:
-                return description[:199] + '…'
-            else:
-                return description
+        return pypi_package_description(package, pypi_url=self._pypi_json)
 
     def _check_new_version(self, package, version, timestamp, action):
         try:
@@ -403,3 +359,56 @@ class PyPIEvents:
                 # or an error has occurred; make sure we don't bother PyPI for
                 # another 10 seconds
                 self._next_read = datetime.now(tz=UTC) + timedelta(seconds=10)
+
+
+@lru_cache(maxsize=100)
+def pypi_package_description(package, pypi_url='https://pypi.org/pypi'):
+    """
+    Look up the project description for *package* using PyPI's legacy JSON
+    API, rooted at *pypi_url*.
+    """
+    pypi_url = urlsplit(pypi_url)
+    path = PosixPath(pypi_url.path) / package / 'json'
+    url = urlunsplit(pypi_url._replace(path=str(path)))
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+    except requests.Timeout:
+        # SSL connection or read timed out; this isn't critical so just
+        # return None and assume we'll pick it up later
+        return None
+    except requests.ConnectionError:
+        # Failed to establish connection; usually "Connection refused"
+        # which means we're hammering PyPI too much; give up for now and
+        # assume we'll pick it up later
+        return None
+    except requests.HTTPError as exc:
+        if exc.response.status_code >= 500:
+            # Server side error; probably a temporary service failure.
+            # Because the package description isn't critical just ignore it
+            # and return None for now and assume we'll pick it up at a
+            # later point
+            return None
+        elif exc.response.status_code == 404:
+            # We may be requesting a description for a package that was
+            # subsequently deleted; return None
+            return None
+        elif exc.response.status_code == 408:
+            # Another timeout type; again just return None as above
+            return None
+        else:
+            raise
+    data = resp.json()
+    try:
+        description = data['info']['summary']
+    except KeyError as exc:
+        logger.error('%s missing when getting description for %s',
+                     exc, package)
+        return None
+    else:
+        if description is None:
+            return ''
+        elif len(description) > 200:
+            return description[:199] + '…'
+        else:
+            return description

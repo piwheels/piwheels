@@ -36,17 +36,15 @@ from socketserver import ThreadingMixIn
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from xmlrpc.client import ProtocolError
-from urllib.parse import urlsplit
 from queue import Queue
 
 import pytest
 import http.client
 import xmlrpc.client
 import simplejson as json
-from requests.exceptions import RequestException, HTTPError
 from simplejson.errors import JSONDecodeError
 
-from piwheels.master.pypi import *
+from piwheels.pypi import *
 
 
 UTC = timezone.utc
@@ -54,19 +52,6 @@ UTC = timezone.utc
 
 def dt(s):
     return datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
-
-
-@pytest.fixture()
-def mock_requests():
-    # XXX Delete me?
-    with mock.patch('piwheels.master.pypi.requests') as requests:
-        yield requests
-
-
-@pytest.fixture()
-def mock_logger(request):
-    with mock.patch('piwheels.master.pypi.logger') as logger:
-        yield logger
 
 
 @pytest.fixture()
@@ -92,49 +77,10 @@ def xml_server(request):
 
 @pytest.fixture()
 def mock_buffer(request):
-    with mock.patch('piwheels.master.pypi.PyPIBuffer') as buffer_proxy:
+    with mock.patch('piwheels.pypi.PyPIBuffer') as buffer_proxy:
         events = []
         buffer_proxy().__iter__.return_value = events
         yield events
-
-
-@pytest.fixture()
-def mock_json_server(request):
-    with mock.patch('piwheels.master.pypi.requests.get') as get:
-        packages = {}
-        def mock_response(status_code, json=None):
-            resp = mock.Mock(
-                status_code=status_code,
-                json=mock.Mock(return_value=json))
-            if status_code >= 400:
-                resp.raise_for_status = mock.Mock(
-                    side_effect=HTTPError(response=resp))
-            else:
-                resp.raise_for_status = mock.Mock(return_value=None)
-            return resp
-        def mock_get(url, timeout=None):
-            url = urlsplit(url)
-            if url.path.endswith('/json'):
-                package = url.path.rsplit('/', 2)[1]
-                try:
-                    if package == 'pypi-err':
-                        return mock_response(status_code=503)
-                    else:
-                        description = packages[package]
-                except KeyError:
-                    return mock_response(status_code=404)
-                else:
-                    if package == 'pypi-bad':
-                        return mock_response(
-                            status_code=200, json={'info': {}})
-                    else:
-                        return mock_response(
-                            status_code=200,
-                            json={'info': {'summary': description}})
-            else:
-                return mock.Mock(status=404)
-        get.side_effect = mock_get
-        yield packages
 
 
 def test_pypi_buf_talks_to_servers(xml_server):

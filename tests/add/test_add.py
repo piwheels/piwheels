@@ -107,38 +107,41 @@ def test_abort(caplog):
     assert find_message(caplog.records, message='User aborted addition')
 
 
-def test_add_package(mock_context, import_queue_name, import_queue):
+def test_add_package(mock_json_server, mock_context, import_queue_name,
+                     import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foo']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foo', 'DESCRIPTION', '', False, []]
-                )
-                import_queue.send_msg('DONE', 'NEWPKG')
-                thread.join(10)
-                assert thread.exitcode == 0
+        mock_json_server['foo'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foo']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foo', 'DESCRIPTION', '', False, []]
+            )
+            import_queue.send_msg('DONE', 'NEWPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
 
 
-def test_add_and_skip_package(mock_context, import_queue_name, import_queue):
+def test_add_and_skip_package(mock_json_server, mock_context,
+                              import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foo', '--skip', 'legal']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foo', 'DESCRIPTION', 'legal', False, []]
-                )
-                import_queue.send_msg('DONE', 'NEWPKG')
-                thread.join(10)
-                assert thread.exitcode == 0
+        mock_json_server['foo'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foo', '--skip',
+                        'legal']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foo', 'DESCRIPTION', 'legal', False, []]
+            )
+            import_queue.send_msg('DONE', 'NEWPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
 
 
-def test_add_package_with_description(mock_context, import_queue_name, import_queue):
+def test_add_package_with_description(mock_context, import_queue_name,
+                                      import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with AddThread(['--import-queue', import_queue_name, 'foo', '-d', 'description']) as thread:
+        with AddThread(['--import-queue', import_queue_name, 'foo', '-d',
+                        'description']) as thread:
             assert import_queue.recv_msg() == ('ADDPKG',
                 ['foo', 'description', '', False, []]
             )
@@ -147,78 +150,84 @@ def test_add_package_with_description(mock_context, import_queue_name, import_qu
             assert thread.exitcode == 0
 
 
-def test_add_package_with_alias(mock_context, import_queue_name, import_queue):
+def test_add_package_with_alias(mock_json_server, mock_context,
+                                import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foobar', '-a', 'FooBar']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foobar', 'DESCRIPTION', '', False, ['FooBar']]
-                )
-                import_queue.send_msg('DONE', 'NEWPKG')
+        mock_json_server['foobar'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foobar', '-a',
+                        'FooBar']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foobar', 'DESCRIPTION', '', False, ['FooBar']]
+            )
+            import_queue.send_msg('DONE', 'NEWPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_add_package_with_aliases(mock_json_server, mock_context,
+                                  import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        mock_json_server['foobar'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foobar', '-a',
+                        'FooBar', 'fooBar']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foobar', 'DESCRIPTION', '', False, ['FooBar', 'fooBar']]
+            )
+            import_queue.send_msg('DONE', 'NEWPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_add_package_with_bad_alias(mock_json_server, mock_context,
+                                    import_queue_name, import_queue):
+    mock_json_server['foobar'] = 'DESCRIPTION'
+    with AddThread(['--import-queue', import_queue_name, 'foobar', '-a',
+                    'Foo-Bar', '--yes']) as thread:
+        with pytest.raises(RuntimeError) as exc:
+            thread.join(10)
+        assert 'Alias Foo-Bar does not match canon: foobar' in str(exc.value)
+
+
+def test_skip_known_package(mock_json_server, mock_context, import_queue_name,
+                            import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        mock_json_server['foo'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foo', '--skip',
+                        'skip']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foo', 'DESCRIPTION', 'skip', False, []]
+            )
+            import_queue.send_msg('ERROR', 'SKIPPKG')
+            with pytest.raises(RuntimeError) as exc:
                 thread.join(10)
-                assert thread.exitcode == 0
+            assert ('Cannot skip a known package with piw-add - use '
+                    'piw-remove instead') in str(exc.value)
 
 
-def test_add_package_with_aliases(mock_context, import_queue_name, import_queue):
+def test_unskip_known_package(mock_json_server, mock_context,
+                              import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foobar', '-a', 'FooBar', 'fooBar']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foobar', 'DESCRIPTION', '', False, ['FooBar', 'fooBar']]
-                )
-                import_queue.send_msg('DONE', 'NEWPKG')
-                thread.join(10)
-                assert thread.exitcode == 0
+        mock_json_server['foo'] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, 'foo',
+                        '--unskip']) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                ['foo', 'DESCRIPTION', '', True, []]
+            )
+            import_queue.send_msg('DONE', 'UPDPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
 
 
-def test_add_package_with_bad_alias(mock_context, import_queue_name, import_queue):
+def test_update_known_package_description(mock_context, import_queue_name,
+                                          import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foobar', '-a', 'Foo-Bar']) as thread:
-                with pytest.raises(RuntimeError) as exc:
-                    thread.join(10)
-                assert 'Alias Foo-Bar does not match canon: foobar' in str(exc.value)
-
-
-def test_skip_known_package(mock_context, import_queue_name, import_queue):
-    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
-        prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foo', '--skip', 'skip']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foo', 'DESCRIPTION', 'skip', False, []]
-                )
-                import_queue.send_msg('ERROR', 'SKIPPKG')
-                with pytest.raises(RuntimeError) as exc:
-                    thread.join(10)
-                assert 'Cannot skip a known package with piw-add - use piw-remove instead' in str(exc.value)
-
-
-def test_unskip_known_package(mock_context, import_queue_name, import_queue):
-    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
-        prompt_mock.return_value = True
-        with mock.patch('piwheels.add.requests') as requests:
-            requests.get.return_value.json.return_value = {'info': {'summary': 'DESCRIPTION'}}
-            with AddThread(['--import-queue', import_queue_name, 'foo', '--unskip']) as thread:
-                assert import_queue.recv_msg() == ('ADDPKG',
-                    ['foo', 'DESCRIPTION', '', True, []]
-                )
-                import_queue.send_msg('DONE', 'UPDPKG')
-                thread.join(10)
-                assert thread.exitcode == 0
-
-
-def test_update_known_package_description(mock_context, import_queue_name, import_queue):
-    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
-        prompt_mock.return_value = True
-        with AddThread(['--import-queue', import_queue_name, 'foo', '-d', 'description']) as thread:
+        with AddThread(['--import-queue', import_queue_name, 'foo', '-d',
+                        'description']) as thread:
             assert import_queue.recv_msg() == ('ADDPKG',
                 ['foo', 'description', '', False, []]
             )
@@ -233,7 +242,8 @@ def test_add_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
+            with AddThread(['--import-queue', import_queue_name,
+                            'foo', '0.1']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
@@ -249,7 +259,8 @@ def test_add_and_skip_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--skip', 'legal']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', 'legal', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
@@ -265,7 +276,8 @@ def test_add_and_yank_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yank']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--yank']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2021, 1, 1, tzinfo=UTC), True, False, []
@@ -275,13 +287,15 @@ def test_add_and_yank_version(mock_context, import_queue_name, import_queue):
                 assert thread.exitcode == 0
 
 
-def test_add_version_with_release_date(mock_context, import_queue_name, import_queue):
+def test_add_version_with_release_date(mock_context, import_queue_name,
+                                       import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--released', '2020-06-06 00:00:00']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--released', '2020-06-06 00:00:00']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2020, 6, 6, tzinfo=UTC), False, False, []
@@ -291,13 +305,15 @@ def test_add_version_with_release_date(mock_context, import_queue_name, import_q
                 assert thread.exitcode == 0
 
 
-def test_add_version_for_unknown_package(mock_context, import_queue_name, import_queue):
+def test_add_version_for_unknown_package(mock_context, import_queue_name,
+                                         import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
+            with AddThread(['--import-queue', import_queue_name,
+                            'foo', '0.1']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
@@ -305,7 +321,8 @@ def test_add_version_for_unknown_package(mock_context, import_queue_name, import
                 import_queue.send_msg('ERROR', 'NOPKG')
                 with pytest.raises(RuntimeError) as exc:
                     thread.join(10)
-                assert 'Package foo does not exist - add it with piw-add first' in str(exc.value)
+                assert ('Package foo does not exist - add it with piw-add '
+                        'first') in str(exc.value)
 
 
 def test_skip_known_version(mock_context, import_queue_name, import_queue):
@@ -314,7 +331,8 @@ def test_skip_known_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--skip', 'legal']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', 'legal', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
@@ -322,7 +340,8 @@ def test_skip_known_version(mock_context, import_queue_name, import_queue):
                 import_queue.send_msg('ERROR', 'SKIPVER')
                 with pytest.raises(RuntimeError) as exc:
                     thread.join(10)
-                assert 'Cannot skip a known version with piw-add - use piw-remove instead' in str(exc.value)
+                assert ('Cannot skip a known version with piw-add - use '
+                        'piw-remove instead') in str(exc.value)
 
 
 def test_unskip_known_version(mock_context, import_queue_name, import_queue):
@@ -331,7 +350,8 @@ def test_unskip_known_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--unskip']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--unskip']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', True,
                     datetime(2021, 1, 1, tzinfo=UTC), False, False, []
@@ -347,7 +367,8 @@ def test_yank_known_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yank']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--yank']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2021, 1, 1, tzinfo=UTC), True, False, []
@@ -355,7 +376,8 @@ def test_yank_known_version(mock_context, import_queue_name, import_queue):
                 import_queue.send_msg('ERROR', 'YANKVER')
                 with pytest.raises(RuntimeError) as exc:
                     thread.join(10)
-                assert 'Cannot yank a known version with piw-add - use piw-remove instead' in str(exc.value)
+                assert ('Cannot yank a known version with piw-add - use '
+                        'piw-remove instead') in str(exc.value)
 
 
 def test_unyank_known_version(mock_context, import_queue_name, import_queue):
@@ -364,7 +386,8 @@ def test_unyank_known_version(mock_context, import_queue_name, import_queue):
         with mock.patch('piwheels.add.datetime') as dt:
             dt.utcnow.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
-            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1', '--unyank']) as thread:
+            with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
+                            '--unyank']) as thread:
                 assert import_queue.recv_msg() == ('ADDVER',[
                     'foo', '0.1', '', False,
                     datetime(2021, 1, 1, tzinfo=UTC), False, True, []

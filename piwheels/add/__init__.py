@@ -42,6 +42,7 @@ import requests
 
 from .. import __version__, terminal, const, transport, protocols
 from ..format import canonicalize_name
+from ..pypi import pypi_package_description
 
 
 UTC = timezone.utc
@@ -118,7 +119,7 @@ system. This script must be run on the same node as the piw-master script.
     config.released = datetime.strptime(
         config.released, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
     if config.version is None and config.description is None:
-        config.description = _get_package_description(package)
+        config.description = pypi_package_description(package)
     for alias in config.aliases:
         if canonicalize_name(alias) != package:
             raise RuntimeError("Alias {} does not match canon: {}".format(
@@ -188,21 +189,3 @@ def do_add(config):
     finally:
         queue.close()
         ctx.close()
-
-
-def _get_package_description(pkg):
-    "Return the package description from PyPI"
-    url = 'https://pypi.org/pypi/{}/json'.format(pkg)
-    r = requests.get(url)
-    try:
-        r.raise_for_status()
-    except requests.HTTPError:
-        logging.error('Error retrieving package description, status code: %s',
-                      r.status_code)
-        return ''
-    description = r.json()['info']['summary']
-    if description is None:
-        return ''
-    elif len(description) > 200:
-        return description[:199] + '…'
-    return description
