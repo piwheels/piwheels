@@ -112,13 +112,13 @@ registered as produced by a *single* build.
 
     logging.info("PiWheels Importer version %s", __version__)
 
-    # NOTE: If any of the files are unreadable, this'll fail (it attempts
-    # to calculate the hash of the file which requires reading it)
     if config.dependencies:
         apt_dependencies = config.dependencies.read().split()
         dependencies = {'apt': apt_dependencies}
     else:
         dependencies = {}
+    # NOTE: If any of the files are unreadable, this'll fail (it attempts
+    # to calculate the hash of the file which requires reading it)
     packages = [
         Wheel(Path(filename), dependencies=dependencies)
         for filename in config.files

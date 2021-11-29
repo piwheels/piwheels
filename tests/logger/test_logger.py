@@ -68,6 +68,7 @@ def log_sample():
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/pyjokes/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /simple/index.html HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/Flask/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
+2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:27:56 +0100] "GET /logs/0000/0001/0001.txt HTTP/1.1" 200 16384 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 """
     entries = [
         ('LOGSEARCH', [

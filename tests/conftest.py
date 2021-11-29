@@ -37,6 +37,7 @@ from urllib.parse import urlsplit
 from time import sleep
 
 import pytest
+import requests
 from sqlalchemy import create_engine, text
 from voluptuous import Schema, ExactSequence, Extra, Any
 from requests.exceptions import RequestException, HTTPError
@@ -505,8 +506,13 @@ def mock_json_server(request):
             if url.path.endswith('/json'):
                 package = url.path.rsplit('/', 2)[1]
                 try:
-                    if package == 'pypi-err':
-                        return mock_response(status_code=503)
+                    if package.startswith('pypi-http-err-'):
+                        status_code = int(package[len('pypi-http-err-'):])
+                        return mock_response(status_code=status_code)
+                    elif package == 'pypi-timeout-err':
+                        raise requests.Timeout()
+                    elif package == 'pypi-connect-err':
+                        raise requests.ConnectionError()
                     else:
                         description = packages[package]
                 except KeyError:
