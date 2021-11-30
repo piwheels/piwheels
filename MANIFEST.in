@@ -1,5 +1,0 @@
-recursive-include piwheels/master/static *
-include piwheels/master/templates/*.pt
-include piwheels/initdb/sql/*.sql
-include README.rst
-include LICENSE.txt

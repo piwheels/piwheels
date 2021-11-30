@@ -1,10 +1,9 @@
 # vim: set noet sw=4 ts=4 fileencoding=utf-8:
 
 # External utilities
-PYTHON ?= python
+PYTHON ?= python3
 PIP ?= pip
 PYTEST ?= pytest
-COVERAGE ?= coverage
 TWINE ?= twine
 PYFLAGS ?=
 DEST_DIR ?= /
@@ -17,11 +16,11 @@ PYTHON_APT:=$(wildcard /usr/lib/python3/dist-packages/apt) \
 # Calculate the base names of the distribution, the location of all source,
 # documentation, packaging, icon, and executable script files
 NAME:=$(shell $(PYTHON) $(PYFLAGS) setup.py --name)
-PKG_DIR:=$(subst -,_,$(NAME))
+WHEEL_NAME:=$(subst -,_,$(NAME))
 VER:=$(shell $(PYTHON) $(PYFLAGS) setup.py --version)
 PY_SOURCES:=$(shell \
 	$(PYTHON) $(PYFLAGS) setup.py egg_info >/dev/null 2>&1 && \
-	grep -v "\.egg-info" $(PKG_DIR).egg-info/SOURCES.txt)
+	cat $(WHEEL_NAME).egg-info/SOURCES.txt | grep -v "\.egg-info"  | grep -v "\.mo$$")
 DOC_SOURCES:=docs/conf.py \
 	$(wildcard docs/*.png) \
 	$(wildcard docs/*.svg) \
@@ -33,7 +32,7 @@ DOC_SOURCES:=docs/conf.py \
 SUBDIRS:=
 
 # Calculate the name of all outputs
-DIST_WHEEL=dist/$(NAME)-$(VER)-py2.py3-none-any.whl
+DIST_WHEEL=dist/$(WHEEL_NAME)-$(VER)-py3-none-any.whl
 DIST_TAR=dist/$(NAME)-$(VER).tar.gz
 DIST_ZIP=dist/$(NAME)-$(VER).zip
 MAN_PAGES=man/piw-master.1 man/piw-slave.1 man/piw-monitor.1 man/piw-initdb.1
@@ -46,7 +45,7 @@ all:
 	@echo "make test - Run tests"
 	@echo "make doc - Generate HTML and PDF documentation"
 	@echo "make source - Create source package"
-	@echo "make egg - Generate a PyPI egg package"
+	@echo "make wheel - Generate a PyPI wheel package"
 	@echo "make zip - Generate a source zip package"
 	@echo "make tar - Generate a source tar package"
 	@echo "make dist - Generate all packages"
@@ -62,6 +61,10 @@ doc: $(DOC_SOURCES)
 	$(MAKE) -C docs html
 	$(MAKE) -C docs epub
 	$(MAKE) -C docs latexpdf
+	$(MAKE) $(MAN_PAGES)
+
+preview:
+	$(MAKE) -C docs preview
 
 source: $(DIST_TAR) $(DIST_ZIP)
 
@@ -77,6 +80,8 @@ develop:
 	@# These have to be done separately to avoid a cockup...
 	$(PIP) install -U setuptools
 	$(PIP) install -U pip
+	$(PIP) install -U twine
+	$(PIP) install -U tox
 	$(PIP) install -e .[doc,test,master,slave,monitor,logger]
 ifeq ($(VIRTUAL_ENV),)
 	@echo "Virtualenv not detected! You may need to link python3-apt manually"
@@ -89,29 +94,29 @@ endif
 endif
 
 test:
-	$(COVERAGE) run --rcfile coverage.cfg -m $(PYTEST) -v tests
-	$(COVERAGE) report --rcfile coverage.cfg
+	$(PYTEST)
 
 clean:
-	rm -fr dist/ $(NAME).egg-info/ tags
+	rm -fr dist/ build/ man/ .pytest_cache/ .mypy_cache/ $(WHEEL_NAME).egg-info/ tags .coverage*
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean; \
 	done
 	find $(CURDIR) -name "*.pyc" -delete
+	find $(CURDIR) -name "__pycache__" -delete
 
 tags: $(PY_SOURCES)
-	ctags -R --exclude="build/*" --exclude="debian/*" --exclude="docs/*" --languages="Python"
+	ctags -R --languages="Python" $(PY_SOURCES)
 
 lint: $(PY_SOURCES)
-	pylint piwheels
+	pylint $(WHEEL_NAME)
 
 $(SUBDIRS):
 	$(MAKE) -C $@
 
 $(MAN_PAGES): $(DOC_SOURCES)
-	$(PYTHON) $(PYFLAGS) setup.py build_sphinx -b man
+	$(MAKE) -C docs man
 	mkdir -p man/
-	cp build/sphinx/man/*.[0-9] man/
+	cp build/man/*.[0-9] man/
 
 $(DIST_TAR): $(PY_SOURCES) $(SUBDIRS)
 	$(PYTHON) $(PYFLAGS) setup.py sdist --formats gztar
@@ -122,11 +127,14 @@ $(DIST_ZIP): $(PY_SOURCES) $(SUBDIRS)
 $(DIST_WHEEL): $(PY_SOURCES) $(SUBDIRS)
 	$(PYTHON) $(PYFLAGS) setup.py bdist_wheel
 
-release: $(PY_SOURCES) $(DOC_SOURCES)
-	git tag -s release-$(VER) -m "Release $(VER)"
-	git push --tags
-	git push
-	# build a source archive and upload to PyPI
+release:
+	$(MAKE) clean
+	test -z "$(shell git status --porcelain)"
+	git tag -s v$(VER) -m "Release v$(VER)"
+	git push origin v$(VER)
+
+upload: $(DIST_TAR) $(DIST_WHEEL)
+	$(TWINE) check $(DIST_TAR) $(DIST_WHEEL)
 	$(TWINE) upload $(DIST_TAR) $(DIST_WHEEL)
 
-.PHONY: all install develop test doc source wheel zip tar dist clean tags release $(SUBDIRS)
+.PHONY: all install develop test doc source wheel zip tar dist clean tags release upload $(SUBDIRS)
