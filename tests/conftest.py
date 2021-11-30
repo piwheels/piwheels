@@ -618,10 +618,10 @@ class MockTask(Thread):
         self.join(10)
         self.control.close()
         self.control = None
-        if self.is_alive():
-            raise RuntimeError('failed to terminate mock task %r' % self)
         self.sock.close()
         self.sock = None
+        if self.is_alive():
+            raise RuntimeError('failed to terminate mock task %r' % self)
 
     def expect(self, message, data=NoData):
         self.control.send_msg('RECV', (message, data))
