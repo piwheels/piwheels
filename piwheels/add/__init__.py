@@ -62,9 +62,9 @@ The piw-add script is used to manually add new packages and versions to the
 system. This script must be run on the same node as the piw-master script.
 """)
     parser.add_argument(
-        'package', default=None, help="The name of the package to add")
+        'package', help="The name of the package to add")
     parser.add_argument(
-        'version', nargs='?', default=None,
+        'version', nargs='?',
         help="The version of the package to add; if omitted, adds the package "
         "only")
     parser.add_argument(
@@ -79,16 +79,18 @@ system. This script must be run on the same node as the piw-master script.
         help="Remove a skip reason for the package or version to enable build "
         "attempts")
     parser.add_argument(
-        '-d', '--description', nargs='?', default=None,
-        help="The package description")
+        '-d', '--description', metavar='TEXT',
+        help="The package description; defaults to retrieving the description "
+        "from PyPI")
     parser.add_argument(
-        '-a', '--aliases', nargs='*', default=[],
-        help="Any package aliases to use")
+        '-a', '--alias', dest='aliases', metavar='NAME',
+        default=[], action='append', 
+        help="A package aliaseto use; may be specified multiple times")
     parser.add_argument(
-        '-r', '--released', nargs='?',
+        '-r', '--released', metavar='TIMESTAMP',
         default=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
         help="The version's release date (can only be provided for a new "
-        "version, cannot be updated)")
+        "version, cannot be updated); defaults to now")
     parser.add_argument(
         '--yank', action='store_true',
         help="Mark the version as yanked (can only be applied to a new "
@@ -99,7 +101,7 @@ system. This script must be run on the same node as the piw-master script.
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-add (default: "
-        "(%(default)s); this should always be an ipc address")
+        "%(default)s); this should always be an ipc address")
     config = parser.parse_args(args)
     package = canonicalize_name(config.package)
     terminal.configure_logging(config.log_level, config.log_file)

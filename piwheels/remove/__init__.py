@@ -75,7 +75,7 @@ system. This script must be run on the same node as the piw-master script.
     parser.add_argument(
         '--import-queue', metavar='ADDR', default=const.IMPORT_QUEUE,
         help="The address of the queue used by piw-remove (default: "
-        "(%(default)s); this should always be an ipc address")
+        "%(default)s); this should always be an ipc address")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
 

@@ -171,7 +171,7 @@ def test_add_package_with_aliases(mock_json_server, mock_context,
         prompt_mock.return_value = True
         mock_json_server['foobar'] = 'DESCRIPTION'
         with AddThread(['--import-queue', import_queue_name, 'foobar', '-a',
-                        'FooBar', 'fooBar']) as thread:
+                        'FooBar', '-a', 'fooBar']) as thread:
             assert import_queue.recv_msg() == ('ADDPKG',
                 ['foobar', 'DESCRIPTION', '', False, ['FooBar', 'fooBar']]
             )
