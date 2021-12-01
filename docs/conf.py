@@ -31,13 +31,12 @@
 
 import sys
 import os
-import configparser
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
+from setuptools.config import read_configuration
 
 on_rtd = os.environ.get('READTHEDOCS', '').lower() == 'true'
-config = configparser.ConfigParser()
-config.read([Path(__file__).parent / '..' / 'setup.cfg'])
+config = read_configuration(str(Path(__file__).parent / '..' / 'setup.cfg'))
 metadata = config['metadata']
 
 # -- Project information -----------------------------------------------------
