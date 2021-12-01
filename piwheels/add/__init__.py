@@ -133,7 +133,7 @@ system. This script must be run on the same node as the piw-master script.
 def do_add(config):
     """
     Handles constructing and sending the ADDPKG/ADDVER message to
-    :class:`..master.mr_chase.MrChase`.
+    :class:`~.mr_chase.MrChase`.
 
     :param config:
         The configuration obtained from parsing the command line.

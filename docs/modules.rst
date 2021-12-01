@@ -108,6 +108,12 @@ piwheels.importer
 .. automodule:: piwheels.importer
 
 
+piwheels.add
+============
+
+.. automodule:: piwheels.add
+
+
 piwheels.remove
 ===============
 
