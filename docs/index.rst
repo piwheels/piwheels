@@ -34,6 +34,7 @@ Table of Contents
     initdb
     importer
     rebuild
+    add
     remove
     logger
     development

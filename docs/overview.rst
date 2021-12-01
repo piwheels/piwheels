@@ -15,7 +15,7 @@ following components:
 |                 | database to store all relevant information, and   |
 |                 | keeps the web site up to date.                    |
 +-----------------+---------------------------------------------------+
-| :doc:`slaves`   | Builds package on behalf of the piwheels master.  |
+| :doc:`slaves`   | Builds packages on behalf of the piwheels master. |
 |                 | Is intended to run on separate machines to the    |
 |                 | master, partly for performance and partly for     |
 |                 | security.                                         |
@@ -31,6 +31,9 @@ following components:
 +-----------------+---------------------------------------------------+
 | :doc:`importer` | A tool for importing wheels manually into the     |
 |                 | piwheels database and file-system.                |
++-----------------+---------------------------------------------------+
+| :doc:`add`      | A tool for manually adding packages or versions   |
+|                 | to the database (and therefore, the build queue). |
 +-----------------+---------------------------------------------------+
 | :doc:`remove`   | A tool for manually removing builds from the      |
 |                 | database and file-system.                         |
