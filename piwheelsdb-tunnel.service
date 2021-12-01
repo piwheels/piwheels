@@ -1,0 +1,20 @@
+[Unit]
+Description=A secure tunnel for the piwheelsdb connection
+After=local-fs.target network.target
+
+[Service]
+User=piwheels
+Group=piwheels
+RuntimeDirectory=postgresql
+RuntimeDirectoryPreserve=restart
+ExecStart=/usr/bin/ssh -NT \
+  -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes \
+  -o StreamLocalBindUnlink=yes \
+  -L /run/postgresql/.s.PGSQL.5432:/run/postgresql/.s.PGSQL.5432 \
+  piwheels@1234:abcd::2
+RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -3,10 +3,11 @@ piw-slave
 =========
 
 The piw-slave script is intended to be run on a standalone machine to build
-packages on behalf of the piw-master script. It is intended to be run as an
-unprivileged user with a clean home-directory. Any build dependencies you wish
-to use must already be installed. The script will run until it is explicitly
-terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
+packages on behalf of the :doc:`piw-master <master>` service. It is intended to
+be run as an unprivileged user with a clean home-directory. Any build
+dependencies you wish to use must already be installed. The script will run
+until it is explicitly terminated, either by :kbd:`Ctrl+C`, SIGTERM (see
+:manpage:`signal(7)`), or by the remote :doc:`piw-master <master>` script.
 
 
 Synopsis
@@ -14,8 +15,8 @@ Synopsis
 
 .. code-block:: text
 
-    piw-slave [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-m HOST]
-              [-t DURATION]
+    piw-slave [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [--debug]
+              [-m HOST] [-t DURATION] [-d DIR] [-L STR]
 
 
 Description
@@ -47,6 +48,10 @@ Description
 
     Log messages to the specified file
 
+.. option:: --debug
+
+    Set logging to debug level
+
 .. option:: -m HOST, --master HOST
 
     The IP address or hostname of the master server (default: localhost)
@@ -54,6 +59,15 @@ Description
 .. option:: -t DURATION, --timeout DURATION
 
     The time to wait before assuming a build has failed (default: 3h)
+
+.. option:: -d DIR, --dir DIR
+
+    The temporary directory to use when building wheels (default: /tmp)
+
+.. option:: -L STR, --label STR
+
+    The label to transmit to the master identifying this build slave (default:
+    the local hostname)
 
 
 Deployment
@@ -65,24 +79,28 @@ piwheels code, and all the build dependencies that we feel are reasonable to
 support under various Raspbian versions. The deployment script can be found
 in the root of the piwheels repository:
 
+.. literalinclude:: ../deploy_slave.sh
+    :language: bash
+    :caption: deploy_slave.sh
+
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/deploy_slave.sh
     # chmod +x deploy_slave.sh
-    # ./deploy_slave.sh
+    # ./deploy_slave.sh myname 1234:abcd::1
 
 However, you will very likely wish to customize this script for your own
 purposes, e.g. to support a different set of dependencies, or to customize the
 typical build environment.
 
-Once the script is complete, simply switch to the unprivileged user used to
-run the build slave, and execute :doc:`slaves`. For example, assuming the
-master's IP address is 10.0.0.1:
+Once the script is complete, the machine should reboot, automatically connect
+to the master node and start building packages as and when the build queue
+becomes populated. If you need to manually execute the application (assuming
+the master's IP address is ``1234:abcd::1``:
 
 .. code-block:: console
 
     # su - piwheels
-    $ piw-slave -m 10.0.0.1
+    $ piw-slave -m 1234:abcd::1
 
 
 Automatic start
@@ -92,10 +110,30 @@ If you wish to ensure that the build slave starts on every boot-up, you may
 wish to define a systemd unit for it. Example units can be also be found in
 the root of the piwheels repository:
 
+.. code-block:: ini
+    :caption: /etc/systemd/system/piwheels-slave.service
+
+    [Unit]
+    Description=The piwheels slave service
+    After=local-fs.target network.target
+
+    [Service]
+    Type=notify
+    WatchdogSec=2min
+    StartLimitInterval=5min
+    StartLimitBurst=4
+    StartLimitAction=reboot-force
+    Restart=on-failure
+    User=piwheels
+    PrivateTmp=true
+    NoNewPrivileges=true
+    ExecStart=/usr/local/bin/piw-slave -v
+
+    [Install]
+    WantedBy=multi-user.target
+
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/piwheels-slave.service
-    # cp piwheels-slave.service /etc/systemd/system/
     # systemctl daemon-reload
     # systemctl enable piwheels-slave
     # systemctl start piwheels-slave

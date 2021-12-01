@@ -3,11 +3,12 @@ piw-master
 ==========
 
 The piw-master script is intended to be run on the database and file-server
-machine. It is recommended you *do not* run :doc:`slaves` on the same machine
-as the piw-master script. The database specified in the configuration must
-exist and have been configured with the :doc:`initdb` script. It is *strongly
-recommended* you run piw-master as an ordinary unprivileged user, although
-obviously it will need write access to the output directory.
+machine. It is recommended you *do not* run :doc:`piw-slave <slaves>` on the
+same machine as the piw-master script. The database specified in the
+configuration must exist and have been configured with the :doc:`piw-initdb
+<initdb>` script. It is *strongly recommended* you run piw-master as an
+ordinary unprivileged user, although obviously it will need write access to the
+output directory.
 
 
 Synopsis
@@ -102,24 +103,25 @@ Description
 
 .. option:: --import-queue ADDR
 
-    The address of the queue used by :doc:`importer`, :doc:`add`,
-    :doc:`remove`, and :doc:`rebuild` (default: ``ipc:///tmp/piw-import``);
-    this should always be an ipc address
+    The address of the queue used by :doc:`piw-import <importer>`,
+    :doc:`piw-add <add>`, :doc:`piw-remove <remove>`, and :doc:`piw-rebuild
+    <rebuild>` (default: ``ipc:///tmp/piw-import``); this should always be an
+    ipc address
 
 .. option:: --log-queue ADDR
 
-    The address of the queue used by :doc:`logger` (default:
+    The address of the queue used by :doc:`piw-logger <logger>` (default:
     ``ipc:///tmp/piw-logger``); this should always be an ipc address
 
 .. option:: --slave-queue ADDR
 
-    The address of the queue used to talk to :doc:`slaves` (default:
-    ``tcp://*:5555``); this is usually a tcp address
+    The address of the queue used to talk to :doc:`piw-slave <slaves>`
+    (default: ``tcp://*:5555``); this is usually a tcp address
 
 .. option:: --file-queue ADDR
 
-    The address of the queue used to transfer files to :doc:`slaves` (default:
-    ``tcp://*:5556``); this is usually a tcp address
+    The address of the queue used to transfer files to :doc:`piw-slave
+    <slaves>` (default: ``tcp://*:5556``); this is usually a tcp address
 
 .. option:: --web-queue ADDR
 
@@ -223,8 +225,8 @@ like this (each step assumes you start as root):
 #. Deploy some build slaves; see :doc:`slaves` for deployment instructions.
 
 
-Example web server setup
-========================
+Example httpd configuration
+===========================
 
 The following is an example Apache configuration similar to that used on the
 production piwheels master. The port 80 (http) server configuration should look
@@ -304,9 +306,6 @@ Several important things to note:
   (which in turn is used to generate statistics for the homepage and the
   project pages)
 
-* An example configuration for the SSL certificate locations is given which
-  assumes `dehydrated`_ is being used to maintain them
-
 * Only ``index.html`` is allowed as a directory index, no directory listings
   are generated (they can be enormous, and remember the master is expected to
   be deployable on a Raspberry Pi)
@@ -320,31 +319,45 @@ Several important things to note:
   `Accept-Encoding: gzip`_ header. For clients which do not (e.g.
   :manpage:`curl(1)`), the server unpacks the log transparently
 
+* An example configuration for the SSL certificate locations is given which
+  assumes `dehydrated`_ is being used to maintain them
 
 
-Separate database server
-========================
+Example database configuration
+==============================
 
-The following sections assumes your master server is accessible at the IPv6
-address ``[1234:abcd::1]`` and your database server is at the IPv6 address
-``[1234:abcd::2]``. Replace addresses accordingly.
+The following sections detail various setups for the database server. The
+simplest is the first, the combined configuration in which the machine hosting
+the master service also hosts the database.
 
-.. warning::
-
-    *Never* provide remote access to the PostgreSQL superuser, ``postgres``.
-    Install the piwheels package directly on the database server and run the
-    :doc:`initdb` script locally. This will also require creating a
-    :file:`/etc/piwheels.conf` on the database server, that uses a typical
-    "local" DSN like ``dsn=postgres:///piwheels``.
+The later sections detail separating the master and database hosts, and assume
+your master server is accessible at the IPv6 address ``1234:abcd::1`` and
+your database server is at the IPv6 address ``1234:abcd::2``. Replace
+addresses accordingly.
 
 
-Simple configuration
---------------------
+Combined configuration
+----------------------
+
+This is effectively covered in the prior deployment section. The default DSN of
+``dsn=postgresql:///piwheels`` can either be implied by default, or explicitly
+specified in :file:`/etc/piwheels.conf`.
+
+The only thing to be aware of, particularly if you are deploying on a Pi, is
+that the calculation of the build queue is quite a big query. Assuming you are
+targetting all packages on PyPI (as the production piwheels instance does), you
+should never consider running the combined database+master on a machine (or VM)
+with less than 4 cores and 4GB of RAM, preferably more. If deploying a combined
+master+database on a Pi, use a Pi 4 with 8GB of RAM.
+
+
+Separate configuration
+----------------------
 
 If you wish to deploy your PostgreSQL database on a separate server, you will
 first need to ensure that server can accept remote connections from the master
 server. A simple (but less secure) means of configuring this is to simply
-"trust" that connections from the master's IPv6 address to the piwheels
+"trust" that connections from the master's IP address to the piwheels
 database by the piwheels user. This can be accomplished by adding the last line
 below to :file:`pg_hba.conf`:
 
@@ -384,6 +397,14 @@ Then, on the master, use the following DSN in :file:`/etc/piwheels.conf`:
     [master]
     dsn=postgresql://piwheels@[1234:abcd::2]/piwheels
 
+.. warning::
+
+    *Never* provide remote access to the PostgreSQL superuser, ``postgres``.
+    Install the piwheels package directly on the database server and run the
+    :doc:`initdb` script locally. This will also require creating a
+    :file:`/etc/piwheels.conf` on the database server, that uses a typical
+    "local" DSN like ``dsn=postgresql:///piwheels``.
+
 
 SSH tunnelling
 --------------
@@ -416,29 +437,9 @@ copy the public key to the database server.
 
 Secondly, set up a :manpage:`systemd(1)` service to maintain the tunnel:
 
-.. code-block:: ini
+.. literalinclude:: ../piwheelsdb-tunnel.service
+    :language: ini
     :caption: /etc/systemd/system/piwheelsdb-tunnel.service
-
-    [Unit]
-    Description=A secure tunnel for the piwheelsdb connection
-    After=local-fs.target network.target
-
-    [Service]
-    User=piwheels
-    Group=piwheels
-    RuntimeDirectory=postgresql
-    RuntimeDirectoryPreserve=restart
-    ExecStart=/usr/bin/ssh -NT \
-      -o BatchMode=yes \
-      -o ExitOnForwardFailure=yes \
-      -o StreamLocalBindUnlink=yes \
-      -L /run/postgresql/.s.PGSQL.5432:/run/postgresql/.s.PGSQL.5432 \
-      piwheels@1234:abcd::2
-    RestartSec=5
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
 
 .. code-block:: console
 
@@ -471,13 +472,14 @@ Automatic start
 ===============
 
 If you wish to ensure that the master starts on every boot-up, you may wish to
-define a systemd unit for it. Example units can be also be found in the root of
-the piwheels repository:
+define a systemd unit for it:
+
+.. literalinclude:: ../piwheels-master.service
+    :language: ini
+    :caption: /etc/systemd/system/piwheels-master.service
 
 .. code-block:: console
 
-    # wget https://raw.githubusercontent.com/piwheels/piwheels/master/piwheels-master.service
-    # cp piwheels-master.service /etc/systemd/system/
     # systemctl daemon-reload
     # systemctl enable piwheels-master
     # systemctl start piwheels-master
@@ -489,9 +491,9 @@ Upgrades
 The master will check that build slaves have the same version number and will
 reject them if they do not. Furthermore, it will check the version number in
 the database's *configuration* table matches its own and fail if it does not.
-Re-run the :doc:`initdb` script as the PostgreSQL super-user to upgrade the
-database between versions (downgrades are not supported, so take a backup
-first!).
+Re-run the :doc:`piw-initdb <initdb>` script as the PostgreSQL super-user to
+upgrade the database between versions (downgrades are not supported, so take a
+backup first!).
 
 .. _PostgreSQL: https://postgresql.org/
 .. _Let's Encrypt: https://letsencrypt.org/

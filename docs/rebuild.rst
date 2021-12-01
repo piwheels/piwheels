@@ -4,7 +4,7 @@ piw-rebuild
 
 The piw-rebuild script is used to inject rebuild requests for various web
 pages into the piwheels system. This script must be run on the same node as
-the piw-master script.
+the :doc:`piw-master <master>` service.
 
 Synopsis
 ========
