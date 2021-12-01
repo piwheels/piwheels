@@ -35,7 +35,16 @@ SUBDIRS:=
 DIST_WHEEL=dist/$(WHEEL_NAME)-$(VER)-py3-none-any.whl
 DIST_TAR=dist/$(NAME)-$(VER).tar.gz
 DIST_ZIP=dist/$(NAME)-$(VER).zip
-MAN_PAGES=man/piw-master.1 man/piw-slave.1 man/piw-monitor.1 man/piw-initdb.1
+MAN_PAGES=man/piw-master.1 \
+	man/piw-slave.1 \
+	man/piw-monitor.1 \
+	man/piw-sense.1 \
+	man/piw-initdb.1 \
+	man/piw-import.1 \
+	man/piw-add.1 \
+	man/piw-remove.1 \
+	man/piw-rebuild.1 \
+	man/piw-logger.1
 
 
 # Default target

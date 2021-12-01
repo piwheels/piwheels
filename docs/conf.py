@@ -146,7 +146,9 @@ man_pages = [
     ('sense',    'piw-sense',    'PiWheels Sense HAT Monitor',   [metadata['author']], 1),
     ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [metadata['author']], 1),
     ('importer', 'piw-import',   'PiWheels Package Importer',    [metadata['author']], 1),
+    ('add',      'piw-add',      'PiWheels Package Addition',    [metadata['author']], 1),
     ('remove',   'piw-remove',   'PiWheels Package Remover',     [metadata['author']], 1),
+    ('rebuild',  'piw-rebuild',  'PiWheels Page Rebuilder',      [metadata['author']], 1),
     ('logger',   'piw-logger',   'PiWheels Logger',              [metadata['author']], 1),
 ]
 
