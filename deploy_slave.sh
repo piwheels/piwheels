@@ -20,7 +20,6 @@ source /etc/os-release
 LIBXLST=libxslt1-dev
 LIBGLES=libgles2-mesa-dev
 TURBOGEARS=
-PIP="pip==21.1.3"
 SOUNDFONT=timgm6mb-soundfont
 POSTGRES_SERVER_DEV=postgresql-server-dev-13
 PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
@@ -33,7 +32,6 @@ QMAKE=qt4-qmake
 
 if [ $VERSION_ID -eq 9 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
-    PIP="pip<21"
     LIBXLST=libxslt-dev
     TURBOGEARS=python-turbogears
     SOUNDFONT=musescore-soundfont-gm
@@ -71,7 +69,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
 apt purge python3-cryptography -y
 
 pip3 install setuptools --upgrade
-pip3 install $PIP --upgrade
+pip3 install pip --upgrade
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
