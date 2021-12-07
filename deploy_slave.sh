@@ -96,15 +96,24 @@ cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
 pip3 install .[slave]
 
-if ! grep swapfile /etc/rc.local >/dev/null; then
-    dd if=/dev/zero of=/swapfile bs=1M count=1024
-    chmod 0600 /swapfile
-    sed -i -e '$i\
+
+if [ $VERSION_ID -lt 10 ]; then
+    if ! grep swapfile /etc/rc.local >/dev/null; then
+        dd if=/dev/zero of=/swapfile bs=1M count=1024
+        chmod 0600 /swapfile
+        sed -i -e '$i\
 chmod 0600 /swapfile\
 losetup /dev/loop0 /swapfile\
 mkswap /dev/loop0\
 swapon /dev/loop0\
 ' /etc/rc.local
+    fi
+else
+    fallocate -x -l 1G /swapfile
+    chmod 0600 /swapfile
+    mkswap /swapfile
+    echo "/swapfile none swap x-systemd.makefs,nofail 0 0" >> /etc/fstab
+    systemctl daemon-reload
 fi
 
 rm -f /etc/pip.conf
