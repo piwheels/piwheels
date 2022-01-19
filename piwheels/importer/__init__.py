@@ -164,7 +164,7 @@ def print_state(state):
     if file.dependencies:
         dependencies = file.dependencies['apt']
     else:
-        dependencies = 'None'
+        dependencies = set()
 
     logging.warning('Preparing to import build')
     logging.warning('Package:  %s', state.package)
