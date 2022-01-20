@@ -342,18 +342,20 @@ footer #mythic {
 .fail,
 .success,
 .pending {
-  cursor: help;
   min-width: 20px;
   background-repeat: no-repeat;
   background-position: center;
 }
-.key.box .skip,
-.key.box .fail,
-.key.box .success,
-.key.box .pending {
-  cursor: default;
-}
 
+.skip a,
+.fail a,
+.success a,
+.pending a {
+  width: 100%;
+  height: 100%;
+  display: block;
+  text-indent: -9999px;
+}
 
 /** SHADING STYLES ***********************************************************/
 

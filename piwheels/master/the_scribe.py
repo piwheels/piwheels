@@ -33,7 +33,6 @@ Defines the :class:`TheScribe` task; see class for more details.
     :members:
 """
 
-import io
 import os
 import shutil
 import tempfile
@@ -48,7 +47,7 @@ from chameleon import PageTemplateLoader
 import simplejson as json
 
 from .. import const, protocols, tasks, transport
-from ..format import format_size, canonicalize_name
+from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
 
@@ -216,7 +215,6 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'DELVER':
                 package, version = data
                 self.delete_version(package, version)
-                pages = ('index', 'project')
                 self.write_pages(package, both=True, exclude={version})
             elif msg == 'DELPKG':
                 package = data
