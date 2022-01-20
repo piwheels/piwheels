@@ -103,7 +103,7 @@ def test_invalid_part(caplog):
 def test_rebuild_home(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'home']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['HOME'])
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'REBUILD')
         thread.join(10)
         assert thread.exitcode == 0
 
@@ -111,7 +111,7 @@ def test_rebuild_home(import_queue_name, import_queue):
 def test_rebuild_search(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'search']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['SEARCH'])
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'REBUILD')
         thread.join(10)
         assert thread.exitcode == 0
 
@@ -119,7 +119,7 @@ def test_rebuild_search(import_queue_name, import_queue):
 def test_rebuild_project(import_queue_name, import_queue):
     with RebuildThread(['--import-queue', import_queue_name, 'project', 'foo']) as thread:
         assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', 'foo'])
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'REBUILD')
         thread.join(10)
         assert thread.exitcode == 0
 
@@ -129,7 +129,7 @@ def test_rebuild_all(import_queue_name, import_queue):
         prompt_mock.return_value = True
         with RebuildThread(['--import-queue', import_queue_name, 'project']) as thread:
             assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', None])
-            import_queue.send_msg('DONE')
+            import_queue.send_msg('DONE', 'REBUILD')
             thread.join(10)
             assert thread.exitcode == 0
 
@@ -137,7 +137,7 @@ def test_rebuild_all(import_queue_name, import_queue):
 def test_rebuild_all_yes(import_queue_name, import_queue):
         with RebuildThread(['--yes', '--import-queue', import_queue_name, 'project']) as thread:
             assert import_queue.recv_msg() == ('REBUILD', ['PROJECT', None])
-            import_queue.send_msg('DONE')
+            import_queue.send_msg('DONE', 'REBUILD')
             thread.join(10)
             assert thread.exitcode == 0
 

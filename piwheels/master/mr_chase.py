@@ -33,11 +33,18 @@ Defines the :class:`MrChase` task; see class for more details.
     :members:
 """
 
+from datetime import datetime, timezone
+from logging import Logger
+from piwheels.format import canonicalize_name
+
 from .. import const, protocols, transport, tasks
 from ..states import BuildState
 from .the_oracle import DbClient
 from .file_juggler import FsClient
 from .slave_driver import build_armv6l_hack
+
+
+UTC = timezone.utc
 
 
 class MrChase(tasks.PauseableTask):
@@ -106,7 +113,7 @@ class MrChase(tasks.PauseableTask):
                 # mechanism?
                 state._slave_id = 0
                 self.states[address] = state
-            elif msg in ('REMOVE', 'REBUILD'):
+            elif msg in ('ADDPKG', 'ADDVER', 'REMPKG', 'REMVER', 'REBUILD'):
                 # No need to store state for these tools
                 state = data
             elif msg == 'SENT':
@@ -115,10 +122,13 @@ class MrChase(tasks.PauseableTask):
                 return
 
         handler = {
-            'IMPORT': self.do_import,
-            'REMOVE': self.do_remove,
+            'ADDPKG':  self.do_add_package,
+            'ADDVER':  self.do_add_version,
+            'IMPORT':  self.do_import,
+            'REMPKG':  self.do_remove_package,
+            'REMVER':  self.do_remove_version,
             'REBUILD': self.do_rebuild,
-            'SENT': self.do_sent,
+            'SENT':    self.do_sent,
         }[msg]
         msg, data = handler(state)
 
@@ -190,7 +200,7 @@ class MrChase(tasks.PauseableTask):
             if state.transfers_done:
                 self.web_queue.send_msg('BOTH', state.package)
                 self.web_queue.recv_msg()
-                return 'DONE', protocols.NoData
+                return 'DONE', 'IMPORT'
             else:
                 self.fs.expect(0, state.files[state.next_file])
                 self.logger.info('send %s', state.next_file)
@@ -199,55 +209,147 @@ class MrChase(tasks.PauseableTask):
             self.logger.info('re-send %s', state.next_file)
             return 'SEND', state.next_file
 
-    def do_remove(self, state):
+    def do_add_package(self, state):
         """
-        Handler for the remover's "REMOVE" message, indicating a request to
-        remove a specific version of a package from the system.
+        Handler for the remover's "ADDPKG" message, indicating a request to
+        add a package to the system, or update it.
         """
-        package, version, reason = state
-        if version is None:
-            return self.do_remove_package(package, reason)
+        display_name, description, skip, unskip, aliases = state
+        package = canonicalize_name(display_name)
+        aliases = set(aliases) | {package, display_name}
+        # Ensure display_name sorts last, so it is treated as display name
+        aliases = sorted(aliases, key=lambda s: s == display_name)
+        self.logger.info('adding package %s', package)
+        if self.db.add_new_package(package, skip, description):
+            rewrite = 'BOTH'
+            msg, data = 'DONE', 'NEWPKG'
         else:
-            return self.do_remove_version(package, version, reason)
+            self.logger.info('updating package %s', package)
+            if skip:
+                return 'ERROR', 'SKIPPKG'
+            if unskip:
+                self.db.skip_package(package, reason='')
+            if description:
+                self.db.set_package_description(package, description)
+            rewrite = 'PROJECT'
+            msg, data = 'DONE', 'UPDPKG'
 
-    def do_remove_package(self, package, reason):
+        self.do_add_package_aliases(package, aliases)
+        self.web_queue.send_msg(rewrite, package)
+        self.web_queue.recv_msg()
+        return msg, data
+
+    def do_add_version(self, state):
+        """
+        Handler for the remover's "ADDVER" message, indicating a request to
+        add a specific version of a package to the system, or update it.
+        """
+        (
+            display_name, version, skip, unskip, released,
+            yank, unyank, aliases
+        ) = state
+        package = canonicalize_name(display_name)
+        aliases = set(aliases) | {package, display_name}
+        # Ensure display_name sorts last, so it is treated as display name
+        aliases = sorted(aliases, key=lambda s: s == display_name)
+        self.logger.info('adding version %s %s', package, version)
+        if not self.db.test_package(package):
+            return 'ERROR', 'NOPKG'
+        if self.db.add_new_package_version(package, version, released, skip):
+            if yank:
+                self.db.yank_version(package, version)
+            rewrite = 'PROJECT'
+            msg, data = 'DONE', 'NEWVER'
+        else:
+            self.logger.info('updating version %s %s', package, version)
+            if skip:
+                return 'ERROR', 'SKIPVER'
+            if unskip:
+                self.db.skip_package_version(package, version, reason='')
+            if yank:
+                return 'ERROR', 'YANKVER'
+            if unyank:
+                self.db.unyank_version(package, version)
+            rewrite = 'BOTH'
+            msg, data = 'DONE', 'UPDVER'
+
+        self.do_add_package_aliases(package, aliases)
+        self.web_queue.send_msg(rewrite, package)
+        self.web_queue.recv_msg()
+        return msg, data
+
+    def do_add_package_aliases(self, package, aliases):
+        "Add aliases for a package name"
+        for alias in aliases:
+            self.db.add_package_name(package, alias, datetime.now(tz=UTC))
+
+    def do_remove_package(self, state):
+        """
+        Handler for the remover's "REMPKG" message, indicating a request to
+        remove or alter a whole package.
+        """
+        package, builds, skip = state
+        package = canonicalize_name(package)
         if not self.db.test_package(package):
             self.logger.error('unknown package %s', package)
-            return 'ERROR', 'unknown package %s' % package
-        self.logger.info('removing %s', package)
-        if reason:
-            self.db.skip_package(package, reason)
+            return 'ERROR', 'NOPKG'
+        if skip or builds:
+            if skip:
+                self.logger.info('marking package %s as skipped', package)
+                self.db.skip_package(package, skip)
+                msg = 'SKIPPKG'
+            if builds:
+                self.logger.info('deleting all builds for package %s', package)
+                for row in self.db.get_project_versions(package):
+                    self.db.delete_build(package, row.version)
+                msg = 'DELPKGBLD'
+        else:
+            self.logger.info('deleting package %s', package)
+            # FKs will take care of removing builds here
+            self.db.delete_package(package)
+            msg = 'DELPKG'
         self.web_queue.send_msg('DELPKG', package)
         self.skip_queue.send_msg('DELPKG', package)
         self.web_queue.recv_msg()
         self.skip_queue.recv_msg()
-        if reason:
-            for row in self.db.get_project_versions(package):
-                if row.builds_succeeded:
-                    self.db.delete_build(package, row.version)
-        else:
-            # FKs will take care of removing builds here
-            self.db.delete_package(package)
-        return 'DONE', protocols.NoData
+        return 'DONE', msg
 
-    def do_remove_version(self, package, version, reason):
+    def do_remove_version(self, state):
+        """
+        Handler for the remover's "REMVER" message, indicating a request to
+        remove or alter a specific package version.
+        """
+        package, version, builds, skip, yank = state
+        package = canonicalize_name(package)
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s %s',
                               package, version)
-            return 'ERROR', 'unknown package version %s %s' % (
-                package, version)
-        self.logger.info('removing %s %s', package, version)
-        if reason:
-            self.db.skip_package_version(package, version, reason)
-        self.web_queue.send_msg('DELVER', [package, version])
-        self.skip_queue.send_msg('DELVER', [package, version])
-        self.web_queue.recv_msg()
-        self.skip_queue.recv_msg()
-        if reason:
-            self.db.delete_build(package, version)
+            return 'ERROR', 'NOVER'
+        if skip or builds or yank:
+            if skip:
+                self.logger.info('marking %s %s as skipped', package, version)
+                self.db.skip_package_version(package, version, skip)
+                msg = 'SKIPVER'
+            if yank:
+                self.logger.info('yanking %s %s', package, version)
+                self.db.yank_version(package, version)
+                self.web_queue.send_msg('BOTH', package)
+                self.web_queue.recv_msg()
+                msg = 'YANKVER'
+            if builds:
+                self.logger.info('deleting all builds for %s %s', package, version)
+                self.db.delete_build(package, version)
+                msg = 'DELVERBLD'
         else:
+            self.logger.info('removing %s %s', package, version)
             self.db.delete_version(package, version)
-        return 'DONE', protocols.NoData
+            msg = 'DELVER'
+        if msg in ('SKIPVER', 'DELVER', 'DELVERBLD'):
+            self.web_queue.send_msg('DELVER', [package, version])
+            self.skip_queue.send_msg('DELVER', [package, version])
+            self.web_queue.recv_msg()
+            self.skip_queue.recv_msg()
+        return 'DONE', msg
 
     def do_rebuild(self, state):
         """
@@ -271,4 +373,4 @@ class MrChase(tasks.PauseableTask):
                 self.web_queue.recv_msg()
             else:
                 return 'ERROR', 'unknown package %s' % package
-        return 'DONE', protocols.NoData
+        return 'DONE', 'REBUILD'

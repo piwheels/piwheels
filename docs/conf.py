@@ -31,111 +31,84 @@
 
 import sys
 import os
+from pathlib import Path
 from datetime import datetime
-from unittest import mock
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
-import piwheels as _setup
+from setuptools.config import read_configuration
 
-sys.modules['zmq'] = mock.MagicMock()
-sys.modules['zmq.error'] = mock.Mock()
-sys.modules['dateutil'] = mock.Mock()
-sys.modules['dateutil.parser'] = mock.Mock()
-sys.modules['configargparse'] = mock.Mock()
-sys.modules['sqlalchemy'] = mock.Mock()
-sys.modules['sqlalchemy.exc'] = mock.Mock()
-sys.modules['sqlalchemy.engine.url'] = mock.Mock()
-sys.modules['piwheels.terminal'] = mock.Mock()
-sys.modules['voluptuous'] = mock.Mock()
-sys.modules['cbor2'] = mock.Mock()
-sys.modules['chameleon'] = mock.Mock()
-sys.modules['psycopg2.extensions'] = mock.Mock()
-sys.modules['psycopg2'] = mock.Mock()
+on_rtd = os.environ.get('READTHEDOCS', '').lower() == 'true'
+config = read_configuration(str(Path(__file__).parent / '..' / 'setup.cfg'))
+metadata = config['metadata']
+
+# -- Project information -----------------------------------------------------
+
+project = metadata['name'].title()
+author = metadata['author']
+copyright = '2017-{now:%Y} {author}'.format(now=datetime.now(), author=author)
+release = metadata['version']
+version = release
 
 # -- General configuration ------------------------------------------------
 
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx']
+needs_sphinx = '1.4.0'
+
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.intersphinx',
+]
+
 if on_rtd:
-    needs_sphinx = '1.4.0'
-    extensions.append('sphinx.ext.imgmath')
-    imgmath_image_format = 'svg'
     tags.add('rtd')
-else:
-    extensions.append('sphinx.ext.mathjax')
-    mathjax_path = '/usr/share/javascript/mathjax/MathJax.js?config=TeX-AMS_HTML'
+
+imgmath_image_format = 'svg'
 
 templates_path = ['_templates']
-source_suffix = '.rst'
-#source_encoding = 'utf-8-sig'
 master_doc = 'index'
-project = _setup.__project__.title()
-copyright = '2017-%s %s' % (datetime.now().year, _setup.__author__)
-version = _setup.__version__
-release = _setup.__version__
-#language = None
-#today_fmt = '%B %d, %Y'
-exclude_patterns = ['_build']
-highlight_language = 'python3'
-#default_role = None
-#add_function_parentheses = True
-#add_module_names = True
-#show_authors = False
-pygments_style = 'sphinx'
-#modindex_common_prefix = []
-#keep_warnings = False
 
-# -- Autodoc configuration ------------------------------------------------
+exclude_patterns = ['_build']
+pygments_style = 'sphinx'
+
+# -- Autodoc options ---------------------------------------------------------
 
 autodoc_member_order = 'groupwise'
+autodoc_mock_imports = [
+    'zmq',
+    'dateutil',
+    'configargparse',
+    'sqlalchemy',
+    'piwheels.terminal',
+    'voluptuous',
+    'cbor2',
+    'chameleon',
+    'psycopg2',
+]
 
-# -- Intersphinx configuration --------------------------------------------
+# -- Intersphinx options -----------------------------------------------------
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.5', None),
+    'python': ('https://docs.python.org/3.9', None),
     'lars': ('https://lars.readthedocs.io/en/latest', None),
     'simplejson': ('https://simplejson.readthedocs.io/en/latest', None),
 }
-intersphinx_cache_limit = 7
 
 # -- Options for HTML output ----------------------------------------------
 
-if on_rtd:
-    html_theme = 'sphinx_rtd_theme'
-    pygments_style = 'default'
-    #html_theme_options = {}
-    #html_sidebars = {}
-else:
-    html_theme = 'default'
-    #html_theme_options = {}
-    #html_sidebars = {}
-html_title = '%s %s Documentation' % (project, version)
-#html_theme_path = []
-#html_short_title = None
-#html_logo = None
-#html_favicon = None
+html_theme = 'sphinx_rtd_theme'
+pygments_style = 'default'
+html_title = '{project} {version} Documentation'.format(
+    project=project, version=version)
 html_static_path = ['_static']
-#html_extra_path = []
-#html_last_updated_fmt = '%b %d, %Y'
-#html_use_smartypants = True
-#html_additional_pages = {}
-#html_domain_indices = True
-#html_use_index = True
-#html_split_index = False
-#html_show_sourcelink = True
-#html_show_sphinx = True
-#html_show_copyright = True
-#html_use_opensearch = ''
-#html_file_suffix = None
-htmlhelp_basename = '%sdoc' % _setup.__project__
+html_extra_path = ['_html']
+manpages_url = 'https://manpages.ubuntu.com/manpages/focal/en/man{section}/{page}.{section}.html'
 
 # Hack to make wide tables work properly in RTD
 # See https://github.com/snide/sphinx_rtd_theme/issues/117 for details
 def setup(app):
-    app.add_stylesheet('style_override.css')
+    app.add_css_file('style_override.css')
 
-# -- Options for LaTeX output ---------------------------------------------
+# -- Options for LaTeX output ------------------------------------------------
 
-#latex_engine = 'pdflatex'
+latex_engine = 'xelatex'
 
 latex_elements = {
     'papersize': 'a4paper',
@@ -145,58 +118,43 @@ latex_elements = {
 
 latex_documents = [
     (
-        'index',                       # source start file
-        '%s.tex' % _setup.__project__, # target filename
-        '%s %s Documentation' % (project, version), # title
-        _setup.__author__,             # author
-        'manual',                      # documentclass
-        True,                          # documents ref'd from toctree only
+        'index',            # source start file
+        project + '.tex',   # target filename
+        html_title,         # title
+        author,             # author
+        'manual',           # documentclass
+        True,               # documents ref'd from toctree only
     ),
 ]
 
-#latex_logo = None
-#latex_use_parts = False
 latex_show_pagerefs = True
 latex_show_urls = 'footnote'
-#latex_appendices = []
-#latex_domain_indices = True
 
-# -- Options for epub output ----------------------------------------------
+# -- Options for epub output -------------------------------------------------
 
-epub_basename = _setup.__project__
-#epub_theme = 'epub'
-#epub_title = html_title
-epub_author = _setup.__author__
-epub_identifier = 'https://piwheels.readthedocs.io/'
-#epub_tocdepth = 3
+epub_basename = project
+epub_author = author
+epub_identifier = 'https://{metadata[name]}.readthedocs.io/'.format(metadata=metadata)
 epub_show_urls = 'no'
-#epub_use_index = True
 
-# -- Options for manual page output ---------------------------------------
+# -- Options for manual page output ------------------------------------------
 
 man_pages = [
-    ('master',   'piw-master',   'PiWheels Master',              [_setup.__author__], 1),
-    ('slaves',   'piw-slave',    'PiWheels Build Slave',         [_setup.__author__], 1),
-    ('monitor',  'piw-monitor',  'PiWheels Monitor',             [_setup.__author__], 1),
-    ('sense',    'piw-sense',    'PiWheels Sense HAT Monitor',   [_setup.__author__], 1),
-    ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [_setup.__author__], 1),
-    ('importer', 'piw-import',   'PiWheels Package Importer',    [_setup.__author__], 1),
-    ('remove',   'piw-remove',   'PiWheels Package Remover',     [_setup.__author__], 1),
-    ('logger',   'piw-logger',   'PiWheels Logger',              [_setup.__author__], 1),
+    ('master',   'piw-master',   'PiWheels Master',              [metadata['author']], 1),
+    ('slaves',   'piw-slave',    'PiWheels Build Slave',         [metadata['author']], 1),
+    ('monitor',  'piw-monitor',  'PiWheels Monitor',             [metadata['author']], 1),
+    ('sense',    'piw-sense',    'PiWheels Sense HAT Monitor',   [metadata['author']], 1),
+    ('initdb',   'piw-initdb',   'PiWheels Initialize Database', [metadata['author']], 1),
+    ('importer', 'piw-import',   'PiWheels Package Importer',    [metadata['author']], 1),
+    ('add',      'piw-add',      'PiWheels Package Addition',    [metadata['author']], 1),
+    ('remove',   'piw-remove',   'PiWheels Package Remover',     [metadata['author']], 1),
+    ('rebuild',  'piw-rebuild',  'PiWheels Page Rebuilder',      [metadata['author']], 1),
+    ('logger',   'piw-logger',   'PiWheels Logger',              [metadata['author']], 1),
 ]
 
 man_show_urls = True
 
-# -- Options for Texinfo output -------------------------------------------
-
-texinfo_documents = []
-
-#texinfo_appendices = []
-#texinfo_domain_indices = True
-#texinfo_show_urls = 'footnote'
-#texinfo_no_detailmenu = False
-
-# -- Options for linkcheck builder ----------------------------------------
+# -- Options for linkcheck builder -------------------------------------------
 
 linkcheck_retries = 3
 linkcheck_workers = 20

@@ -36,17 +36,14 @@ from socketserver import ThreadingMixIn
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from xmlrpc.client import ProtocolError
-from urllib.parse import urlsplit
 from queue import Queue
 
 import pytest
+import requests
 import http.client
 import xmlrpc.client
-import simplejson as json
-from requests.exceptions import RequestException, HTTPError
-from simplejson.errors import JSONDecodeError
 
-from piwheels.master.pypi import *
+from piwheels.pypi import *
 
 
 UTC = timezone.utc
@@ -54,19 +51,6 @@ UTC = timezone.utc
 
 def dt(s):
     return datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
-
-
-@pytest.fixture()
-def mock_requests():
-    # XXX Delete me?
-    with mock.patch('piwheels.master.pypi.requests') as requests:
-        yield requests
-
-
-@pytest.fixture()
-def mock_logger(request):
-    with mock.patch('piwheels.master.pypi.logger') as logger:
-        yield logger
 
 
 @pytest.fixture()
@@ -92,49 +76,10 @@ def xml_server(request):
 
 @pytest.fixture()
 def mock_buffer(request):
-    with mock.patch('piwheels.master.pypi.PyPIBuffer') as buffer_proxy:
+    with mock.patch('piwheels.pypi.PyPIBuffer') as buffer_proxy:
         events = []
         buffer_proxy().__iter__.return_value = events
         yield events
-
-
-@pytest.fixture()
-def mock_json_server(request):
-    with mock.patch('piwheels.master.pypi.requests.get') as get:
-        packages = {}
-        def mock_response(status_code, json=None):
-            resp = mock.Mock(
-                status_code=status_code,
-                json=mock.Mock(return_value=json))
-            if status_code >= 400:
-                resp.raise_for_status = mock.Mock(
-                    side_effect=HTTPError(response=resp))
-            else:
-                resp.raise_for_status = mock.Mock(return_value=None)
-            return resp
-        def mock_get(url, timeout=None):
-            url = urlsplit(url)
-            if url.path.endswith('/json'):
-                package = url.path.rsplit('/', 2)[1]
-                try:
-                    if package == 'pypi-err':
-                        return mock_response(status_code=503)
-                    else:
-                        description = packages[package]
-                except KeyError:
-                    return mock_response(status_code=404)
-                else:
-                    if package == 'pypi-bad':
-                        return mock_response(
-                            status_code=200, json={'info': {}})
-                    else:
-                        return mock_response(
-                            status_code=200,
-                            json={'info': {'summary': description}})
-            else:
-                return mock.Mock(status=404)
-        get.side_effect = mock_get
-        yield packages
 
 
 def test_pypi_buf_talks_to_servers(xml_server):
@@ -286,17 +231,16 @@ def test_pypi_read_json_err(mock_buffer, mock_json_server):
     mock_buffer[:] = [
         ('foo', '0.1', 1531327388, 'create', 0),
         ('foo', '0.1', 1531327388, 'add source file foo-0.1.tar.gz', 1),
-        ('pypi-err', '1.0', 1531327389, 'create', 2),
-        ('pypi-err', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 3),
+        ('pypi-http-err-503', '1.0', 1531327389, 'create', 2),
+        ('pypi-http-err-503', '1.0', 1531327389, 'add py2.py3 file bar-1.0-py2.py3-none-any.whl', 3),
     ]
     mock_json_server['foo'] = 'package foo'
-    mock_json_server['pypi-err'] = 'pypi broke'
     events = PyPIEvents()
     assert list(events) == [
         ('foo', None,  dt('2018-07-11 16:43:08'), 'create', 'package foo'),
         ('foo', '0.1', dt('2018-07-11 16:43:08'), 'source', 'package foo'),
-        ('pypi-err', None,  dt('2018-07-11 16:43:09'), 'create', None),
-        ('pypi-err', '1.0', dt('2018-07-11 16:43:09'), 'create', None),
+        ('pypi-http-err-503', None,  dt('2018-07-11 16:43:09'), 'create', None),
+        ('pypi-http-err-503', '1.0', dt('2018-07-11 16:43:09'), 'create', None),
     ]
 
 
@@ -538,11 +482,30 @@ def test_pypi_read_improper_state():
         assert list(events) == []
 
 
-def test_pypi_read_server_error():
+def test_pypi_read_server_protocol_error():
     with mock.patch('xmlrpc.client.ServerProxy') as proxy:
         proxy().changelog_since_serial.side_effect = (
             xmlrpc.client.ProtocolError('Something else went wrong',
                                         500, '', '')
+        )
+        events = PyPIEvents()
+        assert list(events) == []
+
+
+def test_pypi_read_server_other_fault():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.side_effect = (
+            xmlrpc.client.Fault(-1000, 'Something went horribly wrong!')
+        )
+        events = PyPIEvents()
+        with pytest.raises(xmlrpc.client.Fault):
+            list(events)
+
+
+def test_pypi_read_server_backoff():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.side_effect = (
+            xmlrpc.client.Fault(-32500, 'Too many requests')
         )
         events = PyPIEvents()
         assert list(events) == []
@@ -557,3 +520,17 @@ def test_pypi_read_client_error():
         events = PyPIEvents()
         with pytest.raises(xmlrpc.client.ProtocolError):
             list(events)
+
+
+def test_pypi_json_timeouts(mock_json_server):
+    assert pypi_package_description('pypi-timeout-err') is None
+    assert pypi_package_description('pypi-http-err-408') is None
+
+
+def test_pypi_json_connection_error(mock_json_server):
+    assert pypi_package_description('pypi-connect-err') is None
+
+
+def test_pypi_json_client_error(mock_json_server):
+    with pytest.raises(requests.HTTPError):
+        pypi_package_description('pypi-http-err-418')  # I'm a teapot

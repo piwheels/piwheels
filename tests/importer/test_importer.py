@@ -101,6 +101,7 @@ def mock_wheel_stats(request, mock_wheel):
             h.update(f.read())
         return p.stat().st_size, h.hexdigest().lower()
 
+
 @pytest.fixture()
 def mock_wheel_no_abi_stats(request, mock_wheel_no_abi):
     h = sha256()
@@ -108,6 +109,7 @@ def mock_wheel_no_abi_stats(request, mock_wheel_no_abi):
         with p.open('rb') as f:
             h.update(f.read())
         return p.stat().st_size, h.hexdigest().lower()
+
 
 @pytest.fixture()
 def import_queue_name(request, tmpdir):
@@ -272,11 +274,43 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
         assert os.path.exists(mock_wheel)
+
+
+def test_import_with_deps(mock_wheel, mock_wheel_stats, import_queue_name, import_queue, tmpdir):
+    filesize, filehash = mock_wheel_stats
+    deps_path = Path(str(tmpdir.join('dependencies.txt')))
+    deps_path.write_text("libblas3\nlibc6\n")
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with ImportThread(['--import-queue', import_queue_name, mock_wheel,
+                           '--dependencies', str(deps_path)]) as thread, \
+                mock.patch('piwheels.slave.builder.Wheel.transfer') as transfer_mock:
+            assert import_queue.recv_msg() == (
+                'IMPORT', [
+                    0, 'foo', '0.1', 'cp34m', True, timedelta(0),
+                    'Imported manually via piw-import', [
+                        [
+                            'foo-0.1-cp34-cp34m-linux_armv7l.whl',
+                            filesize, filehash, 'foo', '0.1',
+                            'cp34', 'cp34m', 'linux_armv7l', '>=3', {
+                                'apt': ['libblas3', 'libc6']
+                            },
+                        ],
+                    ]
+                ]
+            )
+            import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
+            assert import_queue.recv_msg() == ('SENT', None)
+            import_queue.send_msg('DONE', 'IMPORT')
+            thread.join(10)
+            assert thread.exception is None
+            assert thread.exitcode == 0
+            assert os.path.exists(mock_wheel)
 
 
 def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, import_queue, tmpdir):
@@ -298,7 +332,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
@@ -330,7 +364,7 @@ def test_import_override_abi(mock_wheel_no_abi, mock_wheel_no_abi_stats, import_
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-none-any.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0
@@ -355,7 +389,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
         )
         import_queue.send_msg('SEND', 'foo-0.1-cp34-cp34m-linux_armv7l.whl')
         assert import_queue.recv_msg() == ('SENT', None)
-        import_queue.send_msg('DONE')
+        import_queue.send_msg('DONE', 'IMPORT')
         thread.join(10)
         assert thread.exception is None
         assert thread.exitcode == 0

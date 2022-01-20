@@ -43,6 +43,7 @@ import ipaddress
 from pathlib import PosixPath
 from datetime import timezone
 from fnmatch import fnmatchcase
+from collections import namedtuple
 
 from lars.apache import ApacheSource, COMMON, COMMON_VHOST, COMBINED
 
@@ -71,18 +72,20 @@ clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
 get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
 get_user_agent = lambda ua: ua.split('/')[0].lower()
 
-log_type_patterns = (
-    ('pip/*', '/simple/', None),
-    (None,    '/project/', None),
-    ('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
-    ('pip/*', '/simple/*', 'LOGSEARCH'),
-    (None,    '/simple/*', None),
-    (None,    '/project/*/json/', 'LOGJSON'),
-    (None,    '/project/*/json/index.json', 'LOGJSON'),
-    (None,    '/project/*', 'LOGPROJECT'),
-    (None,    '/', 'LOGPAGE'),
-    (None,    '/*.html', 'LOGPAGE'),
-)
+
+LogType = namedtuple('LogType', ('user_agent', 'path', 'log_type'))
+log_type_patterns = [
+    LogType('pip/*', '/simple/', None),
+    LogType(None,    '/project/', None),
+    LogType('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
+    LogType('pip/*', '/simple/*', 'LOGSEARCH'),
+    LogType(None,    '/simple/*', None),
+    LogType(None,    '/project/*/json/', 'LOGJSON'),
+    LogType(None,    '/project/*/json/index.json', 'LOGJSON'),
+    LogType(None,    '/project/*', 'LOGPROJECT'),
+    LogType(None,    '/', 'LOGPAGE'),
+    LogType(None,    '/*.html', 'LOGPAGE'),
+]
 
 
 def main(args=None):
@@ -144,7 +147,10 @@ as the piw-master script.
                         if log_type:
                             if not config.drop or queue.poll(0.01, transport.POLLOUT):
                                 data = log_transform(row, log_type)
-                                queue.send_msg(log_type, data)
+                                if data:
+                                    queue.send_msg(log_type, data)
+                                else:
+                                    logging.warning('bad log type, %s', log_type)
                             else:
                                 logging.warning('dropping log entry')
             finally:
@@ -192,10 +198,11 @@ def get_log_type(row):
     if row.status != 200 or row.req_User_Agent is None:
         return
     path = row.request.url.path_str
-    for ua_mask, fn_mask, log_type in log_type_patterns:
-        if ua_mask is None or fnmatchcase(row.req_User_Agent, ua_mask):
-            if fnmatchcase(path, fn_mask):
-                return log_type
+    for p in log_type_patterns:
+        if p.user_agent is None or fnmatchcase(row.req_User_Agent, p.user_agent):
+            if fnmatchcase(path, p.path):
+                return p.log_type
+
 
 def log_transform(row, log_type, decoder=json.JSONDecoder()):
     """
@@ -224,55 +231,57 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
                 user_data = decoder.decode(row.req_User_Agent[json_start:])
             except ValueError:
                 user_data = {}
-        # Convert lars types into standard types (avoids some issues with
-        # some database backends)
-        if log_type == 'LOGDOWNLOAD':
-            return [
-                path.name,
-                get_access_ip(row.remote_host),
-                get_access_time(row.time),
-                get_arch(user_data),
-                get_distro_name(user_data),
-                get_distro_version(user_data),
-                get_os_name(user_data),
-                get_os_version(user_data),
-                get_py_name(user_data),
-                get_py_version(user_data),
-                get_installer_name(user_data),
-                get_installer_version(user_data),
-                get_setuptools_version(user_data),
-            ]
-        if log_type == 'LOGSEARCH':
-            return [
-                get_package_name(path),
-                get_access_ip(row.remote_host),
-                get_access_time(row.time),
-                get_arch(user_data),
-                get_distro_name(user_data),
-                get_distro_version(user_data),
-                get_os_name(user_data),
-                get_os_version(user_data),
-                get_py_name(user_data),
-                get_py_version(user_data),
-                get_installer_name(user_data),
-                get_installer_version(user_data),
-                get_setuptools_version(user_data),
-            ]
-    if log_type == 'LOGPROJECT':
+    else:
+        user_data = {}
+    # Convert lars types into standard types (avoids some issues with
+    # some database backends)
+    if log_type == 'LOGDOWNLOAD':
+        return [
+            path.name,
+            get_access_ip(row.remote_host),
+            get_access_time(row.time),
+            get_arch(user_data),
+            get_distro_name(user_data),
+            get_distro_version(user_data),
+            get_os_name(user_data),
+            get_os_version(user_data),
+            get_py_name(user_data),
+            get_py_version(user_data),
+            get_installer_name(user_data),
+            get_installer_version(user_data),
+            get_setuptools_version(user_data),
+        ]
+    elif log_type == 'LOGSEARCH':
+        return [
+            get_package_name(path),
+            get_access_ip(row.remote_host),
+            get_access_time(row.time),
+            get_arch(user_data),
+            get_distro_name(user_data),
+            get_distro_version(user_data),
+            get_os_name(user_data),
+            get_os_version(user_data),
+            get_py_name(user_data),
+            get_py_version(user_data),
+            get_installer_name(user_data),
+            get_installer_version(user_data),
+            get_setuptools_version(user_data),
+        ]
+    elif log_type == 'LOGPROJECT':
         return [
             get_package_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
             row.req_User_Agent,
         ]
-    if log_type == 'LOGJSON':
+    elif log_type == 'LOGJSON':
         return [
             get_package_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
             get_user_agent(row.req_User_Agent),
         ]
-    if log_type == 'LOGPAGE':
+    elif log_type == 'LOGPAGE':
         return [
             get_page_name(path),
             get_access_ip(row.remote_host),

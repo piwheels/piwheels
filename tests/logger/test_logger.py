@@ -34,11 +34,12 @@ from unittest import mock
 from datetime import datetime, timezone
 from threading import Thread
 
+import lars
 import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
-from piwheels.logger import main
+from piwheels.logger import *
 
 
 UTC = timezone.utc
@@ -68,6 +69,7 @@ def log_sample():
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/pyjokes/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /simple/index.html HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:26:56 +0100] "GET /project/Flask/ HTTP/1.1" 200 6499 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
+2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:27:56 +0100] "GET /logs/0000/0001/0001.txt HTTP/1.1" 200 16384 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 """
     entries = [
         ('LOGSEARCH', [
@@ -197,13 +199,14 @@ def log_sample():
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
             'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
         ]),
-        # The log entry here does not match a log type and thus produces no entries
+        # The log entry here does not match a log type (UA) and thus produces no entries
         ('LOGPROJECT', [
             'flask',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
             'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
         ]),
+        # The log entry here does not match a log type (path) and thus produces no entries
     ]
     return log, entries
 
@@ -285,3 +288,20 @@ def test_drop_entries(logger_queue_name, logger_queue, log_sample, tmpdir):
         while logger_queue.poll(0):
             assert logger_queue.recv_msg() == entries[0]
         main_thread.join()
+
+
+def test_bad_log_type(logger_queue_name, logger_queue, log_sample, caplog):
+    save_entry = log_type_patterns[-1]
+    corrupt_entry = save_entry._replace(log_type='LOGFOO')
+    log_type_patterns[-1] = corrupt_entry
+    try:
+        log, entries = log_sample
+        with mock.patch('sys.stdin', io.StringIO(log)):
+            main(['--log-queue', logger_queue_name])
+            for log_msg, entry in entries:
+                if log_msg == 'LOGPAGE' and entry[0] == 'faq':
+                    assert find_message(caplog.records, message='bad log type, LOGFOO')
+                else:
+                    assert logger_queue.recv_msg() == (log_msg, entry)
+    finally:
+        log_type_patterns[-1] = save_entry

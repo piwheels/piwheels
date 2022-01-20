@@ -342,11 +342,13 @@ class Poller:
         self._poller = zmq.Poller()
         self._map = {}
 
-    def register(self, sock, flags=POLLIN | POLLOUT):
+    def register(self, sock, flags=None):
         """
         Register *sock* with the poller, watching for events as specified by
         *flags* (which defaults to POLLIN and POLLOUT events).
         """
+        if flags is None:
+            flags = POLLIN | POLLOUT
         if isinstance(sock, Socket):
             self._map[sock._socket] = sock
             return self._poller.register(sock._socket, flags)

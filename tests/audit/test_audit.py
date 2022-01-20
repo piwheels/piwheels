@@ -30,6 +30,7 @@
 import os
 import logging
 import hashlib
+from queue import Queue
 from pathlib import Path
 from unittest import mock
 from threading import Thread
@@ -38,7 +39,7 @@ import pytest
 
 from conftest import find_messages
 from piwheels import __version__
-from piwheels.audit import main
+from piwheels.audit import *
 
 
 @pytest.fixture()
@@ -83,10 +84,72 @@ def test_version(capsys):
     assert out.strip() == __version__
 
 
+def test_report(output, simple, caplog, missing, extra):
+    class Config:
+        pass
+    config = Config()
+    with missing.open('w') as missing_f, extra.open('w') as extra_f:
+        config.missing = missing_f
+        config.extraneous = extra_f
+        config.broken = None
+        report_missing(config, 'package', output / 'foo' / 'foo-0.1.whl')
+        assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
+        assert missing_f.tell()
+        caplog.clear()
+        report_broken(config, 'package', output / 'foo' / 'foo-0.1.whl')
+        assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
+
+
+def test_index_parser():
+    data = """\
+<html><body>
+<a name="start"></a>
+<a href="foo-0.1-py3-none-any.whl#sha256=abcdefghijkl">foo-0.1-py3-none-any.whl</a>
+<a class="yanked" href="foo-0.2-py3-none-any.whl#sha256=abcdefghijkl">foo-0.2-py3-none-any.whl</a>
+<a href="foo-0.2.1-py3-none-any.whl#sha256=abcdefghijkl">foo-0.2.1-py3-none-any.whl</a>
+<a class="prerelease" href="foo-0.3b-py3-none-any.whl#sha256=abcdefghijkl">foo-0.3b-py3-none-any.whl</a>
+<a href="foo-0.3-py3-none-any.whl#sha256=abcdefghijkl">foo-0.3-py3-none-any.whl</a>
+<a href="foo-0.4-py3-none-any.whl#sha256=abcdefghijkl">foo-0.4-py3-none-any.whl</a>
+<a name="end"></a>
+</body></html>"""
+    queue = Queue()
+    parser = IndexParser(queue)
+    for i in range(0, len(data), 16):
+        # Deliberately feed in chunks to make sure the parser handles this
+        # correctly
+        parser.feed(data[i:i + 16])
+    assert queue.get(block=False) == (
+        'foo-0.1-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.1-py3-none-any.whl')
+    assert queue.get(block=False) == (
+        'foo-0.2-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.2-py3-none-any.whl')
+    assert queue.get(block=False) == (
+        'foo-0.2.1-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.2.1-py3-none-any.whl')
+    assert queue.get(block=False) == (
+        'foo-0.3b-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.3b-py3-none-any.whl')
+    assert queue.get(block=False) == (
+        'foo-0.3-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.3-py3-none-any.whl')
+    assert queue.get(block=False) == (
+        'foo-0.4-py3-none-any.whl#sha256=abcdefghijkl', 'foo-0.4-py3-none-any.whl')
+
+
 def test_missing_simple_index(output, simple, caplog, missing, extra):
     main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
     assert missing.read_text() == str(simple / 'index.html') + '\n'
+    assert extra.read_text() == ''
+
+
+def test_missing_package_dir(output, simple, caplog, missing, extra):
+    (simple / 'index.html').write_text("""\
+<html>
+<body>
+<a href="foo">foo</a>
+</body>
+</html>""")
+    package_dir = simple / 'foo'
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra)])
+    assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
+    assert missing.read_text() == str(package_dir) + '\n'
     assert extra.read_text() == ''
 
 
@@ -171,6 +234,29 @@ def test_extraneous_wheel_file(output, simple, caplog, missing, extra):
     assert extra.read_text() == str(package_dir / 'foo-0.2-py3-none-any.whl') + '\n'
 
 
+def test_invalid_wheel_hash(output, simple, caplog, missing, extra, broken):
+    (simple / 'index.html').write_text("""\
+<html>
+<body>
+<a href="foo">foo</a>
+</body>
+</html>""")
+    package_dir = simple / 'foo'
+    package_dir.mkdir()
+    (package_dir / 'index.html').write_text("""\
+<html>
+<body>
+<a href="foo-0.1-py3-none-any.whl#sha512=0123456789abcdef">foo-0.1-py3-none-any.whl</a>
+</body>
+</html>""")
+    (package_dir / 'foo-0.1-py3-none-any.whl').touch()
+    main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-b', str(broken)])
+    assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
+    assert missing.read_text() == ''
+    assert extra.read_text() == ''
+    assert broken.read_text() == str(package_dir / 'foo-0.1-py3-none-any.whl') + '\n'
+
+
 def test_invalid_wheel_file(output, simple, caplog, missing, extra, broken):
     (simple / 'index.html').write_text("""\
 <html>
@@ -204,13 +290,14 @@ def test_good_wheel_file(output, simple, caplog, missing, extra, broken):
 </html>""")
     package_dir = simple / 'foo'
     package_dir.mkdir()
+    (package_dir / 'foo-0.1-py3-none-any.whl').write_bytes(b'\x00' * 10000)
+    sha256.update(b'\x00' * 10000)
     (package_dir / 'index.html').write_text("""\
 <html>
 <body>
 <a href="foo-0.1-py3-none-any.whl#sha256={hash}">foo-0.1-py3-none-any.whl</a>
 </body>
 </html>""".format(hash=sha256.hexdigest()))
-    (package_dir / 'foo-0.1-py3-none-any.whl').touch()
     main(['-o', str(output), '-m', str(missing), '-e', str(extra), '-b', str(broken)])
     assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 0
     assert missing.read_text() == ''

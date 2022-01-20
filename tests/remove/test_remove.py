@@ -64,12 +64,20 @@ class RemoveThread(Thread):
         except Exception as e:
             self.exception = e
 
+    def join(self, timeout):
+        super().join(timeout)
+        if self.exception:
+            raise self.exception  # re-raise in the main thread
+
     def __enter__(self):
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.join(10)
+        try:
+            self.join(10)
+        except Exception:
+            pass  # ignore any re-raise
         assert not self.is_alive()
 
 
@@ -100,8 +108,39 @@ def test_remove_package(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMOVE', ['foo', None, ''])
-            import_queue.send_msg('DONE')
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            import_queue.send_msg('DONE', 'DELPKG')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_package_builds(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, '--builds', 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', True, ''])
+            import_queue.send_msg('DONE', 'DELPKGBLD')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_missing_package(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            import_queue.send_msg('ERROR', 'NOPKG')
+            with pytest.raises(RuntimeError) as exc:
+                thread.join(10)
+            assert 'Package foo does not exist' in str(exc.value)
+
+
+def test_skip_package(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, '--skip', 'broken', 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, 'broken'])
+            import_queue.send_msg('DONE', 'SKIPPKG')
             thread.join(10)
             assert thread.exitcode == 0
 
@@ -110,35 +149,57 @@ def test_remove_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
-            assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', ''])
-            import_queue.send_msg('DONE')
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+            import_queue.send_msg('DONE', 'DELVER')
             thread.join(10)
             assert thread.exitcode == 0
+
+
+def test_remove_version_builds(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, '--builds', 'foo', '0.1']) as thread:
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', True, '', False])
+            import_queue.send_msg('DONE', 'DELVERBLD')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_missing_version(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+            import_queue.send_msg('ERROR', 'NOVER')
+            with pytest.raises(RuntimeError) as exc:
+                thread.join(10)
+            assert 'Version foo 0.1 does not exist' in str(exc.value)
 
 
 def test_remove_and_skip(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
-            assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', 'legal'])
-            import_queue.send_msg('DONE')
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, 'legal', False])
+            import_queue.send_msg('DONE', 'SKIPVER')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_yank_version(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yank']) as thread:
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', True])
+            import_queue.send_msg('DONE', 'YANKVER')
             thread.join(10)
             assert thread.exitcode == 0
 
 
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', ''])
-        import_queue.send_msg('ERROR', 'Package foo does not exist')
-        thread.join(10)
-        assert isinstance(thread.exception, RuntimeError)
-        assert 'Package foo does not exist' in str(thread.exception)
-
-
-def test_unexpected(mock_context, import_queue_name, import_queue):
-    with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_msg() == ('REMOVE', ['foo', '0.1', ''])
-        import_queue.send_msg('SEND', 'foo.whl')
-        thread.join(10)
-        assert isinstance(thread.exception, RuntimeError)
-        assert 'Unexpected response from master' in str(thread.exception)
+        assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+        import_queue.send_msg('ERROR', 'NOPKG')
+        with pytest.raises(RuntimeError) as exc:
+            thread.join(10)
+        assert 'Package foo does not exist' in str(exc.value)

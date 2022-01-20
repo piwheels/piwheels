@@ -148,3 +148,6 @@ def test_get_pi_info():
     assert get_pi_info('a02082') == PiInfo('3B', '1.2', 'BCM2837', 'Sony', '1Gb')
     assert get_pi_info('a020d3') == PiInfo('3B+', '1.3', 'BCM2837', 'Sony', '1Gb')
     assert get_pi_info('c03111') == PiInfo('4B', '1.1', 'BCM2711', 'Sony', '4Gb')
+    assert get_pi_info('900012') == PiInfo('B', '2.0', 'BCM2835', 'Sony', '512Mb')
+    with pytest.raises(ValueError):
+        get_pi_info('0')

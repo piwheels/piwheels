@@ -129,16 +129,15 @@ def check_package_index(config, package):
 def check_wheel_hash(config, package, filename, filehash):
     logging.info('checking %s/%s', package, filename)
     algorithm, filehash = filehash.rsplit('=', 1)
+    wheel = config.output_path / 'simple' / package / filename
     try:
         state = {
             'md5': hashlib.md5,
             'sha256': hashlib.sha256,
         }[algorithm]()
     except KeyError:
-        logging.error('invalid algorithm %s in package index %s',
-                      algorithm, package)
+        report_broken(config, 'wheel hash algo', wheel)
     else:
-        wheel = config.output_path / 'simple' / package / filename
         with wheel.open('rb') as f:
             while True:
                 buf = f.read(4096)

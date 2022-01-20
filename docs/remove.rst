@@ -20,7 +20,6 @@ Synopsis
                [-s REASON] [--import-queue ADDR]
                package [version]
 
-
 Description
 ===========
 
