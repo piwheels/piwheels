@@ -21,6 +21,9 @@
   </head>
 
   <body>
+    <section id="noticebar" class="hidden">
+      <div class="contents"></div>
+    </section>
     <header>
       <a class="logo" href="/"><div></div><h1>piwheels</h1></a>
       <nav>
@@ -50,6 +53,7 @@
     </footer>
 
     <div metal:define-slot="scripts" />
+    <script src="/banner.js"></script>
   </body>
 </html>
 </foo>

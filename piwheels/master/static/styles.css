@@ -90,6 +90,23 @@ input:disabled { background-color: #ddd; }
 
 /** HEADER STRUCTURE *********************************************************/
 
+#noticebar {
+  padding: 0 calc(50vw - 37.5rem);
+  background: #ffdead;
+}
+
+#noticebar.hidden {
+  display: none;
+}
+
+#noticebar .contents {
+  line-height: 30px;
+}
+
+#noticebar .contents p {
+  margin: 0;
+}
+
 header {
   display: grid;
   grid-gap: 1em;
@@ -100,7 +117,7 @@ header {
 }
 
 @media screen and (max-width: 77rem) {
-  header { padding: 1em; }
+  header, #noticebar { padding: 1em; }
 }
 
 @media screen and (max-width: 50rem) {

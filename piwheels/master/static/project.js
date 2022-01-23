@@ -37,7 +37,7 @@
     const packageFilter = RegExp('\\b' + escapeForRegExp(package) + '\\b', 'i');
     const url = 'https://api.github.com/repos/piwheels/packages/issues';
 
-    fetch(url, {per_page: 100, sort: 'created', state: 'open'})
+    fetch(url)
       .then(r => r.json())
       .then(issues => issues.filter(issue => issue.title.match(packageFilter)))
       .then(showIssues)

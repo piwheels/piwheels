@@ -77,9 +77,9 @@ sudo pip3 install ${project}</pre>
                   <span tal:condition="row.yanked" class="yanked">yanked</span>
                 </td>
                 <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
-                <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else None}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else None}"><a tal:condition="0" href="/logs/#">&nbsp;</a></td>
-                <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else None}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else None}"><a tal:condition="0" href="/logs/#">&nbsp;</a></td>
-                <td class="${row.abis['cp39m'].css_class if 'cp39m' in row.abis else None}" title="${row.abis['cp39m'].title if 'cp39m' in row.abis else None}"><a tal:condition="0" href="/logs/#">&nbsp;</a></td>
+                <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else None}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
+                <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else None}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
+                <td class="${row.abis['cp39m'].css_class if 'cp39m' in row.abis else None}" title="${row.abis['cp39m'].title if 'cp39m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
                 <td></td>
               </tr>
               <tr>
