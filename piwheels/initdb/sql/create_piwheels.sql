@@ -596,27 +596,181 @@ $sql$;
 REVOKE ALL ON FUNCTION add_package_name(TEXT, TEXT, TIMESTAMP) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION add_package_name(TEXT, TEXT, TIMESTAMP) TO {username};
 
--- get_project_display_name(package)
+-- get_project_data(package)
 -------------------------------------------------------------------------------
--- Retrieve the last seen name for *package*.
+-- Retrieve all data required to build the "project" page for the specified
+-- package.
 -------------------------------------------------------------------------------
 
-CREATE FUNCTION get_project_display_name(pkg TEXT)
-    RETURNS TEXT
+CREATE FUNCTION get_project_data(pkg TEXT)
+    RETURNS JSON
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $sql$
-    SELECT name
-    FROM package_names
-    WHERE package = pkg
-    ORDER BY seen DESC
-    LIMIT 1
+    WITH abi_scores AS (
+        SELECT
+            v.version,
+            b.build_id,
+            CASE
+                WHEN ba.abi_tag = b.abi_tag THEN
+                CASE
+                    -- Best case: builder of requested ABI produced compiled
+                    -- file of requested ABI
+                    WHEN b.status AND f.abi_tag = ba.abi_tag THEN 5
+                    -- Good case: builder of expected ABI produced 'none' ABI
+                    -- build
+                    WHEN b.status AND f.abi_tag = 'none' THEN 4
+                    WHEN b.status AND f.abi_tag = 'abi3' THEN 4
+                    -- Builder of requested ABI produced failure
+                    WHEN NOT b.status THEN 2
+                    -- Builder of requested ABI succeeded but produced no
+                    -- files (or files were overwritten by duplicate attempt)
+                    WHEN b.status AND f.abi_tag is NULL THEN 1
+                    -- Pending build for the requested ABI
+                    WHEN b.status IS NULL THEN 0
+                    -- Unexpected case
+                    ELSE -2
+                END
+                ELSE
+                CASE
+                    -- Weird case: builder of different ABI produced compiled
+                    -- file with requested ABI
+                    WHEN b.status AND f.abi_tag = ba.abi_tag THEN 4
+                    -- Good case: builder of unexpected ABI produced compatible
+                    -- build
+                    WHEN b.status AND f.abi_tag = 'none' THEN 3
+                    WHEN b.status AND f.abi_tag = 'abi3' THEN 3
+                    -- Skipped package/version with no build, or pending build
+                    WHEN b.status IS NULL THEN 1
+                    -- Irrelevant cases
+                    WHEN b.status THEN -1
+                    WHEN NOT b.status THEN -1
+                    -- Unexpected case
+                    ELSE -2
+                END
+            END AS score,
+            CASE f.abi_tag
+                WHEN 'none' THEN ba.abi_tag
+                WHEN 'abi3' THEN ba.abi_tag
+                ELSE COALESCE(f.abi_tag, b.abi_tag, ba.abi_tag)
+            END AS calc_abi_tag,
+            CASE
+                WHEN p.skip <> '' THEN 'skip'
+                WHEN v.skip <> '' THEN 'skip'
+                WHEN b.status AND f.build_id IS NOT NULL THEN 'success'
+                WHEN NOT b.status THEN 'fail'
+                WHEN b.build_id IS NULL THEN 'pending'
+                ELSE 'error'
+            END AS calc_status
+        FROM
+            packages p
+            JOIN versions v USING (package)
+            CROSS JOIN build_abis ba
+            LEFT JOIN builds b
+                ON b.package = v.package
+                AND b.version = v.version
+                -- TODO The <= comparison is *way* too simplisitic
+                AND b.abi_tag <= ba.abi_tag
+            LEFT JOIN files f USING (build_id)
+        WHERE ba.skip = ''
+        AND v.package = pkg
+    ),
+    abi_parts AS (
+        SELECT
+            abi_scores.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY version, calc_abi_tag
+                ORDER BY score DESC
+            ) AS num
+        FROM abi_scores
+    ),
+    abi_objects AS (
+        SELECT
+            version,
+            json_object_agg(
+                calc_abi_tag,
+                json_build_object(
+                    'status', calc_status,
+                    'build_id', build_id
+                )
+            ) AS obj
+        FROM abi_parts
+        WHERE score >= 0
+        AND num = 1
+        GROUP BY version
+    ),
+    file_objects AS (
+        SELECT
+            b.version,
+            json_object_agg(
+                f.filename,
+                json_build_object(
+                    'hash', f.filehash,
+                    'size', f.filesize,
+                    'abi_builder', b.abi_tag,
+                    'abi_file', f.abi_tag,
+                    'platform', f.platform_tag,
+                    'requires_python', f.requires_python,
+                    'apt_dependencies', (
+                        SELECT
+                            COALESCE(json_agg(dependency), '{{}}')
+                        FROM (
+                            SELECT dependency
+                            FROM dependencies
+                            WHERE filename = f.filename AND tool = 'apt'
+                            EXCEPT ALL
+                            SELECT apt_package
+                            FROM preinstalled_apt_packages
+                            WHERE abi_tag = f.abi_tag
+                        ) AS d
+                    )
+                )
+            ) AS obj
+        FROM files f
+        JOIN builds b USING (build_id)
+        WHERE b.package = pkg
+        GROUP BY b.version
+    )
+    VALUES (
+        json_build_object(
+            'name', (
+                SELECT name
+                FROM package_names
+                WHERE package = pkg
+                ORDER BY seen DESC
+                LIMIT 1
+            ),
+            'description', (
+                SELECT description
+                FROM packages
+                WHERE package = pkg
+            ),
+            'releases', (
+                SELECT COALESCE(json_object_agg(
+                    v.version,
+                    json_build_object(
+                        'yanked', v.yanked,
+                        'released', v.released AT TIME ZONE 'UTC',
+                        'skip', COALESCE(NULLIF(v.skip, ''), p.skip),
+                        'files', COALESCE(f.obj, '{{}}'),
+                        'abis', COALESCE(a.obj, '{{}}')
+                    )
+                ), '{{}}')
+                FROM
+                    packages p
+                    JOIN versions v USING (package)
+                    LEFT JOIN file_objects f USING (version)
+                    LEFT JOIN abi_objects a USING (version)
+                WHERE p.package = pkg
+            )
+        )
+    );
 $sql$;
 
-REVOKE ALL ON FUNCTION get_project_display_name(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_display_name(TEXT) TO {username};
+REVOKE ALL ON FUNCTION get_project_data(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_project_data(TEXT) TO {username};
 
 -- get_package_aliases(package)
 -------------------------------------------------------------------------------
@@ -661,26 +815,6 @@ $sql$;
 
 REVOKE ALL ON FUNCTION set_package_description(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_package_description(TEXT, TEXT) TO {username};
-
--- get_package_description(package)
--------------------------------------------------------------------------------
--- Called to retrieve the description for *package* in the packages table.
--------------------------------------------------------------------------------
-
-CREATE FUNCTION get_package_description(pkg TEXT)
-    RETURNS TEXT
-    LANGUAGE SQL
-    RETURNS NULL ON NULL INPUT
-    SECURITY DEFINER
-    SET search_path = public, pg_temp
-AS $sql$
-    SELECT description
-    FROM packages
-    WHERE package = pkg;
-$sql$;
-
-REVOKE ALL ON FUNCTION get_package_description(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_package_description(TEXT) TO {username};
 
 -- skip_package(package, reason)
 -------------------------------------------------------------------------------
@@ -1526,17 +1660,15 @@ GRANT EXECUTE ON FUNCTION get_version_files(TEXT, TEXT) TO {username};
 -- get_project_versions(package)
 -------------------------------------------------------------------------------
 -- Returns the versions registered to a package, along with the skipped state
--- of each version, and arrays detailing the ABIs that have been attempted
+-- of each version
 -------------------------------------------------------------------------------
 
 CREATE FUNCTION get_project_versions(pkg TEXT)
     RETURNS TABLE(
         version versions.version%TYPE,
-        yanked BOOLEAN,
+        yanked versions.yanked%TYPE,
         released TIMESTAMP WITH TIME ZONE,
-        skip versions.skip%TYPE,
-        builds_succeeded TEXT,
-        builds_failed TEXT
+        skip versions.skip%TYPE
     )
     LANGUAGE SQL
     RETURNS NULL ON NULL INPUT
@@ -1547,15 +1679,11 @@ AS $sql$
         v.version,
         v.yanked,
         v.released AT TIME ZONE 'UTC',
-        COALESCE(NULLIF(v.skip, ''), p.skip) AS skip_msg,
-        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ',') FILTER (WHERE b.status), '') AS builds_succeeded,
-        COALESCE(STRING_AGG(DISTINCT b.abi_tag, ',') FILTER (WHERE NOT b.status), '') AS builds_failed
+        COALESCE(NULLIF(v.skip, ''), p.skip) AS skip_msg
     FROM
         packages p
         JOIN versions v USING (package)
-        LEFT JOIN builds b USING (package, version)
-    WHERE v.package = pkg
-    GROUP BY version, skip_msg, released, yanked;
+    WHERE v.package = pkg;
 $sql$;
 
 REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
@@ -1590,60 +1718,6 @@ $sql$;
 
 REVOKE ALL ON FUNCTION get_file_apt_dependencies(VARCHAR) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_file_apt_dependencies(VARCHAR) TO {username};
-
--- get_project_files(package)
--------------------------------------------------------------------------------
--- Return details about all files built for the given *package*.
--------------------------------------------------------------------------------
-
-CREATE FUNCTION get_project_files(pkg TEXT)
-    RETURNS TABLE(
-        version builds.version%TYPE,
-        platform_tag files.platform_tag%TYPE,
-        builder_abi builds.abi_tag%TYPE,
-        file_abi_tag files.abi_tag%TYPE,
-        filename files.filename%TYPE,
-        filesize files.filesize%TYPE,
-        filehash files.filehash%TYPE,
-        yanked versions.yanked%TYPE,
-        requires_python files.requires_python%TYPE,
-        dependencies VARCHAR ARRAY
-    )
-    LANGUAGE SQL
-    RETURNS NULL ON NULL INPUT
-    SECURITY DEFINER
-    SET search_path = public, pg_temp
-AS $sql$
-    SELECT
-        b.version,
-        f.platform_tag,
-        b.abi_tag AS builder_abi,
-        f.abi_tag AS file_abi_tag,
-        f.filename,
-        f.filesize,
-        f.filehash,
-        v.yanked,
-        f.requires_python,
-        ARRAY_AGG(d.dependency)
-            FILTER (WHERE d.dependency IS NOT NULL) AS dependencies
-    FROM
-        builds b
-        JOIN files f USING (build_id)
-        JOIN versions v USING (package, version)
-        LEFT JOIN LATERAL (
-            SELECT f.filename, d.dependency
-            FROM get_file_apt_dependencies(f.filename) AS d
-        ) d USING (filename)
-    WHERE b.status
-    AND b.package = pkg
-    GROUP BY (
-        version, platform_tag, builder_abi, file_abi_tag, filename, filesize,
-        filehash, yanked, requires_python
-    );
-$sql$;
-
-REVOKE ALL ON FUNCTION get_project_files(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_files(TEXT) TO {username};
 
 -- save_rewrites_pending(...)
 -------------------------------------------------------------------------------
