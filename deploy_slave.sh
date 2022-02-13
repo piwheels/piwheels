@@ -64,7 +64,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev cargo golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
-    $PYTHON2_PACKAGES $QMAKE libgphoto2-dev
+    $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev
 
 apt purge python3-cryptography -y
 
