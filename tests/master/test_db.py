@@ -375,8 +375,36 @@ def test_get_version_skip(db_intf, with_package_version):
 
 
 def test_get_project_data(db_intf, with_files, build_state_hacked):
-    assert db_intf.get_project_data('foo') == {}
-
+    bsh = build_state_hacked
+    assert db_intf.get_project_data('foo') == {
+        'description': '',
+        'name': bsh.package,
+        'releases': {
+            bsh.version: {
+                'abis': {
+                    bsh.abi_tag: {
+                        'build_id': 1, # bsh.build_id is still None here
+                        'status': 'success' if bsh.status else 'failed',
+                    }
+                },
+                'files': {
+                    fs.filename: {
+                        'abi_builder': bsh.abi_tag,
+                        'abi_file': fs.abi_tag,
+                        'apt_dependencies': set(fs.dependencies['apt']),
+                        'hash': fs.filehash,
+                        'platform': fs.platform_tag,
+                        'requires_python': fs.requires_python,
+                        'size': fs.filesize,
+                    }
+                    for fs in bsh.files.values()
+                },
+                'released': datetime(1970, 1, 1, tzinfo=UTC),
+                'skip': '',
+                'yanked': False,
+            }
+        }
+    }
 
 def test_delete_build(db_intf, db, with_files, build_state_hacked):
     assert db.execute(

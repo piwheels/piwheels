@@ -567,12 +567,20 @@ class Database:
         Returns all details required to build the project page of the specified
         *package*.
         """
-        # XXX Fix up datetime types
         with self._conn.begin():
             for row in self._conn.execute(
                 "VALUES (get_project_data(%s))", (package,)
             ):
-                return row[0]
+                # Fix up datetime and set types (which JSON doesn't support)
+                data = row[0]
+                for release in data['releases'].values():
+                    release['released'] = datetime.strptime(
+                        release['released'], '%Y-%m-%dT%H:%M:%S+00:00'
+                    ).replace(tzinfo=UTC)
+                    for wheel in release['files'].values():
+                        wheel['apt_dependencies'] = set(
+                            wheel['apt_dependencies'])
+                return data
 
     def get_version_skip(self, package, version):
         """
