@@ -174,3 +174,30 @@ $sql$;
 
 REVOKE ALL ON FUNCTION get_project_data(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_data(TEXT) TO {username};
+
+DROP FUNCTION get_project_versions(TEXT);
+CREATE FUNCTION get_project_versions(pkg TEXT)
+    RETURNS TABLE(
+        version versions.version%TYPE,
+        yanked versions.yanked%TYPE,
+        released TIMESTAMP WITH TIME ZONE,
+        skip versions.skip%TYPE
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        v.version,
+        v.yanked,
+        v.released AT TIME ZONE 'UTC',
+        COALESCE(NULLIF(v.skip, ''), p.skip) AS skip_msg
+    FROM
+        packages p
+        JOIN versions v USING (package)
+    WHERE v.package = pkg;
+$sql$;
+
+REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_project_versions(TEXT) TO {username};
