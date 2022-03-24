@@ -154,6 +154,40 @@ def build_state_hacked(request, file_state, file_state_hacked):
 
 
 @pytest.fixture()
+def project_data(request, build_state_hacked):
+    bsh = build_state_hacked
+    return {
+        'description': '',
+        'name': bsh.package,
+        'releases': {
+            bsh.version: {
+                'abis': {
+                    bsh.abi_tag: {
+                        'build_id': 1, # bsh.build_id is still None here
+                        'status': 'success' if bsh.status else 'failed',
+                    }
+                },
+                'files': {
+                    fs.filename: {
+                        'abi_builder': bsh.abi_tag,
+                        'abi_file': fs.abi_tag,
+                        'apt_dependencies': set(fs.dependencies['apt']),
+                        'hash': fs.filehash,
+                        'platform': fs.platform_tag,
+                        'requires_python': fs.requires_python,
+                        'size': fs.filesize,
+                    }
+                    for fs in bsh.files.values()
+                },
+                'released': datetime(1970, 1, 1, tzinfo=UTC),
+                'skip': '',
+                'yanked': False,
+            }
+        }
+    }
+
+
+@pytest.fixture()
 def download_state(request, file_state):
     return DownloadState(
         file_state.filename, '123.4.5.6',

@@ -34,7 +34,6 @@ import pytest
 from piwheels import protocols, transport
 from piwheels.master.mr_chase import MrChase
 from piwheels.master.slave_driver import build_armv6l_hack
-from piwheels.master.the_oracle import ProjectVersionsRow
 
 
 UTC = timezone.utc
@@ -550,22 +549,20 @@ def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
 
 
 def test_remove_package_builds(db_queue, web_queue, skip_queue, task,
-                               import_queue, build_state_hacked):
-    bsh = build_state_hacked
-    import_queue.send_msg('REMPKG', [bsh.package, True, ''])
-    db_queue.expect('PKGEXISTS', bsh.package)
+                               import_queue, project_data):
+    package = project_data['name']
+    assert len(project_data['releases']) == 1
+    version = list(project_data['releases'])[0]
+    import_queue.send_msg('REMPKG', [package, True, ''])
+    db_queue.expect('PKGEXISTS', package)
     db_queue.send('OK', True)
-    db_queue.expect('PROJVERS', bsh.package)
-    db_queue.send('OK', [
-        ProjectVersionsRow(bsh.version, False,
-                           datetime(1970, 1, 1, tzinfo=UTC), '',
-                           bsh.abi_tag, ''),
-    ])
-    db_queue.expect('DELBUILD', [bsh.package, bsh.version])
+    db_queue.expect('PROJDATA', package)
+    db_queue.send('OK', project_data)
+    db_queue.expect('DELBUILD', [package, version])
     db_queue.send('OK', None)
-    web_queue.expect('DELPKG', bsh.package)
+    web_queue.expect('DELPKG', package)
     web_queue.send('DONE')
-    skip_queue.expect('DELPKG', bsh.package)
+    skip_queue.expect('DELPKG', package)
     skip_queue.send('OK')
     task.poll(0)
     assert import_queue.recv_msg() == ('DONE', 'DELPKGBLD')
