@@ -300,8 +300,8 @@ class MrChase(tasks.PauseableTask):
                 msg = 'SKIPPKG'
             if builds:
                 self.logger.info('deleting all builds for package %s', package)
-                for row in self.db.get_project_versions(package):
-                    self.db.delete_build(package, row.version)
+                for version in self.db.get_project_data(package)['releases']:
+                    self.db.delete_build(package, version)
                 msg = 'DELPKGBLD'
         else:
             self.logger.info('deleting package %s', package)

@@ -1657,38 +1657,6 @@ $sql$;
 REVOKE ALL ON FUNCTION get_version_files(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_version_files(TEXT, TEXT) TO {username};
 
--- get_project_versions(package)
--------------------------------------------------------------------------------
--- Returns the versions registered to a package, along with the skipped state
--- of each version
--------------------------------------------------------------------------------
-
-CREATE FUNCTION get_project_versions(pkg TEXT)
-    RETURNS TABLE(
-        version versions.version%TYPE,
-        yanked versions.yanked%TYPE,
-        released TIMESTAMP WITH TIME ZONE,
-        skip versions.skip%TYPE
-    )
-    LANGUAGE SQL
-    RETURNS NULL ON NULL INPUT
-    SECURITY DEFINER
-    SET search_path = public, pg_temp
-AS $sql$
-    SELECT
-        v.version,
-        v.yanked,
-        v.released AT TIME ZONE 'UTC',
-        COALESCE(NULLIF(v.skip, ''), p.skip) AS skip_msg
-    FROM
-        packages p
-        JOIN versions v USING (package)
-    WHERE v.package = pkg;
-$sql$;
-
-REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_project_versions(TEXT) TO {username};
-
 -- save_rewrites_pending(...)
 -------------------------------------------------------------------------------
 -- Saves the state of the_secretary task's internal buffer in the

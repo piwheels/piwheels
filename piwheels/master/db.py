@@ -200,14 +200,6 @@ class Database:
                 "VALUES (set_package_description(%s, %s))",
                 (package, description))
 
-    def get_package_description(self, package):
-        """
-        Retrieve the description for *package* in the packages table.
-        """
-        with self._conn.begin():
-            return self._conn.execute(
-                "VALUES (get_package_description(%s))", (package,)).scalar()
-
     def skip_package(self, package, reason):
         """
         Mark a package with a reason to prevent future builds of all versions
@@ -570,36 +562,17 @@ class Database:
                 )
             }
 
-    def get_project_versions(self, package):
+    def get_project_data(self, package):
         """
-        Returns all details required to build the versions table in the
-        project page of the specified *package*.
+        Returns all details required to build the project page of the specified
+        *package*.
         """
+        # XXX Fix up datetime types
         with self._conn.begin():
-            return [
-                ProjectVersionsRow(*row)
-                for row in self._conn.execute(
-                    "SELECT version, yanked, released, skip, builds_succeeded, "
-                    "builds_failed "
-                    "FROM get_project_versions(%s)", (package,)
-                )
-            ]
-
-    def get_project_files(self, package):
-        """
-        Returns all details required to build the files table in the project
-        page of the specified *package*.
-        """
-        with self._conn.begin():
-            return [
-                ProjectFilesRow(*row)
-                for row in self._conn.execute(
-                    "SELECT version, platform_tag, builder_abi, file_abi_tag, "
-                    "filename, filesize, filehash, yanked, requires_python, "
-                    "dependencies "
-                    "FROM get_project_files(%s)", (package,)
-                )
-            ]
+            for row in self._conn.execute(
+                "VALUES (get_project_data(%s))", (package,)
+            ):
+                return row[0]
 
     def get_version_skip(self, package, version):
         """
