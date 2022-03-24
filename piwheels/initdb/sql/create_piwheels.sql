@@ -1689,36 +1689,6 @@ $sql$;
 REVOKE ALL ON FUNCTION get_project_versions(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_project_versions(TEXT) TO {username};
 
--- get_file_apt_dependencies(filename)
--------------------------------------------------------------------------------
--- Returns apt dependencies registered against the specified *filename*,
--- excluding those listed in preinstalled_apt_packages with a matching ABI tag.
--------------------------------------------------------------------------------
-
-CREATE FUNCTION get_file_apt_dependencies(fn VARCHAR)
-    RETURNS TABLE(
-        dependency dependencies.dependency%TYPE
-    )
-    LANGUAGE SQL
-    RETURNS NULL ON NULL INPUT
-    SECURITY DEFINER
-    SET search_path = public, pg_temp
-AS $sql$
-    SELECT dependency
-        FROM dependencies
-        WHERE filename = fn
-        AND tool = 'apt'
-    EXCEPT ALL
-    SELECT apt_package
-        FROM preinstalled_apt_packages p
-        JOIN files f
-        ON p.abi_tag = f.abi_tag
-        WHERE f.filename = fn;
-$sql$;
-
-REVOKE ALL ON FUNCTION get_file_apt_dependencies(VARCHAR) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_file_apt_dependencies(VARCHAR) TO {username};
-
 -- save_rewrites_pending(...)
 -------------------------------------------------------------------------------
 -- Saves the state of the_secretary task's internal buffer in the
