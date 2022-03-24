@@ -67,9 +67,9 @@ class Wheel:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
 
-    :param set dependencies:
-        A set of dependencies that are required to use these particular wheel
-        files. Defaults to ``None``.
+    :param dict dependencies:
+        A dict mapping tool to dependencies that are required to use these
+        particular wheel files. Defaults to a ``None`` (no dependencies).
     """
     def __init__(self, path, dependencies=None):
         self.wheel_file = path
@@ -79,6 +79,7 @@ class Wheel:
             dependencies = {}
         self._dependencies = dependencies
         self._parts = list(path.stem.split('-'))
+        # XXX This should be on the master
         # Fix up retired tags (noabi->none)
         if self._parts[-2] == 'noabi':
             self._parts[-2] = 'none'
