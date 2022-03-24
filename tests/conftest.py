@@ -272,6 +272,9 @@ def with_package(request, db, with_build_abis, build_state):
     with db.begin():
         db.execute(
             "INSERT INTO packages(package) VALUES (%s)", build_state.package)
+        db.execute(
+            "INSERT INTO package_names(package, name, seen) VALUES (%s, %s, %s)",
+            (build_state.package, build_state.package, datetime(2000, 1, 1)))
     return build_state.package
 
 
