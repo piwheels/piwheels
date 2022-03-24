@@ -380,9 +380,7 @@ the_oracle = Protocol(recv={
     'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
     'NEWPKGNAME':  ExactSequence([str, str, dt.datetime]),  # package, name, timestamp
     'GETPKGNAMES': str,  # package
-    'GETPROJNAME': str,  # package
     'SETDESC':     ExactSequence([str, str]),  # package, description
-    'GETDESC':     str,  # package
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
     'SKIPVER':     ExactSequence([str, str, str]),  # package, version, skip reason
     'DELPKG':      str,
@@ -397,8 +395,7 @@ the_oracle = Protocol(recv={
     'LOGBUILD':    _build_state,
     'DELBUILD':    ExactSequence([str, str]),  # package, version
     'PKGFILES':    str,                        # package
-    'PROJVERS':    str,                        # package
-    'PROJFILES':   str,                        # package
+    'PROJDATA':    str,                        # package
     'VERFILES':    ExactSequence([str, str]),  # package, version
     'GETSKIP':     ExactSequence([str, str]),  # package, version
     'PKGEXISTS':   str,                        # package

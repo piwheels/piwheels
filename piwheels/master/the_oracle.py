@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from .. import const, protocols, transport, tasks
 from ..states import (
     BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)
-from .db import Database, ProjectVersionsRow, ProjectFilesRow, RewritePendingRow
+from .db import Database, RewritePendingRow
 
 
 UTC = timezone.utc
@@ -104,9 +104,7 @@ class TheOracle(tasks.NonStopTask):
                 'NEWVER':      lambda: self.do_newver(*data),
                 'NEWPKGNAME':  lambda: self.do_newpkgname(*data),
                 'GETPKGNAMES': lambda: self.do_getpkgnames(data),
-                'GETPROJNAME': lambda: self.do_getprojname(data),
                 'SETDESC':     lambda: self.do_setdesc(*data),
-                'GETDESC':     lambda: self.do_getdesc(data),
                 'SKIPPKG':     lambda: self.do_skippkg(*data),
                 'SKIPVER':     lambda: self.do_skipver(*data),
                 'DELPKG':      lambda: self.do_delpkg(data),
@@ -121,8 +119,7 @@ class TheOracle(tasks.NonStopTask):
                 'LOGBUILD':    lambda: self.do_logbuild(data),
                 'DELBUILD':    lambda: self.do_delbuild(*data),
                 'PKGFILES':    lambda: self.do_pkgfiles(data),
-                'PROJVERS':    lambda: self.do_projvers(data),
-                'PROJFILES':   lambda: self.do_projfiles(data),
+                'PROJDATA':    lambda: self.do_projdata(data),
                 'VERFILES':    lambda: self.do_verfiles(*data),
                 'GETSKIP':     lambda: self.do_getskip(*data),
                 'PKGEXISTS':   lambda: self.do_pkgexists(data),
@@ -188,26 +185,12 @@ class TheOracle(tasks.NonStopTask):
         """
         return self.db.get_package_aliases(package)
 
-    def do_getprojname(self, package):
-        """
-        Handler for "GETPROJNAME" message, sent by :class:`DbClient` to retrieve
-        the last seen name for *package*.
-        """
-        return self.db.get_project_display_name(package)
-
     def do_setdesc(self, package, description):
         """
         Handler for "SETDESC" message, sent by :class:`DbClient` to update a
         package's project description.
         """
         return self.db.set_package_description(package, description)
-
-    def do_getdesc(self, package):
-        """
-        Handler for "GETDESC" message, sent by :class:`DbClient` to retrieve
-        a package's project description.
-        """
-        return self.db.get_package_description(package)
 
     def do_skippkg(self, package, reason):
         """
@@ -309,19 +292,12 @@ class TheOracle(tasks.NonStopTask):
         """
         return self.db.get_package_files(package)
 
-    def do_projvers(self, package):
+    def do_projdata(self, package):
         """
-        Handler for "PROJVERS" message, sent by :class:`DbClient` to request
-        build and skip details of all versions of *package*.
+        Handler for "PROJDATA" message, sent by :class:`DbClient` to request
+        details of *package* and all its releases.
         """
-        return self.db.get_project_versions(package)
-
-    def do_projfiles(self, package):
-        """
-        Handler for "PROJFILES" message, sent by :class:`DbClient` to request
-        file details of all versions of *package*.
-        """
-        return self.db.get_project_files(package)
+        return self.db.get_project_data(package)
 
     def do_verfiles(self, package, version):
         """
@@ -466,23 +442,11 @@ class DbClient:
         """
         return self._execute('GETPKGNAMES', package)
 
-    def get_project_display_name(self, package):
-        """
-        See :meth:`.db.Database.get_project_display_name`.
-        """
-        return self._execute('GETPROJNAME', package)
-
     def set_package_description(self, package, description):
         """
         See :meth:`.db.Database.update_project_description`.
         """
         return self._execute('SETDESC', [package, description])
-
-    def get_package_description(self, package):
-        """
-        See :meth:`.db.Database.get_project_description`.
-        """
-        return self._execute('GETDESC', package)
 
     def skip_package(self, package, reason):
         """
@@ -629,23 +593,11 @@ class DbClient:
         """
         return self._execute('PKGFILES', package)
 
-    def get_project_versions(self, package):
+    def get_project_data(self, package):
         """
-        See :meth:`.db.Database.get_project_versions`.
+        See :meth:`.db.Database.get_project_data`.
         """
-        return [
-            ProjectVersionsRow(*row)
-            for row in self._execute('PROJVERS', package)
-        ]
-
-    def get_project_files(self, package):
-        """
-        See :meth:`.db.Database.get_project_files`.
-        """
-        return [
-            ProjectFilesRow(*row)
-            for row in self._execute('PROJFILES', package)
-        ]
+        return self._execute('PROJDATA', package)
 
     def get_version_files(self, package, version):
         """

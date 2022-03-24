@@ -43,7 +43,6 @@ from pkg_resources import resource_listdir
 
 from piwheels import const, protocols, transport
 from piwheels.states import MasterStats
-from piwheels.master.the_oracle import ProjectFilesRow, ProjectVersionsRow
 from piwheels.master.the_scribe import TheScribe, AtomicReplaceFile
 
 

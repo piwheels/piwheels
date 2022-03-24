@@ -51,11 +51,6 @@ from .. import __version__
 UTC = timezone.utc
 
 
-ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'yanked', 'released', 'skip', 'builds_succeeded', 'builds_failed'))
-ProjectFilesRow = namedtuple('ProjectFilesRow', (
-    'version', 'platform_tag', 'builder_abi', 'file_abi_tag', 'filename',
-    'filesize', 'filehash', 'yanked', 'requires_python', 'dependencies'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
