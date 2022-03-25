@@ -100,11 +100,11 @@ class TheSecretary(tasks.PausingTask):
         """
         Handle incoming write requests with buffering and de-dupe.
 
-        Some incoming requests (currently "HOME", "SEARCH", "DELPKG", and
-        "DELVER") are passed directly through to :class:`TheScribe` as these
-        are either sufficiently rare ("HOME", "SEARCH") that no benefit is
-        gained by buffering them or sufficiently urgent ("DELPKG", "DELVER")
-        that they must be acted on immediately.
+        Some incoming requests (currently "HOME", "SEARCH", "LOG", "DELPKG",
+        and "DELVER") are passed directly through to :class:`TheScribe` as
+        these are either sufficiently rare ("HOME", "SEARCH") that no benefit
+        is gained by buffering them or sufficiently urgent ("DELPKG", "DELVER",
+        "LOG") that they must be acted on immediately.
 
         For other requests ("PROJECT" and "BOTH"), requests can come thick
         and fast in the case of multiple file registrations picked up by
@@ -119,7 +119,7 @@ class TheSecretary(tasks.PausingTask):
         except IOError as e:
             self.logger.error(str(e))
         else:
-            if msg in ('HOME', 'SEARCH', 'DELPKG', 'DELVER'):
+            if msg in ('HOME', 'SEARCH', 'LOG', 'DELPKG', 'DELVER'):
                 self.output.send_msg(msg, data)
                 if msg in ('DELPKG', 'DELVER'):
                     # Expunge any pending updates of the package from the

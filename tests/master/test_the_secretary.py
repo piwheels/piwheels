@@ -115,6 +115,13 @@ def test_pass_through(task, web_queue, scribe_queue, stats_data, db_queue):
     scribe_queue.check()
     assert web_queue.recv_msg() == ('DONE', None)
 
+    web_queue.send_msg('LOG', (1, 'foo bar baz'))
+    scribe_queue.expect('LOG', (1, 'foo bar baz'))
+    scribe_queue.send('DONE')
+    task.poll(0)
+    scribe_queue.check()
+    assert web_queue.recv_msg() == ('DONE', None)
+
 
 def test_bad_request(task, web_queue):
     web_queue.send(b'FOO')

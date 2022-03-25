@@ -28,6 +28,8 @@
 
 
 import os
+import io
+import gzip
 import json
 import cbor2 as cbor
 from unittest import mock
@@ -211,6 +213,23 @@ def test_write_homepage(db_queue, task, scribe_queue, master_config, stats_data)
     root = Path(master_config.output_path)
     assert (root / 'index.html').exists() and (root / 'index.html').is_file()
     assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_log(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('LOG', (1, 'foo bar baz'))
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    logs = root / 'logs'
+    assert logs.exists()
+    log_file = logs / '0000' / '0000' / '0001.txt.gz'
+    assert log_file.exists() and log_file.is_file()
+    with log_file.open('rb') as f:
+        with gzip.open(f, 'rt', encoding='utf-8') as arc:
+            assert arc.read() == 'foo bar baz'
 
 
 def test_write_pkg_index(db_queue, task, scribe_queue, master_config,

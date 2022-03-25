@@ -34,6 +34,7 @@ Defines the :class:`TheScribe` task; see class for more details.
 """
 
 import os
+import gzip
 import shutil
 import tempfile
 from pathlib import Path
@@ -167,6 +168,8 @@ class TheScribe(tasks.PauseableTask):
         * "PROJECT", a request to write just the project page for the specified
           package
 
+        * "LOG", a request to write a build log
+
         .. note::
 
             In all handlers below, care is taken to ensure clients never see a
@@ -190,6 +193,9 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
+            elif msg == 'LOG':
+                build_id, log = data
+                self.write_log(build_id, log)
             elif msg == 'DELVER':
                 package, version = data
                 self.delete_version(package, version)
@@ -547,6 +553,30 @@ class TheScribe(tasks.PauseableTask):
         mkdir_override_symlink(pkg_dir)
         with AtomicReplaceFile(pkg_dir / 'index.json', encoding='utf-8') as index:
             json.dump(project_data, index)
+
+    def write_log(self, build_id, log):
+        """
+        Attempts to write the *log* of build *build_id* to the log output
+        directories, splitting the numeric build id into three parts to flatten
+        the output hierarchy. Log data is also gzip compressed.
+        """
+        self.logger.info('writing log for build %d', build_id)
+
+        levels = []
+        n = build_id
+        for i in range(3):
+            n, m = divmod(n, 10000)
+            levels.append(m)
+        levels = ['{:04d}'.format(level) for level in reversed(levels)]
+
+        log_dir = self.output_path / 'logs' / levels[0] / levels[1]
+        log_dir.mkdir(parents=True, exist_ok=True)
+        # No need for AtomicReplaceFile here. The log we're writing should
+        # *never* exist. In fact, it should be an error if it does hence the
+        # use of the "x" mode
+        with (log_dir / (levels[2] + '.txt.gz')).open('xb') as f:
+            with gzip.open(f, 'wt', encoding='utf-8', errors='replace') as arc:
+                arc.write(log)
 
     def delete_package(self, package):
         """

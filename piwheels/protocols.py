@@ -296,6 +296,7 @@ the_scribe = Protocol(recv={
     'DELPKG':  str,  # package name
     'PROJECT': str,  # package name
     'BOTH':    str,  # package name
+    'LOG':     ExactSequence([int, str]),  # build_id, log
     'HOME':    _master_stats,  # statistics
     'SEARCH':  {str: ExactSequence([int, int])},  # package: (downloads-recent, downloads-all)
 }, send={
