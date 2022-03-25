@@ -348,39 +348,6 @@ def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
-                                      master_config, project_data):
-    db_queue.expect('ALLPKGS')
-    db_queue.send('OK', {'foo'})
-    task.once()
-    scribe_queue.send_msg('BOTH', 'foo')
-    db_queue.expect('PROJDATA', 'foo')
-    db_queue.send('OK', project_data)
-    db_queue.expect('GETPKGNAMES', 'foo')
-    db_queue.send('OK', ['Foo'])
-    task.poll(0)
-    db_queue.check()
-    root = Path(master_config.output_path)
-    simple = root / 'simple' / 'index.html'
-    simple_index = root / 'simple' / 'foo' / 'index.html'
-    assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
-    assert simple_index.exists() and simple_index.is_file()
-    for release in project_data['releases'].values():
-        for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ])
-    canonical = root / 'project' / 'foo'
-    alias = root / 'project' / 'Foo'
-    assert (canonical / 'index.html').exists()
-    assert alias.exists() and alias.is_symlink()
-    assert canonical.resolve() == alias.resolve()
-    assert scribe_queue.recv_msg() == ('DONE', None)
-
-
 def test_write_pkg_index_with_yanked_files_and_requires_python(
     db_queue, task, scribe_queue, master_config, project_data
 ):
@@ -417,6 +384,74 @@ def test_write_pkg_index_with_yanked_files_and_requires_python(
     assert project.exists() and project.is_file()
     project_json = root / 'project' / 'foo' / 'json' / 'index.json'
     assert project_json.exists() and project_json.is_file()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
+                                      master_config, project_data):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJDATA', 'foo')
+    db_queue.send('OK', project_data)
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', ['Foo'])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    simple = root / 'simple' / 'index.html'
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert simple_index.exists() and simple_index.is_file()
+    for release in project_data['releases'].values():
+        for filename, file_data in release['files'].items():
+            assert contains_elem(
+                simple_index, 'a', [
+                    ('href', '{filename}#sha256={filehash}'.format(
+                        filename=filename, filehash=file_data['hash'])),
+                ])
+    canonical = root / 'project' / 'foo'
+    alias = root / 'project' / 'Foo'
+    assert (canonical / 'index.html').exists()
+    assert alias.exists() and alias.is_symlink()
+    assert canonical.resolve() == alias.resolve()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
+                                             master_config, project_data):
+    root = Path(master_config.output_path)
+    (root / 'simple' / 'foo').mkdir(parents=True)
+    (root / 'simple' / 'Foo').symlink_to(root / 'simple' / 'foo')
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJDATA', 'foo')
+    db_queue.send('OK', project_data)
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', ['Foo'])
+    task.poll(0)
+    db_queue.check()
+    simple = root / 'simple' / 'index.html'
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert simple.exists() and simple.is_file()
+    assert contains_elem(simple, 'a', [('href', 'foo')])
+    assert simple_index.exists() and simple_index.is_file()
+    for release in project_data['releases'].values():
+        for filename, file_data in release['files'].items():
+            assert contains_elem(
+                simple_index, 'a', [
+                    ('href', '{filename}#sha256={filehash}'.format(
+                        filename=filename, filehash=file_data['hash'])),
+                ])
+    canonical = root / 'project' / 'foo'
+    alias = root / 'project' / 'Foo'
+    assert (canonical / 'index.html').exists()
+    assert alias.exists() and alias.is_symlink()
+    assert canonical.resolve() == alias.resolve()
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
