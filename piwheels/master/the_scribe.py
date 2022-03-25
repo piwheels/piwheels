@@ -58,28 +58,6 @@ ProjectRelease = namedtuple('ProjectRelease', (
     'version', 'yanked', 'released', 'skip', 'abis', 'files',
     'builds_succeeded', 'builds_failed'))
 
-def _is_compatible_with_abi(abi, builds_succeeded, files):
-    return abi in builds_succeeded or any(
-        f['file_abi_tag'] == 'none' and abi >= f['builder_abi']
-        for f in files
-    )
-
-def _get_abi_status(abi, builds_succeeded, builds_failed, files, skip):
-    status = {
-        'css_class': 'pending',
-        'title': 'Build pending',
-    }
-    if abi in builds_failed:
-        status['css_class'] = 'fail'
-        status['title'] = 'Build failed'
-    elif _is_compatible_with_abi(abi, builds_succeeded, files):
-        status['css_class'] = 'success'
-        status['title'] = 'Build succeeded'
-    elif skip:
-        status['css_class'] = 'skip'
-        status['title'] = 'Skipped: {}'.format(skip)
-    return status
-
 
 class PackageDeleted(ValueError):
     "Error raised when a package is deleted and doesn't need updating"
