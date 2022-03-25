@@ -422,12 +422,12 @@ def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
 
 def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
                                              master_config, project_data):
-    root = Path(master_config.output_path)
-    (root / 'simple' / 'foo').mkdir(parents=True)
-    (root / 'simple' / 'Foo').symlink_to(root / 'simple' / 'foo')
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
+    root = Path(master_config.output_path)
+    (root / 'simple' / 'foo').mkdir()
+    (root / 'simple' / 'Foo').symlink_to(root / 'simple' / 'foo')
     scribe_queue.send_msg('BOTH', 'foo')
     db_queue.expect('PROJDATA', 'foo')
     db_queue.send('OK', project_data)
@@ -791,6 +791,41 @@ def test_delete_package(db_queue, task, scribe_queue, master_config):
     task.poll(0)
     db_queue.check()
     assert not index.exists()
+    assert not project_json.exists()
+    assert not project.exists()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_delete_package_with_aliases(db_queue, task, scribe_queue,
+                                     master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELPKG', 'foo')
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', ['Foo'])
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': 'deadbeef',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': 'deadbeef',
+    })
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo'
+    index.mkdir(parents=True)
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    project_json = project / 'json'
+    project_json.mkdir(parents=True)
+    (index / 'foo-0.1-cp34-cp34m-linux_armv6l.whl').touch()
+    (index / 'foo-0.1-cp34-cp34m-linux_armv7l.whl').touch()
+    (project / 'index.html').touch()
+    (project_json / 'index.json').touch()
+    alias = root / 'simple' / 'Foo'
+    alias.symlink_to(index)
+    task.poll(0)
+    db_queue.check()
+    assert not index.exists()
+    assert not alias.exists()
     assert not project_json.exists()
     assert not project.exists()
     assert scribe_queue.recv_msg() == ('DONE', None)
