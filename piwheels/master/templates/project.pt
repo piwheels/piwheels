@@ -1,9 +1,9 @@
 <div metal:use-macro="layout">
-  <div metal:fill-slot="title" tal:omit-tag="1">${project}</div>
+  <div metal:fill-slot="title" tal:omit-tag="1">${title}</div>
 
   <div metal:fill-slot="head" tal:omit-tag="1">
-    <link rel="canonical" href="https://www.piwheels.org/project/${project}/" />
-    <meta name="description" content="The piwheels project page for ${project}: ${description}" />
+    <link rel="canonical" href="https://www.piwheels.org/project/${package}/" />
+    <meta name="description" content="The piwheels project page for ${title}: ${description}" />
   </div>
 
   <div metal:fill-slot="scripts" tal:omit-tag="1">
@@ -14,13 +14,13 @@
   <div metal:fill-slot="content" tal:omit-tag="1">
     <section>
       <div class="content">
-        <h2 id="package" data-package="${package}">${project}</h2>
+        <h2 id="package" data-package="${package}">${title}</h2>
         <p>${description}</p>
 
         <h3 id="install">Installation</h3>
         <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
-sudo pip3 install ${project}</pre>
-        <pre tal:condition="not dependencies">sudo pip3 install ${project}</pre>
+sudo pip3 install ${package}</pre>
+        <pre tal:condition="not dependencies">sudo pip3 install ${package}</pre>
         <p><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></p>
       </div>
 
@@ -28,7 +28,7 @@ sudo pip3 install ${project}</pre>
         <div class="stats highlight">
           <dl>
             <dt>PyPI page</dt>
-            <dd><a href="https://pypi.org/project/${project}">pypi.org/<wbr />project/<wbr />${project}</a></dd>
+            <dd><a href="https://pypi.org/project/${package}">pypi.org/<wbr />project/<wbr />${package}</a></dd>
           </dl>
           <dl>
             <dt>Project JSON</dt>
@@ -40,7 +40,10 @@ sudo pip3 install ${project}</pre>
           </dl>
           <dl>
             <dt>Files</dt>
-            <dd>${'{:,}'.format(num_files)}</dd>
+            <dd>${'{:,}'.format(sum(
+              len(release.files)
+              for release in releases.values()
+            ))}</dd>
           </dl>
           <dl>
             <dt>Downloads<wbr /> (all time)</dt>
@@ -69,27 +72,31 @@ sudo pip3 install ${project}</pre>
             </tr>
           </thead>
           <tbody>
-            <span tal:repeat="row releases" tal:omit-tag="True">
+            <span tal:omit-tag="1" tal:repeat="(version, vers_data) releases.items()">
               <tr>
                 <td>
-                  ${row.version.original}
-                  <span tal:condition="row.version.is_prerelease" class="prerelease">pre-release</span>
-                  <span tal:condition="row.yanked" class="yanked">yanked</span>
+                  ${version.original}
+                  <span tal:condition="version.is_prerelease" class="prerelease">pre-release</span>
+                  <span tal:condition="vers_data.yanked" class="yanked">yanked</span>
                 </td>
-                <td title="${row.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${row.released.strftime('%Y-%m-%d')}</td>
-                <td class="${row.abis['cp35m'].css_class if 'cp35m' in row.abis else None}" title="${row.abis['cp35m'].title if 'cp35m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
-                <td class="${row.abis['cp37m'].css_class if 'cp37m' in row.abis else None}" title="${row.abis['cp37m'].title if 'cp37m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
-                <td class="${row.abis['cp39m'].css_class if 'cp39m' in row.abis else None}" title="${row.abis['cp39m'].title if 'cp39m' in row.abis else None}"><a tal:condition="True" href="/logs/#">&nbsp;</a></td>
+                <td title="${vers_data.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${vers_data.released.strftime('%Y-%m-%d')}</td>
+                <td tal:repeat="(abi, abi_data) vers_data.abis.items()"
+                    class="${abi_data.status}" title="${{
+                      'pending': 'Build pending',
+                      'fail':    'Build failed',
+                      'success': 'Build succeeded',
+                      'skip':    'Skipped: ' + vers_data.skip,
+                    }[abi_data.status]}"><a tal:condition="abi_data.build_id is not None" href="/logs/${abi_data.build_id}">&nbsp;</a></td>
                 <td></td>
               </tr>
               <tr>
                 <td colspan="6">
                   <ul>
-                    <li tal:repeat="file row.files"
-                       data-dependencies="${' '.join(file.apt_dependencies)}">
+                    <li tal:repeat="(filename, file_data) vers_data.files.items()"
+                       data-dependencies="${' '.join(file_data.apt_dependencies)}">
                       <span>
-                        <a href="/simple/${package}/${file.filename}#sha256=${file.filehash}">${file.filename}</a>
-                        (${format_size(file.filesize)})
+                        <a href="/simple/${package}/${filename}#sha256=${file_data.hash}">${filename}</a>
+                        (${format_size(file_data.size)})
                       </span>
                     </li>
                   </ul>
@@ -102,9 +109,9 @@ sudo pip3 install ${project}</pre>
 
         <h3 id="issues">Issues with this package?</h3>
         <ul>
-          <li><a href="https://github.com/piwheels/packages/issues?q=is:issue+is:open+${project}">Search issues</a> for this package</li>
-          <li>Package or version missing? <a href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${project}&labels=missing+package&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
-          <li>Something else? <a href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Problem+with+package:+${project}&labels=package+issue&package=${project}&pypi_url=https://pypi.org/project/${project}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
+          <li><a href="https://github.com/piwheels/packages/issues?q=is:issue+is:open+${package}">Search issues</a> for this package</li>
+          <li>Package or version missing? <a href="https://github.com/piwheels/packages/issues/new?template=missing-package.yml&title=Missing+package:+${title}&labels=missing+package&package=${package}&pypi_url=https://pypi.org/project/${package}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
+          <li>Something else? <a href="https://github.com/piwheels/packages/issues/new?template=package.yml&title=Problem+with+package:+${title}&labels=package+issue&package=${package}&pypi_url=https://pypi.org/project/${package}/&piwheels_url=https://www.piwheels.org/project/${package}/">Open a new issue</a></li>
         </ul>
 
       </div>
@@ -121,7 +128,7 @@ sudo pip3 install ${project}</pre>
 
     <section>
       <div class="content no-sidebar">
-        <p id="timestamp">Page last updated ${timestamp}</p>
+        <p id="timestamp">Page last updated ${timestamp.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
       </div>
     </section>
   </div>
