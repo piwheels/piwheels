@@ -386,7 +386,7 @@ class Database:
         with self._conn.begin():
             if build.status:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_success(%s, %s, %s, %s, %s, %s, "
+                    "VALUES (log_build_success(%s, %s, %s, %s, %s, "
                     "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
                     "))",
                     (
@@ -395,7 +395,6 @@ class Database:
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        sanitize(build.output),
                         [(
                             file.filename,
                             None,
@@ -420,14 +419,13 @@ class Database:
                     )).scalar()
             else:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_failure(%s, %s, %s, %s, %s, %s))",
+                    "VALUES (log_build_failure(%s, %s, %s, %s, %s))",
                     (
                         build.package,
                         build.version,
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        sanitize(build.output),
                     )).scalar()
             build.logged(build_id)
 

@@ -248,14 +248,10 @@ def test_log_build(db_intf, db, with_package_version, build_state):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     db_intf.log_build(build_state)
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
     assert db.execute(
@@ -264,10 +260,6 @@ def test_log_build(db_intf, db, with_package_version, build_state):
             build_state.build_id,
             build_state.package,
             build_state.version)
-    assert db.execute(
-        "SELECT build_id, output FROM output").first() == (
-            build_state.build_id,
-            build_state.output)
     assert db.execute(
         "SELECT build_id, filename, filesize, filehash "
         "FROM files "
@@ -285,14 +277,10 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     db_intf.log_build(build_state)
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     assert db.execute(
@@ -301,10 +289,6 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
             build_state.build_id,
             build_state.package,
             build_state.version)
-    assert db.execute(
-        "SELECT build_id, output FROM output").first() == (
-            build_state.build_id,
-            build_state.output)
 
 
 def test_get_build_abis(db_intf, with_build_abis):
@@ -382,14 +366,10 @@ def test_delete_build(db_intf, db, with_files, build_state_hacked):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (len(build_state_hacked.files),)
     db_intf.delete_build('foo', '0.1')
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
 
