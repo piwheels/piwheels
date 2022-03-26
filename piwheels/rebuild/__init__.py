@@ -40,7 +40,6 @@ from datetime import timedelta
 from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
-from ..slave import duration
 
 
 def part(s):
