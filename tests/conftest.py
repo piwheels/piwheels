@@ -335,8 +335,6 @@ def with_build(request, db, with_package_version, build_state):
             build_state.slave_id,
             build_state.duration,
             build_state.abi_tag).first()[0]
-        db.execute(
-            "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)
     build_state.logged(build_id)
     return build_state
 

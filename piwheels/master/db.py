@@ -112,7 +112,6 @@ class Database:
                 self._packages = Table('packages', self._meta, autoload=True)
                 self._versions = Table('versions', self._meta, autoload=True)
                 self._builds = Table('builds', self._meta, autoload=True)
-                self._output = Table('output', self._meta, autoload=True)
                 self._files = Table('files', self._meta, autoload=True)
                 self._dependencies = Table(
                     'dependencies', self._meta, autoload=True)
@@ -380,8 +379,8 @@ class Database:
 
     def log_build(self, build):
         """
-        Log a build attempt in the database, including build output and wheel
-        info if successful.
+        Log a build attempt in the database, including wheel info if
+        successful.
         """
         with self._conn.begin():
             if build.status:
