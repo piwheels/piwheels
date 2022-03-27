@@ -319,7 +319,7 @@ class TheScribe(tasks.PauseableTask):
         data['releases'] = {
             version: vers_data
             for version, vers_data in sorted(
-                data['releases'].items(), key=itemgetter(0))
+                data['releases'].items(), key=itemgetter(0), reverse=True)
         }
 
         if both:
