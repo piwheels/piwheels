@@ -2,11 +2,5 @@
 <?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>
 
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-
-<span tal:repeat="page pages" tal:omit-tag="1">
-  <url>
-    <loc>https://www.piwheels.org/${page}</loc>
-  </url>
-</span>
-
+  <url tal:repeat="page pages"><loc>https://www.piwheels.org/${page}</loc></url>
 </urlset>

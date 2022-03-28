@@ -3,7 +3,7 @@
 # External utilities
 PYTHON ?= python3
 PIP ?= pip
-PYTEST ?= pytest
+PYTEST ?= $(if $(shell which pytest),pytest,pytest-3)
 TWINE ?= twine
 PYFLAGS ?=
 DEST_DIR ?= /

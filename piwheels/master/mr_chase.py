@@ -175,6 +175,8 @@ class MrChase(tasks.PauseableTask):
             # XXX We'll never reach this branch at the moment, but in future we
             # might well support failed builds (as another method of skipping
             # builds)
+            self.web_queue.send_msg('LOG', (state.build_id, state.output))
+            self.web_queue.recv_msg()
             self.web_queue.send_msg('PROJECT', state.package)
             self.web_queue.recv_msg()
             return 'DONE', protocols.NoData
@@ -198,6 +200,8 @@ class MrChase(tasks.PauseableTask):
             self.logger.info('verified transfer of %s', state.next_file)
             state.files[state.next_file].verified()
             if state.transfers_done:
+                self.web_queue.send_msg('LOG', (state.build_id, state.output))
+                self.web_queue.recv_msg()
                 self.web_queue.send_msg('BOTH', state.package)
                 self.web_queue.recv_msg()
                 return 'DONE', 'IMPORT'
@@ -300,8 +304,8 @@ class MrChase(tasks.PauseableTask):
                 msg = 'SKIPPKG'
             if builds:
                 self.logger.info('deleting all builds for package %s', package)
-                for row in self.db.get_project_versions(package):
-                    self.db.delete_build(package, row.version)
+                for version in self.db.get_project_data(package)['releases']:
+                    self.db.delete_build(package, version)
                 msg = 'DELPKGBLD'
         else:
             self.logger.info('deleting package %s', package)

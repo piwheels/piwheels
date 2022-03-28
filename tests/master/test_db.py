@@ -92,12 +92,6 @@ def test_add_new_package_version(db_intf, db, with_package):
         "FROM versions").first() == (with_package, '0.1')
 
 
-def test_get_package_description(db_intf, db, with_package):
-    assert db_intf.get_package_description(with_package) == ''
-    db_intf.add_new_package('bar', description='blah blah')
-    assert db_intf.get_package_description('bar') == 'blah blah'
-
-
 def test_set_package_description(db_intf, db, with_package):
     assert db.execute(
         "SELECT description FROM packages "
@@ -254,14 +248,10 @@ def test_log_build(db_intf, db, with_package_version, build_state):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     db_intf.log_build(build_state)
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
     assert db.execute(
@@ -270,10 +260,6 @@ def test_log_build(db_intf, db, with_package_version, build_state):
             build_state.build_id,
             build_state.package,
             build_state.version)
-    assert db.execute(
-        "SELECT build_id, output FROM output").first() == (
-            build_state.build_id,
-            build_state.output)
     assert db.execute(
         "SELECT build_id, filename, filesize, filehash "
         "FROM files "
@@ -291,14 +277,10 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     db_intf.log_build(build_state)
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
     assert db.execute(
@@ -307,10 +289,6 @@ def test_log_build_failed(db_intf, db, with_package_version, build_state):
             build_state.build_id,
             build_state.package,
             build_state.version)
-    assert db.execute(
-        "SELECT build_id, output FROM output").first() == (
-            build_state.build_id,
-            build_state.output)
 
 
 def test_get_build_abis(db_intf, with_build_abis):
@@ -380,32 +358,18 @@ def test_get_version_skip(db_intf, with_package_version):
     assert db_intf.get_version_skip('foo', '0.1') == ''
 
 
-def test_get_project_versions(db_intf, with_files):
-    assert list(db_intf.get_project_versions('foo')) == [
-        ('0.1', False, datetime(1970, 1, 1, tzinfo=UTC), '', 'cp34m', ''),
-    ]
-
-
-def test_get_project_files(db_intf, with_files, build_state_hacked):
-    assert sorted(db_intf.get_project_files('foo'), key=itemgetter(1)) == sorted([
-        ('0.1', f.platform_tag, f.abi_tag, 'cp34m', f.filename, f.filesize,
-        f.filehash, False, f.requires_python, ['libc6'])
-        for f in build_state_hacked.files.values()
-    ], key=itemgetter(1))
+def test_get_project_data(db_intf, with_files, project_data):
+    assert db_intf.get_project_data('foo') == project_data
 
 
 def test_delete_build(db_intf, db, with_files, build_state_hacked):
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (1,)
     assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (1,)
-    assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (len(build_state_hacked.files),)
     db_intf.delete_build('foo', '0.1')
     assert db.execute(
         "SELECT COUNT(*) FROM builds").first() == (0,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM output").first() == (0,)
     assert db.execute(
         "SELECT COUNT(*) FROM files").first() == (0,)
 

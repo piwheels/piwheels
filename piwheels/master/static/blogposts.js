@@ -56,6 +56,6 @@ const showBlogPosts = (blogUrl, n) => {
 
 window.onload = () => {
   const blogUrl = "https://blog.piwheels.org";
-  const numPosts = 5;
+  const numPosts = 10;
   showBlogPosts(blogUrl, numPosts);
 };

@@ -1,644 +1,584 @@
 <div metal:use-macro="layout">
-  <div metal:fill-slot="content">
-    <div class="row">
-      <div class="small-12 columns">
-        <h2>FAQ</h2>
-      </div>
-    </div>
+  <div metal:fill-slot="title" tal:omit-tag="1">FAQ</div>
 
-    <div class="row" id="faq">
-      <div class="small-12 columns">
-        <div class="accordion" data-accordion data-allow-all-closed="true" data-multi-expand="true">
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How do I install packages from piwheels?</a>
+  <div metal:fill-slot="head" tal:omit-tag="1">
+    <meta name="description" content="Frequently asked questions (FAQs) about
+      the piwheels repository" />
+  </div>
 
-            <div class="accordion-content" data-tab-content>
-              <p>You should have a file at <code>/etc/pip.conf</code> containing:</p>
+  <div metal:fill-slot="scripts" tal:omit-tag="1">
+    <script src="/shade.js"></script>
+    <script src="/faq.js"></script>
+  </div>
 
-              <pre>[global]
+  <section metal:fill-slot="content">
+    <div class="content no-sidebar">
+      <h2>FAQ</h2>
+
+      <h5>How do I install packages from piwheels?</h5>
+      <div>
+        <p>You should have a file at <code>/etc/pip.conf</code> containing:</p>
+
+        <pre>[global]
 extra-index-url=https://www.piwheels.org/simple</pre>
 
-              <p>If that's there, pip should use piwheels. If not, create the
-              file and add those lines to it.</p>
-
-              <p>Note that pip version 9 or above is required.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How do I install a package from
-              piwheels without changing my pip configuration?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>You can use piwheels as an additional index,
-              which will allow pip to fall back to PyPI if the requested
-              package (or one of its dependencies) is not available on
-              piwheels, by using the <code>--extra-index-url</code> option, for
-              example:</p>
-
-              <pre>sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
-
-              <p>Alternatively, to only use piwheels, use the <code>-i</code> or
-              <code>--index-url</code> option, for example:</p>
-
-              <pre>sudo pip3 install numpy -i https://www.piwheels.org/simple</pre>
-
-              <p>or</p>
-
-              <pre>sudo pip3 install numpy --index-url https://www.piwheels.org/simple</pre>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How do I install a package from
-            PyPI (not from piwheels)?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>If your pip is configured to use piwheels, but you want to use
-              PyPI instead, you can either remove or comment out the
-              <code>extra-index-url</code> configuration in
-              <code>/etc/pip.conf</code>, or you can explicitly request no
-              binary distribution in the installation command, and you'll get
-              source distribution from PyPI, for example:</p>
-
-              <pre>sudo pip3 install numpy --no-binary :all:</pre>
-
-              <p>or to use the <code>--no-binary</code> option for a single
-              package (e.g. get the tensorflow wheel but force a build of one
-              of its dependencies, grpcio):</p>
-
-              <pre>sudo pip3 install tensorflow --no-binary grpcio</pre>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item id="sudo">
-            <a href="#" class="accordion-title">Should I use sudo? Should I use pip or pip3?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>On Debian-based systems such as the Raspberry Pi OS, the <code>python</code> command
-              is Python 2, and <code>python3</code> is Python 3. Similarly, <code>pip</code> is for
-              Python 2, and <code>pip3</code> is for Python 3.</p>
-              <p>The exception to this is is when using a Python 3 virtual environment, when
-              <code>python</code> and <code>pip</code> refer to your virtual environment's Python and pip.</p>
-              <p>Usually, it's good practice to use a virtual environment rather than the system Python. However,
-              it's common to use the system Python on Raspberry Pi, because you can think of the whole SD card as
-              a "virtual environment" in that you are likely to reimage the SD card regularly, or swap to a
-              different SD card for a different project.</p>
-              <p>If you're using the system Python, use <code>sudo pip3</code>:</p>
-              <pre>sudo pip3 install numpy</pre>
-              <p>If you're in an active a virtual environment, you use <code>pip</code> not <code>pip3</code>,
-              and you don't use <code>sudo</code>:</p>
-              <pre>pip install numpy</pre>
-              <p>Alternatively, you can use the system Python but install packages for the current user only, which
-              doesn't require <code>sudo</code>:</p>
-              <pre>pip3 install numpy --user</pre>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">piwheels doesn't have the latest
-            version of a package I need. How do I install the newest version available from piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>You can either specify the version you want:</p>
-              <pre>sudo pip3 install numpy==1.18.0</pre>
-              <p>Or you can use the <code>--prefer-binary</code> flag:</p>
-              <pre>sudo pip3 install numpy --prefer-binary</pre>
-              <p>This will install the latest version that's available as a wheel.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How much time does piwheels save?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Time saved depends on the package requested, and the Raspberry
-              Pi model used. Some packages usually require significant build
-              time, which is avoided by using piwheels. Many packages are
-              usually quite quick to install anyway, and only a small amount of
-              time is saved. Build time on Pi 1 and Pi Zero is much longer than
-              Pi 3 (roughly 6x), so the biggest gains are there.</p>
-              <p>piwheels saved Raspberry Pi users over 128 years in
-              <a href="https://blog.piwheels.org/piwheels-stats-for-2019/">2019</a> and 269 years
-              in <a href="https://blog.piwheels.org/piwheels-stats-for-2020/">2019</a>.
-              See more details in the <a href="https://blog.piwheels.org/tag/stats/">stats blog posts</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I maintain a package on PyPI. How do I
-              publish it on piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>You don't need to do anything. All package releases on PyPI
-              are automatically processed by the piwheels project. As long as
-              you upload a source distribution, we'll attempt to build it.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Why is a package I maintain not
-              available on piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Some packages fail to build, for various reasons. If you would
-              like to investigate, try building the package yourself on a
-              Raspberry Pi 3 or 4 with a Lite image by running <code>pip3 wheel
-              package==version --no-deps --no-binary package</code>. If you find
-              you are able to successfully build the package (for example, by
-              installing some build dependencies), please <a
-              href="https://github.com/piwheels/packages/issues/new/choose">open
-              an issue on github</a> and we'll try to resolve it. Also see the
-              following answer.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Why are some versions of a package
-              available on piwheels and other versions are not?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>You may discover that piwheels manages to build some versions
-              of a package and fails to build others. Success and failure per
-              ABI is noted on each package's project page. Search for a package
-              on the <a href="packages.html">package
-              list page</a>. If you maintain the package or otherwise have a
-              solution for the build, please <a
-              href="https://github.com/piwheels/packages/issues/new/choose">open
-              an issue on github</a> and we'll try to resolve it.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How long does it take for a new release
-              to become available on piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>piwheels should notice the registration of a new package or
-              version within about 10 seconds. How long it takes for that
-              version to be built then depends on two factors:</p>
-
-              <ul>
-                <li><em>Build queue</em>. Sometimes, particularly when a new
-                Debian version is released, piwheels will be busy working
-                through a large build queue, and it may take a while to reach a
-                package.</li>
-                <li><em>Build time</em>. If the package is pure python it
-                  should build within a few seconds and appear very quickly.
-                  Alternatively if it's a big chunk of C++ with lots of
-                  generics it can take hours to compile (the longest compile
-                  time for a successful build is currently over 3 hours).</li>
-              </ul>
-
-              <p>So ultimately the time for a new release to appear can be
-              anything from about 10 seconds up to several hours (for complex
-              to build packages) or several days (when piwheels has a large
-              backlog of packages to work through).</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Does piwheels use cross-compilation?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>No. All wheels are built natively on the Raspberry Pi OS on Raspberry Pi 3 and 4 hardware.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Which Raspberry Pi models are
-            supported by packages provided by piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>All current Raspberry Pi models (as of July 2021) are supported:</p>
-
-              <ul>
-                <li>Raspberry Pi 400</li>
-                <li>Raspberry Pi 4</li>
-                <li>Raspberry Pi 3 (including B+/A+)</li>
-                <li>Raspberry Pi 2</li>
-                <li>Raspberry Pi 1 (including B+/A+)</li>
-                <li>Raspberry Pi Zero</li>
-              </ul>
-
-              <p>Please also observe answers to questions relating to operating
-              systems and Python versions.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I installed a package from piwheels and
-              it doesn't work as expected</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Some packages build differently depending on the tools
-              available. For example, if the package <code>matplotlib</code> is
-              built with <code>pyqt</code> installed, the wheel will depend on
-              the user also having <code>pyqt</code> installed. If it is built
-              without <code>pyqt</code>, the user can use
-              <code>matplotlib</code> without <code>pyqt</code>.</p>
-
-              <p>If you find an issue with a package installed from piwheels,
-              please <a href="https://github.com/piwheels/packages/issues/new/choose">submit
-              an issue on GitHub</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Which Python versions does
-            piwheels support?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>piwheels supports Python 3 only. While most
-              packages available will work in any version of Python 3, some
-              packages are only compatible with the minor version with which
-              they were built. We build using for the ABI of the Python 3
-              version distributed with Debian releases:</p>
-
-              <ul>
-                <li>Stretch - Python 3.5</li>
-                <li>Buster - Python 3.7</li>
-                <li>Bullseye - Python 3.9</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Where can I find the piwheels source
-              code?</a>
-
-            <div class="accordion-content" data-tab-content>
-            <p>The source code for the piwheels project can be found on GitHub
-            at <a href="https://github.com/piwheels/piwheels">github.com/piwheels/piwheels</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">What infrastructure does the
-            piwheels project use?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>The piwheels project is hosted on a cluster of Raspberry Pi 3 and 4s provided by <a
-              href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts</a>. The web pages and
-              wheel files are served from a single Raspberry Pi 4, we use a separate VM to host the
-              database, and use several other Raspberry Pis accross different OS versions to build
-              wheels.</p>
-
-              <p>The original build run was completed by a total of 20 Raspberry Pis, and now a
-              smaller cluster remains active, continuing to build new package releases.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">The package I installed took a long
-              time to install, despite being available on piwheels.</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>First of all: check your pip configuration and confirm that piwheels is in fact
-              being used. You should see
-              <code>Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple</code>.</p>
-
-              <p>If you are definitely using piwheels, it could be that while
-              the package you installed was available on piwheels, perhaps one
-              of its dependencies is not available, and requires downloading
-              from PyPI and building from source. Reading the output from the
-              pip command should tell you what's going on, particularly when the <code>-v</code>
-              flag is used.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Why are the wheel files are
-            tagged with Armv6 and Armv7?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>While the hardware in Raspberry Pi 1 and Zero is Armv6, Pi 2 is
-              Armv7, Pi 3 and 4 are Armv8, the (32-bit) operating system images
-              provided on raspberrypi.org are made to support all three
-              architectures (and are compatible with all Raspberry Pi products
-              to date) by operating in Armv6 userland.</p>
-
-              <p>However, wheels built on a Raspberry Pi 2/3/4 running the
-              32-bit OS are tagged <code>armv7l</code>. Since wheels built on a
-              Raspberry Pi 3/4 will work on a Pi 4, 3, 2, 1 or Zero, we simply
-              provide Pi 3/4-built wheels renamed <code>armv6l</code>, with a few
-              exceptions (some packages, like opencv and tensorflow, are built
-              with optimisations available on Pi 3/4).</p>
-
-              <p>Also see the following answer.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">What about aarch64?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>The repository at piwheels.org does not currently support the
-              64-bit version of the Raspberry Pi OS (currently in beta). We have
-              plans to support it in future, but this requires a significant
-              amount of work, and then rebuilding all wheels on the new
-              architecture. Read more on the <a
-              href="https://blog.piwheels.org/raspberry-pi-os-64-bit-aarch64/">blog</a>
-              and <a href="https://github.com/piwheels/piwheels/issues/220">issue
-              #220</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">What about Ubuntu and other distros?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>The repository at piwheels.org does not support Ubuntu or other distributions.
-              It's possible some wheels will work on other distributions, but we can't promise
-              that they will. Wheels are built against certain shared libraries which we know
-              are available to Raspberry Pi OS users too.</p>
-
-              <p>It would be possible for someone to run their own instance of
-              piwheels to build wheels on and for another distribution, like Ubuntu.
-              To those interested in doing this, please see the
-              <a href="https://piwheels.readthedocs.io/">docs</a>, and feel free
-              to get in touch.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Will wheels provided on piwheels
-            work on other Arm platforms?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Some wheels may work on other Arm platforms, but we can't
-              guarantee this. We only officially support Raspberry Pi OS
-              on Raspberry Pi, but you may have success using wheels on
-              other Debian-based distributions or other boards. We won't accept
-              bug reports for unsupported platforms.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Does piwheels work for the
-            Raspberry Pi Desktop OS for x86?</a>
-
-            <div class="accordion-content" data-tab-content>
-            <p>See the following answer.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Can I install packages from
-            piwheels on my PC/Mac to speed up installations?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Pure Python wheels will likely work, but there's a much
-              smaller speed increase installing from wheels over source
-              distribution. Packages requiring compilation are built for a
-              specific architecture, so they will not be useful on non-Arm
-              platforms and will be ignored. Assuming your pip configuration
-              is set to fall back to PyPI, installation will continue from
-              there, which may involve building from source. There's no harm in
-              trying to use piwheels on a PC/Mac but it's not likely to be very useful.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Are you going to upload all the
-            wheels to PyPI?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>No &mdash; we can't. Only package maintainers can upload files to
-              PyPI. We don't recommend that package maintainers upload Raspberry
-              Pi Arm wheels to PyPI in case they don't work on other Arm
-              platforms. Raspberry Pi users have access to piwheels, so that
-              should suffice.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I'm a package maintainer. Can I
-            upload an Arm wheel to PyPI?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>PyPI now allows uploading Armv6 and Armv7 wheels, but we
-              recommend that you don't upload Arm wheels to PyPI for
-              incompatibility reasons and other complications.</p>
-
-              <p>Wheels built on a Raspberry Pi 3, although tagged
-              <code>armv7l</code> are not truly Armv7, and may be incompatible
-              with other Arm platforms. If your package is made exclusively for
-              the Raspberry Pi platform, there is no harm in uploading Arm
-              wheels to PyPI, and this will speed up the installation for users
-              who do not have pip configured to use piwheels. However, it is not
-              possible to upload two indentical wheel files with
-              <code>armv6l</code> and <code>armv7l</code> platform tags, so the
-              second one will be rejected by PyPI.</p>
-
-              <p>If you intend for your package to be installed by users in
-              multiple Arm platforms, you may be best not to upload Arm wheels
-              to PyPI and instead leave Raspberry Pi users to get a wheel from
-              piwheels, and leave other Arm platform users to build from
-              source.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I'm a package maintainer. How
-            can I remove a wheel from piwheels?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p><a
-              href="https://github.com/piwheels/packages/issues/new/choose">Open
-              an issue on GitHub</a> and we'll endeavour to remove it as soon
-              as we can. In cases where it's not obvious that the requester
-              owns the package to be removed, we may require further evidence
-              that you are authorized to request its removal (e.g. posting as
-              the GitHub owner of the project, or some similar standard of
-              proof on the relevant hosting service).</p>
-
-              <p>If you do request removal, please let us know if you'd like
-              piwheels to avoid building future releases of your package. We
-              can arrange this trivially via a skip flag in our database.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">My package is really popular, so
-                why are the download stats so low?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>We only log downloads from piwheels.org, not from PyPI. If your
-              package is pure Python, and you submit wheels to PyPI (as you
-              should), users may get the file from PyPI, not from piwheels. The
-              only downloads from piwheels for these packages will be if people
-              are explicitly choosing to download from piwheels. You can use
-              projects like <a href="https://pypistats.org">pypistats.org</a> to
-              get the numbers from PyPI, and aggregate them.</p>
-
-              <p>Additionally, if your project is packaged for Debian, people
-              could be installing your package with apt, rather than pip.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I installed a package from
-            piwheels and I get an ImportError with the message "cannot open
-            shared object file".</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Packages built by piwheels may depend on the presence of
-              certain shared libraries. This is resolved by installing apt
-              packages which provide the required shared objects.</p>
-
-              <p>We calculate dependencies after building wheels, and show them
-              on the package project pages.</p>
-
-              <p>It is possible to discover dependencies yourself using
-              <code>ldd</code> and <code>apt-file</code>. Read more about this
-              process on the <a
-              href="https://blog.piwheels.org/how-to-work-out-the-missing-dependencies-for-a-python-package/">piwheels
-              blog</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How can I download all the wheels I need for an offline installation?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Sometimes you need to download wheels ahead of time, for installation later, or download the wheels
-                you need using your PC, and then transfer them to a Raspberry Pi which is offline.</p>
-              <p>To download the wheels on a Raspberry Pi, for use on the same Pi model, it could be as simple as:</p>
-
-              <pre>mkdir wheels
+        <p>If that's there, pip should use piwheels. If not, create the file
+        and add those lines to it.</p>
+
+        <p>Note that pip version 9 or above is required.</p>
+      </div>
+
+      <h5>How do I install a package from piwheels without changing my pip
+        configuration?</h5>
+      <div>
+        <p>You can use piwheels as an additional index, which will allow pip
+        to fall back to PyPI if the requested package (or one of its
+        dependencies) is not available on piwheels, by using the
+        <code>--extra-index-url</code> option, for example:</p>
+
+        <pre>sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
+
+        <p>Alternatively, to only use piwheels, use the <code>-i</code> or
+        <code>--index-url</code> option, for example:</p>
+
+        <pre>sudo pip3 install numpy -i https://www.piwheels.org/simple</pre>
+
+        <p>or</p>
+
+        <pre>sudo pip3 install numpy --index-url https://www.piwheels.org/simple</pre>
+      </div>
+
+      <h5>How do I install a package from PyPI (not from piwheels)?</h5>
+      <div>
+        <p>If your pip is configured to use piwheels, but you want to use
+        PyPI instead, you can either remove or comment out the
+        <code>extra-index-url</code> configuration in
+        <code>/etc/pip.conf</code>, or you can explicitly request no binary
+        distribution in the installation command, and you'll get source
+        distribution from PyPI, for example:</p>
+
+        <pre>sudo pip3 install numpy --no-binary :all:</pre>
+
+        <p>or to use the <code>--no-binary</code> option for a single package
+        (e.g. get the tensorflow wheel but force a build of one of its
+        dependencies, grpcio):</p>
+
+        <pre>sudo pip3 install tensorflow --no-binary grpcio</pre>
+      </div>
+
+      <h5 id="sudo">Should I use sudo? Should I use pip or pip3?</h5>
+      <div>
+        <p>On Debian-based systems such as the Raspberry Pi OS, the
+        <code>python</code> command is Python 2, and <code>python3</code> is
+        Python 3. Similarly, <code>pip</code> is for Python 2, and
+        <code>pip3</code> is for Python 3.</p>
+
+        <p>The exception to this is is when using a Python 3 virtual
+        environment, when <code>python</code> and <code>pip</code> refer to
+        your virtual environment's Python and pip.</p>
+
+        <p>Usually, it's good practice to use a virtual environment rather
+        than the system Python. However, it's common to use the system Python
+        on Raspberry Pi, because you can think of the whole SD card as a
+        "virtual environment" in that you are likely to reimage the SD card
+        regularly, or swap to a different SD card for a different
+        project.</p>
+
+        <p>If you're using the system Python, use <code>sudo pip3</code>:</p>
+
+        <pre>sudo pip3 install numpy</pre>
+
+        <p>If you're in an active a virtual environment, you use
+        <code>pip</code> not <code>pip3</code>, and you don't use
+        <code>sudo</code>:</p>
+
+        <pre>pip install numpy</pre>
+
+        <p>Alternatively, you can use the system Python but install packages
+        for the current user only, which doesn't require
+        <code>sudo</code>:</p>
+
+        <pre>pip3 install numpy --user</pre>
+      </div>
+
+      <h5>piwheels doesn't have the latest version of a package I need. How do
+        I install the newest version available from piwheels?</h5>
+      <div>
+        <p>You can either specify the version you want:</p>
+        <pre>sudo pip3 install numpy==1.18.0</pre>
+        <p>Or you can use the <code>--prefer-binary</code> flag:</p>
+        <pre>sudo pip3 install numpy --prefer-binary</pre>
+        <p>This will install the latest version that's available as a
+        wheel.</p>
+      </div>
+
+      <h5>How much time does piwheels save?</h5>
+      <div>
+        <p>Time saved depends on the package requested, and the Raspberry
+        Pi model used. Some packages usually require significant build
+        time, which is avoided by using piwheels. Many packages are
+        usually quite quick to install anyway, and only a small amount of
+        time is saved. Build time on Pi 1 and Pi Zero is much longer than
+        Pi 3 (roughly 6x), so the biggest gains are there.</p>
+        <p>piwheels saved Raspberry Pi users over 128 years in
+        <a href="https://blog.piwheels.org/piwheels-stats-for-2019/">2019</a>
+        and 269 years in
+        <a href="https://blog.piwheels.org/piwheels-stats-for-2020">2020</a>.
+        See more details in the
+        <a href="https://blog.piwheels.org/tag/stats/">stats blog posts</a>.</p>
+      </div>
+
+      <h5>I maintain a package on PyPI. How do I publish it on piwheels?</h5>
+      <div>
+        <p>You don't need to do anything. All package releases on PyPI are
+        automatically processed by the piwheels project. As long as you
+        upload a source distribution, we'll attempt to build it.</p>
+      </div>
+
+      <h5>Why is a package I maintain not available on piwheels?</h5>
+      <div>
+        <p>Some packages fail to build, for various reasons. If you would like
+        to investigate, try building the package yourself on a Raspberry Pi 3
+        or 4 with a Lite image by running <code>pip3 wheel package==version
+        --no-deps --no-binary package</code>. If you find you are able to
+        successfully build the package (for example, by installing some build
+        dependencies), please <a
+        href="https://github.com/piwheels/packages/issues/new/choose">open an
+        issue on github</a> and we'll try to resolve it. Also see the
+        following question.</p>
+      </div>
+
+      <h5>Why are some versions of a package available on piwheels and other
+        versions are not?</h5>
+      <div>
+        <p>You may discover that piwheels manages to build some versions of a
+        package and fails to build others. Success and failure per ABI is
+        noted on each package's project page. Search for a package on the
+        <a href="packages.html">package list page</a>. If you maintain the
+        package or otherwise have a solution for the build, please <a
+        href="https://github.com/piwheels/packages/issues/new/choose">open
+        an issue on github</a> and we'll try to resolve it.</p>
+      </div>
+
+      <h5>How long does it take for a new release to become available on
+        piwheels?</h5>
+      <div>
+        <p>piwheels should notice the registration of a new package or
+        version within about 10 seconds. How long it takes for that version
+        to be built then depends on two factors:</p>
+
+        <ul>
+          <li><em>Build queue</em>. Sometimes, particularly when a new Debian
+            version is released, piwheels will be busy working through a
+            large build queue, and it may take a while to reach a
+            package.</li>
+          <li><em>Build time</em>. If the package is pure python it should
+            build within a few seconds and appear very quickly. Alternatively
+            if it's a big chunk of C++ with lots of generics it can take
+            hours to compile (the longest compile time for a successful build
+            is currently over 3 hours).</li>
+        </ul>
+
+        <p>So ultimately the time for a new release to appear can be anything
+        from about 10 seconds up to several hours (for complex to build
+        packages) or several days (when piwheels has a large backlog of
+        packages to work through).</p>
+      </div>
+
+      <h5>Does piwheels use cross-compilation?</h5>
+      <div>
+        <p>No. All wheels are built natively on the Raspberry Pi OS on
+        Raspberry Pi 3 and 4 hardware.</p>
+      </div>
+
+      <h5>Which Raspberry Pi models are supported by packages provided by
+        piwheels?</h5>
+      <div>
+        <p>All current Raspberry Pi models (as of November 2021) are
+        supported:</p>
+
+        <ul>
+          <li>Raspberry Pi 400</li>
+          <li>Raspberry Pi 4</li>
+          <li>Raspberry Pi 3 (including B+/A+)</li>
+          <li>Raspberry Pi 2</li>
+          <li>Raspberry Pi 1 (including B+/A+)</li>
+          <li>Raspberry Pi Zero</li>
+          <li>Raspberry Pi Zero 2</li>
+        </ul>
+
+        <p>Please also observe answers to questions relating to operating
+        systems and Python versions.</p>
+      </div>
+
+      <h5>I installed a package from piwheels and it doesn't work as
+        expected</h5>
+      <div>
+        <p>Some packages build differently depending on the tools available.
+        For example, if the package <code>matplotlib</code> is built with
+        <code>pyqt</code> installed, the wheel will depend on the user also
+        having <code>pyqt</code> installed. If it is built without
+        <code>pyqt</code>, the user can use <code>matplotlib</code> without
+        <code>pyqt</code>.</p>
+
+        <p>If you find an issue with a package installed from piwheels, please
+        <a href="https://github.com/piwheels/packages/issues/new/choose">submit
+        an issue on GitHub</a>.</p>
+      </div>
+
+      <h5>Which Python versions does piwheels support?</h5>
+      <div>
+        <p>piwheels supports Python 3 only. While most packages available
+        will work in any version of Python 3, some packages are only
+        compatible with the minor version with which they were built. We
+        build using for the ABI of the Python 3 version distributed with
+        Debian releases:</p>
+
+        <ul>
+          <li>Jessie - Python 3.4 (end of life)</li>
+          <li>Stretch - Python 3.5</li>
+          <li>Buster - Python 3.7</li>
+          <li>Bullseye - Python 3.9</li>
+        </ul>
+      </div>
+
+      <h5>Where can I find the piwheels source code?</h5>
+      <div>
+        <p>The source code for the piwheels project can be found on GitHub at
+        <a href="https://github.com/piwheels/piwheels">github.com/piwheels/piwheels</a>.</p>
+      </div>
+
+      <h5>What infrastructure does the piwheels project use?</h5>
+      <div>
+        <p>The piwheels project is hosted on a cluster of Raspberry Pi 3 and 4s
+        provided by <a
+        href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts</a>.
+        The web pages and wheel files are served from a single Raspberry Pi 4,
+        we use a separate VM to host the database, and use several other
+        Raspberry Pis accross different OS versions to build wheels.</p>
+
+        <p>The original build run was completed by a total of 20 Raspberry
+        Pis, and now a smaller cluster remains active, continuing to build
+        new package releases.</p>
+      </div>
+
+      <h5>The package I installed took a long time to install, despite being
+        available on piwheels.</h5>
+      <div>
+        <p>First of all: check your pip configuration and confirm that
+        piwheels is in fact being used. You should see <code>Looking in
+        indexes: https://pypi.org/simple,
+        https://www.piwheels.org/simple</code>.</p>
+
+        <p>If you are definitely using piwheels, it could be that while the
+        package you installed was available on piwheels, perhaps one of its
+        dependencies is not available, and requires downloading from PyPI and
+        building from source. Reading the output from the pip command should
+        tell you what's going on, particularly when the <code>-v</code> flag
+        is used.</p>
+      </div>
+
+      <h5>Why are the wheel files are tagged with Armv6 and Armv7?</h5>
+      <div>
+        <p>While the hardware in Raspberry Pi 1 and Zero is Armv6, Pi 2 is
+        Armv7, Pi 3, 4, 400 and Zero 2 are Armv8, the (32-bit) operating system
+        images provided on raspberrypi.com are made to support all three
+        architectures (and are compatible with all Raspberry Pi products to
+        date) by operating in Armv6 userland.</p>
+
+        <p>However, wheels built on a Raspberry Pi 2/3/4 running the 32-bit
+        OS are tagged <code>armv7l</code>. Since wheels built on a Raspberry
+        Pi 3/4 will work on a Pi 4, 3, 2, 1, Zero or Zero 2, we simply provide Pi
+        3/4-built wheels renamed <code>armv6l</code>, with a few exceptions
+        (some packages, like opencv and tensorflow, are built with
+        optimisations available on Pi 3/4).</p>
+
+        <p>Also see the following question.</p>
+      </div>
+
+      <h5>What about aarch64?</h5>
+      <div>
+        <p>The repository at piwheels.org does not currently support the
+        64-bit version of the Raspberry Pi OS (currently in beta). We have
+        plans to support it in future, but this requires a significant amount
+        of work, and then rebuilding all wheels on the new architecture. Read
+        more on the <a href="https://blog.piwheels.org/raspberry-pi-os-64-bit-aarch64/">blog</a>
+        and <a href="https://github.com/piwheels/piwheels/issues/220">issue #220</a>.</p>
+      </div>
+
+      <h5>What about Ubuntu and other distros?</h5>
+      <div>
+        <p>The repository at piwheels.org does not support Ubuntu or other
+        distributions. It's possible some wheels will work on other
+        distributions, but we can't promise that they will. Wheels are built
+        against certain shared libraries which we know are available to
+        Raspberry Pi OS users too.</p>
+
+        <p>It would be possible for someone to run their own instance of
+        piwheels to build wheels on and for another distribution, like
+        Ubuntu. To those interested in doing this, please see the <a
+        href="https://piwheels.readthedocs.io/">docs</a>, and feel free to
+        get in touch.</p>
+      </div>
+
+      <h5>Will wheels provided on piwheels work on other Arm platforms?</h5>
+      <div>
+        <p>Some wheels may work on other Arm platforms, but we can't
+        guarantee this. We only officially support Raspberry Pi OS
+        on Raspberry Pi, but you may have success using wheels on other
+        Debian-based distributions or other boards. We won't accept bug
+        reports for unsupported platforms.</p>
+      </div>
+
+      <h5>Does piwheels work for the Raspberry Pi Desktop OS for x86?</h5>
+      <div>
+        <p>See the following question.</p>
+      </div>
+
+      <h5>Can I install packages from piwheels on my PC/Mac to speed up
+        installations?</h5>
+      <div>
+        <p>Pure Python wheels will likely work, but there's a much smaller
+        speed increase installing from wheels over source distribution.
+        Packages requiring compilation are built for a specific architecture,
+        so they will not be useful on non-Arm platforms and will be ignored.
+        Assuming your pip configuration is set to fall back to PyPI,
+        installation will continue from there, which may involve building
+        from source. There's no harm in trying to use piwheels on a PC/Mac
+        but it's not likely to be very useful.</p>
+      </div>
+
+      <h5>Are you going to upload all the wheels to PyPI?</h5>
+      <div>
+        <p>No &mdash; we can't. Only package maintainers can upload files to
+        PyPI. We don't recommend that package maintainers upload Raspberry Pi
+        Arm wheels to PyPI in case they don't work on other Arm platforms.
+        Raspberry Pi users have access to piwheels, so that should
+        suffice.</p>
+      </div>
+
+      <h5>I'm a package maintainer. Can I upload an Arm wheel to PyPI?</h5>
+      <div>
+        <p>PyPI now allows uploading Armv6 and Armv7 wheels, but we recommend
+        that you don't upload Arm wheels to PyPI for incompatibility reasons
+        and other complications.</p>
+
+        <p>Wheels built on a Raspberry Pi 3, although tagged
+        <code>armv7l</code> are not truly Armv7, and may be incompatible with
+        other Arm platforms. If your package is made exclusively for the
+        Raspberry Pi platform, there is no harm in uploading Arm wheels to
+        PyPI, and this will speed up the installation for users who do not
+        have pip configured to use piwheels. However, it is not possible to
+        upload two indentical wheel files with <code>armv6l</code> and
+        <code>armv7l</code> platform tags, so the second one will be rejected
+        by PyPI.</p>
+
+        <p>If you intend for your package to be installed by users in
+        multiple Arm platforms, you may be best not to upload Arm wheels to
+        PyPI and instead leave Raspberry Pi users to get a wheel from
+        piwheels, and leave other Arm platform users to build from
+        source.</p>
+      </div>
+
+      <h5>I'm a package maintainer. How can I remove a wheel from piwheels?</h5>
+      <div>
+        <p><a href="https://github.com/piwheels/packages/issues/new/choose">Open
+        an issue on GitHub</a> and we'll endeavour to remove it as soon as
+        we can. In cases where it's not obvious that the requester owns the
+        package to be removed, we may require further evidence that you are
+        authorized to request its removal (e.g. posting as the GitHub owner
+        of the project, or some similar standard of proof on the relevant
+        hosting service).</p>
+
+        <p>If you do request removal, please let us know if you'd like
+        piwheels to avoid building future releases of your package. We
+        can arrange this trivially via a skip flag in our database.</p>
+      </div>
+
+      <h5>My package is really popular, so why are the download stats so low?</h5>
+      <div>
+        <p>We only log downloads from piwheels.org, not from PyPI. If your
+        package is pure Python, and you submit wheels to PyPI (as you
+        should), users may get the file from PyPI, not from piwheels. The
+        only downloads from piwheels for these packages will be if people are
+        explicitly choosing to download from piwheels. You can use projects
+        like <a href="https://pypistats.org">pypistats.org</a> to get the
+        numbers from PyPI, and aggregate them.</p>
+
+        <p>Additionally, if your project is packaged for Debian, people could
+        be installing your package with apt, rather than pip.</p>
+      </div>
+
+      <h5>I installed a package from piwheels and I get an ImportError with
+        the message "cannot open shared object file".</h5>
+      <div>
+        <p>Packages built by piwheels may depend on the presence of certain
+        shared libraries. This is resolved by installing apt packages which
+        provide the required shared objects.</p>
+
+        <p>We calculate dependencies after building wheels, and show them on
+        the package project pages.</p>
+
+        <p>It is possible to discover dependencies yourself using
+        <code>ldd</code> and <code>apt-file</code>. Read more about this
+        process on the <a href="https://blog.piwheels.org/how-to-work-out-the-missing-dependencies-for-a-python-package/">piwheels
+        blog</a>.</p>
+      </div>
+
+      <h5>How can I download all the wheels I need for an offline installation?</h5>
+      <div>
+        <p>Sometimes you need to download wheels ahead of time, for
+        installation later, or download the wheels you need using your PC,
+        and then transfer them to a Raspberry Pi which is offline.</p>
+        <p>To download the wheels on a Raspberry Pi, for use on the same Pi
+        model, it could be as simple as:</p>
+
+        <pre>mkdir wheels
 cd wheels
-pip3 wheel &lt;package&gt;</pre>
+pip3 wheel <em>&lt;package&gt;</em></pre>
 
-              <p>To download the wheels using your PC, you will need to provide additional flags to specify the spec of
-              the Pi. For example, Armv7 wheels (for a Pi 2/3/4) for Buster (cp37m):</p>
+        <p>To download the wheels using your PC, you will need to provide
+        additional flags to specify the spec of the Pi. For example, Armv7
+        wheels (for a Pi 2/3/4) for Buster (cp37m):</p>
 
-              <pre>mkdir wheels
+        <pre>mkdir wheels
 cd wheels
-python3 -m pip download --extra-index-url https://www.piwheels.org/simple --implementation cp --platform linux_armv7l --abi cp37m --only-binary=:all: &lt;package&gt;</pre>
+python3 -m pip download \
+    --extra-index-url https://www.piwheels.org/simple \
+    --implementation cp \
+    --platform linux_armv7l \
+    --abi cp37m \
+    --only-binary=:all: \
+    <em>&lt;package&gt;</em></pre>
 
-            <p>You'll need to alter the flags according to platform and ABI requirements.</p>
-            </div>
-          </div>
+        <p>You'll need to alter the flags according to platform and ABI
+        requirements.</p>
+      </div>
 
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How can I force installation of Armv6 wheels?</a>
+      <h5>How can I force installation of Armv6 wheels?</h5>
+      <div>
+        <p>Sometimes you need to install the Armv6 wheels, even if you're on
+        a Pi 2/3/4/400/Zero 2, because you intend to use the SD card on multiple models,
+        including Pi 1/Zero.</p>
+        <p>Note that in almost all cases, the Armv6 and Armv7 wheels are
+        identical, and compatible on both architectures. The only exceptions
+        are opencv and tensorflow.</p>
+        <p>To ensure the Armv6 wheels are installed on a Pi 2/3/4, you need
+        to find the location of the Armv6 wheels, download them and rename
+        them.</p>
+        <ol>
+          <li>Go to the package's <a href="/packages.html">project page</a>,
+            scroll down to the Files section, and find the file you need.</li>
+          <li>Copy the full URL of the file location, e.g.
+            https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl</li>
+          <li>Download the file</li>
+          <li>Rename the file, changing <code>armv6l</code> to
+            <code>armv7l</code></li>
+          <li>Use pip to install the file</li>
+        </ol>
 
-            <div class="accordion-content" data-tab-content>
-              <p>Sometimes you need to install the Armv6 wheels, even if you're on a Pi 2/3/4, because you intend to
-              use the SD card on multiple models, including Pi 1/Zero.</p>
-              <p>Note that in almost all cases, the Armv6 and Armv7 wheels are identical, and compatible on both
-              architectures. The only exceptions are opencv and tensorflow.</p>
-              <p>To ensure the Armv6 wheels are installed on a Pi 2/3/4, you need to find the location of the Armv6
-              wheels, download them and rename them.</p>
-              <ol>
-                <li>Go to the package's <a href="/packages.html">project page</a>, scroll down to the Files section, and find the file you need.</li>
-                <li>Copy the full URL of the file location, e.g. https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl</li>
-                <li>Download the file</li>
-                <li>Rename the file, changing <code>armv6l</code> to <code>armv7l</code></li>
-                <li>Use pip to install the file</li>
-              </ol>
-
-              <pre>wget https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl
+        <pre>wget https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl
 mv tensorflow-1.14.0-cp37-none-linux_armv6l.whl tensorflow-1.14.0-cp37-none-linux_armv7l.whl
 sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
 
-              <p>Alternatively, simply install the packages as normal on a Pi 1/Zero.</p>
-            </div>
-          </div>
+        <p>Alternatively, simply install the packages as normal on a Pi
+        1/Zero.</p>
+      </div>
 
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">How can I help?</a>
+      <h5>How can I help?</h5>
+      <div>
+        <ul>
+          <li>If you find a missing package, open an issue and complete the
+            issue form in full.</li>
+          <li>If you see a missing package issue, you can help by trying to
+            build it yourself, and try to identify the cause of the failure.
+            Report your findings to us by replying to the GitHub issue.</li>
+          <li>If you want to seek out missing packages, refer to the
+            <a href="https://github.com/piwheels/packages/projects/1">project board</a> or
+            <a href="https://github.com/piwheels/packages/issues">issue list</a>.</li>
+        </ul>
+        <p>This is a summary taken from a blog post
+          <a href="https://blog.piwheels.org/how-you-can-help/">How you can help</a>.</p>
+      </div>
 
-            <div class="accordion-content" data-tab-content>
-              <ul>
-                <li>If you find a missing package, open an issue and complete the issue form in full.</li>
-                <li>If you see a missing package issue, you can help by trying to build it yourself,
-                and try to identify the cause of the failure. Report your findings to us by replying
-                to the GitHub issue.</li>
-                <li>If you want to seek out missing packages, refer to the
-                <a href="https://github.com/piwheels/packages/projects/1">project board</a> or
-                <a href="https://github.com/piwheels/packages/issues">issue list</a>.</li>
-              </ul>
-              <p>This is a summary taken from a blog post
-              <a href="https://blog.piwheels.org/how-you-can-help/">How you can help</a>.</p>
-            </div>
-          </div>
+      <h5>I got a hash mismatch when trying to install a package from piwheels</h5>
+      <div>
+        <p>We've seen some (very few) reports of hash mismatches when people
+        are using piwheels.</p>
+        <p>First of all, don't ignore the hash mismatch &mdash; it's
+        important to verify that the file you downloaded is the file you were
+        expecting.</p>
+        <p>You need to download the file, verify it, and install it
+        manually:</p>
+        <ol>
+          <li>Go to the package's <a href="/packages.html">project page</a>,
+            find the version you need, and open up the list of files. Choose
+            the right file for your Python version and architecture.</li>
+          <li>Copy the full URL of the file location (without the checksum
+            which follows the hash), e.g.
+            https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv7l.whl</li>
+          <li>Download the file:
+            <pre>wget https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre></li>
+          <li>Check the sha256sum of the file:
+            <pre>sha256sum tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre></li>
+          <li>Verify that it matches the checksum after the hash in the URL
+            on the project page:</li>
+          <li>If it matches:
+            <ul>
+              <li>That means pip was timing out trying to download the file,
+                and you ended up with a corrupted file. This is a bug in pip
+                which is difficult to reproduce.</li>
+              <li>It's safe to install the wheel, so you can use
+                <code>pip</code> to install directly from the file: <code>sudo
+                pip3 install
+                tensorflow-1.14.0-cp37-none-linux_armv7l.whl</code></li>
+            </ul>
+          </li>
+          <li>If it doesn't match:
+            <ul>
+              <li>Rename the file extension from <code>.whl</code> to
+                <code>.zip</code> and try to open it as a zip file. If it
+                opens correctly, it should look like a Python package. If it
+                does, that means the hash mismatch is genuine, so please <a
+                href="https://github.com/piwheels/packages/issues/new/choose">open
+                an issue</a> and understand the risk before proceeding to
+                install it.</li>
+              <li>If not, it's probably corrupted (which expains your original
+                problem). Try downloading it again, and check your internet
+                connection is stable.</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
 
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I got a hash mismatch when trying to install a package from piwheels</a>
+      <h5>I need to remove a release</h5>
+      <div>
+        <p>If you delete a package or version from PyPI, it will also be
+        deleted from piwheels, and any files relating to the package or
+        version will be removed. In the case of version removal, the project
+        page will be updated to remove the version in question. In the case
+        of package deletion, the project page will be deleted.</p>
+        <p>Alternatively, package maintainers have the ability to "yank"
+        releases from PyPI. Yanking a release allows authors to effectively
+        delete a version's files, without breaking things for people who have
+        pinned to exactly a specific version. Releases yanked from PyPI will
+        be reflected in piwheels, both in the simple index and visually on
+        the project page. Read more about "yank" in <a
+          href="https://www.python.org/dev/peps/pep-0592/">PEP-592</a>.</p>
+      </div>
 
-            <div class="accordion-content" data-tab-content>
-              <p>We've seen some (very few) reports of hash mismatches when people are using piwheels.</p>
-              <p>First of all, don't ignore the hash mismatch &mdash; it's important to verify that the file you downloaded
-              is the file you were expecting.</p>
-              <p>You need to download the file, verify it, and install it manually:</p>
-              <ol>
-                <li>Go to the package's <a href="/packages.html">project page</a>, find the version you need, and open
-                up the list of files. Choose the right file for your Python version and architecture.</li>
-                <li>Copy the full URL of the file location (without the checksum which follows the hash),
-                e.g. https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv7l.whl</li>
-                <li>Download the file:
-                  <pre>wget https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
-                </li>
-                <li>Check the sha256sum of the file:
-                  <pre>sha256sum tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
-                </li>
-                <li>Verify that it matches the checksum after the hash in the URL on the project page:</li>
-                <li>If it matches:
-                  <ul>
-                    <li>That means pip was timing out trying to download the file, and you ended up with a corrupted file.
-                    This is a bug in pip which is difficult to reproduce.</li>
-                    <li>It's safe to install the wheel, so you can use <code>pip</code> to install directly from the file:
-                    <code>sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</code></li>
-                  </ul>
-                </li>
-                <li>If it doesn't match:
-                  <ul>
-                    <li>Rename the file extension from <code>.whl</code> to <code>.zip</code> and try to open it as a zip file. If it opens correctly,
-                    it should look like a Python package.
-                    If it does, that means the hash mismatch is genuine, so please <a href="https://github.com/piwheels/packages/issues/new/choose">open an issue</a>
-                    and understand the risk before proceeding to install it.</li>
-                    <li>If not, it's probably corrupted (which expains your original problem). Try downloading it again, and check your internet connection is stable.</li>
-                  </ul>
-                </li>
-              </ol>
-            </div>
-          </div>
+      <h5>Is there a piwheels API?</h5>
+      <div>
+        <p>Yes! Read about the <a href="json.html">piwheels JSON API</a>.</p>
+      </div>
 
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I need to remove a release</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>If you delete a package or version from PyPI, it will also be deleted from piwheels, and any files relating to the package or version
-              will be removed. In the case of version removal, the project page will be updated to remove the version in question. In the case of package
-              deletion, the project page will be deleted.</p>
-              <p>Alternatively, package maintainers have the ability to "yank" releases from PyPI. Yanking a release allows authors to effectively delete
-              a version's files, without breaking things for people who have pinned to exactly a specific version. Releases yanked from PyPI will be
-              reflected in piwheels, both in the simple index and visually on the project page. Read more about "yank" in
-              <a href="https://www.python.org/dev/peps/pep-0592/">PEP-592</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">Is there a piwheels API?</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Yes! Read about the <a href="json.html">piwheels JSON API</a>.</p>
-            </div>
-          </div>
-
-          <div class="accordion-item" data-accordion-item>
-            <a href="#" class="accordion-title">I have another question</a>
-
-            <div class="accordion-content" data-tab-content>
-              <p>Please <a href="https://github.com/piwheels/piwheels/issues/221">add your question on GitHub</a>,
-              and we'll try to help, and consider adding an entry here.</p>
-            </div>
-          </div>
-
-        </div>
+      <h5>I have another question</h5>
+      <div>
+        <p>Please <a
+        href="https://github.com/piwheels/piwheels/issues/221">add your
+        question on GitHub</a>, and we'll try to help, and consider adding
+        an entry here.</p>
       </div>
     </div>
-  </div>
+  </section>
 </div>

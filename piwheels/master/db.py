@@ -51,11 +51,6 @@ from .. import __version__
 UTC = timezone.utc
 
 
-ProjectVersionsRow = namedtuple('ProjectVersionsRow', (
-    'version', 'yanked', 'released', 'skip', 'builds_succeeded', 'builds_failed'))
-ProjectFilesRow = namedtuple('ProjectFilesRow', (
-    'version', 'platform_tag', 'builder_abi', 'file_abi_tag', 'filename',
-    'filesize', 'filehash', 'yanked', 'requires_python', 'dependencies'))
 RewritePendingRow = namedtuple('RewritePendingRow', (
     'package', 'added_at', 'command'))
 
@@ -117,7 +112,6 @@ class Database:
                 self._packages = Table('packages', self._meta, autoload=True)
                 self._versions = Table('versions', self._meta, autoload=True)
                 self._builds = Table('builds', self._meta, autoload=True)
-                self._output = Table('output', self._meta, autoload=True)
                 self._files = Table('files', self._meta, autoload=True)
                 self._dependencies = Table(
                     'dependencies', self._meta, autoload=True)
@@ -199,14 +193,6 @@ class Database:
             self._conn.execute(
                 "VALUES (set_package_description(%s, %s))",
                 (package, description))
-
-    def get_package_description(self, package):
-        """
-        Retrieve the description for *package* in the packages table.
-        """
-        with self._conn.begin():
-            return self._conn.execute(
-                "VALUES (get_package_description(%s))", (package,)).scalar()
 
     def skip_package(self, package, reason):
         """
@@ -393,13 +379,13 @@ class Database:
 
     def log_build(self, build):
         """
-        Log a build attempt in the database, including build output and wheel
-        info if successful.
+        Log a build attempt in the database, including wheel info if
+        successful.
         """
         with self._conn.begin():
             if build.status:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_success(%s, %s, %s, %s, %s, %s, "
+                    "VALUES (log_build_success(%s, %s, %s, %s, %s, "
                     "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
                     "))",
                     (
@@ -408,7 +394,6 @@ class Database:
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        sanitize(build.output),
                         [(
                             file.filename,
                             None,
@@ -433,14 +418,13 @@ class Database:
                     )).scalar()
             else:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_failure(%s, %s, %s, %s, %s, %s))",
+                    "VALUES (log_build_failure(%s, %s, %s, %s, %s))",
                     (
                         build.package,
                         build.version,
                         build.slave_id,
                         build.duration,
                         build.abi_tag,
-                        sanitize(build.output),
                     )).scalar()
             build.logged(build_id)
 
@@ -570,36 +554,25 @@ class Database:
                 )
             }
 
-    def get_project_versions(self, package):
+    def get_project_data(self, package):
         """
-        Returns all details required to build the versions table in the
-        project page of the specified *package*.
-        """
-        with self._conn.begin():
-            return [
-                ProjectVersionsRow(*row)
-                for row in self._conn.execute(
-                    "SELECT version, yanked, released, skip, builds_succeeded, "
-                    "builds_failed "
-                    "FROM get_project_versions(%s)", (package,)
-                )
-            ]
-
-    def get_project_files(self, package):
-        """
-        Returns all details required to build the files table in the project
-        page of the specified *package*.
+        Returns all details required to build the project page of the specified
+        *package*.
         """
         with self._conn.begin():
-            return [
-                ProjectFilesRow(*row)
-                for row in self._conn.execute(
-                    "SELECT version, platform_tag, builder_abi, file_abi_tag, "
-                    "filename, filesize, filehash, yanked, requires_python, "
-                    "dependencies "
-                    "FROM get_project_files(%s)", (package,)
-                )
-            ]
+            for row in self._conn.execute(
+                "VALUES (get_project_data(%s))", (package,)
+            ):
+                # Fix up datetime and set types (which JSON doesn't support)
+                data = row[0]
+                for release in data['releases'].values():
+                    release['released'] = datetime.strptime(
+                        release['released'], '%Y-%m-%dT%H:%M:%S+00:00'
+                    ).replace(tzinfo=UTC)
+                    for wheel in release['files'].values():
+                        wheel['apt_dependencies'] = set(
+                            wheel['apt_dependencies'])
+                return data
 
     def get_version_skip(self, package, version):
         """

@@ -154,6 +154,40 @@ def build_state_hacked(request, file_state, file_state_hacked):
 
 
 @pytest.fixture()
+def project_data(request, build_state_hacked):
+    bsh = build_state_hacked
+    return {
+        'description': '',
+        'name': bsh.package,
+        'releases': {
+            bsh.version: {
+                'abis': {
+                    bsh.abi_tag: {
+                        'build_id': 1, # bsh.build_id is still None here
+                        'status': 'success' if bsh.status else 'failed',
+                    }
+                },
+                'files': {
+                    fs.filename: {
+                        'abi_builder': bsh.abi_tag,
+                        'abi_file': fs.abi_tag,
+                        'apt_dependencies': set(fs.dependencies['apt']),
+                        'hash': fs.filehash,
+                        'platform': fs.platform_tag,
+                        'requires_python': fs.requires_python,
+                        'size': fs.filesize,
+                    }
+                    for fs in bsh.files.values()
+                },
+                'released': datetime(1970, 1, 1, tzinfo=UTC),
+                'skip': '',
+                'yanked': False,
+            }
+        }
+    }
+
+
+@pytest.fixture()
 def download_state(request, file_state):
     return DownloadState(
         file_state.filename, '123.4.5.6',
@@ -272,6 +306,9 @@ def with_package(request, db, with_build_abis, build_state):
     with db.begin():
         db.execute(
             "INSERT INTO packages(package) VALUES (%s)", build_state.package)
+        db.execute(
+            "INSERT INTO package_names(package, name, seen) VALUES (%s, %s, %s)",
+            (build_state.package, build_state.package, datetime(2000, 1, 1)))
     return build_state.package
 
 
@@ -298,8 +335,6 @@ def with_build(request, db, with_package_version, build_state):
             build_state.slave_id,
             build_state.duration,
             build_state.abi_tag).first()[0]
-        db.execute(
-            "INSERT INTO output VALUES (%s, 'Built successfully')", build_id)
     build_state.logged(build_id)
     return build_state
 

@@ -313,7 +313,6 @@ class SlaveDriver(tasks.PausingTask):
             if msg == 'HELLO':
                 slave = SlaveState(address, *data)
             else:
-                # XXX Tell the slave to die?
                 self.logger.error('invalid first message from slave: %s', msg)
                 return
 
@@ -488,6 +487,9 @@ class SlaveDriver(tasks.PausingTask):
                 self.logger.info('slave %d (%s): build failed',
                                  slave.slave_id, slave.label)
                 self.db.log_build(slave.build)
+                self.web_queue.send_msg('LOG', (
+                    slave.build.build_id, slave.build.output))
+                self.web_queue.recv_msg()
                 self.web_queue.send_msg('PROJECT', slave.build.package)
                 self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData
@@ -520,6 +522,9 @@ class SlaveDriver(tasks.PausingTask):
                 slave.slave_id, slave.label, slave.reply[1])
             if slave.build.transfers_done:
                 self.db.log_build(slave.build)
+                self.web_queue.send_msg('LOG', (
+                    slave.build.build_id, slave.build.output))
+                self.web_queue.recv_msg()
                 self.web_queue.send_msg('BOTH', slave.build.package)
                 self.web_queue.recv_msg()
                 return 'DONE', protocols.NoData

@@ -33,14 +33,14 @@ Defines the :class:`TheScribe` task; see class for more details.
     :members:
 """
 
-import io
 import os
+import gzip
 import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 from itertools import zip_longest
-from operator import attrgetter
+from operator import itemgetter
 from collections import namedtuple
 
 import pkg_resources
@@ -48,7 +48,7 @@ from chameleon import PageTemplateLoader
 import simplejson as json
 
 from .. import const, protocols, tasks, transport
-from ..format import format_size, canonicalize_name
+from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
 
@@ -58,28 +58,6 @@ UTC = timezone.utc
 ProjectRelease = namedtuple('ProjectRelease', (
     'version', 'yanked', 'released', 'skip', 'abis', 'files',
     'builds_succeeded', 'builds_failed'))
-
-def _is_compatible_with_abi(abi, builds_succeeded, files):
-    return abi in builds_succeeded or any(
-        f['file_abi_tag'] == 'none' and abi >= f['builder_abi']
-        for f in files
-    )
-
-def _get_abi_status(abi, builds_succeeded, builds_failed, files, skip):
-    status = {
-        'css_class': 'pending',
-        'title': 'Build pending',
-    }
-    if abi in builds_failed:
-        status['css_class'] = 'fail'
-        status['title'] = 'Build failed'
-    elif _is_compatible_with_abi(abi, builds_succeeded, files):
-        status['css_class'] = 'success'
-        status['title'] = 'Build succeeded'
-    elif skip:
-        status['css_class'] = 'skip'
-        status['title'] = 'Skipped: {}'.format(skip)
-    return status
 
 
 class PackageDeleted(ValueError):
@@ -190,6 +168,8 @@ class TheScribe(tasks.PauseableTask):
         * "PROJECT", a request to write just the project page for the specified
           package
 
+        * "LOG", a request to write a build log
+
         .. note::
 
             In all handlers below, care is taken to ensure clients never see a
@@ -213,10 +193,12 @@ class TheScribe(tasks.PauseableTask):
             elif msg == 'SEARCH':
                 search_index = data
                 self.write_search_index(search_index)
+            elif msg == 'LOG':
+                build_id, log = data
+                self.write_log(build_id, log)
             elif msg == 'DELVER':
                 package, version = data
                 self.delete_version(package, version)
-                pages = ('index', 'project')
                 self.write_pages(package, both=True, exclude={version})
             elif msg == 'DELPKG':
                 package = data
@@ -315,8 +297,8 @@ class TheScribe(tasks.PauseableTask):
 
         :param bool both:
             Write both the project page and the simple page if True, otherwise
-            only write the project page. Note project page also includes project
-            JSON.
+            only write the project page. Note project page also includes
+            project JSON.
 
         :type exclude: set or None
         :param exclude:
@@ -325,81 +307,163 @@ class TheScribe(tasks.PauseableTask):
         """
         if exclude is None:
             exclude = set()
-        files = self.get_files(package, exclude)
-        if both:
-            self.write_package_index(package, files)
-        versions = self.get_versions(package, exclude)
-        releases = self.get_releases(versions, files)
-        description = self.db.get_package_description(package)
-        self.write_project_page(package, releases, description)
-        self.write_project_json(package, releases, description)
 
-    def write_package_index(self, package, files):
+        data = self.db.get_project_data(package)
+        # Rewrite versions as version objects, exclude deleted versions, and
+        # sort the releases dict by the parsed version
+        data['releases'] = {
+            parse_version(version): vers_data
+            for version, vers_data in data['releases'].items()
+            if version not in exclude
+        }
+        data['releases'] = {
+            version: vers_data
+            for version, vers_data in sorted(
+                data['releases'].items(), key=itemgetter(0), reverse=True)
+        }
+
+        if both:
+            self.write_package_index(package, data)
+        self.write_project_page(package, data)
+        self.write_project_json(package, data)
+
+    def write_package_index(self, package, data):
         """
-        (Re)writes the index of the specified package. The file meta-data
+        (Re)writes the index of the specified *package*. The file meta-data
         (including the hash) is retrieved from the database, *never* from the
         file-system.
 
-        :param str package:
-            The name of the package to write the index for
+        The *data* parameter is expected to be the dictionary of
+        package data returned by :meth:`.db.Database.get_project_data`. This
+        is expected to have at least the following content in the example case
+        of a package named "foo" with version "1.0" containing a validly built
+        wheel::
 
-        :param str files:
-            The list of files to include in the index
+            {
+                'releases': {
+                    '1.0': {
+                        'files': {
+                            'foo-1.0-py3-none-any.whl': {
+                                'hash': 'abcdef1234567890...',
+                                'requires_python': '>= 3.6',
+                            },
+                        },
+                        'yanked': False,
+                    },
+                },
+            }
+
+        :param str package:
+            The name of the package to write the index page for.
+
+        :param dict data:
+            The dictionary of data returned by
+            :meth:`.db.Database.get_project_data` which is expected to have
+            at least the structure documented above.
         """
         self.logger.info('writing index for %s', package)
+
+        files = [
+            {
+                'filename': filename,
+                'filehash': file_data['hash'],
+                'requires_python': file_data['requires_python'],
+                'yanked': vers_data['yanked'],
+            }
+            for vers, vers_data in data['releases'].items()
+            for filename, file_data in vers_data['files'].items()
+        ]
+
         pkg_dir = self.output_path / 'simple' / package
         mkdir_override_symlink(pkg_dir)
         with AtomicReplaceFile(pkg_dir / 'index.html',
                                encoding='utf-8') as index:
-            index.file.write(self.templates['simple_package'](
-                package=package,
-                files=files
-            ))
+            index.file.write(
+                self.templates['simple_package'](
+                    package=package,
+                    files=files))
         if package not in self.package_cache:
             self.package_cache.add(package)
             self.write_simple_index()
 
-    def write_project_page(self, package, releases, description):
+    def write_project_page(self, package, data):
         """
         (Re)writes the project page of the specified package.
 
+        The *data* parameter is expected to be the dictionary of
+        package data returned by :meth:`.db.Database.get_project_data`. This
+        is expected to have at least the following content in the example case
+        of a package named "foo" with version "1.0" containing a validly built
+        wheel::
+
+            {
+                'name': 'foo',
+                'description': 'A foomatic package',
+                'releases': {
+                    '1.0': {
+                        'abis': {
+                            'cp35m': {
+                                'build_id': 1,
+                                'status': 'success',
+                                'skip': '',
+                            }
+                        }
+                        'files': {
+                            'foo-1.0-py3-none-any.whl': {
+                                'hash': 'abcdef1234567890...',
+                                'size': 123456,
+                                'apt_dependencies': {'libc6'},
+                            },
+                        },
+                        'released': datetime(2000, 1, 1, 12, 34, 56),
+                        'yanked': False,
+                        'skip': '',
+                    },
+                },
+            }
+
         :param str package:
-            The name of the package to write the project page for
+            The name of the package to write the project page for.
 
-        :param str releases:
-            The list of releases to include in the project page
-
-        :param str description:
-            The project summary text
+        :param dict data:
+            The dictionary of data returned by
+            :meth:`.db.Database.get_project_data` which is expected to have
+            at least the structure documented above.
         """
         self.logger.info('writing project page for %s', package)
-        num_files = sum(len(release.files) for release in releases)
-        release_files = [
-            release.files
-            for release in releases
-            if not (release.version.is_prerelease or release.yanked)
-        ]
-        try:
-            dependencies = release_files[0][0]['apt_dependencies']
-        except IndexError:
-            dependencies = set()
-        project_name = self.db.get_project_display_name(package)
+
+        # This horribly confusing loop simply serves to efficiently extract
+        # the apt_dependencies from the latest successful build, which is
+        # reported (by default) as the dependencies at the top of the project
+        # page. Ideally this would be done in the template, but the logic is
+        # just too horrid to do nicely there. We *could* resort to javascript
+        # picking the dependencies from the first row of the table, but that
+        # then denies non-JS browsers (or search engines) any dependency info
+        dependencies = set()
+        for version, release in data['releases'].items():
+            if not (version.is_prerelease or release['yanked']):
+                for filedata in release['files'].values():
+                    dependencies = filedata['apt_dependencies']
+                    break
+                else:
+                    continue
+                break
         project_dir = self.output_path / 'project' / package
         mkdir_override_symlink(project_dir)
         dt = datetime.now(tz=UTC)
         with AtomicReplaceFile(project_dir / 'index.html', encoding='utf-8') as index:
-            index.file.write(self.templates['project'](
-                layout=self.templates['layout']['layout'],
-                package=package,
-                project=project_name,
-                releases=releases,
-                num_files=num_files,
-                dependencies=dependencies,
-                format_size=format_size,
-                timestamp=dt.strftime('%Y-%m-%d %H:%M %Z'),
-                title=project_name,
-                description=description,
-                page='project'))
+            index.file.write(
+                self.templates['project'](
+                    layout=self.templates['layout']['layout'],
+                    title=data['name'],
+                    description=data['description'],
+                    timestamp=datetime.now(tz=UTC),
+                    page='project',
+                    package=package,
+                    releases=data['releases'],
+                    dependencies=dependencies,
+                    format_size=format_size))
+
         project_aliases = self.db.get_package_aliases(package)
         if project_aliases:
             self.logger.info('creating %s symlinks for project %s',
@@ -411,48 +475,108 @@ class TheScribe(tasks.PauseableTask):
             except FileExistsError:
                 pass
 
-    def write_project_json(self, package, releases, description):
+    def write_project_json(self, package, data):
         """
-        (Re)writes the project JSON file of the specified package.
+        (Re)writes the project JSON data of the specified package.
+
+        The *data* parameter is expected to be the dictionary of
+        package data returned by :meth:`.db.Database.get_project_data`. This
+        is expected to have at least the following content in the example case
+        of a package named "foo" with version "1.0" containing a validly built
+        wheel::
+
+            {
+                'name': 'foo',
+                'description': 'A foomatic package',
+                'releases': {
+                    '1.0': {
+                        'abis': {
+                            'cp35m': {
+                                'build_id': 1,
+                                'status': 'success',
+                                'skip': '',
+                            }
+                        }
+                        'files': {
+                            'foo-1.0-py3-none-any.whl': {
+                                'hash': 'abcdef1234567890...',
+                                'size': 123456,
+                                'apt_dependencies': {'libc6'},
+                            },
+                        },
+                        'released': datetime(2000, 1, 1, 12, 34, 56),
+                        'yanked': False,
+                        'skip': '',
+                    },
+                },
+            }
 
         :param str package:
-            The name of the package to write the project page for
+            The name of the package to write the project data for.
 
-        :param str releases:
-            The list of releases to include in the project page
-
-        :param str description:
-            The project summary text
+        :param dict data:
+            The dictionary of data returned by
+            :meth:`.db.Database.get_project_data` which is expected to have
+            at least the structure documented above.
         """
         self.logger.info('writing project json for %s', package)
-        releases_dict = {
-            release.version.original: {
-                'released': release.released.strftime('%Y-%m-%d %H:%M:%S %Z'),
-                'prerelease': release.version.is_prerelease,
-                'yanked': release.yanked,
-                'skip_reason': release.skip,
-                'files': {
-                    file['filename']: {
-                        k: v
-                        for k, v in file.items()
-                        if k != 'filename'
-                    }
-                    for file in release.files
-                }
-            }
-            for release in releases
-        }
+
         project_data = {
             'package': package,
-            'summary': description,
+            'summary': data['description'],
             'pypi_url': 'https://pypi.org/project/{}'.format(package),
             'piwheels_url': 'https://www.piwheels.org/project/{}'.format(package),
-            'releases': releases_dict,
+            'releases': {
+                version.original: {
+                    'released': vers_data['released'].strftime('%Y-%m-%d %H:%M:%S'),
+                    'prerelease': version.is_prerelease,
+                    'yanked': vers_data['yanked'],
+                    'skip_reason': vers_data['skip'],
+                    'files': {
+                        filename: {
+                            'filehash': file_data['hash'],
+                            'filesize': file_data['size'],
+                            'builder_abi': file_data['abi_builder'],
+                            'file_abi_tag': file_data['abi_file'],
+                            'platform': file_data['platform'],
+                            'requires_python': file_data['requires_python'],
+                            'apt_dependencies': sorted(file_data['apt_dependencies']),
+                        }
+                        for filename, file_data in vers_data['files'].items()
+                    },
+                }
+                for version, vers_data in data['releases'].items()
+            },
         }
+
         pkg_dir = self.output_path / 'project' / package / 'json'
         mkdir_override_symlink(pkg_dir)
         with AtomicReplaceFile(pkg_dir / 'index.json', encoding='utf-8') as index:
             json.dump(project_data, index)
+
+    def write_log(self, build_id, log):
+        """
+        Attempts to write the *log* of build *build_id* to the log output
+        directories, splitting the numeric build id into three parts to flatten
+        the output hierarchy. Log data is also gzip compressed.
+        """
+        self.logger.info('writing log for build %d', build_id)
+
+        levels = []
+        n = build_id
+        for i in range(3):
+            n, m = divmod(n, 10000)
+            levels.append(m)
+        levels = ['{:04d}'.format(level) for level in reversed(levels)]
+
+        log_dir = self.output_path / 'logs' / levels[0] / levels[1]
+        log_dir.mkdir(parents=True, exist_ok=True)
+        # No need for AtomicReplaceFile here. The log we're writing should
+        # *never* exist. In fact, it should be an error if it does hence the
+        # use of the "x" mode
+        with (log_dir / (levels[2] + '.txt.gz')).open('xb') as f:
+            with gzip.open(f, 'wt', encoding='utf-8', errors='replace') as arc:
+                arc.write(log)
 
     def delete_package(self, package):
         """
@@ -521,93 +645,6 @@ class TheScribe(tasks.PauseableTask):
                 self.logger.info('File deleted: %s', file)
             except FileNotFoundError:
                 self.logger.error('File not found: %s', file)
-
-    def get_versions(self, package, exclude):
-        """
-        Retrieves a sorted list of versions and associated data for *package*
-        excluding any versions in *exclude*.
-
-        :param str package:
-            The name of the package to get versions for.
-
-        :type exclude: set or None
-        :param exclude:
-            Set of versions to exclude from results.
-        """
-        versions = [
-            row._replace(version=parse_version(row.version))
-            for row in self.db.get_project_versions(package)
-            if row.version not in exclude
-        ]
-        return sorted(versions, key=attrgetter('version'), reverse=True)
-
-    def get_files(self, package, exclude):
-        """
-        Retrieves a list of files and associated data for *package* excluding
-        any files from versions in *exclude*.
-
-        :param str package:
-            The name of the package to get versions for.
-
-        :type exclude: set or None
-        :param exclude:
-            Set of versions to exclude from results.
-        """
-        return [
-            row._replace(version=parse_version(row.version))
-            for row in self.db.get_project_files(package)
-            if row.version not in exclude
-        ]
-
-    def get_releases(self, versions, files):
-        """
-        Combines the given *files* and *versions* for a project into a list of
-        releases containing all the release information required to write out
-        the project page and project JSON file for the given package. Returns
-        the list of releases.
-
-        :param list versions:
-            The name of the package to get versions for.
-
-        :param list files:
-            Set of versions to exclude from results.
-        """
-        releases = []
-        for version in versions:
-            version_files = [
-                {
-                    'filename': f.filename,
-                    'filehash': f.filehash,
-                    'filesize': f.filesize,
-                    'builder_abi': f.builder_abi,
-                    'file_abi_tag': f.file_abi_tag,
-                    'platform': f.platform_tag,
-                    'requires_python': f.requires_python,
-                    'apt_dependencies': sorted(f.dependencies) if f.dependencies else [],
-                }
-                for f in files
-                if f.version.original == version.version.original
-            ]
-            builds_succeeded = [abi for abi in version.builds_succeeded.split(',') if abi]
-            builds_failed = [abi for abi in version.builds_failed.split(',') if abi]
-            abis = {
-                abi: _get_abi_status(
-                    abi, builds_succeeded, builds_failed, version_files,
-                    version.skip)
-                for abi in self.db.get_build_abis(exclude_skipped=True)
-            }
-            release = ProjectRelease(
-                version=version.version,
-                yanked=version.yanked,
-                released=version.released,
-                skip=version.skip,
-                abis=abis,
-                files=version_files,
-                builds_succeeded=builds_succeeded,
-                builds_failed=builds_failed,
-            )
-            releases.append(release)
-        return releases
 
 
 # https://docs.python.org/3/library/itertools.html

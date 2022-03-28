@@ -2,11 +2,9 @@
 <?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>
 
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-
-<span tal:repeat="package packages" tal:omit-tag="1">
-  <url tal:condition="package">
-    <loc>https://www.piwheels.org/project/${package}</loc>
-  </url>
-</span>
-
+  <span tal:repeat="package packages" tal:omit-tag="1">
+    <url tal:condition="package">
+      <loc>https://www.piwheels.org/project/${package}</loc>
+    </url>
+  </span>
 </urlset>
