@@ -1,3 +1,10 @@
-sphinx>=1.4.0
-sphinx_rtd_theme>=0.3.1
-colorzero>=1.1
+configargparse
+pyzmq
+voluptuous
+cbor2
+python-dateutil
+requests
+sqlalchemy
+psycopg2
+chameleon
+simplejson
