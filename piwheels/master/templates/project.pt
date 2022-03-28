@@ -86,6 +86,7 @@ sudo pip3 install ${package}</pre>
                       'fail':    'Build failed',
                       'success': 'Build succeeded',
                       'skip':    'Skipped: ' + vers_data.skip,
+                      'error':   'Unexpected error',
                     }[abi_data.status]}"><a tal:condition="abi_data.build_id is not None"
                     href="/logs/${'/'.join(
                       '{:012d}'.format(abi_data.build_id)[i:i + 4]
