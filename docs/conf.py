@@ -81,6 +81,7 @@ autodoc_mock_imports = [
     'cbor2',
     'chameleon',
     'psycopg2',
+    'apt',
 ]
 
 # -- Intersphinx options -----------------------------------------------------
