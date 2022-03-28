@@ -1,0 +1,107 @@
+#!/usr/bin/python3
+
+"""
+This sscript is intended for the transition from 0.19 to 0.20. It extracts
+build logs from the output table in the database and writes them to the
+file-system served by httpd.
+
+It is intended to be run directly on the master, when the master is *not*
+active (to ensure logs are not missed). Please see the documentation for
+information on the required httpd configuration.
+
+The script is not (currently) intelligent enough to use the master
+configuration so you may need to edit the variables at the top to point it to
+the correct output path and database DSN.
+"""
+
+import io
+import gzip
+from pathlib import Path
+from itertools import tee
+from piwheels.master.db import Database
+
+
+OUTPUT_PATH = Path('/home/piwheels/www/logs')
+BATCH_SIZE = 100
+CHUNK_SIZE = 1048576
+
+db = Database('postgresql:///piwheels')
+
+
+def pairwise(it):
+    a, b = tee(it)
+    next(b, None)
+    return zip(a, b)
+
+
+def get_migrated_build_ids():
+    """
+    Yields migrated build_id values in sorted (ascending) order.
+    """
+    for top_path in sorted(OUTPUT_PATH.iterdir()):
+        if top_path.is_dir():
+            top = int(top_path.name)
+            for middle_path in sorted(top_path.iterdir()):
+                if middle_path.is_dir():
+                    middle = int(middle_path.name)
+                    for last_path in sorted(middle_path.iterdir()):
+                        if not last_path.is_dir():
+                            last = int(last_path.name[:-len('.txt.gz')])
+                            yield (top * 10000 * 10000) + (middle * 10000) + last
+
+
+def get_migrated_ranges():
+    """
+    Yields a list of range (start, stop) tuples representing all migrated
+    build_id values.
+    """
+    start = -1
+    for last_build_id, build_id in pairwise(get_migrated_build_ids()):
+        if start == -1:
+            start = last_build_id
+        if last_build_id + 1 != build_id:
+            yield range(start, last_build_id + 1)
+            start = build_id
+    yield range(start, build_id + 1)
+
+
+def batched_migrated_ranges():
+    """
+    Batch up migrated ranges to allow for committal of a group of DELETEs
+    rather than trying to commit every single DELETE.
+    """
+    batch = []
+    for r in get_migrated_ranges():
+        batch.append(r)
+        if len(batch) >= BATCH_SIZE:
+            yield batch
+            batch = []
+    yield batch
+
+
+for batch in batched_migrated_ranges():
+    with db._conn.begin():
+        for r in batch:
+            print(f'Removing output for migrated ids {r.start}-{r.stop - 1}')
+            db._conn.execute(
+                'DELETE FROM output WHERE build_id BETWEEN %s AND %s',
+                (r.start, r.stop - 1))
+    print('Committed')
+
+
+with db._conn.begin():
+    query = 'SELECT build_id, output FROM output'
+    for row in db._conn.execution_options(stream_results=True, max_row_buffer=10).execute(query):
+        n = row.build_id
+        n, last = divmod(n, 10000)
+        n, middle = divmod(n, 10000)
+        n, top = divmod(n, 10000)
+        assert n == 0
+        p = OUTPUT_PATH / f'{top:04d}/{middle:04d}/{last:04d}.txt.gz'
+        p.parent.mkdir(parents=True, exist_ok=True)
+        print(f'Writing {p}')
+        with p.open('wb') as f:
+            with gzip.open(f, 'wb') as z:
+                with io.TextIOWrapper(z, encoding='utf-8', errors='replace') as t:
+                    for i in range(0, len(row.output), CHUNK_SIZE):
+                        t.write(row.output[i:i + CHUNK_SIZE])
