@@ -566,9 +566,8 @@ class Database:
                 # Fix up datetime and set types (which JSON doesn't support)
                 data = row[0]
                 for release in data['releases'].values():
-                    release['released'] = datetime.strptime(
-                        release['released'], '%Y-%m-%dT%H:%M:%S+00:00'
-                    ).replace(tzinfo=UTC)
+                    release['released'] = datetime.fromisoformat(
+                        release['released']).astimezone(tz=UTC)
                     for wheel in release['files'].values():
                         wheel['apt_dependencies'] = set(
                             wheel['apt_dependencies'])
