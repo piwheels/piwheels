@@ -25,7 +25,7 @@
 
       <h2 id="configuration">Configuration</h2>
 
-      <p><a href=", Pi ">Raspberry Pi OS</a>
+      <p><a href="https://www.raspberrypi.com/software/operating-systems/">Raspberry Pi OS</a>
       includes configuration for <code>pip</code>
       to use piwheels by default, which lives at <code>/etc/pip.conf</code>:</p>
 
