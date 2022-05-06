@@ -9,7 +9,6 @@
   <html>
     <head>
       <title>piwheels - Sitemap<xsl:if test="map:sitemapindex"> Index</xsl:if></title>
-      <link rel="stylesheet" href="/foundation-float.min.css" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Condensed" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Mono" />
@@ -17,69 +16,45 @@
     </head>
     <body>
       <header>
-        <div class="row">
-          <div class="title-bar" data-responsive-toggle="nav-menu" data-hide-for="medium">
-            <button class="menu-icon" type="button" data-toggle="nav-menu"></button>
-            <div class="title-bar-title">Menu</div>
-          </div>
-
-          <div class="top-bar" id="nav-menu">
-            <div class="top-bar-left">
-              <ul class="menu">
-                <li class="menu-text">
-                  <a href="/">
-                    <div class="logo"></div>
-                    <h1>piwheels</h1>
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div class="top-bar-right">
-              <ul class="menu">
-                <li><a class="button" href="/packages.html">Packages</a></li>
-                <li><a class="button" href="https://github.com/piwheels/packages/issues">Package Issues</a></li>
-                <li><a class="button" href="/faq.html">FAQ</a></li>
-                <li><a class="button" href="/json.html">JSON API</a></li>
-                <li><a class="button" href="/stats.html">Stats</a></li>
-                <li><a class="button" href="https://blog.piwheels.org/">Blog</a></li>
-                <li><a class="button" href="https://github.com/piwheels">GitHub</a></li>
-                <li><a class="button" href="https://piwheels.readthedocs.io/">Docs</a></li>
-                <li><a class="button" href="https://twitter.com/piwheels">Twitter</a></li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        <a class="logo" href="/"><div></div><h1>piwheels</h1></a>
+        <nav>
+          <a href="/packages.html">Search</a>
+          <a href="/faq.html">FAQ</a>
+          <a href="/json.html">API</a>
+          <a href="https://blog.piwheels.org/">Blog</a>
+        </nav>
       </header>
 
-      <div class="row">
-        <div class="small-12 columns">
-          <h2>Sitemap</h2>
 
-          <p>This page is only intended for robots. If you are a human, you're
-            probably in the wrong place and might find it more useful to click
-            on the big logo at the top there!</p>
-        </div>
-      </div>
+      <article>
+        <section>
+          <div class="content">
+            <h2>Sitemap</h2>
 
-      <xsl:apply-templates/>
+              <p>This page is only intended for robots. If you are a human, you're
+                probably in the wrong place and might find it more useful to click
+                on the big logo at the top there!</p>
+            </div>
+        </section>
+
+        <xsl:apply-templates/>
+
+      </article>
 
       <footer>
-        <div class="row">
-          <div class="small-12 medium-8 columns">
-            <p>piwheels is a community project by <a href="https://twitter.com/ben_nuttall">Ben Nuttall</a>
-              and <a href="https://twitter.com/waveform80">Dave Jones</a>.
-              Powered by the <a href="https://www.mythic-beasts.com/">Mythic Beasts Pi Cloud</a>.
-              Project <a href="https://github.com/piwheels/piwheels">source code</a> is available from GitHub.</p>
-          </div>
-          <div class="small-12 medium-4 columns">
-            <a href="https://www.mythic-beasts.com/"><img src="/mythic_beasts_logo.png" /></a>
-          </div>
-        </div>
+        <nav>
+          <a id="github" href="https://github.com/piwheels"><div></div>GitHub</a>
+          <a id="readthedocs" href="https://piwheels.readthedocs.io/"><div></div>Docs</a>
+          <a id="twitter" href="https://twitter.com/piwheels"><div></div>Twitter</a>
+        </nav>
+        <p class="notices">piwheels is a community project by
+          <a href="https://twitter.com/ben_nuttall">Ben Nuttall</a>
+          and <a href="https://twitter.com/waveform80">Dave Jones</a>.
+          Powered by the <a href="https://www.mythic-beasts.com/order/rpi">Mythic
+          Beasts Pi Cloud</a>.</p>
+        <a id="mythic" href="https://www.mythic-beasts.com/"></a>
       </footer>
-      <script src="//code.jquery.com/jquery-3.3.1.min.js"></script>
-      <script src="/what-input.min.js"></script>
-      <script src="/foundation.min.js"></script>
-      <script>$(document).foundation();</script>
+      
     </body>
   </html>
   </xsl:template>
