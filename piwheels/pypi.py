@@ -382,6 +382,9 @@ def pypi_package_description(package, pypi_url='https://pypi.org/pypi'):
         # which means we're hammering PyPI too much; give up for now and
         # assume we'll pick it up later
         return None
+    except requests.exceptions.TooManyRedirects:
+        # Too many redirects; again just return None as above
+        return None
     except requests.HTTPError as exc:
         if exc.response.status_code >= 500:
             # Server side error; probably a temporary service failure.
