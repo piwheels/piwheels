@@ -98,7 +98,7 @@ take a backup of your database before using this script for upgrades.
     conn = get_connection(config.dsn)
     logging.info("Checking username and superuser status")
     detect_users(conn, config.user)
-    logging.info("Adminstration and master users verified")
+    logging.info("Administration and master users verified")
     logging.info("Detecting database version")
     db_version = detect_version(conn)
     if db_version is None:

@@ -80,7 +80,7 @@ pipe all logs to a given script which can be used directly with
 
 A typical configuration under a Debian-like operating system might use the
 Apache `CustomLog`_ directive as follows, within the Apache virtual host
-reponsible for serving files to ``pip`` clients:
+responsible for serving files to ``pip`` clients:
 
 .. code-block:: apacheconf
 

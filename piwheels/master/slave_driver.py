@@ -172,7 +172,7 @@ class SlaveDriver(tasks.PausingTask):
 
         This class understands a couple of extra control messages unique to it,
         specifically "KILL" to tell a build slave to terminate, "SKIP" to tell
-        a build slave to terminate its current build immmediately, and "HELLO"
+        a build slave to terminate its current build immediately, and "HELLO"
         to cause all "HELLO" messages from build slaves to be replayed (for the
         benefit of a newly attached monitor process).
         """

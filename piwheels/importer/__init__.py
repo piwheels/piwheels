@@ -54,7 +54,7 @@ def main(args=None):
     """
     This is the main function for the :program:`piw-import` script. It uses
     some bits of the :program:`piw-slave` script to deconstruct the filenames
-    passed to it in order to build all the requried information that
+    passed to it in order to build all the required information that
     :class:`~.mr_chase.MrChase` needs.
     """
     sys.excepthook = terminal.error_handler

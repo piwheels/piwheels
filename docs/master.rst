@@ -345,7 +345,7 @@ specified in :file:`/etc/piwheels.conf`.
 
 The only thing to be aware of, particularly if you are deploying on a Pi, is
 that the calculation of the build queue is quite a big query. Assuming you are
-targetting all packages on PyPI (as the production piwheels instance does), you
+targeting all packages on PyPI (as the production piwheels instance does), you
 should never consider running the combined database+master on a machine (or VM)
 with less than 4 cores and 4GB of RAM, preferably more. If deploying a combined
 master+database on a Pi, use a Pi 4 with 8GB of RAM.

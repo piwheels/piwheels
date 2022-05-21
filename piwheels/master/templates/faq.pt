@@ -255,7 +255,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts</a>.
         The web pages and wheel files are served from a single Raspberry Pi 4,
         we use a separate VM to host the database, and use several other
-        Raspberry Pis accross different OS versions to build wheels.</p>
+        Raspberry Pis across different OS versions to build wheels.</p>
 
         <p>The original build run was completed by a total of 20 Raspberry
         Pis, and now a smaller cluster remains active, continuing to build
@@ -369,7 +369,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         Raspberry Pi platform, there is no harm in uploading Arm wheels to
         PyPI, and this will speed up the installation for users who do not
         have pip configured to use piwheels. However, it is not possible to
-        upload two indentical wheel files with <code>armv6l</code> and
+        upload two identical wheel files with <code>armv6l</code> and
         <code>armv7l</code> platform tags, so the second one will be rejected
         by PyPI.</p>
 

@@ -98,7 +98,7 @@ Usage
 
 This utility is intended to permit administrators to tweak the content of the
 database to correct issues that arise from either incorrect scraping of the
-PyPI history, inadvertant mistakes made with :doc:`remove`, or other
+PyPI history, inadvertent mistakes made with :doc:`remove`, or other
 inconsistencies found in the database.
 
 The utility can be run in a batch mode with :option:`--yes` but still requires

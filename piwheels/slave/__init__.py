@@ -160,7 +160,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
     # transfers occasionally needing a retry). Hence all the apparently silly
     # asserts littering the functions below.
 
-    # This is in stark constrast to the master which is expected to stay up and
+    # This is in stark contrast to the master which is expected to stay up and
     # carry on running even if a build slave goes bat-shit crazy and starts
     # sending nonsense (in which case it should calmly ignore it and/or attempt
     # to kill said slave with a "BYE" message).
@@ -338,7 +338,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
     def do_done(self):
         """
         The master can send "DONE" at any point during a built to terminate it
-        prematurely. Alternately, this is also the standard reponse after a
+        prematurely. Alternately, this is also the standard response after a
         successful build has finished and all files have been sent (and
         successfully verified).
 

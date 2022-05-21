@@ -691,7 +691,7 @@ class TransferState:
     location.
 
     The state is intimately tied to the file transfer protocol and includes
-    methods to write a recevied :meth:`chunk`, and to determine the next chunk
+    methods to write a received :meth:`chunk`, and to determine the next chunk
     to :meth:`fetch`, as well as a property to determine when the transfer is
     :attr:`done`.
 
