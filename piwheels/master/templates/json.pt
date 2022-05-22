@@ -82,7 +82,7 @@ for version, info in package['releases'].items():
 
       <p>Note that we intend to maintain the API structure, and to only add
       fields, not remove or change fields. In the unlikely event of
-      compatability changes in future.</p>
+      compatibility changes in future.</p>
 
       <p>Also note that packages and versions can be deleted, and can be
       recreated, so it's inadvisable to expect such data not to change.

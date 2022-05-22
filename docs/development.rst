@@ -343,7 +343,7 @@ protocol follows a strict request-reply sequence which is illustrated below:
    * *mem_total* is the total size (in bytes) of the RAM on the build slave.
 
    * *mem_free* is the number of bytes of RAM currently available (not
-     necessarily unused, but potentially useable by builds).
+     necessarily unused, but potentially usable by builds).
 
    * *load_avg* is the one minute load average.
 

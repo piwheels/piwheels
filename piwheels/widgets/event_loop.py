@@ -40,7 +40,7 @@ from urwid import ExitMainLoop
 try:
     from urwid import EventLoop
 except ImportError:
-    # Use a compatbile EventLoop base class with urwid <2.x
+    # Use a compatible EventLoop base class with urwid <2.x
     class EventLoop:
         def alarm(self, seconds, callback):
             raise NotImplementedError()

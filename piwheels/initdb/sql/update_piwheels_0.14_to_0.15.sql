@@ -230,7 +230,7 @@ AS $sql$
                 -- This guards against including insanely huge durations as
                 -- happens when a builder starts without NTP time sync and
                 -- records a start time of 1970-01-01 and a completion time
-                -- sometime this millenium...
+                -- sometime this millennium...
                 WHEN duration < INTERVAL '1 week' THEN duration
                 ELSE INTERVAL '0'
             END), INTERVAL '0') AS builds_time

@@ -288,7 +288,7 @@ class TheOracle(tasks.NonStopTask):
     def do_pkgfiles(self, package):
         """
         Handler for "PKGFILES" message, sent by :class:`DbClient` to request
-        details of all wheels assocated with *package*.
+        details of all wheels associated with *package*.
         """
         return self.db.get_package_files(package)
 

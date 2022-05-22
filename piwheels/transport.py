@@ -298,9 +298,9 @@ class Socket:
         """
         Receive a CBOR-encoded message, returning a tuple of the unicode
         message string and its associated data. This is the primary method used
-        in piwheels for receving information into a task.
+        in piwheels for receiving information into a task.
 
-        The message, and its associated data, will be validated agains the
+        The message, and its associated data, will be validated against the
         :attr:`protocol` associated with the socket on construction.
         """
         msg, data = self._load_msg(self._socket.recv(flags))
