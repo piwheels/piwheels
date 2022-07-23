@@ -86,6 +86,14 @@ class CloudGazer(tasks.PauseableTask):
     def read_pypi(self):
         for package_alias, version, timestamp, action, description in self.pypi:
             package = canonicalize_name(package_alias)
+            if len(package) > 200:
+                self.logger.warning(
+                    'ignoring package with silly length: %s', package)
+                continue
+            if len(version) > 200:
+                self.logger.warning(
+                    'ignoring version with silly length: %s %s', package, version)
+                continue
             if action == 'remove':
                 if version is None:
                     self.logger.info('marking package %s for deletion', package)
