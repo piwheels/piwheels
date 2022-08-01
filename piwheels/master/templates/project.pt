@@ -65,7 +65,6 @@ sudo pip3 install ${package}</pre>
             <tr>
               <th>Version</th>
               <th>Released</th>
-              <th>Stretch<br /><small>Python 3.5</small></th>
               <th>Buster<br /><small>Python 3.7</small></th>
               <th>Bullseye<br /><small>Python 3.9</small></th>
               <th>Files</th>
@@ -95,7 +94,7 @@ sudo pip3 install ${package}</pre>
                 <td></td>
               </tr>
               <tr>
-                <td colspan="6">
+                <td colspan="5">
                   <ul>
                     <li tal:repeat="(filename, file_data) vers_data.files.items()"
                        data-dependencies="${' '.join(file_data.apt_dependencies)}">
