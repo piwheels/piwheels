@@ -384,7 +384,7 @@ def test_master_says_idle_when_terminated(task, slave_queue, master_config,
 
 
 def test_master_kills_correct_slave(task, slave_queue, master_config,
-                                    stats_queue, hello_data):
+                                    hello_data):
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)
     assert slave_queue.recv_msg() == ('ACK', [1, master_config.pypi_simple])
@@ -393,11 +393,10 @@ def test_master_kills_correct_slave(task, slave_queue, master_config,
     slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('SLEEP', False)
-    assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
 def test_slave_idle_with_no_builds(task, slave_queue, builds_queue,
-                                   master_config, stats_queue, hello_data):
+                                   master_config, hello_data):
     task.logger = mock.Mock()
     slave_queue.send_msg('HELLO', hello_data)
     task.poll(0)
@@ -405,7 +404,6 @@ def test_slave_idle_with_no_builds(task, slave_queue, builds_queue,
     slave_queue.send_msg('IDLE', stats_data())
     task.poll(0)
     assert slave_queue.recv_msg() == ('SLEEP', False)
-    assert stats_queue.recv_msg() == ('STATBQ', {})
 
 
 def test_slave_idle_with_build(
