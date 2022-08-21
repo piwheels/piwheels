@@ -62,7 +62,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev libadios-dev \
     libavfilter-dev libavutil-dev libcec-dev lsb-release pybind11-dev \
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
-    coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev cargo golang \
+    coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
     ninja-build
@@ -81,6 +81,8 @@ getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
+
+su - piwheels -c "curl https://sh.rustup.rs -sSf | sh -s -- -y"
 
 if [ -d piwheels ]; then
     cd piwheels
