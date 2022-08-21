@@ -29,6 +29,7 @@ PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
     python-dnspython python-sphinx python-boto python-gi python-gi-cairo \
     python-cairocffi python-numpy"
 QMAKE=qt4-qmake
+FPRINT=libfprint-2-dev
 
 if [ $VERSION_ID -eq 9 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
@@ -39,6 +40,7 @@ if [ $VERSION_ID -eq 9 ]; then
 elif [ $VERSION_ID -eq 10 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-11
     TURBOGEARS=python-turbogears2
+    FPRINT=libfprint-dev
 elif [ $VERSION_ID -eq 11 ]; then
     PYTHON2_PACKAGES=
     QMAKE=qt5-qmake
@@ -65,7 +67,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev cargo golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
-    ninja-build
+    ninja-build $FPRINT
 
 apt purge python3-cryptography -y
 
