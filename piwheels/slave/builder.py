@@ -437,7 +437,7 @@ class Builder(Thread):
         env['GIT_ALLOW_PROTOCOL'] = 'file'
         
         # allow projects to detect they are built in piwheels
-        env['PIWHEEL_BUILD'] = "1"
+        env['PIWHEELS_BUILD'] = "1"
         return env
 
     def build_command(self, log_file):
