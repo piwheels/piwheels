@@ -82,7 +82,8 @@ getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
-su - piwheels -c "curl https://sh.rustup.rs -sSf | sh -s -- -y"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | CARGO_HOME=/usr/local sh -s -- -y
+echo "CARGO_HOME=/usr/local/bin" > /etc/environment.d/20-rustup.conf
 
 if [ -d piwheels ]; then
     cd piwheels
@@ -96,7 +97,6 @@ fi
 cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
 pip3 install .[slave]
-
 
 if [ $VERSION_ID -lt 10 ]; then
     if ! grep swapfile /etc/rc.local >/dev/null; then
