@@ -435,6 +435,9 @@ class Builder(Thread):
         # disturbing minority of packages try to run git clone during their
         # setup.py)
         env['GIT_ALLOW_PROTOCOL'] = 'file'
+        
+        # allow projects to detect they are built in piwheels
+        env['PIWHEELS_BUILD'] = "1"
         return env
 
     def build_command(self, log_file):
