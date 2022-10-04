@@ -29,16 +29,12 @@ PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
     python-dnspython python-sphinx python-boto python-gi python-gi-cairo \
     python-cairocffi python-numpy"
 QMAKE=qt4-qmake
+FPRINT=libfprint-2-dev
 
-if [ $VERSION_ID -eq 9 ]; then
-    POSTGRES_SERVER_DEV=postgresql-server-dev-9.6
-    LIBXLST=libxslt-dev
-    TURBOGEARS=python-turbogears
-    SOUNDFONT=musescore-soundfont-gm
-    LIBGLES="libgles1-mesa-dev libgles2-mesa-dev"
-elif [ $VERSION_ID -eq 10 ]; then
+if [ $VERSION_ID -eq 10 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-11
     TURBOGEARS=python-turbogears2
+    FPRINT=libfprint-dev
 elif [ $VERSION_ID -eq 11 ]; then
     PYTHON2_PACKAGES=
     QMAKE=qt5-qmake
@@ -65,7 +61,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
-    ninja-build
+    ninja-build $FPRINT
 
 apt purge python3-cryptography -y
 
@@ -98,24 +94,11 @@ cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
 pip3 install .[slave]
 
-if [ $VERSION_ID -lt 10 ]; then
-    if ! grep swapfile /etc/rc.local >/dev/null; then
-        dd if=/dev/zero of=/swapfile bs=1M count=1024
-        chmod 0600 /swapfile
-        sed -i -e '$i\
-chmod 0600 /swapfile\
-losetup /dev/loop0 /swapfile\
-mkswap /dev/loop0\
-swapon /dev/loop0\
-' /etc/rc.local
-    fi
-else
-    fallocate -x -l 1G /swapfile
-    chmod 0600 /swapfile
-    mkswap /swapfile
-    echo "/swapfile none swap x-systemd.makefs,nofail 0 0" >> /etc/fstab
-    systemctl daemon-reload
-fi
+fallocate -x -l 1G /swapfile
+chmod 0600 /swapfile
+mkswap /swapfile
+echo "/swapfile none swap x-systemd.makefs,nofail 0 0" >> /etc/fstab
+systemctl daemon-reload
 
 rm -f /etc/pip.conf
 
