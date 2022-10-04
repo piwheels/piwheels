@@ -42,7 +42,7 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
+apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
     zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
     libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev \
