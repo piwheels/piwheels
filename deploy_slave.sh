@@ -42,7 +42,7 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
+apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
     zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
     libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev \
@@ -58,7 +58,7 @@ apt -y install vim ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     libudev-dev libopus-dev libvpx-dev libc-bin libavdevice-dev libadios-dev \
     libavfilter-dev libavutil-dev libcec-dev lsb-release pybind11-dev \
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
-    coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev cargo golang \
+    coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
     ninja-build $FPRINT
@@ -77,6 +77,9 @@ getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+echo '. ~/.cargo/env' > /home/piwheels/.bashrc
 
 if [ -d piwheels ]; then
     cd piwheels
