@@ -78,8 +78,8 @@ getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | CARGO_HOME=/usr/local sh -s -- -y
-echo "CARGO_HOME=/usr/local/bin" > /etc/environment.d/20-rustup.conf
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+echo '. ~/.cargo/env' > /home/piwheels/.bashrc
 
 if [ -d piwheels ]; then
     cd piwheels
