@@ -79,7 +79,7 @@ getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-echo '. ~/.cargo/env' > /home/piwheels/.bashrc
+cat .cargo/env >> /home/piwheels/.bashrc
 
 if [ -d piwheels ]; then
     cd piwheels
