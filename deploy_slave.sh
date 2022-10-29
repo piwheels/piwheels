@@ -42,7 +42,7 @@ fi
 
 apt update
 apt -y upgrade
-apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
+apt -y install sudo vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
     zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
     libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev \
@@ -78,8 +78,7 @@ getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-cat .cargo/env >> /home/piwheels/.bashrc
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sudo -u pisheels sh -s -- -y
 
 if [ -d piwheels ]; then
     cd piwheels
