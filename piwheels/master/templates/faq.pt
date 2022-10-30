@@ -236,7 +236,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
         <ul>
           <li>Jessie - Python 3.4 (end of life)</li>
-          <li>Stretch - Python 3.5</li>
+          <li>Stretch - Python 3.5 (end of life)</li>
           <li>Buster - Python 3.7</li>
           <li>Bullseye - Python 3.9</li>
         </ul>
