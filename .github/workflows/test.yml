@@ -37,7 +37,7 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Install Python ${{ matrix.python }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
 
@@ -53,7 +53,7 @@ jobs:
           sudo -u postgres psql -c "create database piwheels_test" -c "\l"
 
       - name: Checkout piwheels
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install dependencies
         run: |
