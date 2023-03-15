@@ -61,7 +61,7 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
-    ninja-build $FPRINT
+    ninja-build $FPRINT libfmt-dev
 
 apt purge python3-cryptography -y
 
