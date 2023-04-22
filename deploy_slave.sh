@@ -78,7 +78,7 @@ getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | runuser -- - piwheels -s -- -y --profile minimal
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
 
 if [ -d piwheels ]; then
     cd piwheels
