@@ -79,10 +79,14 @@ getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
 # Enforce 32-bit kernel as the 64-bit kernel is used by default (also on RPi OS 32-bit) since RPi Linux 6.1
-sed -i '/^[[:blank:]]*arm_64bit=/d' /boot/config.txt # remove arm_64bit first
-sed -i '1iarm_64bit=0' /boot/config.txt # add arm_64bit to top of file to assure it is effective on all RPi models
+if [ -f /boot/config.txt ]; then
+    sed -i '/^[[:blank:]]*arm_64bit=/d' /boot/config.txt # remove setting first
+    sed -i '1iarm_64bit=0' /boot/config.txt # readd setting to top of file to assure it is effective on all RPi models
+else
+    echo 'arm_64bit=0' > /boot/config.txt
+fi
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
+curl -sSf 'https://sh.rustup.rs' | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
 
 if [ -d piwheels ]; then
     cd piwheels
