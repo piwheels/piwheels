@@ -63,7 +63,7 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
     ninja-build $FPRINT libgirepository1.0-dev libfmt-dev
 
-apt purge python3-cryptography -y
+apt purge python3-cryptography python3-yaml -y
 
 pip3 install setuptools --upgrade
 pip3 install pip --upgrade
