@@ -90,3 +90,9 @@ chmod 0600 /swapfile
 mkswap /swapfile
 echo "/swapfile none swap x-systemd.makefs,nofail 0 0" >> /etc/fstab
 systemctl daemon-reload
+
+rm -f /etc/pip.conf
+
+byobu-enable
+
+reboot
