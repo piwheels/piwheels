@@ -320,3 +320,6 @@ GRANT EXECUTE ON FUNCTION log_build_failure(
     ) TO {username};
 
 DROP TABLE output;
+
+ALTER TABLE files
+    ALTER COLUMN requires_python SET DATA TYPE VARCHAR(200);
