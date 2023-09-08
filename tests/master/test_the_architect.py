@@ -63,7 +63,7 @@ def test_architect_queue(db, with_build, task, builds_queue):
         assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
         with db.begin():
             db.execute("DELETE FROM builds")
-        dt.now.return_value += timedelta(minutes=3)
+        dt.now.return_value += timedelta(minutes=63)
         task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})
 
