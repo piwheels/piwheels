@@ -170,7 +170,7 @@ CREATE TABLE files (
     py_version_tag      VARCHAR(100) NOT NULL,
     abi_tag             VARCHAR(100) NOT NULL,
     platform_tag        VARCHAR(100) NOT NULL,
-    requires_python     VARCHAR(100) NULL,
+    requires_python     VARCHAR(200) NULL,
 
     CONSTRAINT files_pk PRIMARY KEY (filename),
     CONSTRAINT files_builds_fk FOREIGN KEY (build_id)

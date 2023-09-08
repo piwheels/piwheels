@@ -402,28 +402,23 @@ class SlaveDriver(tasks.PausingTask):
                 excluded_builds = self.excluded_builds[slave.native_abi]
             except KeyError:
                 abi_queue = []
-            try:
-                while abi_queue:
-                    package, version = abi_queue.pop(0)
-                    if (package, version) not in excluded_builds:
-                        self.logger.info(
-                            'slave %d (%s): build %s %s',
-                            slave.slave_id, slave.label, package, version)
-                        excluded_builds[(package, version)] = (
-                            datetime.now(tz=UTC) + slave.build_timeout)
-                        return 'BUILD', [package, version]
-                self.logger.info(
-                    'slave %d (%s): sleeping because no builds',
-                    slave.slave_id, slave.label)
-                return 'SLEEP', False
-            finally:
-                # Only push queue stats if there's space in the stats_queue
-                # (it's not essential; just a nice-to-have)
-                if self.stats_queue.poll(0, transport.POLLOUT):
+            while abi_queue:
+                package, version = abi_queue.pop(0)
+                if (package, version) not in excluded_builds:
+                    self.logger.info(
+                        'slave %d (%s): build %s %s',
+                        slave.slave_id, slave.label, package, version)
+                    excluded_builds[(package, version)] = (
+                        datetime.now(tz=UTC) + slave.build_timeout)
                     self.stats_queue.send_msg('STATBQ', {
                         abi: len(queue)
                         for (abi, queue) in self.abi_queues.items()
                     })
+                    return 'BUILD', [package, version]
+            self.logger.info(
+                'slave %d (%s): sleeping because no builds',
+                slave.slave_id, slave.label)
+            return 'SLEEP', False
 
     def do_busy(self, slave):
         """
