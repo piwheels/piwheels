@@ -448,6 +448,30 @@ class TheScribe(tasks.PauseableTask):
                 else:
                     continue
                 break
+
+        # Add some more useful context to the template; a hard-coded map of
+        # ABIs to Debian and Python versions (this should be incorporated into
+        # the database at some point), and a list of all ABIs involved in the
+        # package.
+        known_abis = {
+            'cp34m': ('Jessie',   'Python 3.4'),
+            'cp35m': ('Stretch',  'Python 3.5'),
+            'cp37m': ('Buster',   'Python 3.7'),
+            'cp39':  ('Bullseye', 'Python 3.9'),
+            'cp311': ('Bookworm', 'Python 3.11'),
+        }
+        abi_order = list(known_abis) + list(
+            abi
+            for vers_data in data['releases'].values()
+            for abi in vers_data['abis']
+            if abi not in known_abis
+        )
+        all_abis = sorted([
+            abi
+            for vers_data in data['releases'].values()
+            for abi in vers_data['abis']], key=abi_order.index
+        )
+
         project_dir = self.output_path / 'project' / package
         mkdir_override_symlink(project_dir)
         dt = datetime.now(tz=UTC)
@@ -462,7 +486,9 @@ class TheScribe(tasks.PauseableTask):
                     package=package,
                     releases=data['releases'],
                     dependencies=dependencies,
-                    format_size=format_size))
+                    format_size=format_size,
+                    known_abis=known_abis,
+                    all_abis=all_abis))
 
         project_aliases = self.db.get_package_aliases(package)
         if project_aliases:
