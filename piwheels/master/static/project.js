@@ -177,7 +177,9 @@
         if (i > 11) versionsTable.children[i].classList.add('hidden');
       expand = document.createElement('tr');
       expand.classList.add('more');
-      expand.innerHTML = '<td colspan="6">Show all releases</td>';
+      const colCount = document.querySelectorAll(
+        '#releases + table thead tr th').length;
+      expand.innerHTML = `<td colspan="${colCount}">Show all releases</td>`;
       expand.addEventListener('click', showHiddenVersions);
       versionsTable.appendChild(expand);
     }

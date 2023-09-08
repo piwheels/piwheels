@@ -94,7 +94,7 @@ sudo pip3 install ${package}</pre>
                 <td></td>
               </tr>
               <tr>
-                <td colspan="5">
+                <td colspan="${len(all_abis) + 3}">
                   <ul>
                     <li tal:repeat="(filename, file_data) vers_data.files.items()"
                        data-dependencies="${' '.join(file_data.apt_dependencies)}">
