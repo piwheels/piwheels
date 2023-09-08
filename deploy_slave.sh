@@ -19,25 +19,17 @@ source /etc/os-release
 
 LIBXLST=libxslt1-dev
 LIBGLES=libgles2-mesa-dev
-TURBOGEARS=
 SOUNDFONT=timgm6mb-soundfont
-POSTGRES_SERVER_DEV=postgresql-server-dev-13
-PYTHON2_PACKAGES="ipython python-pip python-dev python-scipy python-matplotlib \
-    python-pandas python-yaml libpng-dev python-lxml python-cffi python-bs4 \
-    python-click python-sqlalchemy python-pil python-pymongo python-django \
-    python-flask python-cherrypy python-tornado python-redis python-dateutil \
-    python-dnspython python-sphinx python-boto python-gi python-gi-cairo \
-    python-cairocffi python-numpy"
-QMAKE=qt4-qmake
+POSTGRES_SERVER_DEV=postgresql-server-dev-15
+QMAKE=qt5-qmake
 FPRINT=libfprint-2-dev
 
 if [ $VERSION_ID -eq 10 ]; then
+    QMAKE=qt4-qmake
     POSTGRES_SERVER_DEV=postgresql-server-dev-11
-    TURBOGEARS=python-turbogears2
     FPRINT=libfprint-dev
 elif [ $VERSION_ID -eq 11 ]; then
-    PYTHON2_PACKAGES=
-    QMAKE=qt5-qmake
+    POSTGRES_SERVER_DEV=postgresql-server-dev-13
 fi
 
 apt update
@@ -59,27 +51,26 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     libavfilter-dev libavutil-dev libcec-dev lsb-release pybind11-dev \
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
-    libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV $TURBOGEARS \
-    $PYTHON2_PACKAGES $QMAKE libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
-    ninja-build $FPRINT libgirepository1.0-dev libfmt-dev libopenblas-dev
+    libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV \
+    $QMAKE $FPRINT libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
+    ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev
 
 apt purge python3-cryptography python3-yaml -y
 
-pip3 install setuptools --upgrade
-pip3 install pip --upgrade
+pip3 install setuptools --upgrade --break-system-packages
+pip3 install pip --upgrade --break-system-packages
 hash -r
 
 pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
     setuptools_rust conan cbor2 \
-    --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
+    --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary --break-system-packages
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
 passwd -d piwheels
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-cat .cargo/env >> /home/piwheels/.bashrc
+curl -sSf 'https://sh.rustup.rs' | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
 
 if [ -d piwheels ]; then
     cd piwheels
@@ -92,7 +83,7 @@ fi
 
 cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
-pip3 install .[slave]
+pip3 install .[slave] --break-system-packages
 
 fallocate -x -l 1G /swapfile
 chmod 0600 /swapfile

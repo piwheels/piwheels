@@ -438,6 +438,11 @@ class Builder(Thread):
         
         # allow projects to detect they are built in piwheels
         env['PIWHEELS_BUILD'] = "1"
+
+        # Add Rust compiler to PATH if missing
+        if '.cargo/bin' not in env['PATH']:
+            env['PATH'] = f"{env['HOME']}/.cargo/bin:{env['PATH']}"
+
         return env
 
     def build_command(self, log_file):

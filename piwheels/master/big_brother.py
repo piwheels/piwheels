@@ -92,8 +92,8 @@ class BigBrother(tasks.PausingTask):
         self.web_queue = self.socket(
             transport.REQ, protocol=reversed(protocols.the_scribe))
         self.web_queue.connect(config.web_queue)
-        self.every(timedelta(minutes=5), self.update_search_index)
-        self.every(timedelta(seconds=30), self.update_homepage)
+        self.every(timedelta(minutes=60), self.update_search_index)
+        self.every(timedelta(seconds=60), self.update_homepage)
         self.every(timedelta(seconds=10), self.update_stats)
         self.db = DbClient(config, self.logger)
 
