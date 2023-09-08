@@ -62,11 +62,17 @@ sudo pip3 install ${package}</pre>
         <h3 id="releases">Releases</h3>
         <table tal:condition="releases">
           <thead>
-            <tr>
+            <tr define="build_abis {
+                        'cp34m': ('Jessie',   'Python 3.4'),
+                        'cp35m': ('Stretch',  'Python 3.5'),
+                        'cp37m': ('Buster',   'Python 3.7'),
+                        'cp39':  ('Bullseye', 'Python 3.9'),
+                        'cp311': ('Bookworm', 'Python 3.11'),
+                        }">
               <th>Version</th>
               <th>Released</th>
-              <th>Buster<br /><small>Python 3.7</small></th>
-              <th>Bullseye<br /><small>Python 3.9</small></th>
+              <th tal:repeat="abi vers_data.abis"><span
+                  tal:define="(debver, pyver) build_abis.get(abi, ('Unknown', abi))">${debver}<br /><small>${pyver}</small></span></td>
               <th>Files</th>
             </tr>
           </thead>
