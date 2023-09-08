@@ -57,7 +57,7 @@ class TheArchitect(tasks.PauseableTask):
             transport.PUSH, protocol=protocols.the_architect)
         self.builds_queue.hwm = 10
         self.builds_queue.connect(config.builds_queue)
-        self.every(timedelta(minutes=1), self.update_build_queue)
+        self.every(timedelta(minutes=60), self.update_build_queue)
         self.can_cancel = False
 
     def close(self):
