@@ -1,0 +1,8 @@
+pyzmq==24.0.1
+configargparse==1.5.3
+voluptuous==0.12.2
+urwid==2.1.2
+sqlalchemy==1.4.46
+psycopg2==2.9.5
+chameleon==3.8.1
+python-dateutil==2.8.2
