@@ -1,4 +1,4 @@
-pyzmq==25.0.2
+pyzmq==24.0.1
 configargparse==1.5.3
 voluptuous==0.12.2
 urwid==2.1.2
