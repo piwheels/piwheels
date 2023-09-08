@@ -466,10 +466,10 @@ class TheScribe(tasks.PauseableTask):
             for abi in vers_data['abis']
             if abi not in known_abis
         )
-        all_abis = sorted([
+        all_abis = sorted({
             abi
             for vers_data in data['releases'].values()
-            for abi in vers_data['abis']], key=abi_order.index
+            for abi in vers_data['abis']}, key=abi_order.index
         )
 
         project_dir = self.output_path / 'project' / package
