@@ -194,7 +194,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
       <h5>Which Raspberry Pi models are supported by packages provided by
         piwheels?</h5>
       <div>
-        <p>All current Raspberry Pi models (as of November 2021) are
+        <p>All current Raspberry Pi models (as of August 2023) are
         supported:</p>
 
         <ul>
@@ -239,6 +239,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
           <li>Stretch - Python 3.5 (end of life)</li>
           <li>Buster - Python 3.7</li>
           <li>Bullseye - Python 3.9</li>
+          <li>Bookworm - Python 3.11</li>
         </ul>
       </div>
 
