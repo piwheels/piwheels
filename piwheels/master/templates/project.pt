@@ -79,18 +79,20 @@ sudo pip3 install ${package}</pre>
                   <span tal:condition="vers_data.yanked" class="yanked">yanked</span>
                 </td>
                 <td title="${vers_data.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${vers_data.released.strftime('%Y-%m-%d')}</td>
-                <td tal:repeat="abi all_abis"><span tal:omit-tag="1" tal:define="abi_data vers_data.abis.get(abi, None)"
-                    class="${abi_data.status if abi_data else 'error'}" title="${{
-                      'pending': 'Build pending',
-                      'fail':    'Build failed',
-                      'success': 'Build succeeded',
-                      'skip':    'Skipped: ' + vers_data.skip,
-                      'error':   'Unexpected error',
-                    }[abi_data.status if abi_data else 'error']}"><a tal:condition="abi_data is not None and abi_data.build_id is not None"
-                    href="/logs/${'/'.join(
-                      '{:012d}'.format(abi_data.build_id)[i:i + 4]
-                      for i in range(0, 12, 4)
-                      )}.txt">&nbsp;</a></span></td>
+                <span tal:repeat="abi all_abis" tal:omit-tag="1">
+                  <td tal:define="abi_data vers_data.abis.get(abi, None)"
+                      class="${abi_data.status if abi_data else 'error'}" title="${{
+                        'pending': 'Build pending',
+                        'fail':    'Build failed',
+                        'success': 'Build succeeded',
+                        'skip':    'Skipped: ' + vers_data.skip,
+                        'error':   'Unexpected error',
+                      }[abi_data.status if abi_data else 'error']}"><a tal:condition="abi_data is not None and abi_data.build_id is not None"
+                      href="/logs/${'/'.join(
+                        '{:012d}'.format(abi_data.build_id)[i:i + 4]
+                        for i in range(0, 12, 4)
+                        )}.txt">&nbsp;</a></td>
+                </span>
                 <td></td>
               </tr>
               <tr>
