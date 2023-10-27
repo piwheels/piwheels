@@ -18,10 +18,10 @@
         <p>${description}</p>
 
         <h3 id="install">Installation</h3>
+        <p>In a virtualenv (see <a href="/faq.html#venv">these instructions if you need to create one</a>):</p>
         <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
-sudo pip3 install ${package}</pre>
-        <pre tal:condition="not dependencies">sudo pip3 install ${package}</pre>
-        <p><a href="/faq.html#sudo">Should I use sudo? pip or pip3?</a></p>
+pip3 install ${package}</pre>
+        <pre tal:condition="not dependencies">pip3 install ${package}</pre>
       </div>
 
       <div class="sidebar">

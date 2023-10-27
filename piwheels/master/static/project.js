@@ -98,7 +98,7 @@
       .textContent
       .trim();
 
-    let commands = `sudo pip3 install ${project}==${version}`;
+    let commands = `pip3 install ${project}==${version}`;
     if (dependencies.length)
       commands = `sudo apt install ${dependencies}\r\n` + commands;
     pre.textContent = commands;
