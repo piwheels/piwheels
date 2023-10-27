@@ -85,7 +85,7 @@
 
   function showInstall(ev) {
     const install = document.querySelector('#install');
-    const pre = document.querySelector('#install + pre');
+    const pre = document.querySelector('#install + p + pre');
     const project = document.getElementById('package').textContent;
     const dependencies = this.parentNode.dataset.dependencies;
     const version = this
