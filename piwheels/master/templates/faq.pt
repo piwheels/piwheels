@@ -36,16 +36,16 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         dependencies) is not available on piwheels, by using the
         <code>--extra-index-url</code> option, for example:</p>
 
-        <pre>sudo pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
+        <pre>pip3 install numpy --extra-index-url https://www.piwheels.org/simple</pre>
 
         <p>Alternatively, to only use piwheels, use the <code>-i</code> or
         <code>--index-url</code> option, for example:</p>
 
-        <pre>sudo pip3 install numpy -i https://www.piwheels.org/simple</pre>
+        <pre>pip3 install numpy -i https://www.piwheels.org/simple</pre>
 
         <p>or</p>
 
-        <pre>sudo pip3 install numpy --index-url https://www.piwheels.org/simple</pre>
+        <pre>pip3 install numpy --index-url https://www.piwheels.org/simple</pre>
       </div>
 
       <h5>How do I install a package from PyPI (not from piwheels)?</h5>
@@ -57,57 +57,44 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         distribution in the installation command, and you'll get source
         distribution from PyPI, for example:</p>
 
-        <pre>sudo pip3 install numpy --no-binary :all:</pre>
+        <pre>pip3 install numpy --no-binary :all:</pre>
 
         <p>or to use the <code>--no-binary</code> option for a single package
         (e.g. get the tensorflow wheel but force a build of one of its
         dependencies, grpcio):</p>
 
-        <pre>sudo pip3 install tensorflow --no-binary grpcio</pre>
+        <pre>pip3 install tensorflow --no-binary grpcio</pre>
       </div>
 
       <h5 id="sudo">Should I use sudo? Should I use pip or pip3?</h5>
       <div>
-        <p>On Debian-based systems such as the Raspberry Pi OS, the
-        <code>python</code> command is Python 2, and <code>python3</code> is
-        Python 3. Similarly, <code>pip</code> is for Python 2, and
-        <code>pip3</code> is for Python 3.</p>
+        <p>Since the release of Debian Bookworm, installations with <code>sudo</code> are no longer
+        permitted. Instead, it is recommended to use a virtual environment.</p>
 
-        <p>The exception to this is is when using a Python 3 virtual
-        environment, when <code>python</code> and <code>pip</code> refer to
-        your virtual environment's Python and pip.</p>
+        <p>Once a virtual environment is activated, either <code>pip</code> or <code>pip3</code>
+        can be used, as they both refer to the virtual environment's Python.</p>
 
-        <p>Usually, it's good practice to use a virtual environment rather
-        than the system Python. However, it's common to use the system Python
-        on Raspberry Pi, because you can think of the whole SD card as a
-        "virtual environment" in that you are likely to reimage the SD card
-        regularly, or swap to a different SD card for a different
-        project.</p>
+        <p>See the section on <a href="#venv">virtual environments</a>.</p>
+      </div>
 
-        <p>If you're using the system Python, use <code>sudo pip3</code>:</p>
-
-        <pre>sudo pip3 install numpy</pre>
-
-        <p>If you're in an active a virtual environment, you use
-        <code>pip</code> not <code>pip3</code>, and you don't use
-        <code>sudo</code>:</p>
-
-        <pre>pip install numpy</pre>
-
-        <p>Alternatively, you can use the system Python but install packages
-        for the current user only, which doesn't require
-        <code>sudo</code>:</p>
-
-        <pre>pip3 install numpy --user</pre>
+      <h5 id="venv"></h5>
+      <div>
+        <p>To create a virtual environment:</p>
+        <pre>$ sudo apt install virtualenv python3-virtualenv -y
+$ virtualenv -p /usr/bin/python3 testpip</pre>
+        <p>Enable it:</p>
+        <pre>$ source testpip/bin/activate</pre>
+        <p>Now you can use <code>pip</code> or <code>pip3</code> to install packages into your environment:</p>
+        <pre>(testpip) $ pip3 install numpy</pre>
       </div>
 
       <h5>piwheels doesn't have the latest version of a package I need. How do
         I install the newest version available from piwheels?</h5>
       <div>
         <p>You can either specify the version you want:</p>
-        <pre>sudo pip3 install numpy==1.18.0</pre>
+        <pre>pip3 install numpy==1.18.0</pre>
         <p>Or you can use the <code>--prefer-binary</code> flag:</p>
-        <pre>sudo pip3 install numpy --prefer-binary</pre>
+        <pre>pip3 install numpy --prefer-binary</pre>
         <p>This will install the latest version that's available as a
         wheel.</p>
       </div>
@@ -140,24 +127,19 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         <p>Some packages fail to build, for various reasons. If you would like
         to investigate, try building the package yourself on a Raspberry Pi 3
         or 4 with a Lite image by running <code>pip3 wheel package==version
-        --no-deps --no-binary package</code>. If you find you are able to
-        successfully build the package (for example, by installing some build
-        dependencies), please <a
-        href="https://github.com/piwheels/packages/issues/new/choose">open an
-        issue on github</a> and we'll try to resolve it. Also see the
-        following question.</p>
+        --no-deps --no-binary package</code>.</p>
+        <p>Please see the questions on 
       </div>
 
       <h5>Why are some versions of a package available on piwheels and other
         versions are not?</h5>
       <div>
-        <p>You may discover that piwheels manages to build some versions of a
-        package and fails to build others. Success and failure per ABI is
-        noted on each package's project page. Search for a package on the
-        <a href="packages.html">package list page</a>. If you maintain the
-        package or otherwise have a solution for the build, please <a
-        href="https://github.com/piwheels/packages/issues/new/choose">open
-        an issue on github</a> and we'll try to resolve it.</p>
+        <p>You may discover that piwheels manages to build some versions of a package and fails to
+        build others. Success and failure per ABI is noted on each package's project page. Search
+        for a package on the <a href="packages.html">package list page</a>. If you maintain the
+        package or otherwise have a solution for the build, please let us know and we'll try to 
+        resolve it. See the questions on reporting <a href="#issues">package issues</a> and
+        <a href="#missing">missing packages</a>.</p>
       </div>
 
       <h5>How long does it take for a new release to become available on
@@ -194,15 +176,15 @@ extra-index-url=https://www.piwheels.org/simple</pre>
       <h5>Which Raspberry Pi models are supported by packages provided by
         piwheels?</h5>
       <div>
-        <p>All current Raspberry Pi models (as of August 2023) are
-        supported:</p>
+        <p>All current Raspberry Pi models (as of October 2023) are supported:</p>
 
         <ul>
+          <li>Raspberry Pi 5</li>
           <li>Raspberry Pi 400</li>
           <li>Raspberry Pi 4</li>
-          <li>Raspberry Pi 3 (including B+/A+)</li>
+          <li>Raspberry Pi 3</li>
           <li>Raspberry Pi 2</li>
-          <li>Raspberry Pi 1 (including B+/A+)</li>
+          <li>Raspberry Pi 1</li>
           <li>Raspberry Pi Zero</li>
           <li>Raspberry Pi Zero 2</li>
         </ul>
@@ -221,22 +203,21 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         <code>pyqt</code>, the user can use <code>matplotlib</code> without
         <code>pyqt</code>.</p>
 
-        <p>If you find an issue with a package installed from piwheels, please
-        <a href="https://github.com/piwheels/packages/issues/new/choose">submit
-        an issue on GitHub</a>.</p>
+        <p>If you find an issue with a package installed from piwheels, please let us know and we'll
+        try to resolve it. See the questions on reporting <a href="#issues">package issues</a> and
+        <a href="#missing">missing packages</a>.</p>
       </div>
 
       <h5>Which Python versions does piwheels support?</h5>
       <div>
-        <p>piwheels supports Python 3 only. While most packages available
-        will work in any version of Python 3, some packages are only
-        compatible with the minor version with which they were built. We
-        build using for the ABI of the Python 3 version distributed with
-        Debian releases:</p>
+        <p>piwheels supports Python 3 only. While most packages available will work in any version
+        of Python 3, some packages are only compatible with the minor version with which they were
+        built. We build using for the ABI of the Python 3 version distributed with Debian releases.
+        We stop building on each Debian version as it goes end-of-life:</p>
 
         <ul>
-          <li>Jessie - Python 3.4 (end of life)</li>
-          <li>Stretch - Python 3.5 (end of life)</li>
+          <li>Jessie - Python 3.4 (end-of-life)</li>
+          <li>Stretch - Python 3.5 (end-of-life)</li>
           <li>Buster - Python 3.7</li>
           <li>Bullseye - Python 3.9</li>
           <li>Bookworm - Python 3.11</li>
@@ -255,7 +236,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         provided by <a
         href="https://www.mythic-beasts.com/order/rpi">Mythic Beasts</a>.
         The web pages and wheel files are served from a single Raspberry Pi 4,
-        we use a separate VM to host the database, and use several other
+        we use a separate VM to host the postgreSQL database, and use several other
         Raspberry Pis across different OS versions to build wheels.</p>
 
         <p>The original build run was completed by a total of 20 Raspberry
@@ -289,7 +270,7 @@ extra-index-url=https://www.piwheels.org/simple</pre>
 
         <p>However, wheels built on a Raspberry Pi 2/3/4 running the 32-bit
         OS are tagged <code>armv7l</code>. Since wheels built on a Raspberry
-        Pi 3/4 will work on a Pi 4, 3, 2, 1, Zero or Zero 2, we simply provide Pi
+        Pi 3/4 will work on a Pi 5, 4, 3, 2, 1, Zero or Zero 2, we simply provide Pi
         3/4-built wheels renamed <code>armv6l</code>, with a few exceptions
         (some packages, like opencv and tensorflow, are built with
         optimisations available on Pi 3/4).</p>
@@ -297,14 +278,13 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         <p>Also see the following question.</p>
       </div>
 
-      <h5>What about aarch64?</h5>
+      <h5>What about 64-bit / aarch64?</h5>
       <div>
-        <p>The repository at piwheels.org does not currently support the
-        64-bit version of the Raspberry Pi OS (currently in beta). We have
-        plans to support it in future, but this requires a significant amount
-        of work, and then rebuilding all wheels on the new architecture. Read
-        more on the <a href="https://blog.piwheels.org/raspberry-pi-os-64-bit-aarch64/">blog</a>
-        and <a href="https://github.com/piwheels/piwheels/issues/220">issue #220</a>.</p>
+        <p>The repository at piwheels.org does not currently support the 64-bit version of the
+        Raspberry Pi OS. We have plans to support it in future, but this requires a significant
+        amount of work, and then rebuilding all wheels on the new architecture. Read more on the
+        <a href="https://blog.piwheels.org/raspberry-pi-os-64-bit-aarch64/">blog</a> and 
+        <a href="https://github.com/piwheels/piwheels/issues/220">issue #220</a>.</p>
       </div>
 
       <h5>What about Ubuntu and other distros?</h5>
@@ -381,37 +361,33 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         source.</p>
       </div>
 
-      <h5>I'm a package maintainer. How can I remove a wheel from piwheels?</h5>
+      <h5>I'm a package maintainer. How can I request rebuild or removal of a wheel from piwheels?</h5>
       <div>
-        <p><a href="https://github.com/piwheels/packages/issues/new/choose">Open
-        an issue on GitHub</a> and we'll endeavour to remove it as soon as
-        we can. In cases where it's not obvious that the requester owns the
-        package to be removed, we may require further evidence that you are
-        authorized to request its removal (e.g. posting as the GitHub owner
-        of the project, or some similar standard of proof on the relevant
-        hosting service).</p>
+        <p>Please contact us by <a href="ben@piwheels.org">email</a> or open an issue on our package
+        issue tracker on GitHub (see the question on <a href="#issues">package issues</a>) and we'll
+        endeavour to remove it as soon as we can. In cases where it's not obvious that the requester
+        owns the package to be removed, we may require further evidence that you are authorized to
+        request its removal (e.g. posting as the GitHub owner of the project, or some similar
+        standard of proof on the relevant hosting service).</p>
 
-        <p>If you do request removal, please let us know if you'd like
-        piwheels to avoid building future releases of your package. We
-        can arrange this trivially via a skip flag in our database.</p>
+        <p>If you do request removal, please let us know if you'd like piwheels to avoid building
+        future releases of your package. We can arrange this trivially with a skip flag in our
+        database.</p>
       </div>
 
       <h5>My package is really popular, so why are the download stats so low?</h5>
       <div>
-        <p>We only log downloads from piwheels.org, not from PyPI. If your
-        package is pure Python, and you submit wheels to PyPI (as you
-        should), users may get the file from PyPI, not from piwheels. The
-        only downloads from piwheels for these packages will be if people are
-        explicitly choosing to download from piwheels. You can use projects
-        like <a href="https://pypistats.org">pypistats.org</a> to get the
-        numbers from PyPI, and aggregate them.</p>
+        <p>We only log downloads from piwheels.org, not from PyPI. If your package is pure Python,
+        and you submit wheels to PyPI, users may get the file from PyPI, not from piwheels. You can
+        use projects like <a href="https://pypistats.org">pypistats.org</a> to get the numbers from
+        PyPI, and aggregate them.</p>
 
-        <p>Additionally, if your project is packaged for Debian, people could
-        be installing your package with apt, rather than pip.</p>
+        <p>Additionally, if your project is packaged for Debian, people could be installing your
+        package with apt, rather than pip.</p>
       </div>
 
-      <h5>I installed a package from piwheels and I get an ImportError with
-        the message "cannot open shared object file".</h5>
+      <h5>I installed a package from piwheels and I get an ImportError with the message "cannot open
+      shared object file".</h5>
       <div>
         <p>Packages built by piwheels may depend on the presence of certain
         shared libraries. This is resolved by installing apt packages which
@@ -468,7 +444,7 @@ python3 -m pip download \
         to find the location of the Armv6 wheels, download them and rename
         them.</p>
         <ol>
-          <li>Go to the package's <a href="/packages.html">project page</a>,
+          <li>Go to the package's <a href="packages.html">project page</a>,
             scroll down to the Files section, and find the file you need.</li>
           <li>Copy the full URL of the file location, e.g.
             https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl</li>
@@ -480,10 +456,53 @@ python3 -m pip download \
 
         <pre>wget https://www.piwheels.org/simple/tensorflow/tensorflow-1.14.0-cp37-none-linux_armv6l.whl
 mv tensorflow-1.14.0-cp37-none-linux_armv6l.whl tensorflow-1.14.0-cp37-none-linux_armv7l.whl
-sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
+pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
 
-        <p>Alternatively, simply install the packages as normal on a Pi
-        1/Zero.</p>
+        <p>Alternatively, simply install the packages as normal on a Pi 1/Zero.</p>
+      </div>
+
+      <h5>How do I find out why a package failed to build?</h5>
+      <div>
+        <p>Navigate to the <a href="packages.html">project page</a> for the package, and you should
+        see which versions are available for each Python version. If a build failed, it will show a
+        red cross. If you click the build status icon, you'll see the build log that shows the output
+        from the build. This may indicate where the build failed, and why. See the following questions
+        on reporting issues to us.</p>
+      </div>
+
+      <h5 id="issues">How do I report a problem with a package built by piwheels?</h5>
+      <div>
+        <p>Issues with packages are tracked within the <a href="https://github.com/piwheels/packages">piwheels/packages</a>
+        GitHub repository.</p>
+        <p>Navigate to the <a href="packages.html">project page</a> for the package, and you should
+        see which versions are available for each Python version. If your attempt to install a
+        package failed, check if this is because we don't have a successful build for the package,
+        or the version your require. Note that installing one package may result in failure to install
+        another dependent package. If a build failed, it will show a
+        red cross. If your issue is that the package, or a version of a package, is not available on
+        piwheels, please see the following question on missing packages. If you determine there is
+        an issue with the way a package was built by piwheels, please open an issue against the
+        package in question.</p>
+        <p>At the bottom of the project page, you'll see "Search issues for this package". Clicking
+        this will search GitHub for issues reported about this package. If there are already issues
+        for the package, links to those issues will be shown. If not, you can click one of the links
+        below this to report one. Please open a new issue, and we'll follow up as we investigate.</p>
+      </div>
+
+      <h5>How do I report a missing package or missing version?</h5>
+      <div id="missing">
+        <p>Issues with packages are tracked within the <a href="https://github.com/piwheels/packages">piwheels/packages</a>
+        GitHub repository.</p>
+        <p>Navigate to the <a href="packages.html">project page</a> for the package, and you should
+        see which versions are available for each Python version. If a build failed, it will show a
+        red cross. If you click the build status icon, you'll see the build log that shows the output
+        from the build. This may indicate where the build failed, and why.</p>
+        <p>At the bottom of the project page, you'll see "Search issues for this package". Clicking
+        this will search GitHub for issues reported about this package. If there are already issues
+        for the package, links to those issues will be shown. If not, you can click the link below
+        this to report one. If a version has a failed build, or all builds failed for this package,
+        please open a "missing package" issue, and we'll follow up as we investigate and try to
+        build the package if possible.</p>
       </div>
 
       <h5>How can I help?</h5>
@@ -512,7 +531,7 @@ sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
         <p>You need to download the file, verify it, and install it
         manually:</p>
         <ol>
-          <li>Go to the package's <a href="/packages.html">project page</a>,
+          <li>Go to the package's <a href="packages.html">project page</a>,
             find the version you need, and open up the list of files. Choose
             the right file for your Python version and architecture.</li>
           <li>Copy the full URL of the file location (without the checksum
@@ -530,8 +549,7 @@ sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
                 and you ended up with a corrupted file. This is a bug in pip
                 which is difficult to reproduce.</li>
               <li>It's safe to install the wheel, so you can use
-                <code>pip</code> to install directly from the file: <code>sudo
-                pip3 install
+                <code>pip</code> to install directly from the file: <code>pip3 install
                 tensorflow-1.14.0-cp37-none-linux_armv7l.whl</code></li>
             </ul>
           </li>
@@ -571,6 +589,11 @@ sudo pip3 install tensorflow-1.14.0-cp37-none-linux_armv7l.whl</pre>
       <h5>Is there a piwheels API?</h5>
       <div>
         <p>Yes! Read about the <a href="json.html">piwheels JSON API</a>.</p>
+      </div>
+
+      <h5>How do I contact the piwheels team?</h5>
+      <div>
+        <p>Please send an email to <a href="mailto:ben@piwheels.org">ben@piwheels.org</a>.</p>
       </div>
 
       <h5>I have another question</h5>

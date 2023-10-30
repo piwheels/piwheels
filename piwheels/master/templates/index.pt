@@ -49,10 +49,8 @@ $ rm -rf testpip/</pre>
 
       <h2 id="support">Support</h2>
 
-      <p>Wheels provided support all Raspberry Pi models: Pi 400, Pi 4, Pi 3,
-      Pi 2, Pi Zero 2 (<code>linux_armv7l</code> wheels), Pi 1 and Pi Zero
-      (<code>linux_armv6l</code> wheels). Our wheels are only supported under
-      32-bit (<code>armhf</code>) Raspberry Pi OS, and only for the version of
+      <p>Wheels provided support all Raspberry Pi models (as of October 2023). Our wheels are only
+      supported under 32-bit (<code>armhf</code>) Raspberry Pi OS, and only for the version of
       Python provided by each OS release:
 
       <table class="box">
