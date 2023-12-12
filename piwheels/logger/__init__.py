@@ -70,7 +70,7 @@ get_installer_version = lambda ud: ud.get('installer', {}).get('version')
 get_setuptools_version = lambda ud: ud.get('setuptools_version')
 clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
 get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
-get_user_agent = lambda ua: ua.split('/')[0].lower()
+get_user_agent = lambda ua: ua.split('/')[0].lower()[:200]
 
 
 LogType = namedtuple('LogType', ('user_agent', 'path', 'log_type'))
@@ -272,7 +272,7 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
             get_package_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
-            row.req_User_Agent,
+            get_user_agent(row.req_User_Agent),
         ]
     elif log_type == 'LOGJSON':
         return [
@@ -286,5 +286,5 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
             get_page_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
-            row.req_User_Agent,
+            get_user_agent(row.req_User_Agent),
         ]
