@@ -70,7 +70,7 @@ get_installer_version = lambda ud: ud.get('installer', {}).get('version')
 get_setuptools_version = lambda ud: ud.get('setuptools_version')
 clean_page_name = lambda path: str(path).replace('/', '').replace('.html', '')
 get_page_name = lambda path: 'home' if str(path) in ('/', '/index.html') else clean_page_name(path)
-get_user_agent = lambda ua: ua.split('/')[0].replace(b'\x00', b'').lower()[:200]
+get_user_agent = lambda ua: ua.split('/')[0].replace('\x00', '').lower()[:200]
 
 
 LogType = namedtuple('LogType', ('user_agent', 'path', 'log_type'))
