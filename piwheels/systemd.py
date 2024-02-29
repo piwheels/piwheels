@@ -41,11 +41,12 @@ import socket
 class Systemd:
     """
     Provides a simple interface to systemd's notification and watchdog
-    services. It is suggested applications construct a single, top-level
-    instance of this class and use it to communicate with systemd.
+    services. It is suggested applications obtain a single, top-level instance
+    of this class via :func:`get_systemd` and use it to communicate with
+    systemd.
     """
-
     __slots__ = ('_socket',)
+    LISTEN_FDS_START = 3
 
     def __init__(self, address=None):
         # Remove NOTIFY_SOCKET implicitly so child processes don't inherit it
@@ -57,8 +58,8 @@ class Systemd:
                 return None
             if address[0] == '@':
                 address = '\0' + address[1:] # abstract namespace socket
-            self._socket = socket.socket(socket.AF_UNIX,
-                              socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
+            self._socket = socket.socket(
+                socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
             try:
                 self._socket.connect(address)
             except IOError:
@@ -87,20 +88,20 @@ class Systemd:
         """
         Notify systemd that service startup is complete.
         """
-        self.notify(b'READY=1')
+        self.notify('READY=1')
 
     def reloading(self):
         """
         Notify systemd that the service is reloading its configuration. Call
         :func:`ready` when reload is complete.
         """
-        self.notify(b'RELOADING=1')
+        self.notify('RELOADING=1')
 
     def stopping(self):
         """
         Notify systemd that the service is stopping.
         """
-        self.notify(b'STOPPING=1')
+        self.notify('STOPPING=1')
 
     def extend_timeout(self, timeout):
         """
@@ -116,20 +117,20 @@ class Systemd:
         has not yet terminated but systemd does *not* consider the timeout
         expired as only 30s have elapsed of the original 90s timeout.
         """
-        self.notify('EXTEND_TIMEOUT_USEC=%d' % int(timeout * 1000000))
+        self.notify(f'EXTEND_TIMEOUT_USEC={timeout * 1000000:d}')
 
     def watchdog_ping(self):
         """
         Ping the systemd watchdog. This must be done periodically if
         :func:`watchdog_period` returns a value other than ``None``.
         """
-        self.notify(b'WATCHDOG=1')
+        self.notify('WATCHDOG=1')
 
     def watchdog_reset(self, timeout):
         """
         Reset the systemd watchdog timer to *timeout* seconds.
         """
-        self.notify('WATCHDOG_USEC=%d' % int(timeout * 1000000))
+        self.notify(f'WATCHDOG_USEC={timeout * 1000000:d}')
 
     def watchdog_period(self):
         """
@@ -168,13 +169,41 @@ class Systemd:
         """
         if pid is None:
             pid = os.getpid()
-        self.notify('MAINPID=%d' % pid)
+        self.notify(f'MAINPID={pid:d}')
 
-    # TODO fd storage, retrieval, and listening
+    def listen_fds(self):
+        """
+        Return file-descriptors passed to the service by systemd, e.g. as part
+        of socket activation or file descriptor stores. It returns a
+        :class:`dict` mapping each file-descriptor to its name, or the string
+        "unknown" if no name was given.
+        """
+        try:
+            if int(os.environ['LISTEN_PID']) != os.getpid():
+                raise ValueError('wrong LISTEN_PID')
+            fds = int(os.environ['LISTEN_FDS'])
+        except (ValueError, KeyError):
+            return {}
+        try:
+            names = os.environ['LISTEN_FDNAMES'].split(':')
+        except KeyError:
+            names = ['unknown'] * fds
+        if len(names) != fds:
+            return {}
+        return {
+            fd: name
+            for fd, name in zip(
+                range(self.LISTEN_FDS_START, self.LISTEN_FDS_START + fds),
+                names)
+        }
 
 
 _SYSTEMD = None
 def get_systemd():
+    """
+    Return a single top-level instance of :class:`Systemd`; repeated calls will
+    return the same instance.
+    """
     global _SYSTEMD
     if _SYSTEMD is None:
         _SYSTEMD = Systemd()

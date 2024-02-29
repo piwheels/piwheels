@@ -35,13 +35,13 @@ from unittest import mock
 
 import pytest
 
-from piwheels.systemd import Systemd
+from nobodd.systemd import Systemd, get_systemd
 
 
 @pytest.fixture()
-def mock_sock(request, tmpdir):
+def mock_sock(request, tmp_path):
     save_addr = os.environ.get('NOTIFY_SOCKET')
-    addr = tmpdir.join('notify')
+    addr = tmp_path / 'notify'
     os.environ['NOTIFY_SOCKET'] = str(addr)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind(str(addr))
@@ -54,9 +54,9 @@ def mock_sock(request, tmpdir):
 
 
 @pytest.fixture()
-def mock_abstract_sock(request, tmpdir):
+def mock_abstract_sock(request, tmp_path):
     save_addr = os.environ.get('NOTIFY_SOCKET')
-    addr = tmpdir.join('abstract')
+    addr = tmp_path / 'abstract'
     os.environ['NOTIFY_SOCKET'] = '@' + str(addr)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind('\0' + str(addr))
@@ -82,9 +82,9 @@ def test_available_invalid():
             intf.available()
 
 
-def test_available_ioerror(tmpdir):
+def test_available_ioerror(tmp_path):
     with mock.patch.dict('os.environ'):
-        os.environ['NOTIFY_SOCKET'] = str(tmpdir.join('FOO'))
+        os.environ['NOTIFY_SOCKET'] = str(tmp_path / 'FOO')
         intf = Systemd()
         with pytest.raises(RuntimeError):
             intf.available()
@@ -106,8 +106,8 @@ def test_abstract_available(mock_abstract_sock):
     intf.available()
 
 
-def test_known_available(tmpdir):
-    addr = tmpdir.join('known')
+def test_known_available(tmp_path):
+    addr = tmp_path / 'known'
     s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
     s.bind(str(addr))
     try:
@@ -193,4 +193,40 @@ def test_main_pid(mock_sock):
     intf.main_pid(10)
     assert mock_sock.recv(64) == b'MAINPID=10'
     intf.main_pid()
-    assert mock_sock.recv(64) == ('MAINPID=%d' % os.getpid()).encode('ascii')
+    assert mock_sock.recv(64) == (f'MAINPID={os.getpid()}').encode('ascii')
+
+
+def test_listen_fds(mock_sock):
+    intf = Systemd()
+    os.environ['LISTEN_PID'] = str(os.getpid())
+    os.environ['LISTEN_FDS'] = '2'
+    assert intf.listen_fds() == {3: 'unknown', 4: 'unknown'}
+
+
+def test_listen_fds_wrong_pid(mock_sock):
+    intf = Systemd()
+    os.environ['LISTEN_PID'] = '1'
+    os.environ['LISTEN_FDS'] = '2'
+    assert intf.listen_fds() == {}
+
+
+def test_listen_fds_with_names(mock_sock):
+    intf = Systemd()
+    os.environ['LISTEN_PID'] = str(os.getpid())
+    os.environ['LISTEN_FDS'] = '2'
+    os.environ['LISTEN_FDNAMES'] = 'connection:stored'
+    assert intf.listen_fds() == {3: 'connection', 4: 'stored'}
+
+
+def test_listen_fds_bad_names(mock_sock):
+    intf = Systemd()
+    os.environ['LISTEN_PID'] = str(os.getpid())
+    os.environ['LISTEN_FDS'] = '2'
+    os.environ['LISTEN_FDNAMES'] = 'connection:stored:foo:bar'
+    assert intf.listen_fds() == {}
+
+
+def test_get_systemd():
+    with mock.patch('nobodd.systemd._SYSTEMD', None):
+        sd = get_systemd()
+        assert get_systemd() is sd
