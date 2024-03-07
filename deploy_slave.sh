@@ -33,6 +33,7 @@ elif [ $VERSION_ID -eq 11 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-13
 fi
 
+apt -y install ntp
 apt update
 apt -y upgrade
 apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
