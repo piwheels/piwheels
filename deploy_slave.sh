@@ -34,6 +34,7 @@ elif [ $VERSION_ID -eq 11 ]; then
 fi
 
 apt update
+apt -y install ntp
 apt -y upgrade
 apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
