@@ -97,7 +97,12 @@ fi
 
 cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
-pip3 install .[slave]
+
+if [ $VERSION_ID -eq 12 ]; then
+    pip3 install .[slave] --break-system-packages
+else
+    pip3 install .[slave]
+fi
 
 fallocate -x -l 1G /swapfile
 chmod 0600 /swapfile
