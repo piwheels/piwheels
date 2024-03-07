@@ -59,7 +59,7 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
 
 apt purge python3-cryptography python3-yaml -y
 
-if [ $VERSION_ID -eq 11 ]; then
+if [ $VERSION_ID -eq 12 ]; then
     pip3 install setuptools --upgrade --break-system-packages
     pip3 install pip --upgrade --break-system-packages
 else
@@ -71,7 +71,7 @@ hash -r
 
 PYTHON_PACKAGES="pypandoc versioneer kervi scikit-build cython numpy scipy setuptools_rust conan cbor2"
 
-if [ $VERSION_ID -eq 11 ]; then
+if [ $VERSION_ID -eq 12 ]; then
     pip3 install $PYTHON_PACKAGES \
         --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary --break-system-packages
 else
