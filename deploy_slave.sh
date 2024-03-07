@@ -14,6 +14,7 @@ echo "master=$2" >> /etc/piwheels.conf
 DEBIAN_FRONTEND=noninteractive
 
 sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+rm -f /boot/kernel8.img
 
 source /etc/os-release
 
