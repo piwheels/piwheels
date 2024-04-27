@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.20');
+INSERT INTO configuration(id, version) VALUES (1, '0.21');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
