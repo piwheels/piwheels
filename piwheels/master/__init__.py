@@ -243,7 +243,7 @@ write access to the output directory.
             elif isinstance(task, BigBrother):
                 self.big_brother = task
             task.start()
-            task.ready.wait(10)
+            task.ready.wait(60)
         self.logger.info('started all tasks')
         assert all(task.ready.wait(0) for task in self.tasks)
         self.logger.info('all tasks ready')
