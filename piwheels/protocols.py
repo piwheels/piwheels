@@ -406,6 +406,7 @@ the_oracle = Protocol(recv={
     'GETABIS':     bool,                       # exclude_skipped
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number
+    'INITSTATS':   NoData,
     'GETSTATS':    NoData,
     'GETSEARCH':   NoData,
     'FILEDEPS':    str,                        # filename

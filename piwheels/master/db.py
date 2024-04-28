@@ -574,6 +574,20 @@ class Database:
                 )
             }
 
+    @rpc('INITSTATS')
+    def get_initial_statistics(self):
+        """
+        Return the initial (expensive to calculate) statistics from the
+        database.
+        """
+        with self._conn.begin():
+            stats = dict(
+                self._conn.execute(
+                    "SELECT * FROM get_initial_statistics()"
+                ).first().items()
+            )
+            return stats
+
     @rpc('GETSTATS')
     def get_statistics(self):
         """

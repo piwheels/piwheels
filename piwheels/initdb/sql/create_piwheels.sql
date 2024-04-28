@@ -1439,9 +1439,35 @@ $sql$;
 REVOKE ALL ON FUNCTION get_build_queue(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_build_queue(INTEGER) TO {username};
 
+-- get_initial_statistics()
+-------------------------------------------------------------------------------
+-- Returns a set of statistics used to initialize the big brother process. This
+-- query is necessarily unbounded and may take a very long time to run (several
+-- minutes).
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION get_initial_statistics()
+    RETURNS TABLE(
+        downloads_all          BIGINT
+    )
+    LANGUAGE SQL
+    RETURNS NULL ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    SELECT
+        COUNT(*) AS downloads_all
+    FROM downloads;
+$sql$;
+
+REVOKE ALL ON FUNCTION get_initial_statistics() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_initial_statistics() TO {username};
+
 -- get_statistics()
 -------------------------------------------------------------------------------
 -- Returns a single row containing a variety of statistics about the system.
+-- This query is designed to be run periodically and should have a relatively
+-- bounded runtime (must not exceed 1 minute)
 -------------------------------------------------------------------------------
 
 CREATE FUNCTION get_statistics()
@@ -1451,7 +1477,6 @@ CREATE FUNCTION get_statistics()
         packages_built         INTEGER,
         files_count            INTEGER,
         new_last_hour          INTEGER,
-        downloads_all          INTEGER,
         downloads_last_month   INTEGER,
         downloads_last_hour    INTEGER
     )
@@ -1489,14 +1514,12 @@ AS $sql$
     ),
     download_stats AS (
         SELECT
-            COUNT(*) AS downloads_all,
-            COUNT(*) FILTER (
-                WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
-            ) AS downloads_last_month,
+            COUNT(*) AS downloads_last_month,
             COUNT(*) FILTER (
                 WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '1 hour'
             ) AS downloads_last_hour
         FROM downloads
+        WHERE accessed_at > CURRENT_TIMESTAMP AT TIME ZONE 'UTC' - INTERVAL '30 days'
     ),
     version_stats AS (
         SELECT COUNT(*) AS new_last_hour
@@ -1509,7 +1532,6 @@ AS $sql$
         CAST(fc.packages_built AS INTEGER),
         CAST(fc.files_count AS INTEGER),
         CAST(vs.new_last_hour AS INTEGER),
-        CAST(dl.downloads_all AS INTEGER),
         CAST(dl.downloads_last_month AS INTEGER),
         CAST(dl.downloads_last_hour AS INTEGER)
     FROM
