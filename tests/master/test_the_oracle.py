@@ -408,7 +408,6 @@ def test_get_statistics(db_client, db, with_files):
         'new_last_hour': 0,
         'downloads_last_hour': 0,
         'downloads_last_month': 0,
-        'downloads_all': 0,
     }
     assert db_client.get_statistics() == expected
     # Run twice to cover caching of Statstics type

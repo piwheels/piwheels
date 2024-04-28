@@ -378,8 +378,8 @@ the_oracle = Protocol(recv={
     'ALLPKGS':     NoData,
     'ALLVERS':     NoData,
     'NEWPKG':      ExactSequence([str, str, str]),  # package, skip reason, description
-    'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
-    'NEWPKGNAME':  ExactSequence([str, str, dt.datetime]),  # package, name, timestamp
+    'NEWVER':      ExactSequence([str, str, Any(dt.datetime, None), str]),  # package, version, released, skip reason
+    'NEWPKGNAME':  ExactSequence([str, str, Any(dt.datetime, None)]),  # package, name, timestamp
     'GETPKGNAMES': str,  # package
     'SETDESC':     ExactSequence([str, str]),  # package, description
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason

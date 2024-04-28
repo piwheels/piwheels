@@ -36,6 +36,7 @@ itself.
     :members:
 """
 
+import inspect
 import warnings
 from datetime import datetime, timedelta, timezone
 from itertools import chain, groupby
@@ -45,7 +46,9 @@ from collections import namedtuple
 from sqlalchemy import MetaData, Table, select, create_engine, func, distinct
 from sqlalchemy.exc import IntegrityError, SAWarning
 
-from .. import __version__
+from .. import __version__, protocols
+from ..states import (
+    BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)
 
 
 UTC = timezone.utc
@@ -73,6 +76,34 @@ def sanitize(s):
         return None
     else:
         return s.translate(CONTROL_CHARS)
+
+
+def rpc(message, args_to_data=None, data_to_args=None):
+    def wrap_rpc(method):
+        sig = inspect.signature(method)
+        if len(sig.parameters) == 1: # no args except self
+            default_args_to_data = lambda args, kwargs: protocols.NoData
+            default_data_to_args = lambda data: ()
+        elif len(sig.parameters) == 2: # one arg
+            def default_args_to_data(args, kwargs):
+                bound = sig.bind(None, *args, **kwargs)
+                bound.apply_defaults()
+                return [arg for arg in bound.arguments.values()][1]
+            default_data_to_args = lambda data: (data,)
+        else:
+            def default_args_to_data(args, kwargs):
+                bound = sig.bind(None, *args, **kwargs)
+                bound.apply_defaults()
+                # Exclude the first (self) parameter
+                return [arg for arg in bound.arguments.values()][1:]
+            default_data_to_args = lambda data: data
+        method.args_to_data = (
+            default_args_to_data if args_to_data is None else args_to_data)
+        method.data_to_args = (
+            default_data_to_args if data_to_args is None else data_to_args)
+        method.message = message
+        return method
+    return wrap_rpc
 
 
 class Database:
@@ -127,6 +158,7 @@ class Database:
             self._conn.close()
             self._conn = None
 
+    @rpc('NEWPKG')
     def add_new_package(self, package, skip='', description=''):
         """
         Insert a new package record into the database. Returns True if the row
@@ -137,6 +169,7 @@ class Database:
                 "VALUES (add_new_package(%s, %s, %s))", (package, skip,
                                                          description)).scalar()
 
+    @rpc('NEWVER')
     def add_new_package_version(self, package, version,
                                 released=None, skip=''):
         """
@@ -153,15 +186,19 @@ class Database:
                  released.astimezone(UTC).replace(tzinfo=None), skip)
             ).scalar()
 
-    def add_package_name(self, package, name, seen):
+    @rpc('NEWPKGNAME')
+    def add_package_name(self, package, name, seen=None):
         """
         Add a new package alias or update the last seen timestamp.
         """
+        if seen is None:
+            seen = datetime(1970, 1, 1, tzinfo=UTC)
         with self._conn.begin():
             self._conn.execute(
                 "VALUES (add_package_name(%s, %s, %s))",
                 (package, name, seen.astimezone(UTC).replace(tzinfo=None)))
 
+    @rpc('GETPKGNAMES')
     def get_package_aliases(self, package):
         """
         Retrieve all aliases for *package* (not including the canonical name
@@ -175,6 +212,7 @@ class Database:
                 )
             ]
 
+    @rpc('SETDESC')
     def set_package_description(self, package, description):
         """
         Update the description for *package* in the packages table.
@@ -184,6 +222,7 @@ class Database:
                 "VALUES (set_package_description(%s, %s))",
                 (package, description))
 
+    @rpc('SKIPPKG')
     def skip_package(self, package, reason):
         """
         Mark a package with a reason to prevent future builds of all versions
@@ -193,6 +232,7 @@ class Database:
             self._conn.execute(
                 "VALUES (skip_package(%s, %s))", (package, reason))
 
+    @rpc('SKIPVER')
     def skip_package_version(self, package, version, reason):
         """
         Mark a version of a package with a reason to prevent future build
@@ -203,6 +243,7 @@ class Database:
                 "VALUES (skip_package_version(%s, %s, %s))",
                 (package, version, reason))
 
+    @rpc('DELPKG')
     def delete_package(self, package):
         """
         Remove the specified package, along with all builds and files.
@@ -211,6 +252,7 @@ class Database:
             self._conn.execute(
                 "VALUES (delete_package(%s))", (package))
 
+    @rpc('DELVER')
     def delete_version(self, package, version):
         """
         Remove the specified version of the specified package, along with all
@@ -220,6 +262,7 @@ class Database:
             self._conn.execute(
                 "VALUES (delete_version(%s, %s))", (package, version))
 
+    @rpc('YANKVER')
     def yank_version(self, package, version):
         """
         Mark the specified version of the specified package version as "yanked".
@@ -228,6 +271,7 @@ class Database:
             self._conn.execute(
                 "VALUES (yank_version(%s, %s))", (package, version))
 
+    @rpc('UNYANKVER')
     def unyank_version(self, package, version):
         """
         Mark the specified version of the specified package version as "unyanked".
@@ -236,6 +280,7 @@ class Database:
             self._conn.execute(
                 "VALUES (unyank_version(%s, %s))", (package, version))
 
+    @rpc('PKGEXISTS')
     def test_package(self, package):
         """
         Check whether *package* already exists in the database. Returns a
@@ -246,6 +291,7 @@ class Database:
                 "VALUES (test_package(%s))", (package,)
             ))
 
+    @rpc('PKGDELETED')
     def package_marked_deleted(self, package):
         """
         Check whether *package* has been marked for deletion.
@@ -255,6 +301,7 @@ class Database:
                 "VALUES (package_marked_deleted(%s))", (package,)
             ))
 
+    @rpc('VEREXISTS')
     def test_package_version(self, package, version):
         """
         Check whether *version* of *package* already exists in the database.
@@ -265,6 +312,7 @@ class Database:
                 "VALUES (test_package_version(%s, %s))", (package, version)
             ))
 
+    @rpc('VERSDELETED')
     def get_versions_deleted(self, package):
         """
         Return any versions of *package* which have been marked for deletion.
@@ -277,6 +325,9 @@ class Database:
                 )
             }
 
+    @rpc('LOGDOWNLOAD',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (DownloadState.from_message(data),))
     def log_download(self, download):
         """
         Log a download in the database, including data derived from JSON in
@@ -301,6 +352,9 @@ class Database:
                     sanitize(download.setuptools_version),
                 ))
 
+    @rpc('LOGSEARCH',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (SearchState.from_message(data),))
     def log_search(self, search):
         """
         Log a search in the database, including data derived from JSON in
@@ -325,6 +379,9 @@ class Database:
                     sanitize(search.setuptools_version),
                 ))
 
+    @rpc('LOGPROJECT',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (ProjectState.from_message(data),))
     def log_project(self, project):
         """
         Log a project page hit in the database.
@@ -339,6 +396,9 @@ class Database:
                     sanitize(project.user_agent),
                 ))
 
+    @rpc('LOGJSON',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (JSONState.from_message(data),))
     def log_json(self, json):
         """
         Log a project's JSON page hit in the database.
@@ -353,6 +413,9 @@ class Database:
                     sanitize(json.user_agent),
                 ))
 
+    @rpc('LOGPAGE',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (PageState.from_message(data),))
     def log_page(self, page):
         """
         Log a web page hit in the database.
@@ -367,6 +430,9 @@ class Database:
                     sanitize(page.user_agent),
                 ))
 
+    @rpc('LOGBUILD',
+         lambda args, kwargs: args[0].as_message(),
+         lambda data: (BuildState.from_message(data),))
     def log_build(self, build):
         """
         Log a build attempt in the database, including wheel info if
@@ -417,7 +483,9 @@ class Database:
                         build.abi_tag,
                     )).scalar()
             build.logged(build_id)
+            return build_id
 
+    @rpc('GETABIS')
     def get_build_abis(self, exclude_skipped=False):
         """
         Return a set of ABIs. If **exclude_skipped** is ``False``, return all
@@ -431,6 +499,7 @@ class Database:
                 if rec.skip == '' or not exclude_skipped
             }
 
+    @rpc('GETPYPI')
     def get_pypi_serial(self):
         """
         Return the serial number of the last PyPI event.
@@ -438,6 +507,7 @@ class Database:
         with self._conn.begin():
             return self._conn.scalar("VALUES (get_pypi_serial())")
 
+    @rpc('SETPYPI')
     def set_pypi_serial(self, serial):
         """
         Update the serial number of the last PyPI event.
@@ -445,6 +515,7 @@ class Database:
         with self._conn.begin():
             self._conn.execute("VALUES (set_pypi_serial(%s))", (serial,))
 
+    @rpc('ALLPKGS')
     def get_all_packages(self):
         """
         Returns the set of all known package names.
@@ -455,6 +526,7 @@ class Database:
                 for rec in self._conn.execute(self._packages.select())
             }
 
+    @rpc('ALLVERS')
     def get_all_package_versions(self):
         """
         Returns the set of all known (package, version) tuples.
@@ -465,13 +537,13 @@ class Database:
                 for rec in self._conn.execute(self._versions.select())
             }
 
+    # NOTE: This method is not exposed on TheOracle as it is only used by
+    # TheArchitect task
     def get_build_queue(self, limit=1000):
         """
         Returns a mapping of ABI tags to an ordered list of up to *limit*
         package version tuples which currently need building for that ABI.
         """
-        # NOTE: This method is not exposed on TheOracle as it is only used by
-        # TheArchitect task
         with self._conn.begin():
             return {
                 abi_tag: [
@@ -486,6 +558,7 @@ class Database:
                 )
             }
 
+    @rpc('GETSTATS')
     def get_statistics(self):
         """
         Return various build related statistics from the database.
@@ -504,6 +577,7 @@ class Database:
             }
             return stats
 
+    @rpc('GETSEARCH')
     def get_search_index(self):
         """
         Return a mapping of all packages to their download count for the last
@@ -517,6 +591,7 @@ class Database:
                     "FROM get_search_index()")
             }
 
+    @rpc('PKGFILES')
     def get_package_files(self, package):
         """
         Returns a mapping of filenames to file hashes; this is all the data
@@ -531,6 +606,7 @@ class Database:
                 )
             }
 
+    @rpc('VERFILES')
     def get_version_files(self, package, version):
         """
         Returns the names of all files for *version* of *package*.
@@ -544,6 +620,7 @@ class Database:
                 )
             }
 
+    @rpc('PROJDATA')
     def get_project_data(self, package):
         """
         Returns all details required to build the project page of the specified
@@ -563,6 +640,7 @@ class Database:
                             wheel['apt_dependencies'])
                 return data
 
+    @rpc('GETSKIP')
     def get_version_skip(self, package, version):
         """
         Returns the reason for skipping *version* of *package*.
@@ -574,6 +652,7 @@ class Database:
                 where(self._versions.c.version == version)
             )
 
+    @rpc('DELBUILD')
     def delete_build(self, package, version):
         """
         Remove all builds for the specified package and version, along with
@@ -583,6 +662,7 @@ class Database:
             self._conn.execute(
                 "VALUES (delete_build(%s, %s))", (package, version))
 
+    @rpc('SAVERWP')
     def save_rewrites_pending(self, queue):
         """
         Save the rewrites-pending queue (the internal state of
@@ -606,6 +686,7 @@ class Database:
                     for (package, added_at, command) in queue
                 ]],))
 
+    @rpc('LOADRWP')
     def load_rewrites_pending(self):
         """
         Loads the rewrites-pending queue (the internal state of
