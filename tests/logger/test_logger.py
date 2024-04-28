@@ -172,39 +172,39 @@ def log_sample():
             'home',
             '2a00:1098:0:80:1000::14',
             datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC),
-            'Mythic HTTP monitor check',
+            'mythic http monitor check',
         ]),
         # The log entry here is 404 and thus produces no entries
         ('LOGPAGE', [
             'faq',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 55, tzinfo=UTC),
-            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+            'mozilla',
         ]),
         ('LOGPAGE', [
             'home',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 6, 11, 29, tzinfo=UTC),
-            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+            'mozilla',
         ]),
         ('LOGPROJECT', [
             'ici',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
-            'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+            'mozilla',
         ]),
         ('LOGPROJECT', [
             'pyjokes',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
-            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+            'mozilla',
         ]),
         # The log entry here does not match a log type (UA) and thus produces no entries
         ('LOGPROJECT', [
             'flask',
             '2a00:1098:0:82:1000:3b:1:1',
             datetime(2019, 10, 11, 5, 26, 56, tzinfo=UTC),
-            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1',
+            'mozilla',
         ]),
         # The log entry here does not match a log type (path) and thus produces no entries
     ]
