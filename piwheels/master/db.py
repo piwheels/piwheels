@@ -175,16 +175,6 @@ class Database:
                 )
             ]
 
-    def get_project_display_name(self, package):
-        """
-        Retrieve the last seen name for *package*.
-        """
-        with self._conn.begin():
-            return self._conn.execute(
-                "VALUES (get_project_display_name(%s))",
-                (package, )
-            ).scalar()
-
     def set_package_description(self, package, description):
         """
         Update the description for *package* in the packages table.
