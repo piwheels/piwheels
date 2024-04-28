@@ -35,7 +35,7 @@ from unittest import mock
 
 import pytest
 
-from nobodd.systemd import Systemd, get_systemd
+from piwheels.systemd import Systemd, get_systemd
 
 
 @pytest.fixture()
@@ -227,6 +227,6 @@ def test_listen_fds_bad_names(mock_sock):
 
 
 def test_get_systemd():
-    with mock.patch('nobodd.systemd._SYSTEMD', None):
+    with mock.patch('piwheels.systemd._SYSTEMD', None):
         sd = get_systemd()
         assert get_systemd() is sd
