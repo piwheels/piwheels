@@ -79,6 +79,29 @@ def sanitize(s):
 
 
 def rpc(message, args_to_data=None, data_to_args=None):
+    """
+    Decorator for :class:`Database` methods that marks them as candidates for
+    RPC calls by :class:`~piwheels.master.the_oracle.TheOracle` task.
+
+    The decorator doesn't fundamentally change the method, but simply
+    associates it with the message to be used to represent the call (see
+    :mod:`piwheels.protocols`), and the routines used to serialize and
+    de-serialize its parameters (in most cases these are automatically derived
+    from the method's signature).
+
+    If given, *args_to_data* must be a routine that takes two parameters,
+    "args" and "kwargs", representing the positional and keyword arguments
+    the method was called with. It must return a CBOR-serializable object
+    which will be transferred as the data along with the *message*.
+
+    If given, *data_to_args* must be a routine that takes the data returned
+    by *args_to_data* and converts it to a tuple which will be used to call
+    the method on the receiving side.
+
+    If the method only takes straight-forward scalar parameters, the default
+    implementation of these methods is acceptable. Only override them if the
+    method accepts more complex objects that don't have obvious serializations.
+    """
     def wrap_rpc(method):
         sig = inspect.signature(method)
         if len(sig.parameters) == 1: # no args except self
