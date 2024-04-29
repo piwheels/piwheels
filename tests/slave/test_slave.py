@@ -73,9 +73,17 @@ def mock_signal(request):
 
 @pytest.fixture()
 def slave_thread(request, mock_context, mock_systemd, mock_signal, tmpdir):
-    main = PiWheelsSlave()
-    slave_thread = Thread(daemon=True, target=main, args=([],))
-    yield slave_thread
+    class SlaveThread(Thread):
+        def __init__(self):
+            super().__init__(daemon=True)
+            self.main = PiWheelsSlave()
+            self.exception = None
+        def run(self):
+            try:
+                self.main([])
+            except Exception as err:
+                self.exception = err
+    yield SlaveThread()
 
 
 def test_help(capsys):
@@ -121,6 +129,7 @@ def test_system_exit(mock_systemd, slave_thread, mock_slave_driver):
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
 
 
 def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
@@ -133,6 +142,7 @@ def test_bye_exit(mock_systemd, slave_thread, mock_slave_driver):
     assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
+    assert slave_thread.exception is None
 
 
 def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplog):
@@ -159,6 +169,7 @@ def test_connection_timeout(mock_systemd, slave_thread, mock_slave_driver, caplo
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
     assert find_message(caplog.records, message='Timed out waiting for master')
 
 
@@ -172,6 +183,7 @@ def test_bad_message_exit(mock_systemd, slave_thread, mock_slave_driver):
     assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
+    assert slave_thread.exception is not None
 
 
 def test_hello(mock_systemd, slave_thread, mock_slave_driver):
@@ -187,6 +199,7 @@ def test_hello(mock_systemd, slave_thread, mock_slave_driver):
     assert msg == 'BYE'
     slave_thread.join(10)
     assert not slave_thread.is_alive()
+    assert slave_thread.exception is None
 
 
 def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
@@ -206,6 +219,7 @@ def test_sleep(mock_systemd, slave_thread, mock_slave_driver):
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
 
 
 def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplog):
@@ -234,6 +248,7 @@ def test_slave_build_failed(mock_systemd, slave_thread, mock_slave_driver, caplo
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
 
 
 def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_driver, caplog):
@@ -267,6 +282,7 @@ def test_connection_timeout_with_build(mock_systemd, slave_thread, mock_slave_dr
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
     assert find_message(caplog.records, message='Removing temporary build directories')
     assert find_message(caplog.records, message='Timed out waiting for master')
 
@@ -299,6 +315,7 @@ def test_slave_build_stopped(mock_systemd, slave_thread, mock_slave_driver,
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
     assert find_message(caplog.records, message='Terminating current build')
     assert find_message(caplog.records, message='Removing temporary build directories')
 
@@ -325,6 +342,7 @@ def test_slave_build_stop_failed(mock_systemd, slave_thread, mock_slave_driver,
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is not None
     assert find_message(caplog.records, message='Terminating current build')
     assert find_message(caplog.records, message='Build failed to terminate')
 
@@ -365,6 +383,7 @@ def test_slave_build_send_done(mock_systemd, slave_thread, mock_slave_driver,
         assert msg == 'BYE'
         slave_thread.join(10)
         assert not slave_thread.is_alive()
+        assert slave_thread.exception is None
     assert find_message(caplog.records, message='Build succeeded')
     assert find_message(caplog.records,
                         message='Sending foo-0.1-cp34-cp34m-linux_armv7l.whl '
