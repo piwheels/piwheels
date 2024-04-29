@@ -267,7 +267,7 @@ def db_engine(request, db_super_url):
 @pytest.fixture()
 def db(request, db_engine):
     conn = db_engine.connect()
-    conn.execute("SET SESSION synchronous_commit TO OFF")  # it's only a test
+    conn.execute(text("SET SESSION synchronous_commit TO OFF"))  # it's only a test
     yield conn
     conn.close()
 
