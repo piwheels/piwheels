@@ -581,11 +581,9 @@ class Database:
         database.
         """
         with self._conn.begin():
-            stats = dict(
-                self._conn.execute(
-                    "SELECT * FROM get_initial_statistics()"
-                ).first().items()
-            )
+            stats = self._conn.execute(
+                "SELECT * FROM get_initial_statistics()"
+            ).first()._asdict()
             return stats
 
     @rpc('GETSTATS')
@@ -594,11 +592,9 @@ class Database:
         Return various build related statistics from the database.
         """
         with self._conn.begin():
-            stats = dict(
-                self._conn.execute(
-                    "SELECT * FROM get_statistics()"
-                ).first().items()
-            )
+            stats = self._conn.execute(
+                "SELECT * FROM get_statistics()"
+            ).first()._asdict()
             stats['builds_last_hour'] = {
                 row.abi_tag: row.builds
                 for row in self._conn.execute(
