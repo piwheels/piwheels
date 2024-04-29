@@ -31,7 +31,7 @@ jobs:
             python: "3.11"
             python-req: requirements_bookworm.txt
             python-apt: 2.3.0
-            experimental: true
+            experimental: false
 
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
