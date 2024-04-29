@@ -52,7 +52,6 @@ def db_result(request):
         'new_last_hour':          0,
         'downloads_last_hour':    0,
         'downloads_last_month':   0,
-        'downloads_all':          0,
         'builds_last_hour':       {},
     }
 
@@ -116,14 +115,15 @@ def task(request, master_config):
 def test_update_homepage(db_queue, web_queue, task, db_result, stats_data):
     with mock.patch('piwheels.master.big_brother.datetime') as dt:
         dt.now.return_value = datetime(2018, 1, 1, 12, 30, 40, tzinfo=UTC)
-        db_result['builds_last_hour'] = {'cp34m': 0, 'cp35m': 0}
-        db_result['downloads_all'] = 1000
-        db_result['downloads_last_month'] = 100
         stats_data = stats_data._replace(
             builds_last_hour={'cp34m': 0, 'cp35m': 0},
             downloads_all=1000,
             downloads_last_month=100,
         )
+        db_queue.expect('INITSTATS')
+        db_queue.send('OK', {'downloads_all': 1000})
+        db_result['builds_last_hour'] = {'cp34m': 0, 'cp35m': 0}
+        db_result['downloads_last_month'] = 100
         db_queue.expect('GETSTATS')
         db_queue.send('OK', db_result)
         web_queue.expect('HOME', stats_data.as_message())
@@ -189,18 +189,20 @@ def test_gen_homepage(db_queue, db_result, web_queue, task, stats_queue,
         for subtask in task.intervals:
             subtask.last_run = dt1.now.return_value
         stats_queue.send_msg('HOME')
-        db_result['builds_last_hour'] = {'cp34m': 5, 'cp35m': 0}
-        db_result['downloads_last_month'] = 100
-        db_result['downloads_last_hour'] = 1
         stats_data = stats_data._replace(
             builds_last_hour={'cp34m': 5, 'cp35m': 0},
-            downloads_last_month=100, downloads_last_hour=1
+            downloads_all=100, downloads_last_month=100, downloads_last_hour=1
         )
         db_queue.expect('GETSEARCH')
         db_queue.send('OK', {'foo': (10, 100)})
         web_queue.expect('SEARCH', {'foo': [10, 100]})
         web_queue.send('DONE')
+        db_queue.expect('INITSTATS')
+        db_queue.send('OK', {'downloads_all': 100})
         db_queue.expect('GETSTATS')
+        db_result['builds_last_hour'] = {'cp34m': 5, 'cp35m': 0}
+        db_result['downloads_last_month'] = 100
+        db_result['downloads_last_hour'] = 1
         db_queue.send('OK', db_result)
         web_queue.expect('HOME', stats_data.as_message())
         web_queue.send('DONE')

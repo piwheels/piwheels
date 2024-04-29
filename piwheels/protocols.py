@@ -288,6 +288,7 @@ big_brother = Protocol(recv={
     'STATFS': ExactSequence([int, int]),  # disk-size, disk-free
     'STATBQ': {str: int},  # abi: queue-size
     'HOME':   NoData,
+    'LOGDOWNLOAD': int, # download count
 })
 
 

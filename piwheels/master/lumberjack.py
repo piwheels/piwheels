@@ -55,6 +55,10 @@ class Lumberjack(tasks.PauseableTask):
         log_queue = self.socket(
             transport.PULL, protocol=protocols.lumberjack)
         log_queue.bind(config.log_queue)
+        self.stats_queue = self.socket(
+            transport.PUSH, protocol=reversed(protocols.big_brother))
+        self.stats_queue.hwm = 10
+        self.stats_queue.connect(config.stats_queue)
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config, self.logger)
         self.access_handlers = {
@@ -79,6 +83,8 @@ class Lumberjack(tasks.PauseableTask):
             if count:
                 self.logger.info('logged %d %s in the last minute',
                                  count, self.access_handlers[msg][2])
+        self.stats_queue.send_msg(
+            'LOGDOWNLOAD', self.counters.get('LOGDOWNLOAD', 0))
         self.counters = {msg: 0 for msg in self.access_handlers}
 
     def handle_log(self, queue):

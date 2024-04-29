@@ -59,6 +59,7 @@ class BigBrother(tasks.PausingTask):
     def __init__(self, config):
         super().__init__(config, control_protocol=protocols.big_brother_control)
         self.paused = False
+        self.init_stats = True
         self.history = deque(maxlen=100)
         self.stats = states.MasterStats(**{
             'timestamp':             datetime.now(tz=UTC),
@@ -129,6 +130,9 @@ class BigBrother(tasks.PausingTask):
                     disk_free=disk_free, disk_size=disk_size)
             elif msg == 'STATBQ':
                 self.stats = self.stats._replace(builds_pending=data)
+            elif msg == 'LOGDOWNLOAD':
+                self.stats = self.stats._replace(
+                    downloads_all=self.stats.downloads_all + data)
             elif msg == 'HOME':
                 # Forced rebuild from Mr. Chase
                 self.force(self.update_search_index)
@@ -141,6 +145,10 @@ class BigBrother(tasks.PausingTask):
 
     def update_homepage(self):
         if not self.paused:
+            if self.init_stats:
+                self.init_stats = False
+                self.stats = self.stats._replace(
+                    **self.db.get_initial_statistics())
             self.stats = self.stats._replace(
                 timestamp=datetime.now(tz=UTC), **self.db.get_statistics())
             self.web_queue.send_msg('HOME', self.stats.as_message())
