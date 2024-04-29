@@ -89,14 +89,14 @@ def rpc(message, args_to_data=None, data_to_args=None):
     de-serialize its parameters (in most cases these are automatically derived
     from the method's signature).
 
-    If given, *args_to_data* must be a routine that takes two parameters,
-    "args" and "kwargs", representing the positional and keyword arguments
-    the method was called with. It must return a CBOR-serializable object
-    which will be transferred as the data along with the *message*.
+    If given, *args_to_data* must be a routine that takes one parameter,
+    "args", representing the bound arguments the method was called with. It
+    must return a CBOR-serializable object which will be transferred as the
+    data along with the *message*.
 
-    If given, *data_to_args* must be a routine that takes the data returned
-    by *args_to_data* and converts it to a tuple which will be used to call
-    the method on the receiving side.
+    If given, *data_to_args* must be a routine that takes the data returned by
+    *args_to_data* and converts it to a tuple of args which will be used to
+    call the method on the receiving side.
 
     If the method only takes straight-forward scalar parameters, the default
     implementation of these methods is acceptable. Only override them if the
@@ -105,20 +105,13 @@ def rpc(message, args_to_data=None, data_to_args=None):
     def wrap_rpc(method):
         sig = inspect.signature(method)
         if len(sig.parameters) == 1: # no args except self
-            default_args_to_data = lambda args, kwargs: protocols.NoData
+            default_args_to_data = lambda args: protocols.NoData
             default_data_to_args = lambda data: ()
-        elif len(sig.parameters) == 2: # one arg
-            def default_args_to_data(args, kwargs):
-                bound = sig.bind(None, *args, **kwargs)
-                bound.apply_defaults()
-                return [arg for arg in bound.arguments.values()][1]
+        elif len(sig.parameters) == 2: # one arg (other than self)
+            default_args_to_data = lambda args: args[1]
             default_data_to_args = lambda data: (data,)
         else:
-            def default_args_to_data(args, kwargs):
-                bound = sig.bind(None, *args, **kwargs)
-                bound.apply_defaults()
-                # Exclude the first (self) parameter
-                return [arg for arg in bound.arguments.values()][1:]
+            default_args_to_data = lambda args: list(args[1:])
             default_data_to_args = lambda data: data
         method.args_to_data = (
             default_args_to_data if args_to_data is None else args_to_data)
@@ -349,7 +342,7 @@ class Database:
             }
 
     @rpc('LOGDOWNLOAD',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (DownloadState.from_message(data),))
     def log_download(self, download):
         """
@@ -376,7 +369,7 @@ class Database:
                 ))
 
     @rpc('LOGSEARCH',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (SearchState.from_message(data),))
     def log_search(self, search):
         """
@@ -403,7 +396,7 @@ class Database:
                 ))
 
     @rpc('LOGPROJECT',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (ProjectState.from_message(data),))
     def log_project(self, project):
         """
@@ -420,7 +413,7 @@ class Database:
                 ))
 
     @rpc('LOGJSON',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (JSONState.from_message(data),))
     def log_json(self, json):
         """
@@ -437,7 +430,7 @@ class Database:
                 ))
 
     @rpc('LOGPAGE',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (PageState.from_message(data),))
     def log_page(self, page):
         """
@@ -454,7 +447,7 @@ class Database:
                 ))
 
     @rpc('LOGBUILD',
-         lambda args, kwargs: args[0].as_message(),
+         lambda args: args[1].as_message(),
          lambda data: (BuildState.from_message(data),))
     def log_build(self, build):
         """

@@ -157,9 +157,13 @@ def _generate_db_client():
     # a straight-forward translation of args into a message
     for name, method in inspect.getmembers(Database):
         if hasattr(method, 'message') and not hasattr(DbClient, name):
-            def handler(self, *args, _message=method.message,
-                        _args_to_data=method.args_to_data, **kwargs):
-                return self._execute(_message, _args_to_data(args, kwargs))
+            def handler(self, *args, _method=method, **kwargs):
+                sig = inspect.signature(_method)
+                bound = sig.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+                return self._execute(
+                    _method.message,
+                    _method.args_to_data(tuple(bound.arguments.values())))
             handler.__name__ = name
             handler.__qualname__ = f'DbClient.{name}'
             setattr(DbClient, name, handler)
