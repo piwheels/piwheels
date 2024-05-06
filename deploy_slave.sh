@@ -33,6 +33,7 @@ elif [ $VERSION_ID -eq 11 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-13
 fi
 
+apt -y install ntp
 apt update
 apt -y upgrade
 apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
@@ -58,13 +59,25 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
 
 apt purge python3-cryptography python3-yaml -y
 
-pip3 install setuptools --upgrade --break-system-packages
-pip3 install pip --upgrade --break-system-packages
+if [ $VERSION_ID -eq 12 ]; then
+    pip3 install setuptools --upgrade --break-system-packages
+    pip3 install pip --upgrade --break-system-packages
+else
+    pip3 install setuptools --upgrade
+    pip3 install pip --upgrade
+fi
+
 hash -r
 
-pip3 install pypandoc versioneer kervi scikit-build cython numpy scipy \
-    setuptools_rust conan cbor2 \
-    --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary --break-system-packages
+PYTHON_PACKAGES="pypandoc versioneer kervi scikit-build cython numpy scipy setuptools_rust conan cbor2"
+
+if [ $VERSION_ID -eq 12 ]; then
+    pip3 install $PYTHON_PACKAGES \
+        --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary --break-system-packages
+else
+    pip3 install $PYTHON_PACKAGES \
+        --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
+fi
 
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
@@ -84,7 +97,12 @@ fi
 
 cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
-pip3 install .[slave] --break-system-packages
+
+if [ $VERSION_ID -eq 12 ]; then
+    pip3 install .[slave] --break-system-packages
+else
+    pip3 install .[slave]
+fi
 
 fallocate -x -l 1G /swapfile
 chmod 0600 /swapfile
