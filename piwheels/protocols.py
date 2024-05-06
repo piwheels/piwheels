@@ -288,6 +288,7 @@ big_brother = Protocol(recv={
     'STATFS': ExactSequence([int, int]),  # disk-size, disk-free
     'STATBQ': {str: int},  # abi: queue-size
     'HOME':   NoData,
+    'LOGDOWNLOAD': int, # download count
 })
 
 
@@ -378,8 +379,8 @@ the_oracle = Protocol(recv={
     'ALLPKGS':     NoData,
     'ALLVERS':     NoData,
     'NEWPKG':      ExactSequence([str, str, str]),  # package, skip reason, description
-    'NEWVER':      ExactSequence([str, str, dt.datetime, str]),  # package, version, released, skip reason
-    'NEWPKGNAME':  ExactSequence([str, str, dt.datetime]),  # package, name, timestamp
+    'NEWVER':      ExactSequence([str, str, Any(dt.datetime, None), str]),  # package, version, released, skip reason
+    'NEWPKGNAME':  ExactSequence([str, str, Any(dt.datetime, None)]),  # package, name, timestamp
     'GETPKGNAMES': str,  # package
     'SETDESC':     ExactSequence([str, str]),  # package, description
     'SKIPPKG':     ExactSequence([str, str]),  # package, skip reason
@@ -406,6 +407,7 @@ the_oracle = Protocol(recv={
     'GETABIS':     bool,                       # exclude_skipped
     'GETPYPI':     NoData,
     'SETPYPI':     int,                        # PyPI serial number
+    'INITSTATS':   NoData,
     'GETSTATS':    NoData,
     'GETSEARCH':   NoData,
     'FILEDEPS':    str,                        # filename

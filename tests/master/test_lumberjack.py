@@ -52,7 +52,17 @@ def log_queue(request, zmq_context, master_config):
     queue.close()
 
 
-def test_log_valid_download(db_queue, log_queue, download_state, task):
+@pytest.fixture(scope='function')
+def stats_queue(request, zmq_context, master_config):
+    queue = zmq_context.socket(
+        transport.PULL, protocol=protocols.big_brother)
+    queue.bind(master_config.stats_queue)
+    yield queue
+    queue.close()
+
+
+def test_log_valid_download(db_queue, log_queue, stats_queue, download_state,
+                            task):
     log_queue.send_msg('LOGDOWNLOAD', list(download_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
     db_queue.send('OK', None)
@@ -60,7 +70,8 @@ def test_log_valid_download(db_queue, log_queue, download_state, task):
     db_queue.check()
 
 
-def test_log_valid_search(db_queue, log_queue, search_state, task):
+def test_log_valid_search(db_queue, log_queue, stats_queue, search_state,
+                          task):
     log_queue.send_msg('LOGSEARCH', list(search_state))
     db_queue.expect('LOGSEARCH', search_state)
     db_queue.send('OK', None)
@@ -68,7 +79,8 @@ def test_log_valid_search(db_queue, log_queue, search_state, task):
     db_queue.check()
 
 
-def test_log_valid_project_page_hit(db_queue, log_queue, project_state, task):
+def test_log_valid_project_page_hit(db_queue, log_queue, stats_queue,
+                                    project_state, task):
     log_queue.send_msg('LOGPROJECT', list(project_state))
     db_queue.expect('LOGPROJECT', project_state)
     db_queue.send('OK', None)
@@ -76,7 +88,8 @@ def test_log_valid_project_page_hit(db_queue, log_queue, project_state, task):
     db_queue.check()
 
 
-def test_log_valid_json_hit(db_queue, log_queue, json_state, task):
+def test_log_valid_json_hit(db_queue, log_queue, stats_queue, json_state,
+                            task):
     log_queue.send_msg('LOGJSON', list(json_state))
     db_queue.expect('LOGJSON', json_state)
     db_queue.send('OK', None)
@@ -84,7 +97,8 @@ def test_log_valid_json_hit(db_queue, log_queue, json_state, task):
     db_queue.check()
 
 
-def test_log_valid_webpage_hit(db_queue, log_queue, page_state, task):
+def test_log_valid_webpage_hit(db_queue, log_queue, stats_queue, page_state,
+                               task):
     log_queue.send_msg('LOGPAGE', list(page_state))
     db_queue.expect('LOGPAGE', page_state)
     db_queue.send('OK', None)
@@ -92,13 +106,14 @@ def test_log_valid_webpage_hit(db_queue, log_queue, page_state, task):
     db_queue.check()
 
 
-def test_log_invalid(db_queue, log_queue, task):
+def test_log_invalid(db_queue, log_queue, stats_queue, task):
     log_queue.send(b'FOO')
     task.poll(0)
     assert task.logger.error.call_count == 1
 
 
-def test_log_summary(db_queue, log_queue, download_state, project_state, task):
+def test_log_summary(db_queue, log_queue, stats_queue, download_state,
+                     project_state, task):
     log_queue.send_msg('LOGDOWNLOAD', list(download_state))
     log_queue.send_msg('LOGPROJECT', list(project_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
@@ -106,6 +121,7 @@ def test_log_summary(db_queue, log_queue, download_state, project_state, task):
     db_queue.expect('LOGPROJECT', project_state)
     db_queue.send('OK', None)
     task.poll(0)
+    assert stats_queue.recv_msg() == ('LOGDOWNLOAD', 0)
     task.poll(0)
     db_queue.check()
     task.log_counters()
@@ -116,3 +132,4 @@ def test_log_summary(db_queue, log_queue, download_state, project_state, task):
     }
     for msg, count in task.counters.items():
         assert count == 0
+    assert stats_queue.recv_msg() == ('LOGDOWNLOAD', 1)

@@ -92,6 +92,26 @@ def test_add_new_package_version(db_intf, db, with_package):
         "FROM versions").first() == (with_package, '0.1')
 
 
+def test_add_package_name(db_intf, db, with_package):
+    assert db.execute(
+        "SELECT COUNT(*) from package_names").first() == (1,)
+    db_intf.add_package_name('foo', 'Foo')
+    assert db.execute(
+        "SELECT COUNT(*) from package_names").first() == (2,)
+    db_intf.add_package_name(
+        'foo', 'FOO', seen=datetime(2000, 1, 1, tzinfo=UTC))
+    assert db.execute(
+        "SELECT COUNT(*) from package_names").first() == (3,)
+
+
+def test_get_package_aliases(db_intf, db, with_package):
+    assert db_intf.get_package_aliases('foo') == []
+    db_intf.add_package_name('foo', 'Foo')
+    assert set(db_intf.get_package_aliases('foo')) == {'Foo'}
+    db_intf.add_package_name('foo', 'FOO')
+    assert set(db_intf.get_package_aliases('foo')) == {'Foo', 'FOO'}
+
+
 def test_set_package_description(db_intf, db, with_package):
     assert db.execute(
         "SELECT description FROM packages "
@@ -331,7 +351,6 @@ def test_get_statistics(db_intf, with_files):
         'new_last_hour': 0,
         'downloads_last_hour': 0,
         'downloads_last_month': 0,
-        'downloads_all': 0,
     }
     assert db_intf.get_statistics() == expected
 

@@ -541,7 +541,7 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config,
                     ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ], filename)
-    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert contains_elem(project_page, 'pre', content='pip3 install foo')
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -586,7 +586,7 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue,
                 ], filename)
     assert contains_elem(
         project_page, 'pre',
-        content='sudo apt install libfoo\nsudo pip3 install foo')
+        content='sudo apt install libfoo\npip3 install foo')
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -635,7 +635,7 @@ def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config,
                     ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ], filename)
-    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert contains_elem(project_page, 'pre', content='pip3 install foo')
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -690,7 +690,7 @@ def test_write_pkg_project_prerelease(db_queue, task, scribe_queue,
                     ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ], filename)
-    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert contains_elem(project_page, 'pre', content='pip3 install foo')
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -751,7 +751,7 @@ def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue,
                     ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ], filename)
-    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert contains_elem(project_page, 'pre', content='pip3 install foo')
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -975,7 +975,7 @@ def test_delete_version(db_queue, task, scribe_queue, master_config,
         assert not (simple / filename).exists()
     for filename in project_data['releases']['0.2']['files']:
         assert (simple / filename).exists()
-    assert contains_elem(project_page, 'pre', content='sudo pip3 install foo')
+    assert contains_elem(project_page, 'pre', content='pip3 install foo')
     for filename, file_data in project_data['releases']['0.1']['files'].items():
         assert not contains_elem(
             project_page, 'a', [
