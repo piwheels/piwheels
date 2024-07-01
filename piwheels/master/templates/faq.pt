@@ -218,7 +218,7 @@ $ virtualenv -p /usr/bin/python3 testpip</pre>
         <ul>
           <li>Jessie - Python 3.4 (end-of-life)</li>
           <li>Stretch - Python 3.5 (end-of-life)</li>
-          <li>Buster - Python 3.7</li>
+          <li>Buster - Python 3.7 (end-of-life)</li>
           <li>Bullseye - Python 3.9</li>
           <li>Bookworm - Python 3.11</li>
         </ul>
@@ -416,7 +416,7 @@ pip3 wheel <em>&lt;package&gt;</em></pre>
 
         <p>To download the wheels using your PC, you will need to provide
         additional flags to specify the spec of the Pi. For example, Armv7
-        wheels (for a Pi 2/3/4) for Buster (cp37m):</p>
+        wheels (for a Pi 2/3/4) for Bookworm (cp11):</p>
 
         <pre>mkdir wheels
 cd wheels
@@ -424,7 +424,7 @@ python3 -m pip download \
     --extra-index-url https://www.piwheels.org/simple \
     --implementation cp \
     --platform linux_armv7l \
-    --abi cp37m \
+    --abi cp39 \
     --only-binary=:all: \
     <em>&lt;package&gt;</em></pre>
 
