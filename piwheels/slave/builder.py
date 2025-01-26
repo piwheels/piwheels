@@ -438,6 +438,10 @@ class Builder(Thread):
         
         # allow projects to detect they are built in piwheels
         env['PIWHEELS_BUILD'] = "1"
+        
+        # workaround for cryptography package which requires static linking
+        # see https://github.com/pyca/cryptography/issues/11370
+        env['OPENSSL_STATIC'] = "1"
 
         # Add Rust compiler to PATH if missing
         if '.cargo/bin' not in env['PATH']:
