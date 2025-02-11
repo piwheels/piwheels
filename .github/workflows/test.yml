@@ -17,12 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
-            python: "3.7"
-            python-req: requirements_buster.txt
-            python-apt: 2.0.0
-            experimental: false
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             python: "3.9"
             python-req: requirements_bullseye.txt
             python-apt: 2.0.0
