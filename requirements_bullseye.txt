@@ -1,3 +1,5 @@
+setuptools==52.0.0
+wheel==0.34.2
 pyzmq==20.0.0
 configargparse==0.13.0
 voluptuous==0.11.1
