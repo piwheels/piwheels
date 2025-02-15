@@ -31,22 +31,10 @@
 # does ... frequently.
 
 try:
-    from wheel import bdist_wheel
+    from setuptools.command import bdist_wheel
 except ImportError:
-    from wheel import pep425tags as bdist_wheel
+    from wheel import bdist_wheel
 
 
-try:
-    bdist_wheel.get_platform()
-except TypeError:
-    def get_platform(archive_root=None):
-        return bdist_wheel.get_platform(archive_root)
-else:
-    get_platform = bdist_wheel.get_platform
-
-try:
-    get_impl_ver = bdist_wheel.get_impl_ver
-except AttributeError:
-    from wheel.vendored.packaging.tags import interpreter_version as get_impl_ver
-
-get_abi_tag = bdist_wheel.get_abi_tag
+def get_platform(archive_root=None):
+    return bdist_wheel.get_platform(archive_root)
