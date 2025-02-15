@@ -101,7 +101,7 @@ pip3 install ${package}</pre>
                     <li tal:repeat="(filename, file_data) vers_data.files.items()"
                        data-dependencies="${' '.join(file_data.apt_dependencies)}">
                       <span>
-                        <a href="/simple/${package}/${filename}#sha256=${file_data.hash}">${filename}</a>
+                        <a href="${file_data.file_url}#sha256=${file_data.hash}">${filename}</a>
                         (${format_size(file_data.size)})
                       </span>
                     </li>

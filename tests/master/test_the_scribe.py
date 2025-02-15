@@ -254,7 +254,7 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash']))
                 ])
     project = root / 'project' / 'foo' / 'index.html'
@@ -288,7 +288,7 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash']))
                 ])
     project = root / 'project' / 'foo' / 'index.html'
@@ -320,7 +320,7 @@ def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                     ('data-yanked', ''),
                 ])
@@ -356,7 +356,7 @@ def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                     ('data-requires-python', '>=3'),
                 ])
@@ -394,7 +394,7 @@ def test_write_pkg_index_with_yanked_files_and_requires_python(
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                     ('data-yanked', ''),
                     ('data-requires-python', '>=3'),
@@ -428,7 +428,7 @@ def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ])
     canonical = root / 'project' / 'foo'
@@ -463,7 +463,7 @@ def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
         for filename, file_data in release['files'].items():
             assert contains_elem(
                 simple_index, 'a', [
-                    ('href', '{filename}#sha256={filehash}'.format(
+                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
                         filename=filename, filehash=file_data['hash'])),
                 ])
     canonical = root / 'project' / 'foo'
