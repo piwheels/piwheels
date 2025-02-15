@@ -91,6 +91,7 @@ develop:
 	$(PIP) install -U pip
 	$(PIP) install -U twine
 	$(PIP) install -U tox
+	$(PIP) install -U psycopg2-binary
 	$(PIP) install -e .[doc,test,master,slave,monitor,logger]
 ifeq ($(VIRTUAL_ENV),)
 	@echo "Virtualenv not detected! You may need to link python3-apt manually"
