@@ -367,6 +367,7 @@ class TheScribe(tasks.PauseableTask):
         files = [
             {
                 'filename': filename,
+                'file_url': _make_file_url(package, file_data['location'], filename),
                 'filehash': file_data['hash'],
                 'requires_python': file_data['requires_python'],
                 'yanked': vers_data['yanked'],
@@ -561,6 +562,7 @@ class TheScribe(tasks.PauseableTask):
                     'skip_reason': vers_data['skip'],
                     'files': {
                         filename: {
+                            'file_url': _make_file_url(package, file_data['location'], filename),
                             'filehash': file_data['hash'],
                             'filesize': file_data['size'],
                             'builder_abi': file_data['abi_builder'],
@@ -692,6 +694,12 @@ def parse_version(s):
     # parsed variant will fail
     v.original = s
     return v
+
+
+def _make_file_url(package, filename, location):
+    if location is None:
+        return f"/simple/{package}/{filename}"
+    return f"{location}/{package}/{filename}"
 
 
 class AtomicReplaceFile:
