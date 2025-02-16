@@ -96,19 +96,19 @@ Classifier: Programming Language :: Python
 @pytest.fixture()
 def mock_wheel_stats(request, mock_wheel):
     h = sha256()
-    with Path(mock_wheel) as p:
-        with p.open('rb') as f:
-            h.update(f.read())
-        return p.stat().st_size, h.hexdigest().lower()
+    p = Path(mock_wheel)
+    with p.open('rb') as f:
+        h.update(f.read())
+    return p.stat().st_size, h.hexdigest().lower()
 
 
 @pytest.fixture()
 def mock_wheel_no_abi_stats(request, mock_wheel_no_abi):
     h = sha256()
-    with Path(mock_wheel_no_abi) as p:
-        with p.open('rb') as f:
-            h.update(f.read())
-        return p.stat().st_size, h.hexdigest().lower()
+    p = Path(mock_wheel_no_abi)
+    with p.open('rb') as f:
+        h.update(f.read())
+    return p.stat().st_size, h.hexdigest().lower()
 
 
 @pytest.fixture()
