@@ -32,6 +32,7 @@ from operator import itemgetter
 
 import cbor2
 import pytest
+from sqlalchemy import text
 
 from conftest import PIWHEELS_USER
 from piwheels import const, transport
@@ -103,7 +104,7 @@ def test_oracle_badly_formed_request(mock_seraph, task):
 
 def test_database_error(db, with_schema, db_client):
     with db.begin():
-        db.execute("REVOKE EXECUTE ON FUNCTION get_statistics() FROM %s" % PIWHEELS_USER)
+        db.execute(text("REVOKE EXECUTE ON FUNCTION get_statistics() FROM %s" % PIWHEELS_USER))
     with pytest.raises(IOError):
         db_client.get_statistics()
 
@@ -118,63 +119,63 @@ def test_get_all_package_versions(db, with_package_version, db_client):
 
 def test_add_new_package(db, with_schema, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM packages")).scalar() == 0
     db_client.add_new_package('foo', '', '')
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 1
-        assert db.execute(
-            "SELECT package, skip, description FROM packages").first() == ('foo', '', '')
+        assert db.execute(text("SELECT COUNT(*) FROM packages")).scalar() == 1
+        assert db.execute(text(
+            "SELECT package, skip, description FROM packages")).first() == ('foo', '', '')
     db_client.add_new_package('bar', 'skipped', 'package bar')
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM packages").scalar() == 2
-        assert db.execute(
+        assert db.execute(text("SELECT COUNT(*) FROM packages")).scalar() == 2
+        assert db.execute(text(
             "SELECT package, skip, description FROM packages "
-            "WHERE package = 'bar'").first() == ('bar', 'skipped', 'package bar')
+            "WHERE package = 'bar'").first() == ('bar', 'skipped', 'package bar'))
 
 
 def test_add_new_package_version(db, with_package, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM versions")).scalar() == 0
     db_client.add_new_package_version(
         'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8, tzinfo=UTC))
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM versions").scalar() == 1
-        assert db.execute(
+        assert db.execute(text("SELECT COUNT(*) FROM versions")).scalar() == 1
+        assert db.execute(text(
             "SELECT package, version, released, skip "
-            "FROM versions").first() == (
+            "FROM versions")).first() == (
                 'foo', '0.1', datetime(2018, 7, 11, 16, 43, 8), '')
 
 
 def test_set_package_description(db, with_package, db_client):
     with db.begin():
-        assert db.execute(
-            "SELECT package, description FROM packages").first() == ('foo', '')
+        assert db.execute(text(
+            "SELECT package, description FROM packages")).first() == ('foo', '')
     db_client.set_package_description('foo', 'a package')
     with db.begin():
-        assert db.execute(
-            "SELECT package, description FROM packages").first() == ('foo', 'a package')
+        assert db.execute(text(
+            "SELECT package, description FROM packages")).first() == ('foo', 'a package')
 
 
 def test_skip_package(db, with_package, db_client):
     with db.begin():
-        assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', '')
+        assert db.execute(text(
+            "SELECT package, skip FROM packages")).first() == ('foo', '')
     db_client.skip_package('foo', 'manual build')
     with db.begin():
-        assert db.execute(
-            "SELECT package, skip FROM packages").first() == ('foo', 'manual build')
+        assert db.execute(text(
+            "SELECT package, skip FROM packages")).first() == ('foo', 'manual build')
 
 
 def test_skip_package_version(db, with_package_version, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', '')
+            "FROM versions")).first() == ('foo', '0.1', '')
     db_client.skip_package_version('foo', '0.1', 'binary only')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT package, version, skip "
-            "FROM versions").first() == ('foo', '0.1', 'binary only')
+            "FROM versions")).first() == ('foo', '0.1', 'binary only')
 
 
 def test_get_version_skip(db, with_package_version, db_client):
@@ -187,87 +188,87 @@ def test_get_version_skip(db, with_package_version, db_client):
 
 def test_delete_package(db, with_package, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT count(*) "
             "FROM packages "
-            "WHERE package = 'foo'").first() == (1,)
+            "WHERE package = 'foo'")).first() == (1,)
     db_client.delete_package('foo')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT count(*) "
             "FROM packages "
-            "WHERE package = 'foo'").first() == (0,)
+            "WHERE package = 'foo'")).first() == (0,)
 
 
 def test_delete_version(db, with_package_version, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT count(*) "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (1,)
+            "WHERE package = 'foo'")).first() == (1,)
     db_client.delete_version('foo', '0.1')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT count(*) "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (0,)
+            "WHERE package = 'foo'")).first() == (0,)
 
 
 def test_yank_version(db, with_package_version, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT yanked "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (False,)
+            "WHERE package = 'foo'")).first() == (False,)
     db_client.yank_version('foo', '0.1')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT yanked "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (True,)
+            "WHERE package = 'foo'")).first() == (True,)
 
 
 def test_unyank_version(db, with_package_version, db_client):
     db_client.yank_version('foo', '0.1')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT yanked "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (True,)
+            "WHERE package = 'foo'")).first() == (True,)
     db_client.unyank_version('foo', '0.1')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT yanked "
             "FROM versions "
-            "WHERE package = 'foo'").first() == (False,)
+            "WHERE package = 'foo'")).first() == (False,)
 
 
 def test_package_marked_deleted(db, with_package, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT skip "
             "FROM packages "
-            "WHERE package = 'foo'").first() == ('',)
+            "WHERE package = 'foo'")).first() == ('',)
     db_client.skip_package('foo', 'deleted')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT skip "
             "FROM packages "
-            "WHERE package = 'foo'").first() == ('deleted',)
+            "WHERE package = 'foo'")).first() == ('deleted',)
 
 
 def test_get_versions_deleted(db, with_package_version, db_client):
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT skip "
             "FROM versions "
-            "WHERE package = 'foo'").first() == ('',)
+            "WHERE package = 'foo'")).first() == ('',)
     db_client.skip_package_version('foo', '0.1', 'deleted')
     with db.begin():
-        assert db.execute(
+        assert db.execute(text(
             "SELECT skip "
             "FROM versions "
-            "WHERE package = 'foo'").first() == ('deleted',)
+            "WHERE package = 'foo'")).first() == ('deleted',)
 
 
 def test_test_package_version(db, with_package_version, db_client):
@@ -278,70 +279,70 @@ def test_test_package_version(db, with_package_version, db_client):
 def test_get_versions_deleted(db, with_package_version, db_client):
     assert db_client.get_versions_deleted('foo') == set()
     with db.begin():
-        db.execute(
+        db.execute(text(
             "UPDATE versions SET skip = 'deleted' "
-            "WHERE package = 'foo' AND version = '0.1'")
+            "WHERE package = 'foo' AND version = '0.1'"))
     assert db_client.get_versions_deleted('foo') == {'0.1'}
 
 
 def test_log_download(db, with_files, download_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM downloads").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM downloads")).scalar() == 0
     db_client.log_download(download_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM downloads").scalar() == 1
-        assert db.execute(
-            "SELECT filename FROM downloads").scalar() == download_state.filename
+        assert db.execute(text("SELECT COUNT(*) FROM downloads")).scalar() == 1
+        assert db.execute(text(
+            "SELECT filename FROM downloads")).scalar() == download_state.filename
 
 
 def test_log_search(db, with_files, search_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM searches")).scalar() == 0
     db_client.log_search(search_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 1
-        assert db.execute(
-            "SELECT package FROM searches").scalar() == search_state.package
+        assert db.execute(text("SELECT COUNT(*) FROM searches")).scalar() == 1
+        assert db.execute(text(
+            "SELECT package FROM searches")).scalar() == search_state.package
 
 
 def test_log_project_page_hit(db, with_files, project_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM project_page_hits").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM project_page_hits")).scalar() == 0
     db_client.log_project(project_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM project_page_hits").scalar() == 1
-        assert db.execute(
-            "SELECT package FROM project_page_hits").scalar() == project_state.package
+        assert db.execute(text("SELECT COUNT(*) FROM project_page_hits")).scalar() == 1
+        assert db.execute(text(
+            "SELECT package FROM project_page_hits")).scalar() == project_state.package
 
 
 def test_log_project_json_download(db, with_files, json_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM project_json_downloads").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM project_json_downloads")).scalar() == 0
     db_client.log_json(json_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM project_json_downloads").scalar() == 1
-        assert db.execute(
-            "SELECT package FROM project_json_downloads").scalar() == json_state.package
+        assert db.execute(text("SELECT COUNT(*) FROM project_json_downloads")).scalar() == 1
+        assert db.execute(text(
+            "SELECT package FROM project_json_downloads")).scalar() == json_state.package
 
 
 def test_log_web_page_hit(db, with_files, page_state, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM web_page_hits").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM web_page_hits")).scalar() == 0
     db_client.log_page(page_state)
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM web_page_hits").scalar() == 1
-        assert db.execute(
-            "SELECT page FROM web_page_hits").scalar() == page_state.page
+        assert db.execute(text("SELECT COUNT(*) FROM web_page_hits")).scalar() == 1
+        assert db.execute(text(
+            "SELECT page FROM web_page_hits")).scalar() == page_state.page
 
 
 def test_log_build(db, with_package_version, build_state_hacked, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM builds")).scalar() == 0
     db_client.log_build(build_state_hacked)
     assert build_state_hacked.build_id is not None
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
-        assert db.execute("SELECT COUNT(*) FROM files").scalar() == 2
+        assert db.execute(text("SELECT COUNT(*) FROM builds")).scalar() == 1
+        assert db.execute(text("SELECT COUNT(*) FROM files")).scalar() == 2
 
 
 def test_get_project_data(db, with_files, project_data, db_client):
@@ -350,13 +351,13 @@ def test_get_project_data(db, with_files, project_data, db_client):
 
 def test_delete_build(db, with_build, db_client):
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
+        assert db.execute(text("SELECT COUNT(*) FROM builds")).scalar() == 1
     db_client.delete_build('foo', '0.2')
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 1
+        assert db.execute(text("SELECT COUNT(*) FROM builds")).scalar() == 1
     db_client.delete_build('foo', '0.1')
     with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM builds").scalar() == 0
+        assert db.execute(text("SELECT COUNT(*) FROM builds")).scalar() == 0
 
 
 def test_get_package_files(db, with_files, build_state_hacked, db_client):
@@ -378,9 +379,9 @@ def test_test_package(db, with_package, db_client):
 def test_package_marked_deleted(db, with_package, db_client):
     assert not db_client.package_marked_deleted(with_package)
     with db.begin():
-        db.execute(
+        db.execute(text(
             "UPDATE packages SET skip = 'deleted' "
-            "WHERE package = 'foo'")
+            "WHERE package = 'foo'"))
     assert db_client.package_marked_deleted(with_package)
 
 

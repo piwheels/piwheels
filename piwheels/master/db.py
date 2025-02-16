@@ -43,7 +43,7 @@ from itertools import chain, groupby
 from operator import attrgetter
 from collections import namedtuple
 
-from sqlalchemy import MetaData, Table, select, create_engine, func, distinct
+from sqlalchemy import MetaData, Table, select, create_engine, func, distinct, text
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from .. import __version__, protocols
@@ -182,8 +182,9 @@ class Database:
         """
         with self._conn.begin():
             return self._conn.execute(
-                "VALUES (add_new_package(%s, %s, %s))", (package, skip,
-                                                         description)).scalar()
+                text("VALUES (add_new_package(:package, :skip, :description))"),
+                {"package": package, "skip": skip, "description": description}
+            ).scalar()
 
     @rpc('NEWVER')
     def add_new_package_version(self, package, version,
@@ -197,9 +198,13 @@ class Database:
             if released is None:
                 released = datetime.now(tz=UTC)
             return self._conn.execute(
-                "VALUES (add_new_package_version(%s, %s, %s, %s))",
-                (package, version,
-                 released.astimezone(UTC).replace(tzinfo=None), skip)
+                text("VALUES (add_new_package_version(:package, :version, :released, :skip))"),
+                {
+                    "package": package,
+                    "version": version,
+                    "released": released.astimezone(UTC).replace(tzinfo=None),
+                    "skip": skip,
+                }
             ).scalar()
 
     @rpc('NEWPKGNAME')
@@ -211,8 +216,12 @@ class Database:
             seen = datetime(1970, 1, 1, tzinfo=UTC)
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (add_package_name(%s, %s, %s))",
-                (package, name, seen.astimezone(UTC).replace(tzinfo=None)))
+                text("VALUES (add_package_name(:package, :name, :seen))"),
+                {
+                    "package": package,
+                    "name": name,
+                    "seen": seen.astimezone(UTC).replace(tzinfo=None),
+                })
 
     @rpc('GETPKGNAMES')
     def get_package_aliases(self, package):
@@ -224,7 +233,8 @@ class Database:
             return [
                 row.name
                 for row in self._conn.execute(
-                    "SELECT name FROM get_package_aliases(%s)", (package, )
+                    text("SELECT name FROM get_package_aliases(:package)"),
+                    {"package": package}
                 )
             ]
 
@@ -235,8 +245,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (set_package_description(%s, %s))",
-                (package, description))
+                text("VALUES (set_package_description(:package, :description))"),
+                {"package": package, "description": description})
 
     @rpc('SKIPPKG')
     def skip_package(self, package, reason):
@@ -246,7 +256,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (skip_package(%s, %s))", (package, reason))
+                text("VALUES (skip_package(:package, :reason))"),
+                {"package": package, "reason": reason})
 
     @rpc('SKIPVER')
     def skip_package_version(self, package, version, reason):
@@ -256,8 +267,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (skip_package_version(%s, %s, %s))",
-                (package, version, reason))
+                text("VALUES (skip_package_version(:package, :version, :reason))"),
+                {"package": package, "version": version, "reason": reason})
 
     @rpc('DELPKG')
     def delete_package(self, package):
@@ -266,7 +277,7 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (delete_package(%s))", (package))
+                text("VALUES (delete_package(:package))"), {"package": package})
 
     @rpc('DELVER')
     def delete_version(self, package, version):
@@ -276,7 +287,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (delete_version(%s, %s))", (package, version))
+                text("VALUES (delete_version(:package, :version))"),
+                {"package": package, "version": version})
 
     @rpc('YANKVER')
     def yank_version(self, package, version):
@@ -285,7 +297,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (yank_version(%s, %s))", (package, version))
+                text("VALUES (yank_version(:package, :version))"),
+                {"package": package, "version": version})
 
     @rpc('UNYANKVER')
     def unyank_version(self, package, version):
@@ -294,7 +307,8 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (unyank_version(%s, %s))", (package, version))
+                text("VALUES (unyank_version(:package, :version))"),
+                {"package": package, "version": version})
 
     @rpc('PKGEXISTS')
     def test_package(self, package):
@@ -304,7 +318,7 @@ class Database:
         """
         with self._conn.begin():
             return bool(self._conn.scalar(
-                "VALUES (test_package(%s))", (package,)
+                text("VALUES (test_package(:package))"), {"package": package}
             ))
 
     @rpc('PKGDELETED')
@@ -314,7 +328,7 @@ class Database:
         """
         with self._conn.begin():
             return bool(self._conn.scalar(
-                "VALUES (package_marked_deleted(%s))", (package,)
+                text("VALUES (package_marked_deleted(:package))"), {"package": package}
             ))
 
     @rpc('VEREXISTS')
@@ -325,7 +339,8 @@ class Database:
         """
         with self._conn.begin():
             return bool(self._conn.scalar(
-                "VALUES (test_package_version(%s, %s))", (package, version)
+                text("VALUES (test_package_version(:package, :version))"),
+                {"package": package, "version": version}
             ))
 
     @rpc('VERSDELETED')
@@ -337,7 +352,7 @@ class Database:
             return {
                 row.version
                 for row in self._conn.execute(
-                    "SELECT version FROM get_versions_deleted(%s)", (package,)
+                    text("SELECT version FROM get_versions_deleted(:package)"), {"package": package}
                 )
             }
 
@@ -350,23 +365,25 @@ class Database:
         pip's user-agent.
         """
         with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
-                (
-                    sanitize(download.filename),
-                    download.host,
-                    download.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(download.arch),
-                    sanitize(download.distro_name),
-                    sanitize(download.distro_version),
-                    sanitize(download.os_name),
-                    sanitize(download.os_version),
-                    sanitize(download.py_name),
-                    sanitize(download.py_version),
-                    sanitize(download.installer_name),
-                    sanitize(download.installer_version),
-                    sanitize(download.setuptools_version),
-                ))
+            self._conn.execute(text(
+                "VALUES (log_download(:filename, :host, :timestamp, :arch, :distro_name, "
+                ":distro_version, :os_name, :os_version, :py_name, :py_version, :installer_name, "
+                ":installer_version, :setuptools_version))"),
+                {
+                    "filename": sanitize(download.filename),
+                    "host": download.host,
+                    "timestamp": download.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    "arch": sanitize(download.arch),
+                    "distro_name": sanitize(download.distro_name),
+                    "distro_version": sanitize(download.distro_version),
+                    "os_name": sanitize(download.os_name),
+                    "os_version": sanitize(download.os_version),
+                    "py_name": sanitize(download.py_name),
+                    "py_version": sanitize(download.py_version),
+                    "installer_name": sanitize(download.installer_name),
+                    "installer_version": sanitize(download.installer_version),
+                    "setuptools_version": sanitize(download.setuptools_version),
+            })
 
     @rpc('LOGSEARCH',
          lambda args: args[1].as_message(),
@@ -377,23 +394,25 @@ class Database:
         pip's user-agent.
         """
         with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
-                (
-                    sanitize(search.package),
-                    search.host,
-                    search.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(search.arch),
-                    sanitize(search.distro_name),
-                    sanitize(search.distro_version),
-                    sanitize(search.os_name),
-                    sanitize(search.os_version),
-                    sanitize(search.py_name),
-                    sanitize(search.py_version),
-                    sanitize(search.installer_name),
-                    sanitize(search.installer_version),
-                    sanitize(search.setuptools_version),
-                ))
+            self._conn.execute(text(
+                "VALUES (log_search(:package, :host, :timestamp, :arch, :distro_name, "
+                ":distro_version, :os_name, :os_version, :py_name, :py_version, :installer_name, "
+                ":installer_version, :setuptools_version))"),
+                {
+                    "package": sanitize(search.package),
+                    "host": search.host,
+                    "timestamp": search.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    "arch": sanitize(search.arch),
+                    "distro_name": sanitize(search.distro_name),
+                    "distro_version": sanitize(search.distro_version),
+                    "os_name": sanitize(search.os_name),
+                    "os_version": sanitize(search.os_version),
+                    "py_name": sanitize(search.py_name),
+                    "py_version": sanitize(search.py_version),
+                    "installer_name": sanitize(search.installer_name),
+                    "installer_version": sanitize(search.installer_version),
+                    "setuptools_version": sanitize(search.setuptools_version),
+                })
 
     @rpc('LOGPROJECT',
          lambda args: args[1].as_message(),
@@ -404,13 +423,13 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_project(%s, %s, %s, %s))",
-                (
-                    sanitize(project.package),
-                    project.host,
-                    project.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(project.user_agent),
-                ))
+                text("VALUES (log_project(:package, :host, :timestamp, :user_agent))"),
+                {
+                    "package": sanitize(project.package),
+                    "host": project.host,
+                    "timestamp": project.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    "user_agent": sanitize(project.user_agent),
+                })
 
     @rpc('LOGJSON',
          lambda args: args[1].as_message(),
@@ -421,13 +440,13 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_json(%s, %s, %s, %s))",
-                (
-                    sanitize(json.package),
-                    json.host,
-                    json.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(json.user_agent),
-                ))
+                text("VALUES (log_json(:package, :host, :timestamp, :user_agent))"),
+                {
+                    "package": sanitize(json.package),
+                    "host": json.host,
+                    "timestamp": json.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    "user_agent": sanitize(json.user_agent),
+                })
 
     @rpc('LOGPAGE',
          lambda args: args[1].as_message(),
@@ -438,13 +457,13 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (log_page(%s, %s, %s, %s))",
-                (
-                    sanitize(page.page),
-                    page.host,
-                    page.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(page.user_agent),
-                ))
+                text("VALUES (log_page(:page, :host, :timestamp, :user_agent))"),
+                {
+                    "page": sanitize(page.page),
+                    "host": page.host,
+                    "timestamp": page.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    "user_agent": sanitize(page.user_agent),
+                })
 
     @rpc('LOGBUILD',
          lambda args: args[1].as_message(),
@@ -457,47 +476,57 @@ class Database:
         with self._conn.begin():
             if build.status:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_success(%s, %s, %s, %s, %s, "
-                    "CAST(%s AS files ARRAY), CAST(%s AS dependencies ARRAY)"
-                    "))",
-                    (
-                        build.package,
-                        build.version,
-                        build.slave_id,
-                        build.duration,
-                        build.abi_tag,
-                        [(
-                            file.filename,
-                            None,
-                            file.filesize,
-                            file.filehash,
-                            file.package_tag,
-                            file.package_version_tag,
-                            file.py_version_tag,
-                            file.abi_tag,
-                            file.platform_tag,
-                            file.requires_python,
-                        )
-                        for file in build.files.values()],
-                        [(
-                            file.filename,
-                            tool,
-                            dependency,
-                        )
-                        for file in build.files.values()
-                        for tool, dependencies in file.dependencies.items()
-                        for dependency in dependencies]
-                    )).scalar()
+                    text("""
+                        VALUES (log_build_success(
+                            :package, :version, :slave_id, :duration, :abi_tag, 
+                            CAST(:files AS files ARRAY), CAST(:dependencies AS dependencies ARRAY)
+                        ))
+                    """),
+                    {
+                        "package": build.package,
+                        "version": build.version,
+                        "slave_id": build.slave_id,
+                        "duration": build.duration,
+                        "abi_tag": build.abi_tag,
+                        "files": [
+                            [
+                                file.filename,
+                                None,
+                                file.filesize,
+                                file.filehash,
+                                file.package_tag,
+                                file.package_version_tag,
+                                file.py_version_tag,
+                                file.abi_tag,
+                                file.platform_tag,
+                                file.requires_python,
+                            ]
+                            for file in build.files.values()
+                        ],
+                        "dependencies": [
+                            [file.filename, tool, dependency]
+                            for file in build.files.values()
+                            for tool, dependencies in file.dependencies.items()
+                            for dependency in dependencies
+                        ]
+                    }
+                ).scalar()
             else:
                 build_id = self._conn.execute(
-                    "VALUES (log_build_failure(%s, %s, %s, %s, %s))",
-                    (
-                        build.package,
-                        build.version,
-                        build.slave_id,
-                        build.duration,
-                        build.abi_tag,
-                    )).scalar()
+                    text("""
+                        VALUES (log_build_failure(
+                            :package, :version, :slave_id, :duration, :abi_tag
+                        ))
+                    """),
+                    {
+                        "package": build.package,
+                        "version": build.version,
+                        "slave_id": build.slave_id,
+                        "duration": build.duration,
+                        "abi_tag": build.abi_tag,
+                    }
+                ).scalar()
+            
             build.logged(build_id)
             return build_id
 
@@ -529,7 +558,7 @@ class Database:
         Update the serial number of the last PyPI event.
         """
         with self._conn.begin():
-            self._conn.execute("VALUES (set_pypi_serial(%s))", (serial,))
+            self._conn.execute(text("VALUES (set_pypi_serial(:serial))"), {"serial": serial})
 
     @rpc('ALLPKGS')
     def get_all_packages(self):
@@ -568,8 +597,8 @@ class Database:
                 ]
                 for abi_tag, rows in groupby(
                     self._conn.execution_options(stream_results=True).\
-                    execute("SELECT abi_tag, package, version "
-                            "FROM get_build_queue(%s)", (limit,)),
+                    execute(text("SELECT abi_tag, package, version "
+                            "FROM get_build_queue(:limit)"), {"limit": limit}),
                         key=attrgetter('abi_tag')
                 )
             }
@@ -582,7 +611,7 @@ class Database:
         """
         with self._conn.begin():
             stats = self._conn.execute(
-                "SELECT * FROM get_initial_statistics()"
+                text("SELECT * FROM get_initial_statistics()")
             ).first()._asdict()
             return stats
 
@@ -593,12 +622,12 @@ class Database:
         """
         with self._conn.begin():
             stats = self._conn.execute(
-                "SELECT * FROM get_statistics()"
+                text("SELECT * FROM get_statistics()")
             ).first()._asdict()
             stats['builds_last_hour'] = {
                 row.abi_tag: row.builds
                 for row in self._conn.execute(
-                    "SELECT * FROM get_builds_last_hour()"
+                    text("SELECT * FROM get_builds_last_hour()")
                 )
             }
             return stats
@@ -612,9 +641,9 @@ class Database:
         with self._conn.begin():
             return {
                 rec.package: (rec.downloads_recent, rec.downloads_all)
-                for rec in self._conn.execute(
+                for rec in self._conn.execute(text(
                     "SELECT package, downloads_recent, downloads_all "
-                    "FROM get_search_index()")
+                    "FROM get_search_index()"))
             }
 
     @rpc('PKGFILES')
@@ -626,9 +655,10 @@ class Database:
         with self._conn.begin():
             return {
                 row.filename: row.filehash
-                for row in self._conn.execute(
+                for row in self._conn.execute(text(
                     "SELECT filename, filehash "
-                    "FROM get_package_files(%s)", (package,)
+                    "FROM get_package_files(:package)"),
+                    {"package": package}
                 )
             }
 
@@ -640,9 +670,10 @@ class Database:
         with self._conn.begin():
             return {
                 row.filename
-                for row in self._conn.execute(
+                for row in self._conn.execute(text(
                     "SELECT filename "
-                    "FROM get_version_files(%s, %s)", (package, version)
+                    "FROM get_version_files(:package, :version)"),
+                    {"package": package, "version": version}
                 )
             }
 
@@ -654,7 +685,8 @@ class Database:
         """
         with self._conn.begin():
             for row in self._conn.execute(
-                "VALUES (get_project_data(%s))", (package,)
+                text("VALUES (get_project_data(:package))"),
+                {"package": package}
             ):
                 # Fix up datetime and set types (which JSON doesn't support)
                 data = row[0]
@@ -686,7 +718,9 @@ class Database:
         """
         with self._conn.begin():
             self._conn.execute(
-                "VALUES (delete_build(%s, %s))", (package, version))
+                text("VALUES (delete_build(:package, :version))"),
+                {"package": package, "version": version}
+            )
 
     @rpc('SAVERWP')
     def save_rewrites_pending(self, queue):
@@ -697,20 +731,20 @@ class Database:
         """
         # NOTE: the double list below works around a conflict between
         # SQLAlchemy's execution modes and our parameter types. SA treats
-        # .execute(sql_text, [(), (), (), ...]) as an attempt to execute
+        # .execute(sql_text, [{}, {}, {}, ...]) as an attempt to execute
         # sql_text multiple times, binding each set of parameters in turn.
         # However, in our case we want to execute it once with a fat ARRAY
-        # parameter. Hence, we use .execute(sql_text, [[(), (), (), ...]]) to
+        # parameter. Hence, we use .execute(sql_text, [[{}, {}, {}, ...]]) to
         # work around this
         with self._conn.begin():
-            self._conn.execute(
+            self._conn.execute(text(
                 "VALUES (save_rewrites_pending("
-                "CAST(%s AS rewrites_pending ARRAY)"
-                "))", ([[
-                    # Re-pack with tuples
-                    (package, added_at, command)
+                "CAST(:params AS rewrites_pending ARRAY)"
+                "))"), {"params": [[
+                    # Re-pack
+                    {"package": package, "added_at": added_at, "command": command}
                     for (package, added_at, command) in queue
-                ]],))
+                ]]})
 
     @rpc('LOADRWP')
     def load_rewrites_pending(self):
@@ -721,8 +755,8 @@ class Database:
         with self._conn.begin():
             return [
                 RewritePendingRow(row.package, row.added_at.replace(tzinfo=UTC), row.command)
-                for row in self._conn.execute(
+                for row in self._conn.execute(text(
                     "SELECT package, added_at, command "
                     "FROM load_rewrites_pending()"
-                )
+                ))
             ]

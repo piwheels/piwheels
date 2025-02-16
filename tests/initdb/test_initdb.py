@@ -31,6 +31,7 @@ import os
 from unittest import mock
 
 import pytest
+from sqlalchemy import text
 
 from conftest import find_message, PIWHEELS_USER, PIWHEELS_SUPERUSER
 from piwheels import __version__
@@ -165,8 +166,8 @@ def test_no_path(db, with_schema, db_super_url, caplog):
 
 def test_too_ancient(db, with_schema):
     with db.begin():
-        db.execute("DROP TABLE configuration")
-        db.execute("DROP TABLE files CASCADE")
+        db.execute(text("DROP TABLE configuration"))
+        db.execute(text("DROP TABLE files CASCADE"))
     with pytest.raises(RuntimeError) as exc:
         detect_version(db)
         assert 'Database version older than 0.4' in str(exc)
@@ -174,14 +175,14 @@ def test_too_ancient(db, with_schema):
 
 def test_detect_04(db, with_schema):
     with db.begin():
-        db.execute("DROP TABLE configuration")
+        db.execute(text("DROP TABLE configuration"))
     assert detect_version(db) == '0.4'
 
 
 def test_detect_05(db, with_schema):
     with db.begin():
-        db.execute("DROP TABLE configuration")
-        db.execute("CREATE VIEW statistics(i) AS VALUES (1)")
+        db.execute(text("DROP TABLE configuration"))
+        db.execute(text("CREATE VIEW statistics(i) AS VALUES (1)"))
     assert detect_version(db) == '0.5'
 
 
@@ -203,7 +204,7 @@ $sql$;"""
 def test_init(db, with_clean_db, db_super_url, caplog):
     assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
     with db.begin():
-        for row in db.execute("SELECT version FROM configuration"):
+        for row in db.execute(text("SELECT version FROM configuration")):
             assert row[0] == __version__
             break
         else:
@@ -216,7 +217,7 @@ def test_init(db, with_clean_db, db_super_url, caplog):
 def test_init_debug(db, with_clean_db, db_super_url, caplog):
     assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes', '--debug']) == 0
     with db.begin():
-        for row in db.execute("SELECT version FROM configuration"):
+        for row in db.execute(text("SELECT version FROM configuration")):
             assert row[0] == __version__
             break
         else:
@@ -245,10 +246,10 @@ def test_full_upgrade(db, with_clean_db, db_super_url, caplog, create_script_04)
     # won't test the harder bits
     with db.begin():
         for statement in parse_statements(create_script_04):
-            db.execute(statement)
+            db.execute(text(statement))
     assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
     with db.begin():
-        for row in db.execute("SELECT version FROM configuration"):
+        for row in db.execute(text("SELECT version FROM configuration")):
             assert row[0] == __version__
             break
         else:
@@ -264,7 +265,7 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
     def db_structure():
         with db.begin():
             return {
-                'relations': list(db.execute("""\
+                'relations': list(db.execute(text("""\
                     SELECT
                         cls.relname,
                         cls.relkind,
@@ -281,8 +282,8 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         nsp.nspname = 'public'
                     ORDER BY
                         relname;
-                    """)),
-                'columns': list(db.execute("""\
+                    """))),
+                'columns': list(db.execute(text("""\
                     SELECT
                         attrelid::regclass::name AS attrelname,
                         ROW_NUMBER() OVER (PARTITION BY attrelid ORDER BY attnum) AS attnum,
@@ -306,8 +307,8 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         AND NOT att.attisdropped
                     ORDER BY
                         attrelname, attnum
-                    """)),
-                'constraints': list(db.execute("""\
+                    """))),
+                'constraints': list(db.execute(text("""\
                     SELECT
                         con.conname,
                         pg_get_constraintdef(con.oid) AS condef,
@@ -320,8 +321,8 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         nsp.nspname = 'public'
                     ORDER BY
                         conname;
-                    """)),
-                'functions': list(db.execute("""\
+                    """))),
+                'functions': list(db.execute(text("""\
                     SELECT
                         pro.proname,
                         pg_get_function_arguments(pro.oid) AS proargs,
@@ -335,8 +336,8 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         nsp.nspname = 'public'
                     ORDER BY
                         proname, proargs;
-                    """)),
-                'triggers': list(db.execute("""\
+                    """))),
+                'triggers': list(db.execute(text("""\
                     SELECT
                         tg.tgname,
                         tg.tgrelid::regclass::name AS tgrelname,
@@ -354,8 +355,8 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                         AND NOT tg.tgisinternal
                     ORDER BY
                         tgrelname, tgname;
-                    """)),
-                'privileges': list(db.execute("""\
+                    """))),
+                'privileges': list(db.execute(text("""\
                     WITH users(name) AS (
                         VALUES ('{user}'), ('{superuser}'), ('public')
                     ),
@@ -410,20 +411,20 @@ def test_upgraded_structure(db, with_schema, db_super_url, create_script_04):
                     """.format(
                         user=PIWHEELS_USER,
                         superuser=PIWHEELS_SUPERUSER
-                    ))),
+                    )))),
             }
             permissions = []
             return relation_defs, column_defs, constraint_defs, function_defs, trigger_defs
     create_structure = db_structure()
     with db.begin():
         # Wipe the public schema and re-create it with standard defaults
-        db.execute("DROP SCHEMA public CASCADE")
-        db.execute("CREATE SCHEMA public AUTHORIZATION postgres")
-        db.execute("GRANT CREATE ON SCHEMA public TO PUBLIC")
-        db.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
+        db.execute(text("DROP SCHEMA public CASCADE"))
+        db.execute(text("CREATE SCHEMA public AUTHORIZATION postgres"))
+        db.execute(text("GRANT CREATE ON SCHEMA public TO PUBLIC"))
+        db.execute(text("GRANT USAGE ON SCHEMA public TO PUBLIC"))
     with db.begin():
         for statement in parse_statements(create_script_04):
-            db.execute(statement)
+            db.execute(text(statement))
     assert main(['--dsn', db_super_url, '--user', PIWHEELS_USER, '--yes']) == 0
     upgrade_structure = db_structure()
     assert create_structure == upgrade_structure

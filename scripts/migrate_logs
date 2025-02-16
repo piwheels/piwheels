@@ -18,6 +18,9 @@ import io
 import gzip
 from pathlib import Path
 from itertools import tee
+
+from sqlalchemy import text
+
 from piwheels.master.db import Database
 
 
@@ -83,14 +86,14 @@ for batch in batched_migrated_ranges():
     with db._conn.begin():
         for r in batch:
             print(f'Removing output for migrated ids {r.start}-{r.stop - 1}')
-            db._conn.execute(
-                'DELETE FROM output WHERE build_id BETWEEN %s AND %s',
-                (r.start, r.stop - 1))
+            db._conn.execute(text(
+                'DELETE FROM output WHERE build_id BETWEEN :start AND :stop'),
+                {"start": r.start, "stop": r.stop - 1})
     print('Committed')
 
 
 with db._conn.begin():
-    query = 'SELECT build_id, output FROM output'
+    query = text("SELECT build_id, output FROM output")
     for row in db._conn.execution_options(stream_results=True, max_row_buffer=10).execute(query):
         n = row.build_id
         n, last = divmod(n, 10000)

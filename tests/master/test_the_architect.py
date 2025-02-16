@@ -35,6 +35,7 @@ import pytest
 from piwheels import protocols, transport
 from piwheels.master.the_architect import TheArchitect
 from psycopg2.extensions import QueryCanceledError
+from sqlalchemy import text
 
 
 UTC = timezone.utc
@@ -62,7 +63,7 @@ def test_architect_queue(db, with_build, task, builds_queue):
         task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp35m': [['foo', '0.1']]})
         with db.begin():
-            db.execute("DELETE FROM builds")
+            db.execute(text("DELETE FROM builds"))
         dt.now.return_value += timedelta(minutes=63)
         task.poll(0)
         assert builds_queue.recv_msg() == ('QUEUE', {'cp34m': [['foo', '0.1']]})

@@ -276,10 +276,10 @@ def db(request, db_engine):
 def with_clean_db(request, db):
     with db.begin():
         # Wipe the public schema and re-create it with standard defaults
-        db.execute("DROP SCHEMA public CASCADE")
-        db.execute("CREATE SCHEMA public AUTHORIZATION postgres")
-        db.execute("GRANT CREATE ON SCHEMA public TO PUBLIC")
-        db.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
+        db.execute(text("DROP SCHEMA public CASCADE"))
+        db.execute(text("CREATE SCHEMA public AUTHORIZATION postgres"))
+        db.execute(text("GRANT CREATE ON SCHEMA public TO PUBLIC"))
+        db.execute(text("GRANT USAGE ON SCHEMA public TO PUBLIC"))
     return 'clean'
 
 
@@ -297,7 +297,7 @@ def with_schema(request, db, with_clean_db):
 def with_build_abis(request, db, with_schema):
     with db.begin():
         db.execute(
-            "INSERT INTO build_abis VALUES ('cp34m'), ('cp35m')")
+            text("INSERT INTO build_abis VALUES ('cp34m'), ('cp35m')"))
     return {'cp34m', 'cp35m'}
 
 
@@ -305,36 +305,39 @@ def with_build_abis(request, db, with_schema):
 def with_package(request, db, with_build_abis, build_state):
     with db.begin():
         db.execute(
-            "INSERT INTO packages(package) VALUES (%s)", build_state.package)
+            text("INSERT INTO packages(package) VALUES (:package)"), {"package": build_state.package})
         db.execute(
-            "INSERT INTO package_names(package, name, seen) VALUES (%s, %s, %s)",
-            (build_state.package, build_state.package, datetime(2000, 1, 1)))
+            text("INSERT INTO package_names(package, name, seen) VALUES (:package, :package, :seen)"),
+            {"package": build_state.package, "seen": datetime(2000, 1, 1)})
     return build_state.package
 
 
 @pytest.fixture()
 def with_package_version(request, db, with_package, build_state):
     with db.begin():
-        db.execute(
+        db.execute(text(
             "INSERT INTO versions(package, version) "
-            "VALUES (%s, %s)", build_state.package, build_state.version)
+            "VALUES (:package, :version)"),
+            {"package": build_state.package, "version": build_state.version})
     return (build_state.package, build_state.version)
 
 
 @pytest.fixture()
 def with_build(request, db, with_package_version, build_state):
     with db.begin():
-        build_id = db.execute(
+        build_id = db.execute(text(
             "INSERT INTO builds"
             "(package, version, built_by, built_at, duration, status, abi_tag) "
             "VALUES "
-            "(%s, %s, %s, TIMESTAMP '2018-01-01 00:00:00', %s, true, %s) "
-            "RETURNING (build_id)",
-            build_state.package,
-            build_state.version,
-            build_state.slave_id,
-            build_state.duration,
-            build_state.abi_tag).first()[0]
+            "(:package, :version, :slave_id, TIMESTAMP '2018-01-01 00:00:00', :duration, true, :abi_tag) "
+            "RETURNING (build_id)"),
+            {
+                "package": build_state.package,
+                "version": build_state.version,
+                "slave_id": build_state.slave_id,
+                "duration": build_state.duration,
+                "abi_tag": build_state.abi_tag
+            }).first()[0]
     build_state.logged(build_id)
     return build_state
 
@@ -342,65 +345,100 @@ def with_build(request, db, with_package_version, build_state):
 @pytest.fixture()
 def with_files(request, db, with_build, file_state, file_state_hacked):
     with db.begin():
-        db.execute(
+        db.execute(text(
             "INSERT INTO files "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            file_state.filename, with_build.build_id,
-            file_state.filesize, file_state.filehash, file_state.package_tag,
-            file_state.package_version_tag, file_state.py_version_tag,
-            file_state.abi_tag, file_state.platform_tag,
-            file_state.requires_python)
+            "VALUES (:filename, :build_id, :filesize, :filehash, :package_tag, :package_version_tag, "
+            ":py_version_tag, :abi_tag, :platform_tag, :requires_python)"),
+            {
+                "filename": file_state.filename,
+                "build_id": with_build.build_id,
+                "filesize": file_state.filesize,
+                "filehash": file_state.filehash,
+                "package_tag": file_state.package_tag,
+                "package_version_tag": file_state.package_version_tag,
+                "py_version_tag": file_state.py_version_tag,
+                "abi_tag": file_state.abi_tag,
+                "platform_tag": file_state.platform_tag,
+                "requires_python": file_state.requires_python,
+            })
         for tool, dependencies in file_state.dependencies.items():
             for dependency in dependencies:
-                db.execute(
+                db.execute(text(
                     "INSERT INTO dependencies "
-                    "VALUES (%s, %s, %s)",
-                    file_state.filename, tool, dependency)
-        db.execute(
+                    "VALUES (:filename, :tool, :dependency)"),
+                    {
+                        "filename": file_state.filename,
+                        "tool": tool,
+                        "dependency": dependency,
+                    })
+        db.execute(text(
             "INSERT INTO files "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            file_state_hacked.filename, with_build.build_id,
-            file_state_hacked.filesize, file_state_hacked.filehash,
-            file_state_hacked.package_tag,
-            file_state_hacked.package_version_tag,
-            file_state_hacked.py_version_tag, file_state_hacked.abi_tag,
-            file_state_hacked.platform_tag, file_state_hacked.requires_python)
+            "VALUES (:filename, :build_id, :filesize, :filehash, :package_tag, :package_version_tag, "
+            ":py_version_tag, :abi_tag, :platform_tag, :requires_python)"),
+            {
+                "filename": file_state_hacked.filename,
+                "build_id": with_build.build_id,
+                "filesize": file_state_hacked.filesize,
+                "filehash": file_state_hacked.filehash,
+                "package_tag": file_state_hacked.package_tag,
+                "package_version_tag": file_state_hacked.package_version_tag,
+                "py_version_tag": file_state_hacked.py_version_tag,
+                "abi_tag": file_state_hacked.abi_tag,
+                "platform_tag": file_state_hacked.platform_tag,
+                "requires_python": file_state_hacked.requires_python,
+            })
         for tool, dependencies in file_state_hacked.dependencies.items():
             for dependency in dependencies:
-                db.execute(
+                db.execute(text(
                     "INSERT INTO dependencies "
-                    "VALUES (%s, %s, %s)",
-                    file_state_hacked.filename, tool, dependency)
+                    "VALUES (:filename, :tool, :dependency)"),
+                    {
+                        "filename": file_state_hacked.filename,
+                        "tool": tool,
+                        "dependency": dependency,
+                    })
     return [file_state, file_state_hacked]
 
 
 @pytest.fixture()
 def with_preinstalled_apt(request, db, with_build_abis):
     with db.begin():
-        db.execute(
+        db.execute(text(
             "INSERT INTO preinstalled_apt_packages "
             "VALUES "
             "('cp34m', 'libc'), ('cp35m', 'libc')"
-        )
+        ))
 
 
 @pytest.fixture()
 def with_deps(request, db, file_states_deps, with_build, with_preinstalled_apt):
     with db.begin():
         for file_state in file_states_deps:
-            db.execute(
+            db.execute(text(
                 "INSERT INTO files "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                file_state.filename, with_build.build_id,
-                file_state.filesize, file_state.filehash, file_state.package_tag,
-                file_state.package_version_tag, file_state.py_version_tag,
-                file_state.abi_tag, file_state.platform_tag)
+                "VALUES (:filename, :build_id, :filesize, :filehash, :package_tag, "
+                ":package_version_tag, :py_version_tag, :abi_tag, :platform_tag)"),
+                {
+                    "filename": file_state.filename,
+                    "build_id": with_build.build_id,
+                    "filesize": file_state.filesize,
+                    "filehash": file_state.filehash,
+                    "package_tag": file_state.package_tag,
+                    "package_version_tag": file_state.package_version_tag,
+                    "py_version_tag": file_state.py_version_tag,
+                    "abi_tag": file_state.abi_tag,
+                    "platform_tag": file_state.platform_tag,
+                })
             for tool, dependencies in file_state.dependencies.items():
                 for dependency in dependencies:
-                    db.execute(
+                    db.execute(text(
                         "INSERT INTO dependencies "
-                        "VALUES (%s, %s, %s)",
-                        file_state.filename, tool, dependency)
+                        "VALUES (:filename, :tool, :dependency)"),
+                        {
+                            "filename": file_state_hacked.filename,
+                            "tool": tool,
+                            "dependency": dependency,
+                        })
         return file_states_deps
 
 
@@ -408,20 +446,38 @@ def with_deps(request, db, file_states_deps, with_build, with_preinstalled_apt):
 def with_downloads(request, db, with_files, download_state):
     dl = download_state
     with db.begin():
-        db.execute(
+        db.execute(text(
             "INSERT INTO downloads "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            dl.filename, dl.host, dl.timestamp,
-            dl.arch, dl.distro_name, dl.distro_version,
-            dl.os_name, dl.os_version,
-            dl.py_name, dl.py_version)
-        db.execute(
+            "VALUES (:filename, :host, :timestamp, :arch, :distro_name, :distro_version, :os_name, "
+            "os_version, py_name, py_version)"),
+            {
+                "filename": dl.filename,
+                "host": dl.host,
+                "timestamp": dl.timestamp,
+                "arch": dl.arch,
+                "distro_name": dl.distro_name,
+                "distro_version": dl.distro_version,
+                "os_name": dl.os_name,
+                "os_version": dl.os_version,
+                "py_name": dl.py_name,
+                "py_version": dl.py_version,
+            })
+        db.execute(text(
             "INSERT INTO downloads "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            dl.filename, dl.host, dl.timestamp + timedelta(minutes=5),
-            dl.arch, dl.distro_name, dl.distro_version,
-            dl.os_name, dl.os_version,
-            dl.py_name, dl.py_version)
+            "VALUES (:filename, :host, :timestamp, :arch, :distro_name, :distro_version, :os_name, "
+            ":os_version, :py_name, :py_version)"),
+            {
+                "filename": dl.filename,
+                "host": dl.host,
+                "timestamp": dl.timestamp + timedelta(minutes=5),
+                "arch": dl.arch,
+                "distro_name": dl.distro_name,
+                "distro_version": dl.distro_version,
+                "os_name": dl.os_name,
+                "os_version": dl.os_version,
+                "py_name": dl.py_name,
+                "py_version": dl.py_version,
+            })
 
 
 @pytest.fixture(scope='function')

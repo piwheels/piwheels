@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from operator import itemgetter
 
 import pytest
+from sqlalchemy import text
 
 from piwheels.master.db import Database, RewritePendingRow
 
@@ -57,51 +58,51 @@ def test_init(master_config, db, with_schema):
 
 def test_init_wrong_version(master_config, db, with_schema):
     with db.begin():
-        db.execute("UPDATE configuration SET version = '0.0'")
+        db.execute(text("UPDATE configuration SET version = '0.0'"))
     with pytest.raises(RuntimeError):
         Database(master_config.dsn)
 
 
 def test_add_new_package(db_intf, db, with_schema):
-    assert db.execute("SELECT * FROM packages").first() is None
+    assert db.execute(text("SELECT * FROM packages")).first() is None
     assert db_intf.add_new_package('foo')
-    assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
-    assert db.execute("SELECT package, skip FROM packages").first() == ('foo', '')
+    assert db.execute(text("SELECT COUNT(*) FROM packages")).first() == (1, )
+    assert db.execute(text("SELECT package, skip FROM packages")).first() == ('foo', '')
     assert not db_intf.add_new_package('foo')
-    assert db.execute("SELECT COUNT(*) FROM packages").first() == (1, )
-    assert db.execute("SELECT package FROM packages").first() == ('foo',)
+    assert db.execute(text("SELECT COUNT(*) FROM packages")).first() == (1, )
+    assert db.execute(text("SELECT package FROM packages")).first() == ('foo',)
     assert db_intf.add_new_package('bar', 'skipped')
-    assert db.execute("SELECT COUNT(*) FROM packages").first() == (2, )
-    assert db.execute("SELECT package, skip FROM packages "
-                      "WHERE package = 'bar'").first() == ('bar', 'skipped')
+    assert db.execute(text("SELECT COUNT(*) FROM packages")).first() == (2, )
+    assert db.execute(text("SELECT package, skip FROM packages "
+                      "WHERE package = 'bar'")).first() == ('bar', 'skipped')
 
 
 def test_add_new_package_version(db_intf, db, with_package):
-    assert db.execute("SELECT * FROM versions").first() is None
+    assert db.execute(text("SELECT * FROM versions")).first() is None
     assert db_intf.add_new_package_version(with_package, '0.1')
-    assert db.execute(
-        "SELECT COUNT(*) FROM versions").first() == (1,)
-    assert db.execute(
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM versions")).first() == (1,)
+    assert db.execute(text(
         "SELECT package, version "
-        "FROM versions").first() == (with_package, '0.1')
+        "FROM versions")).first() == (with_package, '0.1')
     assert not db_intf.add_new_package_version(with_package, '0.1')
-    assert db.execute(
-        "SELECT COUNT(*) FROM versions").first() == (1,)
-    assert db.execute(
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM versions")).first() == (1,)
+    assert db.execute(text(
         "SELECT package, version "
-        "FROM versions").first() == (with_package, '0.1')
+        "FROM versions")).first() == (with_package, '0.1')
 
 
 def test_add_package_name(db_intf, db, with_package):
-    assert db.execute(
-        "SELECT COUNT(*) from package_names").first() == (1,)
+    assert db.execute(text(
+        "SELECT COUNT(*) from package_names")).first() == (1,)
     db_intf.add_package_name('foo', 'Foo')
-    assert db.execute(
-        "SELECT COUNT(*) from package_names").first() == (2,)
+    assert db.execute(text(
+        "SELECT COUNT(*) from package_names")).first() == (2,)
     db_intf.add_package_name(
         'foo', 'FOO', seen=datetime(2000, 1, 1, tzinfo=UTC))
-    assert db.execute(
-        "SELECT COUNT(*) from package_names").first() == (3,)
+    assert db.execute(text(
+        "SELECT COUNT(*) from package_names")).first() == (3,)
 
 
 def test_get_package_aliases(db_intf, db, with_package):
@@ -113,79 +114,79 @@ def test_get_package_aliases(db_intf, db, with_package):
 
 
 def test_set_package_description(db_intf, db, with_package):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT description FROM packages "
-        "WHERE package = 'foo'").first() == ('',)
+        "WHERE package = 'foo'")).first() == ('',)
     db_intf.set_package_description(with_package, 'a package')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT description FROM packages "
-        "WHERE package = 'foo'").first() == ('a package',)
+        "WHERE package = 'foo'")).first() == ('a package',)
 
 
 def test_skip_package(db_intf, db, with_package):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == ('',)
+        "WHERE package = 'foo'")).first() == ('',)
     db_intf.skip_package('foo', 'manual override')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == ('manual override',)
+        "WHERE package = 'foo'")).first() == ('manual override',)
 
 
 def test_skip_package_version(db_intf, db, with_package_version):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
-        "AND version = '0.1'").first() == ('',)
+        "AND version = '0.1'")).first() == ('',)
     db_intf.skip_package_version('foo', '0.1', 'binary only')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT skip FROM packages "
-        "WHERE package = 'foo'").first() == ('',)
-    assert db.execute(
+        "WHERE package = 'foo'")).first() == ('',)
+    assert db.execute(text(
         "SELECT skip FROM versions "
         "WHERE package = 'foo' "
-        "AND version = '0.1'").first() == ('binary only',)
+        "AND version = '0.1'")).first() == ('binary only',)
 
 
 def test_delete_package(db_intf, db, with_package):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT count(*) FROM packages "
-        "WHERE package = 'foo'").first() == (1,)
+        "WHERE package = 'foo'")).first() == (1,)
     db_intf.delete_package('foo')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT count(*) FROM packages "
-        "WHERE package = 'foo'").first() == (0,)
+        "WHERE package = 'foo'")).first() == (0,)
 
 
 def test_delete_version(db_intf, db, with_package_version):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT count(*) FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (1,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (1,)
     db_intf.delete_version('foo', '0.1')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT count(*) FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (0,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (0,)
 
 
 def test_yank_version(db_intf, db, with_package_version):
-    assert db.execute(
+    assert db.execute(text(
         "SELECT yanked FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (False,)
     db_intf.yank_version('foo', '0.1')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT yanked FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (True,)
 
 
 def test_unyank_version(db_intf, db, with_package_version):
     db_intf.yank_version('foo', '0.1')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT yanked FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (True,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (True,)
     db_intf.unyank_version('foo', '0.1')
-    assert db.execute(
+    assert db.execute(text(
         "SELECT yanked FROM versions "
-        "WHERE package = 'foo' AND version = '0.1'").first() == (False,)
+        "WHERE package = 'foo' AND version = '0.1'")).first() == (False,)
 
 
 def test_test_package(db_intf, db, with_build_abis):
@@ -213,99 +214,99 @@ def test_get_versions_deleted(db_intf, db, with_package_version):
 
 
 def test_log_download(db_intf, db, with_files, download_state):
-    assert db.execute(
-        "SELECT COUNT(*) FROM downloads").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM downloads")).first() == (0,)
     db_intf.log_download(download_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM downloads").first() == (1,)
-    assert db.execute(
-        "SELECT filename FROM downloads").first() == (download_state.filename,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM downloads")).first() == (1,)
+    assert db.execute(text(
+        "SELECT filename FROM downloads")).first() == (download_state.filename,)
 
 
 def test_log_search(db_intf, db, with_files, search_state):
-    assert db.execute(
-        "SELECT COUNT(*) FROM searches").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM searches")).first() == (0,)
     db_intf.log_search(search_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM searches").first() == (1,)
-    assert db.execute(
-        "SELECT package FROM searches").first() == (search_state.package,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM searches")).first() == (1,)
+    assert db.execute(text(
+        "SELECT package FROM searches")).first() == (search_state.package,)
 
 
 def test_log_project_page_hit(db_intf, db, with_files, project_state):
-    assert db.execute(
-        "SELECT COUNT(*) FROM project_page_hits").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM project_page_hits")).first() == (0,)
     db_intf.log_project(project_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM project_page_hits").first() == (1,)
-    assert db.execute(
-        "SELECT package FROM project_page_hits").first() == (project_state.package,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM project_page_hits")).first() == (1,)
+    assert db.execute(text(
+        "SELECT package FROM project_page_hits")).first() == (project_state.package,)
 
 
 def test_log_project_json_download(db_intf, db, with_files, json_state):
-    assert db.execute(
-        "SELECT COUNT(*) FROM project_json_downloads").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM project_json_downloads")).first() == (0,)
     db_intf.log_json(json_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM project_json_downloads").first() == (1,)
-    assert db.execute(
-        "SELECT package FROM project_json_downloads").first() == (json_state.package,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM project_json_downloads")).first() == (1,)
+    assert db.execute(text(
+        "SELECT package FROM project_json_downloads")).first() == (json_state.package,)
 
 
 def test_log_web_page_hit(db_intf, db, with_files, page_state):
-    assert db.execute(
-        "SELECT COUNT(*) FROM web_page_hits").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM web_page_hits")).first() == (0,)
     db_intf.log_page(page_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM web_page_hits").first() == (1,)
-    assert db.execute(
-        "SELECT page FROM web_page_hits").first() == (page_state.page,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM web_page_hits")).first() == (1,)
+    assert db.execute(text(
+        "SELECT page FROM web_page_hits")).first() == (page_state.page,)
 
 
 def test_log_build(db_intf, db, with_package_version, build_state):
     for file_state in build_state.files.values():
         break
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (0,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (0,)
     db_intf.log_build(build_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state.files),)
-    assert db.execute(
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (1,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (len(build_state.files),)
+    assert db.execute(text(
         "SELECT build_id, package, version "
-        "FROM builds").first() == (
+        "FROM builds")).first() == (
             build_state.build_id,
             build_state.package,
             build_state.version)
-    assert db.execute(
+    assert db.execute(text(
         "SELECT build_id, filename, filesize, filehash "
         "FROM files "
         "WHERE filename = %s", file_state.filename).first() == (
             build_state.build_id,
             file_state.filename,
             file_state.filesize,
-            file_state.filehash)
+            file_state.filehash))
 
 
 def test_log_build_failed(db_intf, db, with_package_version, build_state):
     build_state._status = False
     build_state._files = {}
     build_state._output = 'Build failed'
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (0,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (0,)
     db_intf.log_build(build_state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
-    assert db.execute(
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (1,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (0,)
+    assert db.execute(text(
         "SELECT build_id, package, version "
-        "FROM builds").first() == (
+        "FROM builds")).first() == (
             build_state.build_id,
             build_state.package,
             build_state.version)
@@ -382,24 +383,24 @@ def test_get_project_data(db_intf, with_files, project_data):
 
 
 def test_delete_build(db_intf, db, with_files, build_state_hacked):
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (1,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (len(build_state_hacked.files),)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (1,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (len(build_state_hacked.files),)
     db_intf.delete_build('foo', '0.1')
-    assert db.execute(
-        "SELECT COUNT(*) FROM builds").first() == (0,)
-    assert db.execute(
-        "SELECT COUNT(*) FROM files").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM builds")).first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM files")).first() == (0,)
 
 
 def test_store_rewrites_pending(db_intf, db, with_package):
     state = [
         RewritePendingRow('foo', datetime(2001, 1, 1, 12, 34, 56, tzinfo=UTC), 'PROJECT'),
     ]
-    assert db.execute(
-        "SELECT COUNT(*) FROM rewrites_pending").first() == (0,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM rewrites_pending")).first() == (0,)
     db_intf.save_rewrites_pending(state)
-    assert db.execute(
-        "SELECT COUNT(*) FROM rewrites_pending").first() == (1,)
+    assert db.execute(text(
+        "SELECT COUNT(*) FROM rewrites_pending")).first() == (1,)
     assert db_intf.load_rewrites_pending() == state
