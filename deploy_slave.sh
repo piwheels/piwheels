@@ -24,13 +24,11 @@ SOUNDFONT=timgm6mb-soundfont
 POSTGRES_SERVER_DEV=postgresql-server-dev-15
 QMAKE=qt5-qmake
 FPRINT=libfprint-2-dev
+LIBLGPIO=liblgpio-dev
 
-if [ $VERSION_ID -eq 10 ]; then
-    QMAKE=qt4-qmake
-    POSTGRES_SERVER_DEV=postgresql-server-dev-11
-    FPRINT=libfprint-dev
-elif [ $VERSION_ID -eq 11 ]; then
+if [ $VERSION_ID -eq 11 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-13
+    LIBLGPIO=
 fi
 
 apt -y install ntp
@@ -54,7 +52,7 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV \
-    $QMAKE $FPRINT libgphoto2-dev libsqlite3-dev libsqlcipher-dev \
+    $QMAKE $FPRINT $libgphoto2-dev $LIBLGPIO libsqlite3-dev libsqlcipher-dev \
     ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev
 
 apt purge python3-cryptography python3-yaml -y
