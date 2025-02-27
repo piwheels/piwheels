@@ -162,7 +162,8 @@ like this (each step assumes you start as root):
        # apt install postgresql apache2 python3-configargparse python3-zmq \
                      python3-voluptuous python3-cbor2 python3-requests \
                      python3-sqlalchemy python3-psycopg2 python3-chameleon \
-                     python3-simplejson python3-urwid python3-geoip python3-pip
+                     python3-simplejson python3-urwid python3-geoip python3-pip \
+                     python3-packaging
        # pip3 install "piwheels[monitor,master,logger]"
 
    If you wish to install directly from the git repository:

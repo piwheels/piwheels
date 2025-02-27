@@ -46,6 +46,7 @@ from datetime import datetime, timedelta, timezone
 from time import sleep
 from random import randint
 
+from packaging.tags import interpreter_version
 import dateutil.parser
 
 from .. import __version__, terminal, transport, protocols, info, platform
@@ -175,7 +176,7 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         os_name, os_version = info.get_os_name_version()
         msg, data = 'HELLO', [
             self.config.timeout, master_timeout,
-            platform.get_impl_ver(), platform.get_abi_tag(),
+            interpreter_version(), platform.get_abi_tag(),
             platform.get_platform(), self.config.label,
             os_name, os_version,
             info.get_board_revision(), info.get_board_serial(),
