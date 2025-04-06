@@ -36,5 +36,7 @@ except ImportError:
     from wheel import bdist_wheel
 
 
+get_abi_tag = bdist_wheel.get_abi_tag
+
 def get_platform(archive_root=None):
     return bdist_wheel.get_platform(archive_root)
