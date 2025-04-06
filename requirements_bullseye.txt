@@ -1,5 +1,5 @@
 setuptools==52.0.0
-wheel==0.34.2
+wheel==0.38.1
 packaging==20.9
 pyzmq==20.0.0
 configargparse==0.13.0
