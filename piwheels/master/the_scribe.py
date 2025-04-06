@@ -445,6 +445,8 @@ class TheScribe(tasks.PauseableTask):
             if not (version.is_prerelease or release['yanked']):
                 for filedata in release['files'].values():
                     dependencies = filedata['apt_dependencies']
+                    filedata['file_url'] = _make_file_url(
+                        package, filedata['location'], filedata['filename'])
                     break
                 else:
                     continue
