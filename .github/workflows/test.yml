@@ -21,11 +21,13 @@ jobs:
             python: "3.9"
             python-req: requirements_bullseye.txt
             python-apt: 2.0.0
+            python-pip: 20.3.4
             experimental: false
           - os: ubuntu-22.04
             python: "3.11"
             python-req: requirements_bookworm.txt
             python-apt: 2.3.0
+            python-pip: 23.0.1
             experimental: false
 
     runs-on: ${{ matrix.os }}
@@ -59,7 +61,7 @@ jobs:
           pushd python-apt
           DEBVER=${{ matrix.python-apt }} python setup.py install --user
           popd
-          python -m pip --version
+          python -m pip install --user pip==${{ matrix.python-pip }}
           python -m pip install --user -r ${{ matrix.python-req }}
           make develop
 
