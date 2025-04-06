@@ -1,6 +1,6 @@
 UPDATE configuration SET version = '0.22';
 
-ALTER TABLE files ADD COLUMN location VARCHAR(100) NULL;
+ALTER TABLE files ADD COLUMN location VARCHAR(100) NOT NULL DEFAULT 'https://archive1.piwheels.org';
 
 DROP FUNCTION get_project_data();
 
