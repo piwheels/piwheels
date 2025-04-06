@@ -695,8 +695,6 @@ def parse_version(s):
 
 
 def _make_file_url(package, filename, location):
-    if location is None:
-        return f"/simple/{package}/{filename}"
     return f"{location}/{package}/{filename}"
 
 
