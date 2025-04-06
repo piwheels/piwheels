@@ -176,7 +176,7 @@ def project_data(request, build_state_hacked):
                         'platform': fs.platform_tag,
                         'requires_python': fs.requires_python,
                         'size': fs.filesize,
-                        'location': None,
+                        'location': '/simple',
                     }
                     for fs in bsh.files.values()
                 },
