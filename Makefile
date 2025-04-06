@@ -87,10 +87,10 @@ dist: $(DIST_WHEEL) $(DIST_TAR) $(DIST_ZIP)
 
 develop:
 	@# These have to be done separately to avoid a cockup...
-	$(PIP) install -U setuptools
-	$(PIP) install -U pip
-	$(PIP) install -U twine
-	$(PIP) install -U tox
+	$(PIP) install setuptools
+	$(PIP) install pip
+	$(PIP) install twine
+	$(PIP) install tox
 	$(PIP) install -e .[doc,test,master,slave,monitor,logger]
 ifeq ($(VIRTUAL_ENV),)
 	@echo "Virtualenv not detected! You may need to link python3-apt manually"
