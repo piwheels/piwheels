@@ -1,4 +1,4 @@
-setuptools==52.0.0
+setuptools==70.0.0
 wheel==0.34.2
 packaging==20.9
 pyzmq==20.0.0
