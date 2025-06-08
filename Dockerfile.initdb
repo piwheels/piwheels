@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy your local source code into the image
+COPY . /app
+
+# Install the local package
+RUN pip install ".[master]"
+
+# Default command (can be overridden in docker-compose)
+CMD ["piw-initdb"]

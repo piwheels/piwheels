@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:15
+    container_name: piwheels-db
+    environment:
+      POSTGRES_DB: piwheels
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./init-user-db.sh:/docker-entrypoint-initdb.d/init-user-db.sh:ro
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  initdb:
+    container_name: piwheels-initdb
+    build:
+      context: .
+      dockerfile: Dockerfile.initdb
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/piwheels
+    command: piw-initdb -d postgresql://postgres:postgres@db:5432/piwheels -y
+    restart: "no"
+
+  master:
+    container_name: piwheels-master
+    build:
+      context: .
+      dockerfile: Dockerfile.master
+    depends_on:
+      db:
+        condition: service_healthy
+      initdb:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://piwheels:piwheels@db:5432/piwheels
+    command: sh -c "chown -R piwheels:piwheels /home/piwheels/www && su piwheels -c 'piw-master -o /home/piwheels/www -d postgresql://piwheels:piwheels@db:5432/piwheels'"
+    user: root
+    volumes:
+      - www_data:/home/piwheels/www
+
+  www:
+    container_name: piwheels-www
+    image: nginx:alpine
+    volumes:
+      - www_data:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
+  www_data:
