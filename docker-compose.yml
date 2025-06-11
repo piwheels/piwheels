@@ -3,12 +3,14 @@ services:
     image: postgres:15
     container_name: piwheels-db
     environment:
-      POSTGRES_DB: piwheels
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - ./init-user-db.sh:/docker-entrypoint-initdb.d/init-user-db.sh:ro
+      - ./db-config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./db-config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - db_data:/var/lib/postgresql/data
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -40,7 +42,7 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://piwheels:piwheels@db:5432/piwheels
-    command: sh -c "chown -R piwheels:piwheels /home/piwheels/www && su piwheels -c 'piw-master -o /home/piwheels/www -d postgresql://piwheels:piwheels@db:5432/piwheels'"
+    command: sh -c "chown -R piwheels:piwheels /home/piwheels/www && su piwheels -c 'PYTHONWARNINGS=ignore piw-master -v -o /home/piwheels/www -d postgresql://piwheels:piwheels@db:5432/piwheels'"
     user: root
     volumes:
       - www_data:/home/piwheels/www
@@ -52,6 +54,27 @@ services:
       - www_data:/usr/share/nginx/html:ro
     ports:
       - "8080:80"
+
+  test:
+    container_name: piwheels-test
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      PIWHEELS_TESTDB: piwtest
+      PIWHEELS_HOST: db:5432
+      PIWHEELS_USER: piwheels
+      PIWHEELS_PASS: piwheels
+      PIWHEELS_SUPERUSER: piwsuper
+      PIWHEELS_SUPERPASS: foobar
+      SQLALCHEMY_SILENCE_UBER_WARNING: 1
+      PYTHONWARNINGS: ignore
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
 
 volumes:
   db_data:

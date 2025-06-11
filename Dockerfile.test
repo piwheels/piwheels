@@ -1,0 +1,32 @@
+FROM debian:bookworm
+
+# Install system Python and required packages
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-apt \
+    sudo \
+    make \
+    git \
+    build-essential \
+    libpq-dev \
+    && apt-get clean
+
+# Create a non-root user
+RUN addgroup --system piwheels && adduser --system --ingroup piwheels piwheels
+
+# Set working directory
+WORKDIR /app
+
+# Copy source code into the container
+COPY . .
+
+# Install Python dependencies
+RUN pip install ".[master,logger,test]" --break-system-packages
+
+# Use unprivileged user for testing
+USER piwheels
+
+# Default command to run tests
+CMD ["pytest"]
