@@ -168,7 +168,8 @@ def test_watchdog_reset(mock_sock):
 
 
 def test_watchdog_period():
-    with mock.patch.dict('piwheels.systemd.os.environ') as env:
+    with mock.patch.dict('piwheels.systemd.os.environ') as env, \
+        mock.patch('piwheels.systemd.os.getpid', return_value=99):
         intf = Systemd()
         env.pop('WATCHDOG_USEC', None)
         assert intf.watchdog_period() is None
@@ -204,10 +205,11 @@ def test_listen_fds(mock_sock):
 
 
 def test_listen_fds_wrong_pid(mock_sock):
-    intf = Systemd()
-    os.environ['LISTEN_PID'] = '1'
-    os.environ['LISTEN_FDS'] = '2'
-    assert intf.listen_fds() == {}
+    with mock.patch('piwheels.systemd.os.getpid', return_value=99) as env:
+        intf = Systemd()
+        env['LISTEN_PID'] = '1'
+        env['LISTEN_FDS'] = '2'
+        assert intf.listen_fds() == {}
 
 
 def test_listen_fds_with_names(mock_sock):
