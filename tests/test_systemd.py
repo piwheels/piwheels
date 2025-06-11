@@ -168,24 +168,24 @@ def test_watchdog_reset(mock_sock):
 
 
 def test_watchdog_period():
-    with mock.patch.dict('os.environ'):
+    with mock.patch.dict('piwheels.systemd.os.environ') as env:
         intf = Systemd()
-        os.environ.pop('WATCHDOG_USEC', None)
+        env.pop('WATCHDOG_USEC', None)
         assert intf.watchdog_period() is None
-        os.environ['WATCHDOG_USEC'] = '5000000'
+        env['WATCHDOG_USEC'] = '5000000'
         assert intf.watchdog_period() == 5
-        os.environ['WATCHDOG_PID'] = '1'
+        env['WATCHDOG_PID'] = '1'
         assert intf.watchdog_period() is None
 
 
 def test_watchdog_clean():
-    with mock.patch.dict('os.environ'):
+    with mock.patch.dict('piwheels.systemd.os.environ') as env:
         intf = Systemd()
-        os.environ['WATCHDOG_USEC'] = '5000000'
-        os.environ['WATCHDOG_PID'] = str(os.getpid())
+        env['WATCHDOG_USEC'] = '5000000'
+        env['WATCHDOG_PID'] = str(os.getpid())
         intf.watchdog_clean()
-        assert 'WATCHDOG_USEC' not in os.environ
-        assert 'WATCHDOG_PID' not in os.environ
+        assert 'WATCHDOG_USEC' not in env
+        assert 'WATCHDOG_PID' not in env
 
 
 def test_main_pid(mock_sock):
