@@ -75,6 +75,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+    command: pytest
 
 volumes:
   db_data:

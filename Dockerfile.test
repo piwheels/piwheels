@@ -23,10 +23,7 @@ WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-RUN pip install ".[master,logger,test]" --break-system-packages
+RUN pip install -e ".[master,logger,test]" --break-system-packages
 
 # Use unprivileged user for testing
 USER piwheels
-
-# Default command to run tests
-CMD ["pytest"]

@@ -7,7 +7,4 @@ WORKDIR /app
 COPY . /app
 
 # Install the local package
-RUN pip install ".[master]"
-
-# Default command (can be overridden in docker-compose)
-CMD ["piw-initdb"]
+RUN pip install -e ".[master]"
