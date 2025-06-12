@@ -73,6 +73,7 @@ services:
       PIWHEELS_SUPERPASS: foobar
       SQLALCHEMY_SILENCE_UBER_WARNING: 1
       PYTHONWARNINGS: ignore
+      COVERAGE_FILE: /tmp/.coverage
     depends_on:
       db:
         condition: service_healthy
