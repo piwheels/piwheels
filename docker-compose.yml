@@ -48,10 +48,13 @@ services:
     volumes:
       - www_data:/home/piwheels/www
 
-  www:
-    container_name: piwheels-www
+  web:
+    container_name: piwheels-web
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
     volumes:
-      - www_data:/usr/local/apache2/htdocs:ro
+      - www_data:/var/www/html
     ports:
       - "8080:80"
 
