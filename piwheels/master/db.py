@@ -476,6 +476,7 @@ class Database:
                             file.py_version_tag,
                             file.abi_tag,
                             file.platform_tag,
+                            file.location,
                             file.requires_python,
                         )
                         for file in build.files.values()],
