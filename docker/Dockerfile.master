@@ -3,7 +3,7 @@ FROM python:3.11-slim
 COPY . /app
 WORKDIR /app
 
-RUN pip install ".[master]"
+RUN pip install ".[master,monitor]"
 
 RUN addgroup --system piwheels && adduser --system --ingroup piwheels --shell /bin/sh piwheels
 
