@@ -366,6 +366,7 @@ class TheScribe(tasks.PauseableTask):
         files = [
             {
                 'filename': filename,
+                'file_url': _make_file_url(package, file_data['location'], filename),
                 'filehash': file_data['hash'],
                 'requires_python': file_data['requires_python'],
                 'yanked': vers_data['yanked'],
@@ -444,6 +445,8 @@ class TheScribe(tasks.PauseableTask):
             if not (version.is_prerelease or release['yanked']):
                 for filedata in release['files'].values():
                     dependencies = filedata['apt_dependencies']
+                    filedata['file_url'] = _make_file_url(
+                        package, filedata['location'], filedata['filename'])
                     break
                 else:
                     continue
@@ -560,6 +563,7 @@ class TheScribe(tasks.PauseableTask):
                     'skip_reason': vers_data['skip'],
                     'files': {
                         filename: {
+                            'file_url': _make_file_url(package, file_data['location'], filename),
                             'filehash': file_data['hash'],
                             'filesize': file_data['size'],
                             'builder_abi': file_data['abi_builder'],
@@ -688,6 +692,10 @@ def parse_version(s):
     # parsed variant will fail
     v.original = s
     return v
+
+
+def _make_file_url(package, filename, location):
+    return f"{location}/{package}/{filename}"
 
 
 class AtomicReplaceFile:
