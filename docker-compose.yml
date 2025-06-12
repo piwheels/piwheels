@@ -21,7 +21,7 @@ services:
     container_name: piwheels-initdb
     build:
       context: .
-      dockerfile: Dockerfile.initdb
+      dockerfile: docker/Dockerfile.initdb
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +34,7 @@ services:
     container_name: piwheels-master
     build:
       context: .
-      dockerfile: Dockerfile.master
+      dockerfile: docker/Dockerfile.master
     depends_on:
       db:
         condition: service_healthy
@@ -49,9 +49,9 @@ services:
 
   www:
     container_name: piwheels-www
-    image: nginx:alpine
+    image: httpd:2.4
     volumes:
-      - www_data:/usr/share/nginx/html:ro
+      - www_data:/usr/local/apache2/htdocs:ro
     ports:
       - "8080:80"
 
@@ -60,7 +60,7 @@ services:
     profiles: ["test"]
     build:
       context: .
-      dockerfile: Dockerfile.test
+      dockerfile: docker/Dockerfile.test
     environment:
       PIWHEELS_TESTDB: piwtest
       PIWHEELS_HOST: db:5432
