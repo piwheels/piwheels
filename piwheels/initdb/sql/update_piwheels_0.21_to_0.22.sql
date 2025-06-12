@@ -1,8 +1,8 @@
 UPDATE configuration SET version = '0.22';
 
-ALTER TABLE files ADD COLUMN location VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE files ADD COLUMN location VARCHAR(100) NOT NULL DEFAULT '/simple';
 
-DROP FUNCTION get_project_data();
+DROP FUNCTION get_project_data(TEXT);
 
 CREATE FUNCTION get_project_data(pkg TEXT)
     RETURNS JSON
