@@ -135,13 +135,17 @@ class FileState:
         The set of dependencies that are required to use this particular
         wheel.
 
+    :param str location:
+        The location the file is stored (default is ``/simple`` i.e. the same
+        server as the master but could be the URL of an external archive server).
+
     :param bool transferred:
         ``True`` if the file has been transferred from the build slave that
         generated it to the file server.
     """
     def __init__(self, filename, filesize, filehash, package_tag,
                  package_version_tag, py_version_tag, abi_tag, platform_tag,
-                 requires_python, dependencies, transferred=False):
+                 requires_python, dependencies, location='/simple', transferred=False):
         self._filename = filename
         self._filesize = filesize
         self._filehash = filehash
@@ -152,6 +156,7 @@ class FileState:
         self._platform_tag = platform_tag
         self._requires_python = requires_python
         self._dependencies = dependencies
+        self._location = location
         self._transferred = transferred
 
     def as_message(self):
@@ -170,7 +175,7 @@ class FileState:
         return cls(*value)
 
     def __len__(self):
-        return 11
+        return 12
 
     def __getitem__(self, index):
         return (
@@ -184,6 +189,7 @@ class FileState:
             self._platform_tag,
             self._requires_python,
             self._dependencies,
+            self._location,
             self._transferred,
         )[index]
 
@@ -239,6 +245,10 @@ class FileState:
     @property
     def requires_python(self):
         return self._requires_python
+
+    @property
+    def location(self):
+        return self._location
 
     @property
     def transferred(self):
