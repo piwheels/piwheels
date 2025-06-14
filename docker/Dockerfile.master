@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+COPY . /app
+WORKDIR /app
+
+RUN pip install ".[master,monitor]"
+
+RUN addgroup --system piwheels && adduser --system --ingroup piwheels --shell /bin/sh piwheels
+
+# Create and chown directory as root
+RUN mkdir -p /home/piwheels/www/simple && chown -R piwheels:piwheels /home/piwheels/www
+
+# Now switch to piwheels user
+USER piwheels
+WORKDIR /home/piwheels
