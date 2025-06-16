@@ -5,7 +5,10 @@ WORKDIR /app
 
 RUN pip install ".[master,monitor]"
 
-RUN addgroup --system piwheels && adduser --system --ingroup piwheels --shell /bin/sh piwheels
+RUN addgroup --system piwheels && \
+    adduser --system --ingroup piwheels --shell /bin/bash --home /home/piwheels piwheels && \
+    mkdir -p /home/piwheels && \
+    chown piwheels:piwheels /home/piwheels
 
 # Create and chown directory as root
 RUN mkdir -p /home/piwheels/www/simple && chown -R piwheels:piwheels /home/piwheels/www
