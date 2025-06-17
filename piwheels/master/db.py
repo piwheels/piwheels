@@ -665,6 +665,8 @@ class Database:
                     for wheel in release['files'].values():
                         wheel['apt_dependencies'] = set(
                             wheel['apt_dependencies'])
+                        wheel['pip_dependencies'] = set(
+                            wheel['pip_dependencies'])
                 return data
 
     @rpc('GETSKIP')

@@ -244,7 +244,7 @@ def test_builder_as_message():
 def test_builder_build_success(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.proc') as proc_mock, \
-            mock.patch('piwheels.slave.builder.Builder.build_dependencies') as dep_mock:
+            mock.patch('piwheels.slave.builder.Builder.calc_apt_dependencies') as dep_mock:
         tmpdir_mock().name = str(tmpdir)
         def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
@@ -316,7 +316,7 @@ def test_builder_build_close(tmpdir):
         assert tmpdir_mock().cleanup.call_args == mock.call()
 
 
-def test_builder_build_dependencies(mock_archive, tmpdir):
+def test_builder_calc_apt_dependencies(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
@@ -364,9 +364,9 @@ def test_builder_build_dependencies(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].dependencies == {
-            'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
-            '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
+        print(b.wheels)
+        assert b.wheels[0].apt_dependencies == {
+            'libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'
         }
 
 
@@ -389,7 +389,7 @@ def test_builder_dependencies_missing(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].dependencies == {}
+        assert b.wheels[0].dependencies == {'apt': [], 'pip': []}
 
 
 def test_builder_dependencies_failed(mock_archive, tmpdir):
