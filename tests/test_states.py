@@ -79,7 +79,7 @@ def test_file_state_init(file_state):
     assert file_state[6] == file_state.abi_tag == 'cp34m'
     assert file_state[7] == file_state.platform_tag == 'linux_armv7l'
     assert file_state[8] == file_state.requires_python == '>=3'
-    assert file_state[9] == file_state.dependencies == {'apt': ['libc6']}
+    assert file_state[9] == file_state.dependencies == {'apt': ['libc6'], 'pip': ['bar']}
     assert file_state[10] == file_state.location == '/simple'
     assert file_state[11] == file_state.transferred == False
 
