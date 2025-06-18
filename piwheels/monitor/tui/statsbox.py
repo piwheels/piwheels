@@ -153,7 +153,7 @@ class MasterStatsBox(wdg.WidgetWrap):
             self.disk_bar.update(invert(state.stats, 'disk_free', 'disk_size'))
             self.swap_bar.update(invert(state.stats, 'swap_free', 'swap_size'))
             self.memory_bar.update(invert(state.stats, 'mem_free', 'mem_size'))
-            self.queue_bar.update(state.stats[-1].builds_pending)
+            self.queue_bar.update(filter_pending_builds(state.stats[-1].builds_pending))
             self.builds_bar.update(state.stats[-1].builds_last_hour)
             self.downloads_bar.update(extract(state.stats, 'downloads_last_hour'))
             self.load_bar.update(extract(state.stats, 'load_average'))
@@ -161,6 +161,18 @@ class MasterStatsBox(wdg.WidgetWrap):
             self.builds_size_label.set_text(format_size(latest.builds_size))
             self.builds_time_label.set_text(format_timedelta(latest.builds_time))
             self.files_count_label.set_text('{:,}'.format(latest.files_count))
+
+
+def filter_pending_builds(builds_pending):
+    """
+    Filter the *builds_pending* dictionary to only include ABIs
+    with a positive count.
+    """
+    return {
+        abi_tag: n
+        for abi_tag, n in builds_pending.items()
+        if n > 0
+    }
 
 
 class SlaveStatsBox(wdg.WidgetWrap):
