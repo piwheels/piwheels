@@ -127,15 +127,13 @@ Make sure the database service is running:
 docker compose up db
 ```
 
-Bring up `initdb`:
+Rebuild `initdb` and bring it back up to attempt the migration.
 
 ```console
-docker compose up initdb
+docker compose up --build initdb
 ```
 
-This will attempt to complete the migration.
-
-Rebuild the master and bring it back up:
+Once successful, rebuild `master` and bring it back up:
 
 ```console
 docker compose up --build master
