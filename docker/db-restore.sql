@@ -1,4 +1,4 @@
-TRUNCATE configuration, build_abis, packages, versions, package_names, builds, files RESTART IDENTITY CASCADE;
+TRUNCATE configuration, build_abis, packages, versions, package_names, builds, files, preinstalled_apt_packages, dependencies RESTART IDENTITY CASCADE;
 
 \COPY configuration(id, version, pypi_serial) FROM 'csv/configuration.csv' CSV;
 \COPY build_abis(abi_tag, skip) FROM 'csv/build_abis.csv' CSV;
@@ -7,4 +7,5 @@ TRUNCATE configuration, build_abis, packages, versions, package_names, builds, f
 \COPY package_names(package, name, seen) FROM 'csv/package_names.csv' CSV;
 \COPY builds(build_id, package, version, built_by, built_at, duration, status, abi_tag) FROM 'csv/builds.csv' CSV;
 \COPY files(filename, build_id, filesize, filehash, package_tag, package_version_tag, py_version_tag, abi_tag, platform_tag, requires_python) FROM 'csv/files.csv' CSV;
+\COPY preinstalled_apt_packages(abi_tag, apt_package) FROM 'csv/preinstalled_apt_packages.csv' CSV;
 \COPY dependencies(filename, tool, dependency) FROM 'csv/dependencies.csv' CSV;

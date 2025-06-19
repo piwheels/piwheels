@@ -22,13 +22,30 @@ the CSVs from piwheelsdb:
 scp piwheelsdb:/tmp/csv/"*".csv docker/csv/
 ```
 
-Make sure the `db` service is up but the master is not running, and run:
+The `initdb` service must be run before restoring from live.
+
+Make sure the `db` service is up but the master is not running, and run one of the following
+commands.
+
+For packages and versions only, use `db-restore-minimal.sql`:
+
+```console
+docker exec -u postgres -w /app/docker piwheels-db psql piwheels -f db-restore-minimal.sql
+```
+
+For builds, files and dependencies too, use `db-restore.sql`:
 
 ```console
 docker exec -u postgres -w /app/docker piwheels-db psql piwheels -f db-restore.sql
 ```
 
-This will populate the database with packages, versions, builds etc.
+## psql
+
+Access the database with psql:
+
+```console
+docker exec -it piwheels-db bash -c "su - postgres -c 'psql piwheels'"
+```
 
 ## Tests
 
@@ -36,4 +53,90 @@ Run tests with:
  
 ```console
 docker compose --profile test run --rm test
+```
+
+## Shell into a container
+
+Shell into e.g. the master:
+
+```console
+docker compose exec master bash
+```
+
+This allows you to view e.g. the output directory:
+
+```console
+$ docker compose exec master bash                                                     
+root@b405ff1d98dc:/home/piwheels# ls www
+```
+
+This also makes it possible to run a command like `piw-rebuild:
+
+```console
+$ docker compose exec master bash                                       
+root@b405ff1d98dc:/home/piwheels# su - piwheels
+piwheels@b405ff1d98dc:~$ piw-rebuild project gpiozero
+```
+
+Alternatively:
+
+```console
+docker compose exec master bash -c "piw-rebuild project gpiozero"
+```
+
+## Stop containers
+
+Stop containers with:
+
+```console
+docker compose down
+```
+
+## Tear it down
+
+Tear a container (e.g. the database) down with:
+
+```console
+docker compose down db --volumes --remove-orphans
+```
+
+Tear it all down with:
+
+```console
+docker compose down --volumes --remove-orphans
+```
+
+## Test a database migration
+
+Start by bringing everything up from the `main` branch, and initialising/restoring the database as
+required, then stop the master service:
+
+```console
+docker compose down master
+```
+
+Switch to the feature branch containing the migration:
+
+```console
+git switch new-feature
+```
+
+Make sure the database service is running:
+
+```console
+docker compose up db
+```
+
+Bring up `initdb`:
+
+```console
+docker compose up initdb
+```
+
+This will attempt to complete the migration.
+
+Rebuild the master and bring it back up:
+
+```console
+docker compose up --build master
 ```
