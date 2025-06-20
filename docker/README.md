@@ -70,7 +70,7 @@ $ docker compose exec master bash
 root@b405ff1d98dc:/home/piwheels# ls www
 ```
 
-This also makes it possible to run a command like `piw-rebuild:
+This also makes it possible to run a command like `piw-rebuild`:
 
 ```console
 $ docker compose exec master bash                                       
