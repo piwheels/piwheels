@@ -1231,7 +1231,8 @@ BEGIN
         py_version_tag,
         abi_tag,
         platform_tag,
-        requires_python
+        requires_python,
+        location
     )
         SELECT
             b.filename,
@@ -1243,7 +1244,8 @@ BEGIN
             b.py_version_tag,
             b.abi_tag,
             b.platform_tag,
-            b.requires_python
+            b.requires_python,
+            b.location
         FROM
             UNNEST(build_files) AS b;
     INSERT INTO dependencies (
