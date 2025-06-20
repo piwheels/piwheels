@@ -42,8 +42,9 @@ from datetime import datetime, timezone
 from itertools import zip_longest
 from operator import itemgetter
 from collections import namedtuple
+from importlib.resources import files, as_file
 
-import pkg_resources
+import packaging.version
 from chameleon import PageTemplateLoader
 import simplejson as json
 
@@ -93,15 +94,12 @@ class TheScribe(tasks.PauseableTask):
         self.package_cache = None
         self.statistics = {}
         self.templates = PageTemplateLoader(
-            search_path=[
-                pkg_resources.resource_filename(__name__, 'templates')
-            ],
+            search_path=[files(__package__).joinpath('templates')],
             default_extension='.pt')
 
     def close(self):
         self.db.close()
         super().close()
-        pkg_resources.cleanup_resources()
 
     def once(self):
         self.setup_output_path()
@@ -129,10 +127,17 @@ class TheScribe(tasks.PauseableTask):
                 path.mkdir()
             except FileExistsError:
                 pass
-        for filename in pkg_resources.resource_listdir(__name__, 'static'):
-            source = pkg_resources.resource_stream(__name__, 'static/' + filename)
-            with AtomicReplaceFile(self.output_path / filename) as f:
-                shutil.copyfileobj(source, f)
+
+        # Copy static files
+        static_dir = files(__package__).joinpath('static')
+        for entry in static_dir.iterdir():
+            if entry.is_file():
+                with as_file(entry) as source_path:
+                    with open(source_path, 'rb') as source:
+                        with AtomicReplaceFile(self.output_path / entry.name) as f:
+                            shutil.copyfileobj(source, f)
+
+        # Render template HTML files
         startup_templates = {
             'faq.pt': ('FAQ', 'frequently asked questions about the piwheels project'),
             'packages.pt': ('Package search', 'search for packages in the piwheels repository'),
@@ -140,18 +145,21 @@ class TheScribe(tasks.PauseableTask):
             'json.pt': ('JSON API', 'information about the piwheels JSON API'),
             '404.pt': ('404 - file not found', 'file not found'),
         }
-        for filename in pkg_resources.resource_listdir(__name__, 'templates'):
-            if filename in startup_templates:
-                title, description = startup_templates[filename]
-                source = self.templates[filename](
+
+        templates_dir = files(__package__).joinpath('templates')
+        for entry in templates_dir.iterdir():
+            if entry.name in startup_templates and entry.is_file():
+                title, description = startup_templates[entry.name]
+                source = self.templates[entry.name](
                     layout=self.templates['layout']['layout'],
-                    page=filename.replace('.pt', ''),
+                    page=entry.name.replace('.pt', ''),
                     title=title,
                     description=description,
                 )
                 with AtomicReplaceFile(
-                        (self.output_path / filename).with_suffix('.html'),
-                        encoding='utf-8') as f:
+                    (self.output_path / entry.name).with_suffix('.html'),
+                    encoding='utf-8'
+                ) as f:
                     f.write(source)
 
     def handle_index(self, queue):
@@ -689,10 +697,7 @@ def grouper(iterable, n, fillvalue=None):
 
 
 def parse_version(s):
-    try:
-        v = pkg_resources.parse_version(s)
-    except:
-        return
+    v = packaging.version.parse(s)
     # Keep a reference to the original string as otherwise it's unrecoverable;
     # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
     # parsed variant will fail
