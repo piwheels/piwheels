@@ -59,11 +59,11 @@ jobs:
           sudo apt build-dep -y python3-apt
           git clone -b $(echo ${{ matrix.python-apt }} | sed -e 's/~/_/') https://salsa.debian.org/apt-team/python-apt.git
           pushd python-apt
-          DEBVER=${{ matrix.python-apt }} python setup.py install --user
+          DEBVER=${{ matrix.python-apt }} python -m pip install --user .
           popd
           python -m pip install --user pip==${{ matrix.python-pip }}
           python -m pip install --user -r ${{ matrix.python-req }}
-          make develop
+          pip install .[doc,test,master,slave,monitor,logger]
 
       - name: Run tests
         env:

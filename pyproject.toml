@@ -1,0 +1,120 @@
+[project]
+name = "piwheels"
+version = "0.21"
+description = "Python package repository providing wheels (pre-built binaries) for Raspberry Pi"
+readme = "README.rst"
+authors = [
+    { name = "Ben Nuttall", email = "ben@bennuttall.com" },
+    { name = "Dave Jones", email = "dave@waveform.org.uk" },
+]
+keywords = ["raspberrypi", "pip", "wheels"]
+license = { file = "LICENSE.rst" }
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Software Distribution",
+]
+dependencies = [
+    "packaging",
+    "configargparse",
+    "pyzmq",
+    "voluptuous",
+    "cbor2",
+    "python-dateutil"
+]
+
+[project.urls]
+Homepage = "https://www.piwheels.org/"
+Blog = "https://blog.piwheels.org/"
+Documentation = "https://piwheels.readthedocs.io/"
+GitHub = "https://github.com/piwheels/piwheels"
+Issues = "https://github.com/piwheels/piwheels/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov"
+]
+doc = [
+    "sphinx",
+    "sphinx-rtd-theme"
+]
+master = [
+    "requests",
+    "sqlalchemy<2",
+    "psycopg2-binary",
+    "chameleon",
+    "simplejson"
+]
+logger = [
+    "lars",
+    "simplejson"
+]
+monitor = ["urwid"]
+sense = ["pisense"]
+slave = ["pip", "wheel"]
+
+[project.scripts]
+piw-master = "piwheels.master:main"
+piw-slave = "piwheels.slave:main"
+piw-initdb = "piwheels.initdb:main"
+piw-import = "piwheels.importer:main"
+piw-rebuild = "piwheels.rebuild:main"
+piw-add = "piwheels.add:main"
+piw-remove = "piwheels.remove:main"
+piw-logger = "piwheels.logger:main"
+piw-monitor = "piwheels.monitor.tui:main"
+piw-sense = "piwheels.monitor.sense:main"
+piw-audit = "piwheels.audit:main"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+"piwheels.master" = [
+    "templates/*.pt",
+    "static/*.css",
+    "static/*.js",
+    "static/*.xsl",
+    "static/*.png",
+    "static/*.svg",
+    "static/*.ico"
+]
+"piwheels.initdb" = [
+    "sql/*.sql"
+]
+
+[tool.pytest.ini_options]
+addopts = "-r=sx --cov --tb=short"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["piwheels"]
+omit = ["piwheels/monitor/*", "piwheels/widgets/*"]
+branch = true
+
+[tool.coverage.report]
+ignore_errors = true
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "assert False",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "pass",
+    "if __name__ == .__main__.:"
+]
