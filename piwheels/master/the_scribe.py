@@ -315,6 +315,7 @@ class TheScribe(tasks.PauseableTask):
             parse_version(version): vers_data
             for version, vers_data in data['releases'].items()
             if version not in exclude
+            if parse_version(version)
         }
         data['releases'] = {
             version: vers_data
@@ -682,7 +683,10 @@ def grouper(iterable, n, fillvalue=None):
 
 
 def parse_version(s):
-    v = pkg_resources.parse_version(s)
+    try:
+        v = pkg_resources.parse_version(s)
+    except:
+        return
     # Keep a reference to the original string as otherwise it's unrecoverable;
     # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
     # parsed variant will fail
