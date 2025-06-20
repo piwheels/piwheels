@@ -453,11 +453,13 @@ class TheScribe(tasks.PauseableTask):
         # just too horrid to do nicely there. We *could* resort to javascript
         # picking the dependencies from the first row of the table, but that
         # then denies non-JS browsers (or search engines) any dependency info
-        dependencies = set()
+        apt_dependencies = set()
+        pip_dependencies = set()
         for version, release in data['releases'].items():
             if not (version.is_prerelease or release['yanked']):
                 for filename, filedata in release['files'].items():
-                    dependencies = filedata['apt_dependencies']
+                    apt_dependencies = filedata['apt_dependencies']
+                    pip_dependencies = filedata['pip_dependencies']
                     break
                 else:
                     continue
@@ -498,7 +500,8 @@ class TheScribe(tasks.PauseableTask):
                     page='project',
                     package=package,
                     releases=data['releases'],
-                    dependencies=dependencies,
+                    apt_dependencies=apt_dependencies,
+                    pip_dependencies=pip_dependencies,
                     format_size=format_size,
                     known_abis=known_abis,
                     all_abis=all_abis))
