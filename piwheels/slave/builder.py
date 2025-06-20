@@ -242,7 +242,7 @@ class Wheel:
         field, and only includes mandatory dependencies (not extras).
         """
         return {
-            v.split(' ')[0]
+            canonicalize_name(v.split(' ')[0])
             for k, v in self.metadata.items()
             if k == 'Requires-Dist' and ';' not in v
         }
