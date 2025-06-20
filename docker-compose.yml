@@ -30,6 +30,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/piwheels
     command: piw-initdb -d postgresql://postgres:postgres@db:5432/piwheels -y
     restart: "no"
+    volumes:
+      - .:/app
 
   master:
     container_name: piwheels-master
@@ -47,6 +49,7 @@ services:
     user: root
     volumes:
       - www_data:/home/piwheels/www
+      - .:/app
 
   web:
     container_name: piwheels-web
@@ -55,6 +58,7 @@ services:
       dockerfile: docker/Dockerfile.web
     volumes:
       - www_data:/var/www/html
+      - .:/app
     ports:
       - "8080:80"
 
