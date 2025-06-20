@@ -47,7 +47,7 @@ import io
 import sys
 import logging
 
-from pkg_resources import resource_listdir, resource_string
+from importlib.resources import files
 from sqlalchemy import create_engine, text, exc
 from sqlalchemy.engine.url import make_url
 
@@ -216,12 +216,14 @@ def get_script(version=None):
     various update scripts.
     """
     if version is None:
-        return resource_string(__name__, 'sql/create_piwheels.sql').decode('utf-8')
+        return files(__package__).joinpath('sql/create_piwheels.sql').read_text(encoding='utf-8')
     # Build the list of upgradable versions from the scripts in the sql/
     # directory
     upgrades = {}
     ver_regex = re.compile(r'update_piwheels_(?P<from>.*)_to_(?P<to>.*)\.sql$')
-    for filename in resource_listdir(__name__, 'sql'):
+    sql_dir = files(__package__).joinpath('sql')
+    for entry in sql_dir.iterdir():
+        filename = entry.name
         match = ver_regex.match(filename)
         if match is not None:
             upgrades[match.group('from')] = (match.group('to'), filename)
@@ -235,7 +237,9 @@ def get_script(version=None):
     try:
         while this_version != __version__:
             this_version, filename = upgrades[this_version]
-            output.append(resource_string(__name__, 'sql/' + filename))
+            output.append(
+                files(__package__).joinpath('sql', filename).read_bytes()
+            )
     except KeyError:
         raise RuntimeError("Unable to find upgrade path from %s to %s" % (
             version, __version__))
