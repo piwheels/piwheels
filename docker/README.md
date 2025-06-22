@@ -138,3 +138,11 @@ Once successful, rebuild `master` and bring it back up:
 ```console
 docker compose up --build master
 ```
+
+## Import a set of wheels
+
+Place some wheels in `docker/wheels` and run:
+
+```console
+docker exec -u piwheels piwheels-master /app/docker/import-wheels.sh
+```
