@@ -10,6 +10,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip3 install ".[test]" --break-system-packages
+RUN pip3 install ".[master,logger,test]" --break-system-packages
 
 USER piwheels
