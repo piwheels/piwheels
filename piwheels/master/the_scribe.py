@@ -577,6 +577,7 @@ class TheScribe(tasks.PauseableTask):
                             'platform': file_data['platform'],
                             'requires_python': file_data['requires_python'],
                             'apt_dependencies': sorted(file_data['apt_dependencies']),
+                            'pip_dependencies': sorted(file_data['pip_dependencies']),
                         }
                         for filename, file_data in vers_data['files'].items()
                     },
