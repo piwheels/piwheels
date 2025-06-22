@@ -28,20 +28,16 @@
 
 
 import os
-import io
 import gzip
 import json
-import cbor2 as cbor
 from unittest import mock
 from pathlib import Path
-from time import time, sleep
-from collections import namedtuple, OrderedDict
-from html.parser import HTMLParser
 from threading import Event
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from pkg_resources import resource_listdir
+from bs4 import BeautifulSoup
 
 from piwheels import const, protocols, transport
 from piwheels.states import MasterStats
@@ -93,50 +89,9 @@ def stats_data(request):
     })
 
 
-class ContainsParser(HTMLParser):
-    def __init__(self, tag, attrs=None, content=None):
-        super().__init__(convert_charrefs=True)
-        self.state = 'not found'
-        self.tag = tag
-        self.attrs = set() if attrs is None else set(attrs)
-        self.content = content
-        self.compare = None
-
-    def handle_starttag(self, tag, attrs):
-        if tag == self.tag and self.attrs <= set(attrs) and self.state != 'found':
-            if self.content is None:
-                self.state = 'found'
-            else:
-                self.state = 'in tag'
-                self.compare = ''
-
-    def handle_data(self, data):
-        if self.state == 'in tag':
-            self.compare += data
-
-    def handle_endtag(self, tag):
-        # Yes, this isn't sufficient to deal with nested equivalent tags but
-        # it's only meant to be a simple matcher
-        if tag == self.tag and self.state == 'in tag':
-            if self.content == self.compare:
-                self.state = 'found'
-
-    @property
-    def found(self):
-        return self.state == 'found'
-
-
-def contains_elem(path, tag, attrs=None, content=None):
-    parser = ContainsParser(tag, attrs, content)
-    with path.open('r', encoding='utf-8') as f:
-        while True:
-            chunk = f.read(8192)
-            if chunk == '':
-                break
-            parser.feed(chunk)
-            if parser.found:
-                return True
-    return False
+def make_bs(html_file: Path) -> BeautifulSoup:
+    "Create a BeautifulSoup object from an HTML file."
+    return BeautifulSoup(html_file.read_text(encoding='utf-8'), 'html.parser')
 
 
 def test_atomic_write_success(tmpdir):
@@ -163,9 +118,13 @@ def test_scribe_first_start(db_queue, task, master_config):
     task.once()
     db_queue.check()
     root = Path(master_config.output_path)
-    assert (root / 'simple' / 'index.html').exists()
-    assert contains_elem(root / 'simple' / 'index.html', 'a', [('href', 'foo')])
-    assert (root / 'simple').exists() and (root / 'simple').is_dir()
+    dir = root / 'simple'
+    assert dir.exists() and dir.is_dir()
+    index = dir / 'index.html'
+    assert index.exists()
+    bs = make_bs(index)
+    links = bs.find_all('a', href='foo')
+    assert len(links) == 1
     for filename in resource_listdir('piwheels.master.the_scribe', 'static'):
         if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
@@ -232,8 +191,7 @@ def test_write_log(db_queue, task, scribe_queue, master_config):
             assert arc.read() == 'foo bar baz'
 
 
-def test_write_pkg_index(db_queue, task, scribe_queue, master_config,
-                         project_data):
+def test_write_pkg_index(db_queue, task, scribe_queue, master_config, project_data):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -248,15 +206,14 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config,
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash']))
-                ])
+            a = simple_index_bs.find('a', href=f"/simple/foo/{filename}#sha256={file_data['hash']}")
+            assert a is not None
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     project_json = root / 'project' / 'foo' / 'json' / 'index.json'
@@ -264,15 +221,16 @@ def test_write_pkg_index(db_queue, task, scribe_queue, master_config,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config,
-                             project_data):
+def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config, project_data):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', set())
     task.once()
     root = Path(master_config.output_path)
     simple = root / 'simple' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert not contains_elem(simple, 'a', [('href', 'foo')])
+    simple_index_bs = make_bs(simple)
+    a = simple_index_bs.find('a', href='foo')
+    assert a is None
     scribe_queue.send_msg('BOTH', 'foo')
     db_queue.expect('PROJDATA', 'foo')
     db_queue.send('OK', project_data)
@@ -281,23 +239,21 @@ def test_write_new_pkg_index(db_queue, task, scribe_queue, master_config,
     task.poll(0)
     db_queue.check()
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
+    a = simple_index_bs.find_all('a', href='foo')
+    found_links = {a['href'] for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash']))
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue,
-                                           master_config, project_data):
+def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue, master_config, project_data):
     for release in project_data['releases']:
         project_data['releases'][release]['yanked'] = True
     db_queue.expect('ALLPKGS')
@@ -314,16 +270,17 @@ def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue,
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a['href']: a for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                    ('data-yanked', ''),
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
+            a = found_links[link]
+            assert 'data-yanked' in a.attrs
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     project_json = root / 'project' / 'foo' / 'json' / 'index.json'
@@ -331,8 +288,7 @@ def test_write_pkg_index_with_yanked_files(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue,
-                                              master_config, project_data):
+def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue, master_config, project_data):
     for release in project_data['releases'].values():
         for filedata in release['files'].values():
             filedata['requires_python'] = '>=3'
@@ -350,16 +306,17 @@ def test_write_pkg_index_with_requires_python(db_queue, task, scribe_queue,
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
     assert simple_index.exists() and simple_index.is_file()
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a['href']: a for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                    ('data-requires-python', '>=3'),
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
+            assert 'data-requires-python' in found_links[link].attrs
+            assert found_links[link]['data-requires-python'] == '>=3'
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     project_json = root / 'project' / 'foo' / 'json' / 'index.json'
@@ -388,17 +345,19 @@ def test_write_pkg_index_with_yanked_files_and_requires_python(
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a['href']: a for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                    ('data-yanked', ''),
-                    ('data-requires-python', '>=3'),
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
+            a = found_links[link]
+            assert 'data-yanked' in a.attrs
+            assert 'data-requires-python' in a.attrs
+            assert a['data-requires-python'] == '>=3'
     project = root / 'project' / 'foo' / 'index.html'
     assert project.exists() and project.is_file()
     project_json = root / 'project' / 'foo' / 'json' / 'index.json'
@@ -406,8 +365,7 @@ def test_write_pkg_index_with_yanked_files_and_requires_python(
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
-                                      master_config, project_data):
+def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue, master_config, project_data):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -422,15 +380,15 @@ def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a['href'] for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
     canonical = root / 'project' / 'foo'
     alias = root / 'project' / 'Foo'
     assert (canonical / 'index.html').exists()
@@ -439,8 +397,7 @@ def test_write_pkg_index_with_aliases(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
-                                             master_config, project_data):
+def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue, master_config, project_data):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -457,15 +414,15 @@ def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
     simple = root / 'simple' / 'index.html'
     simple_index = root / 'simple' / 'foo' / 'index.html'
     assert simple.exists() and simple.is_file()
-    assert contains_elem(simple, 'a', [('href', 'foo')])
+    simple_bs = make_bs(simple)
+    assert simple_bs.find('a', href='foo') is not None
     assert simple_index.exists() and simple_index.is_file()
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a['href'] for a in simple_index_bs.find_all('a')}
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                simple_index, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ])
+            link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert link in found_links
     canonical = root / 'project' / 'foo'
     alias = root / 'project' / 'Foo'
     assert (canonical / 'index.html').exists()
@@ -474,8 +431,7 @@ def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_no_files(db_queue, task, scribe_queue,
-                                    master_config, project_data):
+def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases']:
         project_data['releases'][release]['files'].clear()
@@ -497,8 +453,17 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
+    
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    p = proj_bs.find('p', id='description')
+    assert p is not None and p.text == 'Some description'
+    pip_deps_ul = proj_bs.find('ul', id='pipdeps')
+    assert pip_deps_ul is not None
+    pip_deps_li = pip_deps_ul.find_all('li')
+    assert len(pip_deps_li) == 1 and pip_deps_li[0].text == 'None'
+
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -508,12 +473,12 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config,
-                                   project_data):
+def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():
         for filedata in release['files'].values():
             filedata['apt_dependencies'] = set()
+            filedata['pip_dependencies'] = set()
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -532,27 +497,56 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
+
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    p = proj_bs.find('p', id='description')
+    assert p is not None and p.text == 'Some description'
+    pip_deps_ul = proj_bs.find('ul', id='pipdeps')
+    assert pip_deps_ul is not None
+    pip_deps_li = pip_deps_ul.find_all('li')
+    assert len(pip_deps_li) == 1
+    assert pip_deps_li[0].text == 'None'
+
+    releases_table = proj_bs.find('table', id='releases-table')
+    file_links = {}
+    for tr in releases_table.find_all('tr', class_='files-info'):
+        ul = tr.find('ul', class_='files')
+        for li in ul.find_all('li'):
+            filename = li.find('a').text
+            file_links[filename] = {
+                'href': li.find('a')['href'],
+                'apt_deps': li.get('data-aptdependencies', ''),
+                'pip_deps': li.get('data-pipdependencies', ''),
+            }
+    assert releases_table is not None
     for release in project_data['releases'].values():
-        for filename, file_data in release['files'].items():
-            assert contains_elem(
-                project_page, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ], filename)
-    assert contains_elem(project_page, 'pre', content='pip3 install foo')
+        for filename, file_data in reversed(release['files'].items()):
+            assert filename in file_links
+            file_link = file_links[filename]
+            assert file_link['href'] == f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert file_link['apt_deps'] == ''
+            assert file_link['pip_deps'] == ''
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None and install_pre.text == 'pip3 install foo'
+    assert 'apt install' not in install_pre.text
+
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
     assert data['package'] == 'foo'
     assert len(data['releases']) == 1
     assert len(data['releases']['0.1']['files']) == 2
+    for version, release in project_data['releases'].items():
+        for filename, file_data in reversed(release['files'].items()):
+            file = data['releases'][version]['files'][filename]
+            assert file['apt_dependencies'] == []
+            assert file['pip_dependencies'] == []
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_with_deps(db_queue, task, scribe_queue,
-                                     master_config, project_data):
+def test_write_pkg_project_with_deps(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():
         for filedata in release['files'].values():
@@ -575,29 +569,59 @@ def test_write_pkg_project_with_deps(db_queue, task, scribe_queue,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
+    
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    p = proj_bs.find('p', id='description')
+    assert p is not None and p.text == 'Some description'
+    pip_deps_ul = proj_bs.find('ul', id='pipdeps')
+    assert pip_deps_ul is not None
+    pip_deps_li = pip_deps_ul.find_all('li')
+    assert len(pip_deps_li) == 1
+    assert pip_deps_li[0].text == 'bar'
+    pip_dep_link = pip_deps_li[0].find('a')
+    assert pip_dep_link is not None and pip_dep_link['href'] == '/project/bar/'
+
+    releases_table = proj_bs.find('table', id='releases-table')
+    file_links = {}
+    for tr in releases_table.find_all('tr', class_='files-info'):
+        ul = tr.find('ul', class_='files')
+        for li in ul.find_all('li'):
+            filename = li.find('a').text
+            file_links[filename] = {
+                'href': li.find('a')['href'],
+                'apt_deps': li.get('data-aptdependencies', 'libfoo'),
+                'pip_deps': li.get('data-pipdependencies', 'bar'),
+            }
+    assert releases_table is not None
     for release in project_data['releases'].values():
-        for filename, file_data in release['files'].items():
-            assert contains_elem(
-                project_page, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ], filename)
-    assert contains_elem(
-        project_page, 'pre',
-        content='sudo apt install libfoo\npip3 install foo')
+        for filename, file_data in reversed(release['files'].items()):
+            assert filename in file_links
+            file_link = file_links[filename]
+            assert file_link['href'] == f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert file_link['apt_deps'] == 'libfoo'
+            assert file_link['pip_deps'] == 'bar'
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None
+    assert 'sudo apt install libfoo' in install_pre.text
+    assert 'pip3 install foo' in install_pre.text
+
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
     assert data['package'] == 'foo'
     assert len(data['releases']) == 1
     assert len(data['releases']['0.1']['files']) == 2
+    for version, release in project_data['releases'].items():
+        for filename, file_data in reversed(release['files'].items()):
+            file = data['releases'][version]['files'][filename]
+            assert file['apt_dependencies'] == ['libfoo']
+            assert file['pip_dependencies'] == ['bar']
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config,
-                                  project_data):
+def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():
         release['yanked'] = True
@@ -621,21 +645,29 @@ def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
-    assert contains_elem(
-        project_page, 'span',
-        [('class', 'yanked')],
-        'yanked'
-    )
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    p = proj_bs.find('p', id='description')
+    assert p is not None and p.text == 'Some description'
+    yanked = proj_bs.find('span', class_='yanked')
+    assert yanked is not None and yanked.text == 'yanked'
+    found_file_links = {}
+    for files_ul in proj_bs.find_all('ul', class_='files'):
+        for li in files_ul.find_all('li'):
+            a = li.find('a')
+            filename = a.text
+            found_file_links[filename] = {
+                'href': a['href'],
+            }
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                project_page, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ], filename)
-    assert contains_elem(project_page, 'pre', content='pip3 install foo')
+            assert filename in found_file_links
+            file_link = found_file_links[filename]
+            expected_href = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert file_link['href'] == expected_href
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None and install_pre.text == 'pip3 install foo'
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -647,8 +679,7 @@ def test_write_pkg_project_yanked(db_queue, task, scribe_queue, master_config,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_prerelease(db_queue, task, scribe_queue,
-                                      master_config, project_data):
+def test_write_pkg_project_prerelease(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     project_data['releases']['0.1a'] = project_data['releases'].pop('0.1')
     for release in project_data['releases'].values():
@@ -676,21 +707,24 @@ def test_write_pkg_project_prerelease(db_queue, task, scribe_queue,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
-    assert contains_elem(
-        project_page, 'span',
-        [('class', 'prerelease')],
-        'pre-release'
-    )
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    desc = proj_bs.find('p', id='description')
+    assert desc is not None and desc.text == 'Some description'
+    releases_table = proj_bs.find('table', id='releases-table')
+    prerelease_span = releases_table.find('span', class_='prerelease')
+    assert prerelease_span is not None and prerelease_span.text == 'pre-release'
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                project_page, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ], filename)
-    assert contains_elem(project_page, 'pre', content='pip3 install foo')
+            url = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            links = proj_bs.find('a', href=url)
+            assert links is not None
+            
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None
+    assert install_pre.text == 'pip3 install foo'
+
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -702,8 +736,7 @@ def test_write_pkg_project_prerelease(db_queue, task, scribe_queue,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue,
-                                             master_config, project_data):
+def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     project_data['releases']['0.1a'] = project_data['releases'].pop('0.1')
     for release in project_data['releases'].values():
@@ -732,26 +765,34 @@ def test_write_pkg_project_yanked_prerelease(db_queue, task, scribe_queue,
     project_json = project / 'json'
     project_json_file = project_json / 'index.json'
     assert project_page.exists() and project_page.is_file()
-    assert contains_elem(project_page, 'h2', content='foo')
-    assert contains_elem(project_page, 'p', content='Some description')
-    assert contains_elem(
-        project_page, 'span',
-        [('class', 'yanked')],
-        'yanked'
-    )
-    assert contains_elem(
-        project_page, 'span',
-        [('class', 'prerelease')],
-        'pre-release'
-    )
+    proj_bs = make_bs(project_page)
+    h2 = proj_bs.find('h2', id='package')
+    assert h2 is not None and h2.text == 'foo'
+    desc = proj_bs.find('p', id='description')
+    assert desc is not None and desc.text == 'Some description'
+    
+    releases_table = proj_bs.find('table', id='releases-table')
+    prerelease_span = releases_table.find('span', class_='prerelease')
+    assert prerelease_span is not None and prerelease_span.text == 'pre-release'
+    yanked_span = releases_table.find('span', class_='yanked')
+    assert yanked_span is not None and yanked_span.text == 'yanked'
+
+    found_file_links = {}
+    for files_ul in proj_bs.find_all('ul', class_='files'):
+        for li in files_ul.find_all('li'):
+            a = li.find('a')
+            filename = a.text
+            found_file_links[filename] = a['href']
     for release in project_data['releases'].values():
         for filename, file_data in release['files'].items():
-            assert contains_elem(
-                project_page, 'a', [
-                    ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                        filename=filename, filehash=file_data['hash'])),
-                ], filename)
-    assert contains_elem(project_page, 'pre', content='pip3 install foo')
+            assert filename in found_file_links
+            expected_href = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+            assert found_file_links[filename] == expected_href
+    
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None
+    assert install_pre.text == 'pip3 install foo'
+
     assert project_json_file.exists() and project_json_file.is_file()
     with open(str(project_json_file.absolute())) as f:
         data = json.load(f)
@@ -815,8 +856,7 @@ def test_delete_package(db_queue, task, scribe_queue, master_config):
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_delete_package_with_aliases(db_queue, task, scribe_queue,
-                                     master_config):
+def test_delete_package_with_aliases(db_queue, task, scribe_queue, master_config):
     db_queue.expect('ALLPKGS')
     db_queue.send('OK', {'foo'})
     task.once()
@@ -933,8 +973,7 @@ def test_delete_package_missing_file(db_queue, task, scribe_queue, master_config
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_delete_version(db_queue, task, scribe_queue, master_config,
-                        project_data):
+def test_delete_version(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():
         for filedata in release['files'].values():
@@ -975,24 +1014,28 @@ def test_delete_version(db_queue, task, scribe_queue, master_config,
         assert not (simple / filename).exists()
     for filename in project_data['releases']['0.2']['files']:
         assert (simple / filename).exists()
-    assert contains_elem(project_page, 'pre', content='pip3 install foo')
+    proj_bs = make_bs(project_page)
+    install_pre = proj_bs.find('pre', id='install-command')
+    assert install_pre is not None and install_pre.text == 'pip3 install foo'
+    
+    releases_table = proj_bs.find('table', id='releases-table')
+    file_links = {}
+    for tr in releases_table.find_all('tr', class_='files-info'):
+        ul = tr.find('ul', class_='files')
+        for li in ul.find_all('li'):
+            a = li.find('a')
+            filename = a.text
+            file_links[filename] = a['href']
     for filename, file_data in project_data['releases']['0.1']['files'].items():
-        assert not contains_elem(
-            project_page, 'a', [
-                ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                    filename=filename, filehash=file_data['hash'])),
-            ], filename)
+        assert filename not in file_links
     for filename, file_data in project_data['releases']['0.2']['files'].items():
-        assert contains_elem(
-            project_page, 'a', [
-                ('href', '/simple/foo/{filename}#sha256={filehash}'.format(
-                    filename=filename, filehash=file_data['hash'])),
-            ], filename)
+        link = f"/simple/foo/{filename}#sha256={file_data['hash']}"
+        assert filename in file_links
+        assert file_links[filename] == link
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
-def test_delete_version_missing_file(db_queue, task, scribe_queue,
-                                     master_config, project_data):
+def test_delete_version_missing_file(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():
         for filedata in release['files'].values():
