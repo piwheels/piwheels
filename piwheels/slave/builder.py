@@ -46,9 +46,9 @@ import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from threading import Thread, Event
-from collections import defaultdict
 
 import apt
+from packaging.requirements import Requirement, InvalidRequirement
 
 from .. import proc
 from ..format import canonicalize_name
@@ -241,11 +241,21 @@ class Wheel:
         package names. This is derived from the ``Requires-Dist`` metadata
         field, and only includes mandatory dependencies (not extras).
         """
-        return {
-            canonicalize_name(v.split(' ')[0])
-            for k, v in self.metadata.items()
-            if k == 'Requires-Dist' and ';' not in v
-        }
+        deps = set()
+        for key, value in self.metadata.items():
+            if key != 'Requires-Dist':
+                continue
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                req = Requirement(value)
+            except InvalidRequirement:
+                continue  # Skip malformed requirements
+            if req.marker and 'extra' in str(req.marker):
+                continue  # Skip optional extras
+            deps.add(canonicalize_name(req.name))
+        return deps
 
     @property
     def apt_dependencies(self):
