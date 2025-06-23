@@ -435,6 +435,37 @@ def test_write_pkg_index_with_existing_alias(db_queue, task, scribe_queue, maste
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
+def test_write_pkg_index_external_files(db_queue, task, scribe_queue, master_config, project_data):
+    filename_1 = 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    filename_2 = 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    project_data['releases']['0.1']['files'][filename_1]['location'] = 'https://archive1.piwheels.org'
+    project_data['releases']['0.1']['files'][filename_2]['location'] = 'https://archive2.piwheels.org'
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    root = Path(master_config.output_path)
+    (root / 'project' / 'foo').mkdir()
+    scribe_queue.send_msg('BOTH', 'foo')
+    db_queue.expect('PROJDATA', 'foo')
+    db_queue.send('OK', project_data)
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    simple_index_bs = make_bs(simple_index)
+    found_links = {a.text: a['href'] for a in simple_index_bs.find_all('a')}
+    hash_1 = project_data['releases']['0.1']['files'][filename_1]['hash']
+    file_link_1 = f"https://archive1.piwheels.org/foo/{filename_1}#sha256={hash_1}"
+    assert filename_1 in found_links
+    assert found_links[filename_1] == file_link_1
+    hash_2 = project_data['releases']['0.1']['files'][filename_2]['hash']
+    file_link_2 = f"https://archive2.piwheels.org/foo/{filename_2}#sha256={hash_2}"
+    assert filename_2 in found_links
+    assert found_links[filename_2] == file_link_2
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
 def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases']:
@@ -514,6 +545,7 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, 
     assert pip_deps_li[0].text == 'None'
 
     releases_table = proj_bs.find('table', id='releases-table')
+    assert releases_table is not None
     file_links = {}
     for tr in releases_table.find_all('tr', class_='files-info'):
         ul = tr.find('ul', class_='files')
@@ -524,7 +556,6 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, 
                 'apt_deps': li.get('data-aptdependencies', ''),
                 'pip_deps': li.get('data-pipdependencies', ''),
             }
-    assert releases_table is not None
     for release in project_data['releases'].values():
         for filename, file_data in reversed(release['files'].items()):
             assert filename in file_links
@@ -547,6 +578,69 @@ def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, 
             file = data['releases'][version]['files'][filename]
             assert file['apt_dependencies'] == []
             assert file['pip_dependencies'] == []
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
+def test_write_pkg_project_external_files(db_queue, task, scribe_queue, master_config, project_data):
+    filename_1 = 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
+    filename_2 = 'foo-0.1-cp34-cp34m-linux_armv6l.whl'
+    project_data['releases']['0.1']['files'][filename_1]['location'] = 'https://archive1.piwheels.org'
+    project_data['releases']['0.1']['files'][filename_2]['location'] = 'https://archive2.piwheels.org'
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
+    db_queue.expect('PROJDATA', 'foo')
+    db_queue.send('OK', project_data)
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    simple_index = root / 'simple' / 'foo' / 'index.html'
+    assert not simple_index.exists()
+    project = root / 'project' / 'foo'
+    project_page = project / 'index.html'
+    project_json = project / 'json'
+    project_json_file = project_json / 'index.json'
+    assert project_page.exists() and project_page.is_file()
+
+    proj_bs = make_bs(project_page)
+    releases_table = proj_bs.find('table', id='releases-table')
+    assert releases_table is not None
+    found_links = {}
+    for tr in releases_table.find_all('tr', class_='files-info'):
+        ul = tr.find('ul', class_='files')
+        for li in ul.find_all('li'):
+            filename = li.find('a').text
+            found_links[filename] = li.find('a')['href']
+
+    hash_1 = project_data['releases']['0.1']['files'][filename_1]['hash']
+    file_link_1 = f"https://archive1.piwheels.org/foo/{filename_1}"
+    file_link_1_with_hash = f"{file_link_1}#sha256={hash_1}"
+    assert filename_1 in found_links
+    assert found_links[filename_1] == file_link_1_with_hash
+    hash_2 = project_data['releases']['0.1']['files'][filename_2]['hash']
+    file_link_2 = f"https://archive2.piwheels.org/foo/{filename_2}"
+    file_link_2_with_hash = f"{file_link_2}#sha256={hash_2}"
+    assert filename_2 in found_links
+    assert found_links[filename_2] == file_link_2_with_hash
+
+    assert project_json_file.exists() and project_json_file.is_file()
+    with open(str(project_json_file.absolute())) as f:
+        data = json.load(f)
+    assert data['package'] == 'foo'
+    assert len(data['releases']) == 1
+    assert len(data['releases']['0.1']['files']) == 2
+    found_data = {}
+    for version, release in project_data['releases'].items():
+        for filename in reversed(release['files']):
+            file = data['releases'][version]['files'][filename]
+            found_data[filename] = file
+    assert filename_1 in found_data
+    assert found_data[filename_1]['file_url'] == file_link_1
+    assert filename_2 in found_data
+    assert found_data[filename_2]['file_url'] == file_link_2
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
