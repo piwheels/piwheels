@@ -244,6 +244,35 @@ Requires-Dist: py-cord>=2,<3
 
 
 @pytest.fixture()
+def mock_archive_pip_dependencies_ontology(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.1
+Name: ontology-processing
+Version: 1.0.0
+Summary: Climate Mind ontology processing code.
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+License-File: LICENSE
+Requires-Dist: Brotliclickcyclerdashdash-core-componentsdash-html-componentsdash-rendererdash-tabledecoratorFlaskFlask-CompressfutureitsdangerousJinja2kiwisolverMarkupSafematplotlibnetworkxnumpyOwlready2pandasPillowplotlypyparsingpython-dateutilpytzretryingscipysixvalidatorsWerkzeug
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
 def bad_package(request, bad_archive):
     with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
             mock.patch('piwheels.slave.builder.Path.open') as open_mock:
@@ -325,6 +354,18 @@ def mock_package_pip_depdendencies_aamm(request, mock_archive_pip_dependencies_a
         h = sha256()
         h.update(mock_archive_pip_dependencies_aamm)
         yield len(mock_archive_pip_dependencies_aamm), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_ontology(request, mock_archive_pip_dependencies_ontology):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_ontology), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_ontology)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_ontology)
+        yield len(mock_archive_pip_dependencies_ontology), h.hexdigest().lower()
 
 
 @pytest.fixture()
@@ -446,6 +487,12 @@ def test_package_metadata_pip_depdendencies_aamm(mock_package_pip_depdendencies_
         'ortools',
         'py-cord'
     }
+
+
+def test_package_metadata_pip_depdendencies_ontology(mock_package_pip_depdendencies_ontology):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert pkg.pip_dependencies == set()
 
 
 def test_package_bad_metadata(bad_package):
