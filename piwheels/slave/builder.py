@@ -254,6 +254,8 @@ class Wheel:
                 continue  # Skip malformed requirements
             if req.marker and 'extra' in str(req.marker):
                 continue  # Skip optional extras
+            if len(req.name) > 255:
+                continue  # Skip requirements with too long names
             deps.add(canonicalize_name(req.name))
         return deps
 
