@@ -62,12 +62,11 @@ services:
     ports:
       - "8080:80"
 
-  test:
-    container_name: piwheels-test
-    profiles: ["test"]
+  test-bookworm:
+    container_name: piwheels-test-bookworm
     build:
       context: .
-      dockerfile: docker/Dockerfile.test
+      dockerfile: docker/Dockerfile.test-bookworm
     environment:
       PIWHEELS_TESTDB: piwtest
       PIWHEELS_HOST: db:5432
@@ -83,7 +82,29 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-    command: pytest
+    command: pytest -vvx
+
+  test-bullseye:
+    container_name: piwheels-test-bullseye
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test-bullseye
+    environment:
+      PIWHEELS_TESTDB: piwtest
+      PIWHEELS_HOST: db:5432
+      PIWHEELS_USER: piwheels
+      PIWHEELS_PASS: piwheels
+      PIWHEELS_SUPERUSER: piwsuper
+      PIWHEELS_SUPERPASS: foobar
+      SQLALCHEMY_SILENCE_UBER_WARNING: 1
+      PYTHONWARNINGS: ignore
+      COVERAGE_FILE: /tmp/.coverage
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: pytest-3 -vv
 
 volumes:
   db_data:

@@ -49,10 +49,16 @@ docker exec -it piwheels-db bash -c "su - postgres -c 'psql piwheels'"
 
 ## Tests
 
-Run tests with:
+Run tests on Debian Bookworm (Python 3.11) with:
  
 ```console
-docker compose --profile test run --rm test
+docker compose run --rm test-bookworm
+```
+
+And on Debian Bullseye (Python 3.9) with:
+ 
+```console
+docker compose run --rm test-bookworm
 ```
 
 ## Shell into a container
