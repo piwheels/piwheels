@@ -26,17 +26,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# This unit exists purely to work around the ever-churning API of the wheel
-# package. Because it's a 0.x version it's API is subject to change, and it
-# does ... frequently.
+# This unit exists purely to work around the availability of features in the
+# "packaging" package API, and using the equivalent features in the "wheel"
+# package if not available.
+
+from packaging.tags import sys_tags
 
 try:
-    from setuptools.command import bdist_wheel
-except ImportError:
-    from wheel import bdist_wheel
+    from wheel.bdist_wheel import get_abi_tag as _get_abi_tag
+    ABI_TAG = _get_abi_tag()
+except (ImportError, AttributeError):
+    ABI_TAG = next(sys_tags()).abi
 
-
-get_abi_tag = bdist_wheel.get_abi_tag
-
-def get_platform(archive_root=None):
-    return bdist_wheel.get_platform(archive_root)
+try:
+    from wheel.bdist_wheel import get_platform as _get_platform
+    PLATFORM_TAG = _get_platform(archive_root=None)
+except (ImportError, AttributeError):
+    PLATFORM_TAG = next(sys_tags()).platform
