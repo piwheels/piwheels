@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.21');
+INSERT INTO configuration(id, version) VALUES (1, '0.22');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -171,6 +171,7 @@ CREATE TABLE files (
     abi_tag             VARCHAR(100) NOT NULL,
     platform_tag        VARCHAR(100) NOT NULL,
     requires_python     VARCHAR(200) NULL,
+    location            VARCHAR(100) NOT NULL DEFAULT '/simple',
 
     CONSTRAINT files_pk PRIMARY KEY (filename),
     CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
@@ -687,6 +688,7 @@ AS $sql$
             json_object_agg(
                 f.filename,
                 json_build_object(
+                    'location', f.location,
                     'hash', f.filehash,
                     'size', f.filesize,
                     'abi_builder', b.abi_tag,
@@ -1229,7 +1231,8 @@ BEGIN
         py_version_tag,
         abi_tag,
         platform_tag,
-        requires_python
+        requires_python,
+        location
     )
         SELECT
             b.filename,
@@ -1241,7 +1244,8 @@ BEGIN
             b.py_version_tag,
             b.abi_tag,
             b.platform_tag,
-            b.requires_python
+            b.requires_python,
+            b.location
         FROM
             UNNEST(build_files) AS b;
     INSERT INTO dependencies (

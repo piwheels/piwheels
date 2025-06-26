@@ -552,4 +552,4 @@ def build_armv6l_hack(build):
                     armv6_name, file.filesize, file.filehash, file.package_tag,
                     file.package_version_tag, file.py_version_tag,
                     file.abi_tag, 'linux_armv6l', file.requires_python,
-                    file.dependencies, True)
+                    file.dependencies, transferred=True)

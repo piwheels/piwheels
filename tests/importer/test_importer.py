@@ -197,7 +197,7 @@ def test_import_failure(mock_wheel, mock_wheel_stats, import_queue_name, import_
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                             filesize, filehash, 'foo', '0.1',
-                            'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                            'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                         ],
                     ]
                 ]
@@ -220,7 +220,7 @@ def test_import_send_failure(mock_wheel, mock_wheel_stats, import_queue_name, im
                         [
                             'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                             filesize, filehash, 'foo', '0.1',
-                            'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                            'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                         ],
                     ]
                 ]
@@ -243,7 +243,7 @@ def test_import_no_delete_on_fail(mock_wheel, mock_wheel_stats, import_queue_nam
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                     ],
                 ]
             ]
@@ -267,7 +267,7 @@ def test_import_success(mock_wheel, mock_wheel_stats, import_queue_name, import_
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                     ],
                 ]
             ]
@@ -299,7 +299,7 @@ def test_import_with_deps(mock_wheel, mock_wheel_stats, import_queue_name, impor
                             filesize, filehash, 'foo', '0.1',
                             'cp34', 'cp34m', 'linux_armv7l', '>=3', {
                                 'apt': ['libblas3', 'libc6']
-                            },
+                            }, '/simple',
                         ],
                     ]
                 ]
@@ -325,7 +325,7 @@ def test_import_override_log(mock_wheel, mock_wheel_stats, import_queue_name, im
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                     ],
                 ]
             ]
@@ -357,7 +357,7 @@ def test_import_override_abi(mock_wheel_no_abi, mock_wheel_no_abi_stats, import_
                     [
                         'foo-0.1-cp34-none-any.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'none', 'any', None, {},
+                        'cp34', 'none', 'any', None, {}, '/simple',
                     ],
                 ]
             ]
@@ -382,7 +382,7 @@ def test_import_then_delete(mock_wheel, mock_wheel_stats, import_queue_name, imp
                     [
                         'foo-0.1-cp34-cp34m-linux_armv7l.whl',
                         filesize, filehash, 'foo', '0.1',
-                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {},
+                        'cp34', 'cp34m', 'linux_armv7l', '>=3', {}, '/simple',
                     ],
                 ]
             ]
