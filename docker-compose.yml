@@ -106,6 +106,28 @@ services:
       - .:/app
     command: pytest-3 -vv
 
+  test-buster:
+    container_name: piwheels-test-buster
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test-buster
+    environment:
+      PIWHEELS_TESTDB: piwtest
+      PIWHEELS_HOST: db:5432
+      PIWHEELS_USER: piwheels
+      PIWHEELS_PASS: piwheels
+      PIWHEELS_SUPERUSER: piwsuper
+      PIWHEELS_SUPERPASS: foobar
+      SQLALCHEMY_SILENCE_UBER_WARNING: 1
+      PYTHONWARNINGS: ignore
+      COVERAGE_FILE: /tmp/.coverage
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: pytest-3 -vv
+
 volumes:
   db_data:
   www_data:
