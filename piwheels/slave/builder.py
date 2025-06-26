@@ -42,14 +42,13 @@ import zipfile
 import hashlib
 import resource
 import tempfile
-import warnings
 import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta
 from threading import Thread, Event
-from collections import defaultdict
 
 import apt
+from packaging.requirements import Requirement, InvalidRequirement
 
 from .. import proc
 from ..format import canonicalize_name
@@ -67,17 +66,17 @@ class Wheel:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
 
-    :param dict dependencies:
-        A dict mapping tool to dependencies that are required to use these
-        particular wheel files. Defaults to a ``None`` (no dependencies).
+    :param set or None apt_dependencies:
+        A set of apt dependencies that are required to use this particular
+        wheel file. Defaults to ``None`` (no dependencies).
     """
-    def __init__(self, path, dependencies=None):
+    def __init__(self, path, apt_dependencies=None):
         self.wheel_file = path
         self._filesize = path.stat().st_size
         self._filehash = None
-        if dependencies is None:
-            dependencies = {}
-        self._dependencies = dependencies
+        if apt_dependencies is None:
+            apt_dependencies = set()
+        self._apt_dependencies = apt_dependencies
         self._parts = list(path.stem.split('-'))
         # XXX This should be on the master
         # Fix up retired tags (noabi->none)
@@ -231,6 +230,34 @@ class Wheel:
         wheel metadata.
         """
         return self.metadata['Requires-Python']
+    
+    @property
+    def pip_dependencies(self):
+        """
+        Return the pip dependencies required by the wheel, as a set of
+        package names. This is derived from the ``Requires-Dist`` metadata
+        field, and only includes mandatory dependencies (not extras).
+        """
+        deps = set()
+        for key, value in self.metadata.items():
+            if key != 'Requires-Dist':
+                continue
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                req = Requirement(value)
+            except InvalidRequirement:
+                continue  # Skip malformed requirements
+            if req.marker and 'extra' in str(req.marker):
+                continue  # Skip optional extras
+            deps.add(canonicalize_name(req.name))
+        return deps
+
+    @property
+    def apt_dependencies(self):
+        "Return the apt dependencies required by the wheel."
+        return self._apt_dependencies
 
     @property
     def dependencies(self):
@@ -239,7 +266,10 @@ class Wheel:
         dependency system (e.g. "apt", "pip", etc.) to set of package names for
         that system.
         """
-        return self._dependencies
+        return {
+            'apt': sorted(self.apt_dependencies),
+            'pip': sorted(self.pip_dependencies),
+        }
 
     @property
     def metadata(self):
@@ -487,14 +517,14 @@ class Builder(Thread):
             env=self.build_environment(), event=self._stopped,
             stdin=proc.DEVNULL, stdout=proc.DEVNULL, stderr=proc.DEVNULL)
 
-    def build_dependencies(self, wheel):
+    def calc_apt_dependencies(self, wheel):
         """
         Calculate the apt dependencies of *wheel* (which is a :class:`Wheel`
         instance representing a built wheel).
         """
         apt_cache = apt.cache.Cache()
         find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
-        deps = defaultdict(set)
+        apt_dependencies = set()
         whl_libs = set()
         dep_libs = set()
         with tempfile.TemporaryDirectory() as tempdir:
@@ -531,19 +561,14 @@ class Builder(Thread):
             providers = {
                 pkg.name for pkg in apt_cache
                 if pkg.installed is not None
-                and lib in pkg.installed_files}
+                and lib in pkg.installed_files
+            }
             assert len(providers) <= 1
-            try:
-                deps['apt'].add(providers.pop())
-            except KeyError:
-                deps[''].add(lib)
+            apt_dependencies |= providers
             if self._stopped.wait(0):
                 raise proc.ProcessTerminated(['dpkg', '--search', lib],
                                              self._stopped)
-        wheel._dependencies = {
-            tool: sorted(deps)
-            for tool, deps in deps.items()
-        }
+        wheel._apt_dependencies = apt_dependencies
 
     def run(self):
         """
@@ -570,8 +595,11 @@ class Builder(Thread):
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
                         wheel = Wheel(path)
-                        self.build_dependencies(wheel)
+                        print("START")
+                        self.calc_apt_dependencies(wheel)
+                        print("END")
                         self._wheels.append(wheel)
+                        print("DONE")
                 except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
                     self.stop()
                     log_file.seek(0, os.SEEK_END)

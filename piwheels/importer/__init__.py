@@ -40,7 +40,6 @@ Contains the functions that implement the :program:`piw-import` script.
 
 import sys
 import logging
-from datetime import timedelta
 from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
@@ -105,7 +104,7 @@ registered as produced by a *single* build.
         "(%(default)s); this should always be an ipc address")
     parser.add_argument(
         '--dependencies', metavar='FILE', default=None, type=terminal.FileType('r'),
-        help="The filename containing the dependencies of the wheels to be "
+        help="The filename containing the apt dependencies of the wheels to be "
         "imported ")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
@@ -114,13 +113,12 @@ registered as produced by a *single* build.
 
     if config.dependencies:
         apt_dependencies = config.dependencies.read().split()
-        dependencies = {'apt': apt_dependencies}
     else:
-        dependencies = {}
+        apt_dependencies = None
     # NOTE: If any of the files are unreadable, this'll fail (it attempts
     # to calculate the hash of the file which requires reading it)
     packages = [
-        Wheel(Path(filename), dependencies=dependencies)
+        Wheel(Path(filename), apt_dependencies=apt_dependencies)
         for filename in config.files
     ]
     state = BuildState(

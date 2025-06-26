@@ -69,7 +69,7 @@ def slave_state(slave_queue):
 
 
 def test_file_state_init(file_state):
-    assert len(file_state) == 11
+    assert len(file_state) == 12
     assert file_state[0] == file_state.filename == 'foo-0.1-cp34-cp34m-linux_armv7l.whl'
     assert file_state[1] == file_state.filesize == 123456
     assert file_state[2] == file_state.filehash == 'c3bef91a6ceda582a97839ab65fc7efb4e79bc4eba53e41272574828ca59325a'
@@ -79,8 +79,9 @@ def test_file_state_init(file_state):
     assert file_state[6] == file_state.abi_tag == 'cp34m'
     assert file_state[7] == file_state.platform_tag == 'linux_armv7l'
     assert file_state[8] == file_state.requires_python == '>=3'
-    assert file_state[9] == file_state.dependencies == {'apt': ['libc6']}
-    assert file_state[10] == file_state.transferred == False
+    assert file_state[9] == file_state.dependencies == {'apt': ['libc6'], 'pip': ['bar']}
+    assert file_state[10] == file_state.location == '/simple'
+    assert file_state[11] == file_state.transferred == False
 
 
 def test_file_state_transferred(file_state):

@@ -97,7 +97,7 @@ def file_state(request, file_content):
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
         h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
-        '>=3', {'apt': ['libc6']})
+        '>=3', {'apt': ['libc6'], 'pip': ['bar']})
 
 
 @pytest.fixture()
@@ -107,7 +107,7 @@ def file_state_hacked(request, file_content):
     return FileState(
         'foo-0.1-cp34-cp34m-linux_armv6l.whl', len(file_content),
         h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv6l',
-        '>=3', {'apt': ['libc6']}, transferred=True)
+        '>=3', {'apt': ['libc6'], 'pip': ['bar']}, transferred=True)
 
 
 @pytest.fixture()
@@ -118,11 +118,11 @@ def file_states_deps(request, file_content):
         FileState(
             'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(file_content),
             h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
-            '>=3', {'apt': ['libc', 'libfoo4']}),
+            '>=3', {'apt': ['libc', 'libfoo4'], 'pip': ['bar']}),
         FileState(
             'foo-0.1-cp35-cp35m-linux_armv7l.whl', len(file_content),
             h.hexdigest().lower(), 'foo', '0.1', 'cp35', 'cp35m', 'linux_armv7l',
-            '>=3', {'apt': ['libc', 'libfoo5']}),
+            '>=3', {'apt': ['libc', 'libfoo5'], 'pip': ['bar']}),
     ]
 
 
@@ -172,10 +172,12 @@ def project_data(request, build_state_hacked):
                         'abi_builder': bsh.abi_tag,
                         'abi_file': fs.abi_tag,
                         'apt_dependencies': set(fs.dependencies['apt']),
+                        'pip_dependencies': set(fs.dependencies['pip']),
                         'hash': fs.filehash,
                         'platform': fs.platform_tag,
                         'requires_python': fs.requires_python,
                         'size': fs.filesize,
+                        'location': '/simple',
                     }
                     for fs in bsh.files.values()
                 },

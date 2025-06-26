@@ -477,6 +477,7 @@ class Database:
                             file.abi_tag,
                             file.platform_tag,
                             file.requires_python,
+                            file.location,
                         )
                         for file in build.files.values()],
                         [(
@@ -664,6 +665,8 @@ class Database:
                     for wheel in release['files'].values():
                         wheel['apt_dependencies'] = set(
                             wheel['apt_dependencies'])
+                        wheel['pip_dependencies'] = set(
+                            wheel['pip_dependencies'])
                 return data
 
     @rpc('GETSKIP')

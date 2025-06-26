@@ -315,6 +315,7 @@ class TheScribe(tasks.PauseableTask):
             parse_version(version): vers_data
             for version, vers_data in data['releases'].items()
             if version not in exclude
+            if parse_version(version)
         }
         data['releases'] = {
             version: vers_data
@@ -366,11 +367,12 @@ class TheScribe(tasks.PauseableTask):
         files = [
             {
                 'filename': filename,
+                'file_url': _make_file_url(package, filename, file_data['location']),
                 'filehash': file_data['hash'],
                 'requires_python': file_data['requires_python'],
                 'yanked': vers_data['yanked'],
             }
-            for vers, vers_data in data['releases'].items()
+            for vers_data in data['releases'].values()
             for filename, file_data in vers_data['files'].items()
         ]
 
@@ -432,6 +434,11 @@ class TheScribe(tasks.PauseableTask):
         """
         self.logger.info('writing project page for %s', package)
 
+        # Add the file url for each file based on the location
+        for vers_data in data['releases'].values():
+            for filename, file_data in vers_data['files'].items():
+                file_data['file_url'] = _make_file_url(package, filename, file_data['location'])
+
         # This horribly confusing loop simply serves to efficiently extract
         # the apt_dependencies from the latest successful build, which is
         # reported (by default) as the dependencies at the top of the project
@@ -439,11 +446,13 @@ class TheScribe(tasks.PauseableTask):
         # just too horrid to do nicely there. We *could* resort to javascript
         # picking the dependencies from the first row of the table, but that
         # then denies non-JS browsers (or search engines) any dependency info
-        dependencies = set()
+        apt_dependencies = set()
+        pip_dependencies = set()
         for version, release in data['releases'].items():
             if not (version.is_prerelease or release['yanked']):
-                for filedata in release['files'].values():
-                    dependencies = filedata['apt_dependencies']
+                for filename, filedata in release['files'].items():
+                    apt_dependencies = filedata['apt_dependencies']
+                    pip_dependencies = filedata['pip_dependencies']
                     break
                 else:
                     continue
@@ -474,7 +483,6 @@ class TheScribe(tasks.PauseableTask):
 
         project_dir = self.output_path / 'project' / package
         mkdir_override_symlink(project_dir)
-        dt = datetime.now(tz=UTC)
         with AtomicReplaceFile(project_dir / 'index.html', encoding='utf-8') as index:
             index.file.write(
                 self.templates['project'](
@@ -485,7 +493,8 @@ class TheScribe(tasks.PauseableTask):
                     page='project',
                     package=package,
                     releases=data['releases'],
-                    dependencies=dependencies,
+                    apt_dependencies=apt_dependencies,
+                    pip_dependencies=pip_dependencies,
                     format_size=format_size,
                     known_abis=known_abis,
                     all_abis=all_abis))
@@ -560,6 +569,7 @@ class TheScribe(tasks.PauseableTask):
                     'skip_reason': vers_data['skip'],
                     'files': {
                         filename: {
+                            'file_url': _make_file_url(package, filename, file_data['location']),
                             'filehash': file_data['hash'],
                             'filesize': file_data['size'],
                             'builder_abi': file_data['abi_builder'],
@@ -567,6 +577,7 @@ class TheScribe(tasks.PauseableTask):
                             'platform': file_data['platform'],
                             'requires_python': file_data['requires_python'],
                             'apt_dependencies': sorted(file_data['apt_dependencies']),
+                            'pip_dependencies': sorted(file_data['pip_dependencies']),
                         }
                         for filename, file_data in vers_data['files'].items()
                     },
@@ -682,12 +693,19 @@ def grouper(iterable, n, fillvalue=None):
 
 
 def parse_version(s):
-    v = pkg_resources.parse_version(s)
+    try:
+        v = pkg_resources.parse_version(s)
+    except:
+        return
     # Keep a reference to the original string as otherwise it's unrecoverable;
     # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
     # parsed variant will fail
     v.original = s
     return v
+
+
+def _make_file_url(package, filename, location):
+    return f"{location}/{package}/{filename}"
 
 
 class AtomicReplaceFile:
