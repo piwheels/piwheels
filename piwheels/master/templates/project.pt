@@ -15,13 +15,18 @@
     <section>
       <div class="content">
         <h2 id="package" data-package="${package}">${title}</h2>
-        <p>${description}</p>
+        <p id="description">${description}</p>
 
         <h3 id="install">Installation</h3>
         <p>In a virtualenv (see <a href="/faq.html#venv">these instructions if you need to create one</a>):</p>
-        <pre tal:condition="dependencies">sudo apt install ${' '.join(dependencies)}
+        <pre tal:condition="apt_dependencies" id="install-command">sudo apt install ${' '.join(apt_dependencies)}
 pip3 install ${package}</pre>
-        <pre tal:condition="not dependencies">pip3 install ${package}</pre>
+        <pre tal:condition="not apt_dependencies" id="install-command">pip3 install ${package}</pre>
+        <h3 id="dependencies">Dependencies</h3>
+        <ul id="pipdeps">
+          <li tal:repeat="pkg pip_dependencies"><a href="/project/${pkg}/">${pkg}</a></li>
+          <li tal:condition="not pip_dependencies">None</li>
+        </ul>
       </div>
 
       <div class="sidebar">
@@ -60,7 +65,7 @@ pip3 install ${package}</pre>
     <section>
       <div class="content">
         <h3 id="releases">Releases</h3>
-        <table tal:condition="releases">
+        <table id="releases-table" tal:condition="releases">
           <thead>
             <tr>
               <th>Version</th>
@@ -71,21 +76,21 @@ pip3 install ${package}</pre>
             </tr>
           </thead>
           <tbody>
-            <span tal:omit-tag="1" tal:repeat="(version, vers_data) releases.items()">
-              <tr>
+            <span tal:omit-tag="1" tal:repeat="(version, release) releases.items()">
+              <tr class="release-info">
                 <td>
                   ${version.original}
                   <span tal:condition="version.is_prerelease" class="prerelease">pre-release</span>
-                  <span tal:condition="vers_data.yanked" class="yanked">yanked</span>
+                  <span tal:condition="release.yanked" class="yanked">yanked</span>
                 </td>
-                <td title="${vers_data.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${vers_data.released.strftime('%Y-%m-%d')}</td>
+                <td title="${release.released.strftime('%Y-%m-%d %H:%M:%S %Z')}">${release.released.strftime('%Y-%m-%d')}</td>
                 <span tal:repeat="abi all_abis" tal:omit-tag="1">
-                  <td tal:define="abi_data vers_data.abis.get(abi, None)"
+                  <td tal:define="abi_data release.abis.get(abi, None)"
                       class="${abi_data.status if abi_data else 'error'}" title="${{
                         'pending': 'Build pending',
                         'fail':    'Build failed',
                         'success': 'Build succeeded',
-                        'skip':    'Skipped: ' + vers_data.skip,
+                        'skip':    'Skipped: ' + release.skip,
                         'error':   'Unexpected error',
                       }[abi_data.status if abi_data else 'error']}"><a tal:condition="abi_data is not None and abi_data.build_id is not None"
                       href="/logs/${'/'.join(
@@ -95,11 +100,12 @@ pip3 install ${package}</pre>
                 </span>
                 <td></td>
               </tr>
-              <tr>
+              <tr class="files-info">
                 <td colspan="${len(all_abis) + 3}">
-                  <ul>
-                    <li tal:repeat="(filename, file_data) vers_data.files.items()"
-                       data-dependencies="${' '.join(file_data.apt_dependencies)}">
+                  <ul class="files">
+                    <li tal:repeat="(filename, file_data) release.files.items()"
+                      data-aptdependencies="${' '.join(file_data.apt_dependencies)}"
+                      data-pipdependencies="${' '.join(file_data.pip_dependencies)}">
                       <span>
                         <a href="${file_data.file_url}#sha256=${file_data.hash}">${filename}</a>
                         (${format_size(file_data.size)})
