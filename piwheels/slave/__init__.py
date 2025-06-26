@@ -176,8 +176,8 @@ terminated, either by Ctrl+C, SIGTERM, or by the remote piw-master script.
         os_name, os_version = info.get_os_name_version()
         msg, data = 'HELLO', [
             self.config.timeout, master_timeout,
-            interpreter_version(), platform.get_abi_tag(),
-            platform.get_platform(), self.config.label,
+            interpreter_version(), platform.ABI_TAG,
+            platform.PLATFORM_TAG, self.config.label,
             os_name, os_version,
             info.get_board_revision(), info.get_board_serial(),
         ]
