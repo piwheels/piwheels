@@ -44,7 +44,6 @@ from operator import itemgetter
 from collections import namedtuple
 from importlib.resources import files, as_file
 
-import packaging.version
 from chameleon import PageTemplateLoader
 import simplejson as json
 
@@ -52,6 +51,7 @@ from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
 from .the_oracle import DbClient
+from .version import parse_version
 
 UTC = timezone.utc
 
@@ -323,7 +323,6 @@ class TheScribe(tasks.PauseableTask):
             parse_version(version): vers_data
             for version, vers_data in data['releases'].items()
             if version not in exclude
-            if parse_version(version)
         }
         data['releases'] = {
             version: vers_data
@@ -694,15 +693,6 @@ def grouper(iterable, n, fillvalue=None):
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
-
-
-def parse_version(s):
-    v = packaging.version.parse(s)
-    # Keep a reference to the original string as otherwise it's unrecoverable;
-    # e.g. 0.1a parses to 0.1a0. As this is different, keyed lookups with the
-    # parsed variant will fail
-    v.original = s
-    return v
 
 
 def _make_file_url(package, filename, location):
