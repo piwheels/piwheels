@@ -1,73 +1,23 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+name: Run Tests in Docker
 
-name: piwheels-test-suite
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+on: [push, pull_request]
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            python: "3.9"
-            python-req: requirements_bullseye.txt
-            python-apt: 2.0.0
-            python-pip: 20.3.4
-            experimental: false
-          - os: ubuntu-22.04
-            python: "3.11"
-            python-req: requirements_bookworm.txt
-            python-apt: 2.3.0
-            python-pip: 23.0.1
-            experimental: false
+    runs-on: ubuntu-latest
 
-    runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental }}
     steps:
-      - name: Install Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
+      - name: Check out code
+        uses: actions/checkout@v3
 
-      - name: Start PostgreSQL
-        run: |
-          sudo systemctl start postgresql.service
-          pg_isready
+      - name: Build container images
+        run: docker compose build db test-bullseye test-bookworm
 
-      - name: Create PostgreSQL user and database
-        run: |
-          sudo -u postgres psql -c "alter user postgres with password 'postgres'"
-          sudo -u postgres psql -c "create user piwheels password 'piwheels'" -c "\du"
-          sudo -u postgres psql -c "create database piwheels_test" -c "\l"
+      - name: Run tests on Debian Bullseye (Python 3.9)
+        run: docker compose run --rm test-bullseye
 
-      - name: Checkout piwheels
-        uses: actions/checkout@v4
+      - name: Run tests on Debian Bookworm (Python 3.11)
+        run: docker compose run --rm test-bookworm
 
-      - name: Install dependencies
-        run: |
-          sudo sed -i -e '/^deb / { h; p; g; s/^deb /deb-src /; }' /etc/apt/sources.list
-          sudo apt update
-          sudo apt build-dep -y python3-apt
-          git clone -b $(echo ${{ matrix.python-apt }} | sed -e 's/~/_/') https://salsa.debian.org/apt-team/python-apt.git
-          pushd python-apt
-          DEBVER=${{ matrix.python-apt }} python setup.py install --user
-          popd
-          python -m pip install --user pip==${{ matrix.python-pip }}
-          python -m pip install --user -r ${{ matrix.python-req }}
-          make develop
-
-      - name: Run tests
-        env:
-          PIWHEELS_HOST: localhost
-          PIWHEELS_SUPERPASS: postgres
-        run: |
-          make test
+      - name: Shut down services
+        run: docker compose down
