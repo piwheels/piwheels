@@ -7,6 +7,8 @@ PYTEST ?= $(if $(shell which pytest),pytest,pytest-3)
 TWINE ?= twine
 PYFLAGS ?=
 DEST_DIR ?= /
+DOC_HTML ?= docs/build/html
+DOC_REQS=rtd_requirements.txt
 
 # Find the location of python-apt (only packaged for apt, not pip)
 PYTHON_APT:=$(wildcard /usr/lib/python3/dist-packages/apt) \
@@ -53,6 +55,8 @@ all:
 	@echo "make develop - Install symlinks for development"
 	@echo "make test - Run tests"
 	@echo "make doc - Generate HTML and PDF documentation"
+	@echo "make doc-serve - Serve the docs locally"
+	@echo "make doc-reqs - Generate requirements file for RTD"
 	@echo "make source - Create source package"
 	@echo "make wheel - Generate a PyPI wheel package"
 	@echo "make zip - Generate a source zip package"
@@ -71,6 +75,13 @@ doc: $(DOC_SOURCES)
 	$(MAKE) -C docs epub
 	$(MAKE) -C docs latexpdf
 	$(MAKE) $(MAN_PAGES)
+
+doc-serve:
+	python -m http.server -d $(DOC_HTML)
+
+doc-reqs:
+	echo "." > $(DOC_REQS)
+	pip freeze | grep -i sphinx >> $(DOC_REQS)
 
 preview:
 	$(MAKE) -C docs preview
@@ -146,4 +157,4 @@ upload: $(DIST_TAR) $(DIST_WHEEL)
 	$(TWINE) check $(DIST_TAR) $(DIST_WHEEL)
 	$(TWINE) upload $(DIST_TAR) $(DIST_WHEEL)
 
-.PHONY: all install develop test doc source wheel zip tar dist clean tags release upload $(SUBDIRS)
+.PHONY: all install develop test doc doc-serve doc-reqs source wheel zip tar dist clean tags release upload $(SUBDIRS)
