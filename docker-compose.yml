@@ -106,6 +106,17 @@ services:
       - .:/app
     command: pytest-3 -vv
 
+  docs:
+    container_name: piwheels-docs
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docs
+    volumes:
+      - .:/app
+    command: sh -c "make -C docs html && python3 -m http.server 80 -d build/html"
+    ports:
+      - "8081:80"
+
 volumes:
   db_data:
   www_data:
