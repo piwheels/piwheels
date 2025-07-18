@@ -52,7 +52,7 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     libsnappy-dev libpcap0.8-dev swig libzmq5 portaudio19-dev libqpdf-dev \
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV \
-    $QMAKE $FPRINT $libgphoto2-dev $LIBLGPIO libsqlite3-dev libsqlcipher-dev \
+    $QMAKE $FPRINT libgphoto2-dev $LIBLGPIO libsqlite3-dev libsqlcipher-dev \
     ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev
 
 apt purge python3-cryptography python3-yaml -y
