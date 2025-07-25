@@ -39,9 +39,9 @@ from collections import namedtuple, OrderedDict
 from html.parser import HTMLParser
 from threading import Event
 from datetime import datetime, timedelta, timezone
+from importlib.resources import files, as_file
 
 import pytest
-from pkg_resources import resource_listdir
 
 from piwheels import const, protocols, transport
 from piwheels.states import MasterStats
@@ -166,7 +166,9 @@ def test_scribe_first_start(db_queue, task, master_config):
     assert (root / 'simple' / 'index.html').exists()
     assert contains_elem(root / 'simple' / 'index.html', 'a', [('href', 'foo')])
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
-    for filename in resource_listdir('piwheels.master.the_scribe', 'static'):
+    static_dir = files('piwheels.master').joinpath('static')
+    for entry in static_dir.iterdir():
+        filename = entry.name
         if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
@@ -184,7 +186,9 @@ def test_scribe_second_start(db_queue, task, master_config):
     task.once()
     db_queue.check()
     assert (root / 'simple').exists() and (root / 'simple').is_dir()
-    for filename in resource_listdir('piwheels.master.the_scribe', 'static'):
+    static_dir = files('piwheels.master').joinpath('static')
+    for entry in static_dir.iterdir():
+        filename = entry.name
         if filename not in {'index.html', 'project.html', 'stats.html'}:
             assert (root / filename).exists() and (root / filename).is_file()
 
