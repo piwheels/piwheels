@@ -4,7 +4,7 @@ RUN apt update
 RUN apt install -y python3 python3-pip python3-setuptools python3-wheel python3-packaging \
     python3-configargparse python3-zmq python3-voluptuous python3-cbor2 python3-dateutil \
     python3-pytest python3-pytest-cov python3-apt python3-requests python3-psycopg2 \
-    python3-chameleon python3-simplejson python3-pygeoip
+    python3-chameleon python3-simplejson python3-pygeoip python3-bs4
 RUN addgroup --system piwheels && adduser --system --ingroup piwheels piwheels
 
 COPY . /app
