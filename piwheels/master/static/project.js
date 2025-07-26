@@ -84,24 +84,47 @@
   }
 
   function showInstall(ev) {
+    // apt dependencies
     const install = document.querySelector('#install');
     const pre = document.querySelector('#install + p + pre');
     const project = document.getElementById('package').textContent;
-    const dependencies = this.parentNode.dataset.dependencies;
+    const aptDeps = this.parentNode.dataset.aptdependencies;
     const version = this
-      .parentElement
-      .parentElement
-      .parentElement
-      .parentElement
-      .previousElementSibling
-      .firstElementChild
-      .textContent
-      .trim();
-
+    .parentElement
+    .parentElement
+    .parentElement
+    .parentElement
+    .previousElementSibling
+    .firstElementChild
+    .textContent
+    .trim();
+    
     let commands = `pip3 install ${project}==${version}`;
-    if (dependencies.length)
-      commands = `sudo apt install ${dependencies}\r\n` + commands;
+    if (aptDeps.length) {
+      commands = `sudo apt install ${aptDeps}\r\n` + commands;
+    }
     pre.textContent = commands;
+    
+    // pips dependencies
+    const pipDepsList = document.querySelector('#pipdeps');
+    const pipDeps = this.parentNode.dataset.pipdependencies;
+    pipDepsList.innerHTML = '';
+    if (pipDeps.length === 0) {
+      const emptyList = document.createElement('li');
+      emptyList.textContent = 'None';
+      pipDepsList.appendChild(emptyList);
+    }
+    else {
+      for (const dep of pipDeps.split(' ')) {
+        const depItem = document.createElement('li');
+        const depLink = document.createElement('a');
+        depLink.href = `/project/${dep}/`;
+        depLink.textContent = dep;
+        depItem.appendChild(depLink);
+        pipDepsList.appendChild(depItem);
+      }
+    }
+
     install.scrollIntoView({behavior: "smooth"});
   }
 

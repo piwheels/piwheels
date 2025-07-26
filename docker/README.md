@@ -58,7 +58,7 @@ docker compose run --rm test-bookworm
 And on Debian Bullseye (Python 3.9) with:
  
 ```console
-docker compose run --rm test-bookworm
+docker compose run --rm test-bullseye
 ```
 
 ## Shell into a container

@@ -40,7 +40,6 @@ Contains the functions that implement the :program:`piw-import` script.
 
 import sys
 import logging
-from datetime import timedelta
 from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
@@ -116,7 +115,7 @@ registered as produced by a *single* build.
         apt_dependencies = config.dependencies.read().split()
         dependencies = {'apt': apt_dependencies}
     else:
-        dependencies = {}
+        dependencies = {'apt': []}
     # NOTE: If any of the files are unreadable, this'll fail (it attempts
     # to calculate the hash of the file which requires reading it)
     packages = [
@@ -162,7 +161,7 @@ def print_state(state):
     """
     file = next(iter(state.files.values()))
     if file.dependencies:
-        dependencies = file.dependencies['apt']
+        dependencies = file.dependencies
     else:
         dependencies = set()
 
