@@ -667,7 +667,6 @@ def test_builder_calc_apt_dependencies(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        print(b.wheels)
         assert b.wheels[0].apt_dependencies == {
             'libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'
         }

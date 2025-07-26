@@ -600,11 +600,8 @@ class Builder(Thread):
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
                         wheel = Wheel(path)
-                        print("START")
                         self.calc_apt_dependencies(wheel)
-                        print("END")
                         self._wheels.append(wheel)
-                        print("DONE")
                 except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
                     self.stop()
                     log_file.seek(0, os.SEEK_END)
