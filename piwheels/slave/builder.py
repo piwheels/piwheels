@@ -269,8 +269,8 @@ class Wheel:
         that system.
         """
         return {
-            'apt': sorted(self.apt_dependencies),
-            'pip': sorted(self.pip_dependencies),
+            'apt': list(self.apt_dependencies),
+            'pip': list(self.pip_dependencies),
         }
 
     @property
