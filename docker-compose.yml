@@ -82,7 +82,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-    command: pytest -vvx
+    command: pytest -vv
 
   test-bullseye:
     container_name: piwheels-test-bullseye
