@@ -41,6 +41,8 @@ from pathlib import Path
 from queue import Queue, Empty
 from html.parser import HTMLParser
 
+from requests import Session
+
 from .. import __version__, terminal, const
 
 
@@ -80,26 +82,33 @@ master is active, deletions may cause false negatives.
         "corrupted wheels will be written; warning: this is an extremely "
         "slow operation on a full index which is avoided if this option is "
         "not specified")
+    parser.add_argument(
+        '--verify-external-links', action='store_true',
+        help="If specified, the script will verify that all external links"
+        "exist")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
 
     logging.info("PiWheels Audit version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
-    check_simple_index(config)
+    session = None
+    if config.verify_external_links:
+        session = Session()
+    check_simple_index(config, session)
 
 
-def check_simple_index(config):
+def check_simple_index(config, session):
     logging.info('checking simple index')
     path = config.output_path / 'simple'
     index = path / 'index.html'
     try:
         for href, text in parse_links(index):
-            check_package_index(config, href)
+            check_package_index(config, href, session)
     except OSError as exc:
         report_missing(config, 'simple index', index)
 
 
-def check_package_index(config, package):
+def check_package_index(config, package, session):
     logging.info('checking %s', package)
     path = config.output_path / 'simple' / package
     index = path / 'index.html'
@@ -116,8 +125,16 @@ def check_package_index(config, package):
             for href, text in parse_links(index):
                 file_url, filehash = href.rsplit('#', 1)
                 if file_url.startswith('http'):
-                    logging.warning(
-                        'ignoring external link %s in package index', file_url)
+                    if config.verify_external_links:
+                        response = session.head(file_url)
+                        if response.status_code != 200:
+                            report_missing(config, 'external link', file_url)
+                            logging.warning(
+                                'external link %s returned %d',
+                                file_url, response.status_code)
+                    else:
+                        logging.warning(
+                            'ignoring external link %s in package index', file_url)
                     continue
                 filename = file_url.split('/')[-1]
                 try:
