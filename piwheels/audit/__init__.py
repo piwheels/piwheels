@@ -114,11 +114,12 @@ def check_package_index(config, package):
             report_missing(config, 'package index', index)
         else:
             for href, text in parse_links(index):
-                filename, filehash = href.rsplit('#', 1)
-                if filename.startswith('http'):
+                file_url, filehash = href.rsplit('#', 1)
+                if file_url.startswith('http'):
                     logging.warning(
-                        'ignoring external link %s in package index', filename)
+                        'ignoring external link %s in package index', file_url)
                     continue
+                filename = file_url.split('/')[-1]
                 try:
                     all_files.remove(path / filename)
                 except KeyError:
