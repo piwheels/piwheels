@@ -115,6 +115,10 @@ def check_package_index(config, package):
         else:
             for href, text in parse_links(index):
                 filename, filehash = href.rsplit('#', 1)
+                if filename.startswith('http'):
+                    logging.warning(
+                        'ignoring external link %s in package index', filename)
+                    continue
                 try:
                     all_files.remove(path / filename)
                 except KeyError:
