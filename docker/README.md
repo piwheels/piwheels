@@ -1,10 +1,10 @@
 # Docker setup
 
-You can set up piwheels for local development within Docker containers with:
+You can set up and run a piwheels instance for local development within Docker containers with:
 
 ```console
 docker compose build
-docker compose up
+docker compose up master web
 ```
 
 Then once the master is running, you should see the piwheels homepage at http://localhost:8080
@@ -19,10 +19,10 @@ Alternatively, we can restore the DB from a selective data-only DB dump from the
 the CSVs from piwheelsdb:
 
 ```console
-scp piwheelsdb:/tmp/csv/"*".csv docker/csv/
+scp piwheelsdb:/tmp/csv/\*.csv docker/csv/
 ```
 
-The `initdb` service must be run before restoring from live.
+The `initdb` service must have been run on the same version as live before restoring from live.
 
 Make sure the `db` service is up but the master is not running, and run one of the following
 commands.
@@ -52,13 +52,13 @@ docker exec -it piwheels-db bash -c "su - postgres -c 'psql piwheels'"
 Run tests on Debian Bookworm (Python 3.11) with:
  
 ```console
-docker compose run --rm test-bookworm
+docker compose build test-bookworm && docker compose run --rm test-bookworm
 ```
 
 And on Debian Bullseye (Python 3.9) with:
  
 ```console
-docker compose run --rm test-bookworm
+docker compose build test-bullseye && docker compose run --rm test-bullseye
 ```
 
 ## Shell into a container
