@@ -79,6 +79,7 @@ files specified on the command line.
     packages = db.get_all_packages()
     audit_packages(config, packages)
     audit_extras(config, packages)
+    remove_broken_symlinks(config)
 
 def audit_packages(config, packages):
     """
@@ -116,11 +117,25 @@ def audit_extras(config, packages):
     extra_project_dirs = project_dirs - packages
     report_extra_dirs(config, "project directory", extra_project_dirs)
 
+def remove_broken_symlinks(config):
+    project_dir = config.output_path / 'project'
+    symlinks = get_symlinks(project_dir)
+    for link in symlinks:
+        if not link.exists():
+            logging.warning('removing broken symlink %s', link)
+            link.unlink()
+
 def get_dirs(parent):
     """
     Return all directories within the given parent directory
     """
     return {d for d in parent.iterdir() if d.is_dir()}
+
+def get_symlinks(parent):
+    """
+    Return all symlinks within the given parent directory
+    """
+    return {s for s in parent.iterdir() if s.is_symlink()}
 
 def report_extra_dirs(config, label, extra_dirs):
     for path in sorted(extra_dirs):
