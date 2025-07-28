@@ -99,24 +99,42 @@ cause false negatives.
         '--verify-external-links', action='store_true',
         help="If specified, the script will verify that all external links"
         "exist")
+    parser.add_argument(
+        '--master-url', metavar='URL',
+        help="If specified, the audit will assume to be running on a secondary " 
+        "archive server, rather than the master, and will attempt to verify "
+        "the state of the files on the archive server, as specified in the "
+        "simple index for the package on the master.")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
+
+    if config.verify_external_links and config.master_url:
+        logging.error(
+            'Cannot run with both --verify-external-links and --master-url')
+        sys.exit(1)
+    
+    if config.master_url:
+        config.master_url = config.master_url.removesuffix('/')
 
     logging.info("PiWheels Audit package version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
     config.package = canonicalize_name(config.package)
     check_package_index(config)
 
-
 def check_package_index(config):
     logging.info('checking %s', config.package)
-    simple_pkg_dir = config.output_path / 'simple' / config.package
-    index = simple_pkg_dir / 'index.html'
-    
-    if config.verify_external_links:
+
+    if config.verify_external_links or config.master_url:
         session = Session()
     else:
         session = None
+
+    simple_pkg_dir = config.output_path / 'simple' / config.package
+    if config.master_url:
+        html = fetch_master_package_index(config, session)
+    else:
+        index_file = simple_pkg_dir / 'index.html'
+        html = index_file.read_text(encoding='utf-8')
 
     try:
         all_files = set(simple_pkg_dir.iterdir())
@@ -124,13 +142,14 @@ def check_package_index(config):
         report_missing(config, 'package dir', simple_pkg_dir)
         return
     
-    try:
-        all_files.remove(index)
-    except KeyError:
-        report_missing(config, 'package index', index)
-        return
-    
-    for href in parse_links(config):
+    if not config.master_url:
+        try:
+            all_files.remove(index_file)
+        except KeyError:
+            report_missing(config, 'package index', index_file)
+            return
+
+    for href in parse_links(html):
         file_url, filehash = href.rsplit('#', 1)
         if file_url.startswith('http'):
             verify_external_link(file_url, session, config)
@@ -151,7 +170,22 @@ def check_package_index(config):
     aliases = db.get_package_aliases(config.package)
     check_project_symlinks(config, aliases)
 
+def fetch_master_package_index(config, session):
+    """
+    Fetch the package index from the master server and return its HTML content
+    """
+    simple_pkg_index = f"{config.master_url}/simple/{config.package}/index.html"
+    response = session.get(simple_pkg_index)
+    if response.status_code != 200 or not response.text:
+        report_missing(config, 'master package index', simple_pkg_index)
+        sys.exit(1)
+    return response.text
+
 def verify_external_link(file_url, session, config):
+    """
+    Verify that an external link exists by making a HEAD request to the URL. If
+    verify_external_links is not set, this will log a warning instead.
+    """
     if config.verify_external_links:
         response = session.head(file_url)
         if response.status_code != 200:
@@ -186,6 +220,9 @@ def check_project_symlinks(config, aliases):
             alias_path.symlink_to(canon_project_dir)
 
 def check_wheel_hash(config, filename, filehash):
+    """
+    Verify the hash of a wheel file against the expected hash
+    """
     logging.info('checking %s/%s', config.package, filename)
     algorithm, filehash = filehash.rsplit('=', 1)
     wheel = config.output_path / 'simple' / config.package / filename
@@ -219,9 +256,7 @@ class LinkExtractor(HTMLParser):
                     self.links.add(value)
 
 
-def parse_links(config):
-    index_file = config.output_path / 'simple' / config.package / 'index.html'
-    html = index_file.read_text(encoding='utf-8')
+def parse_links(html):
     parser = LinkExtractor()
     parser.feed(html)
     return parser.links
