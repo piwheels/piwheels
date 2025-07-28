@@ -73,6 +73,11 @@ cause false negatives.
         metavar='PACKAGE',
         help="The name of the package to audit")
     parser.add_argument(
+        '-d', '--dsn', default=const.DSN,
+        help="The database to use; this database must be configured with "
+        "piw-initdb and the user should *not* be a PostgreSQL superuser "
+        "(default: %(default)s)")
+    parser.add_argument(
         '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
         help="The path under which the website has been written; must be "
         "readable by the current user")
@@ -142,7 +147,7 @@ def check_package_index(config):
     for filename in all_files:
         report_extra(config, 'file', simple_pkg_dir / filename)
 
-    db = Database("postgresql:///piwheels")  # TODO: use config
+    db = Database(config.dsn)
     aliases = db.get_package_aliases(config.package)
     check_project_symlinks(config, aliases)
 

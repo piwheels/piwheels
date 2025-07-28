@@ -59,6 +59,11 @@ or extraneous directories will be reported to the console and optionally to
 files specified on the command line.
 """)
     parser.add_argument(
+        '-d', '--dsn', default=const.DSN,
+            help="The database to use; this database must be configured with "
+            "piw-initdb and the user should *not* be a PostgreSQL superuser "
+            "(default: %(default)s)")
+    parser.add_argument(
         '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
         help="The path under which the website has been written; must be "
         "readable by the current user")
@@ -75,7 +80,7 @@ files specified on the command line.
 
     logging.info("PiWheels Audit version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
-    db = Database("postgresql:///piwheels") # TODO: use config
+    db = Database(config.dsn)
     packages = sorted(db.get_all_packages())
     audit_packages(config, packages)
     audit_extras(config, packages)
