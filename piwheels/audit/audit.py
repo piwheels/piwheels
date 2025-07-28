@@ -76,7 +76,7 @@ files specified on the command line.
     logging.info("PiWheels Audit version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
     db = Database("postgresql:///piwheels") # TODO: use config
-    packages = db.get_all_packages()
+    packages = sorted(db.get_all_packages())
     audit_packages(config, packages)
     audit_extras(config, packages)
     remove_broken_symlinks(config)
