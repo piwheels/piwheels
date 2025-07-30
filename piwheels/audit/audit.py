@@ -82,7 +82,7 @@ files specified on the command line.
     config.output_path = Path(os.path.expanduser(config.output_path))
     db = Database(config.dsn)
     packages = sorted(db.get_all_packages())
-    logger.warning("Found %d packages", len(packages))
+    logging.warning(f"Found {len(packages:,)} packages")
     audit_expected_packages(config, packages)
     audit_extra_packages(config, packages)
     remove_broken_symlinks(config)
