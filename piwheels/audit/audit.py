@@ -92,7 +92,7 @@ def audit_expected_packages(config, packages):
     Audit the given packages to ensure that the simple and project
     indexes exist
     """
-    logger.warning("Auditing expected package directories")
+    logging.warning("Auditing expected package directories")
     simple = config.output_path / "simple"
     project = config.output_path / "project"
 
@@ -102,7 +102,7 @@ def audit_expected_packages(config, packages):
         if not simple_index.exists():
             missing_simple.add(pkg)
             report_missing(config, 'simple', simple_dir)
-        
+
         proj_dir = project / pkg
         proj_index = proj_dir / "index.html"
         proj_json_dir = proj_dir / "json"
@@ -114,7 +114,7 @@ def audit_extra_packages(config, packages):
     """
     Audit the simple and project directories for extraneous directories
     """
-    logger.warning("Auditing extra packages")
+    logging.warning("Auditing extra packages")
     simple_dirs = get_dirs(config.output_path / "simple")
     extra_simple_dirs = simple_dirs - packages
     report_extra_dirs(config, "simple directory", extra_simple_dirs)
@@ -123,7 +123,7 @@ def audit_extra_packages(config, packages):
     report_extra_dirs(config, "project directory", extra_project_dirs)
 
 def remove_broken_symlinks(config):
-    logger.warning("Removing broken project page symlinks")
+    logging.warning("Removing broken project page symlinks")
     project_dir = config.output_path / 'project'
     symlinks = get_symlinks(project_dir)
     for link in symlinks:
