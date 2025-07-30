@@ -82,6 +82,10 @@ cause false negatives.
         help="The path under which the website has been written; must be "
         "readable by the current user")
     parser.add_argument(
+        '--hashes', action='store_true',
+        help="If specified, the script will verify that wheel hashes are as "
+        "expected")
+    parser.add_argument(
         '--extras-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all extraneous "
         "filenames (files which shouldn't exist, but do) will be written")
@@ -101,7 +105,7 @@ cause false negatives.
         "exist.")
     parser.add_argument(
         '--verify-external-links', action='store_true',
-        help="If specified, the script will verify that all external links"
+        help="If specified, the script will verify that all external links "
         "exist")
     parser.add_argument(
         '--master-url', metavar='URL',
@@ -164,7 +168,7 @@ def check_package_index(config):
         except KeyError:
             report_missing(config, 'wheel', simple_pkg_dir / filename)
         else:
-            if config.broken:
+            if config.hashes:
                 check_wheel_hash(config, filename, filehash)
 
     for filename in all_files:
