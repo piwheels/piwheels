@@ -96,6 +96,10 @@ cause false negatives.
         "slow operation on a full index which is avoided if this option is "
         "not specified")
     parser.add_argument(
+        '--ensure-project-symlinks', action='store_true',
+        help="If specified, the script will ensure that all alias symlinks "
+        "exist.")
+    parser.add_argument(
         '--verify-external-links', action='store_true',
         help="If specified, the script will verify that all external links"
         "exist")
@@ -196,28 +200,22 @@ def verify_external_link(file_url, session, config):
         
 def check_project_symlinks(config, aliases):
     """
-    Check that all project symlinks exist and are valid
+    Check that all project symlinks exist and are valid. If configured so,
+    ensure they point to the correct target.
     """
     project_dir = config.output_path / 'project'
     canon_project_dir = project_dir / config.package
     for alias in aliases:
         alias_path = project_dir / alias
-        if alias_path.exists():
-            if alias_path.is_symlink():
-                try:
-                    target = alias_path.resolve()
-                except OSError:
-                    report_broken(config, 'project symlink', alias_path)
-                    continue
-                if target != canon_project_dir:
-                    report_broken(config, 'project symlink target', alias_path)
+        target = alias_path.resolve()
+        if target != canon_project_dir:
+            if config.ensure_project_symlinks:
+                logging.warning(
+                    'creating symlink %s to %s', alias, canon_project_dir)
+                alias_path.unlink()
+                alias_path.symlink_to(canon_project_dir)
             else:
                 report_broken(config, 'project symlink', alias_path)
-        else:
-            logging.warning(
-                'creating symlink %s to %s',
-                alias, canon_project_dir)
-            alias_path.symlink_to(canon_project_dir)
 
 def check_wheel_hash(config, filename, filehash):
     """
