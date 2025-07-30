@@ -86,7 +86,7 @@ cause false negatives.
         help="If specified, the script will verify that wheel hashes are as "
         "expected")
     parser.add_argument(
-        '--extras-file', metavar='FILE', type=argparse.FileType('w'),
+        '--extra-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all extraneous "
         "filenames (files which shouldn't exist, but do) will be written")
     parser.add_argument(
