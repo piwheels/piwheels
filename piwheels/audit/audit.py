@@ -38,7 +38,7 @@ import logging
 import argparse
 from pathlib import Path
 
-from . import report_missing, report_extra
+from . import report_missing, report_extra, report_broken
 from .. import __version__, terminal, const
 from ..master.db import Database
 
@@ -68,13 +68,27 @@ files specified on the command line.
         help="The path under which the website has been written; must be "
         "readable by the current user")
     parser.add_argument(
-        '-e', '--extraneous', metavar='FILE', type=argparse.FileType('w'),
-        help="If specified, the path of a file to which all extraneous "
-        "filenames (files which shouldn't exist, but do) will be written")
+        '-m', '--missing', action='store_true',
+        help="Audit missing package directories")
     parser.add_argument(
-        '-m', '--missing', metavar='FILE', type=argparse.FileType('w'),
-        help="If specified, the path of a file to which all missing "
-        "filenames (files which should exist, but don't) will be written")
+        '--missing-file', metavar='FILE', type=argparse.FileType('w'),
+        help="If specified, the path of a file to which all missing or "
+        "incomplete directories will be written")
+    parser.add_argument(
+        '-e', '--extra', action='store_true',
+        help="Audit extraneous project directories")
+    parser.add_argument(
+        '--extra-file', metavar='FILE', type=argparse.FileType('w'),
+        help="If specified, the path of a file to which all extraneous "
+        "project directories (directories which shouldn't exist, but do) will "
+        "be written")
+    parser.add_argument(
+        '-b', '--broken-symlinks', action='store_true',
+        help="Audit broken project page symlinks")
+    parser.add_argument(
+        '--broken-file', metavar='FILE', type=argparse.FileType('w'),
+        help="If specified, the path of a file to which all broken symlinks "
+        "will be written")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
 
@@ -82,17 +96,20 @@ files specified on the command line.
     config.output_path = Path(os.path.expanduser(config.output_path))
     db = Database(config.dsn)
     packages = sorted(db.get_all_packages())
-    logging.warning(f"Found {len(packages:,)} packages")
-    audit_expected_packages(config, packages)
-    audit_extra_packages(config, packages)
-    remove_broken_symlinks(config)
+    logging.warning(f"Found {len(packages):,} packages")
+    if config.missing:
+        audit_missing_packages(config, packages)
+    if config.extra:
+        audit_extra_packages(config, packages)
+    if config.broken_symlinks:
+        audit_broken_symlinks(config)
 
-def audit_expected_packages(config, packages):
+def audit_missing_packages(config, packages):
     """
     Audit the given packages to ensure that the simple and project
     indexes exist
     """
-    logging.warning("Auditing expected package directories")
+    logging.warning("Auditing missing package directories")
     simple = config.output_path / "simple"
     project = config.output_path / "project"
 
@@ -100,7 +117,6 @@ def audit_expected_packages(config, packages):
         simple_dir = simple / pkg
         simple_index = simple_dir / "index.html"
         if not simple_index.exists():
-            missing_simple.add(pkg)
             report_missing(config, 'simple', simple_dir)
 
         proj_dir = project / pkg
@@ -122,14 +138,13 @@ def audit_extra_packages(config, packages):
     extra_project_dirs = project_dirs - packages
     report_extra_dirs(config, "project directory", extra_project_dirs)
 
-def remove_broken_symlinks(config):
-    logging.warning("Removing broken project page symlinks")
+def audit_broken_symlinks(config):
+    logging.warning("Auditing broken project page symlinks")
     project_dir = config.output_path / 'project'
     symlinks = get_symlinks(project_dir)
     for link in symlinks:
         if not link.exists():
-            logging.warning('removing broken symlink %s', link)
-            link.unlink()
+            report_broken(config, 'project', link)
 
 def get_dirs(parent):
     """

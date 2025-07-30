@@ -42,11 +42,11 @@ def report(file, prefix, label, path):
         file.write('\n')
 
 def report_missing(config, label, path):
-    report(config.missing, 'missing', label, path)
+    report(config.missing_file, 'missing', label, path)
 
 def report_extra(config, label, path):
-    report(config.extraneous, 'extraneous', label, path)
+    report(config.extra_file, 'extraneous', label, path)
 
 def report_broken(config, label, path):
-    report(config.broken, 'corrupted', label, path)
+    report(config.broken_file, 'corrupted', label, path)
 

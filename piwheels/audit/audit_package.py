@@ -82,15 +82,15 @@ cause false negatives.
         help="The path under which the website has been written; must be "
         "readable by the current user")
     parser.add_argument(
-        '-e', '--extraneous', metavar='FILE', type=argparse.FileType('w'),
+        '--extras-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all extraneous "
         "filenames (files which shouldn't exist, but do) will be written")
     parser.add_argument(
-        '-m', '--missing', metavar='FILE', type=argparse.FileType('w'),
+        '--missing-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all missing "
         "filenames (files which should exist, but don't) will be written")
     parser.add_argument(
-        '-b', '--broken', metavar='FILE', type=argparse.FileType('w'),
+        '--broken-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all filenames of "
         "corrupted wheels will be written; warning: this is an extremely "
         "slow operation on a full index which is avoided if this option is "
