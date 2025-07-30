@@ -82,17 +82,17 @@ files specified on the command line.
     config.output_path = Path(os.path.expanduser(config.output_path))
     db = Database(config.dsn)
     packages = sorted(db.get_all_packages())
-    audit_packages(config, packages)
-    audit_extras(config, packages)
+    logger.warning("Found %d packages", len(packages))
+    audit_expected_packages(config, packages)
+    audit_extra_packages(config, packages)
     remove_broken_symlinks(config)
 
-def audit_packages(config, packages):
+def audit_expected_packages(config, packages):
     """
     Audit the given packages to ensure that the simple and project
     indexes exist
     """
-    missing_simple = set()
-    missing_project = set()
+    logger.warning("Auditing expected package directories")
     simple = config.output_path / "simple"
     project = config.output_path / "project"
 
@@ -108,13 +108,13 @@ def audit_packages(config, packages):
         proj_json_dir = proj_dir / "json"
         proj_json_index = proj_json_dir / "index.json"
         if not (proj_index.exists() and proj_json_index.exists()):
-            missing_project.add(pkg)
             report_missing(config, 'project', proj_dir)
 
-def audit_extras(config, packages):
+def audit_extra_packages(config, packages):
     """
     Audit the simple and project directories for extraneous directories
     """
+    logger.warning("Auditing extra packages")
     simple_dirs = get_dirs(config.output_path / "simple")
     extra_simple_dirs = simple_dirs - packages
     report_extra_dirs(config, "simple directory", extra_simple_dirs)
@@ -123,6 +123,7 @@ def audit_extras(config, packages):
     report_extra_dirs(config, "project directory", extra_project_dirs)
 
 def remove_broken_symlinks(config):
+    logger.warning("Removing broken project page symlinks")
     project_dir = config.output_path / 'project'
     symlinks = get_symlinks(project_dir)
     for link in symlinks:
