@@ -50,7 +50,7 @@ from ..format import canonicalize_name
 
 def main(args=None):
     """
-    This is the main function for the :program:`piw-audit-package` script. It
+    This is the main function for the :program:`piw-audit-packages` script. It
     relies
     on nothing from the master application as this is intended to be used
     offline or on backups of the master.
@@ -60,18 +60,20 @@ def main(args=None):
         terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'audit'
     parser = terminal.configure_parser("""\
-The piw-audit-package script is intended to verify that the index generated
+The piw-audit-packages script is intended to verify that the index generated
 for a package's "simple" index are valid, i.e. that the files in the index file
 all exist and optionally that the hashes recorded in the sub-indexes match the
 files on disk; and that files on external servers can be verified. Note that the
 script is intended to be run offline; i.e. the master should preferably be shut
 down during operation of this script. If the master is active, deletions may
-cause false negatives.
+cause false negatives. Can be used to audit a number of given packages, or all
+packages in the index.
 """)
     parser.add_argument(
-        'package',
-        metavar='PACKAGE',
-        help="The name of the package to audit")
+        'packages',
+        metavar='PACKAGES',
+        nargs='*',
+        help="The names of the packages to audit")
     parser.add_argument(
         '-d', '--dsn', default=const.DSN,
         help="The database to use; this database must be configured with "
@@ -126,20 +128,27 @@ cause false negatives.
 
     logging.info("PiWheels Audit package version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
-    config.package = canonicalize_name(config.package)
-    check_package_index(config)
+    config.packages = [canonicalize_name(pkg) for pkg in config.packages]
+    db = Database(config.dsn)
+    if not config.packages:
+        config.packages = db.get_all_packages()
 
-def check_package_index(config):
-    logging.info('checking %s', config.package)
+    logging.info(f"Checking {len(config.packages):,} packages")
+
+    for package in config.packages:
+        check_package_index(config, package, db)
+
+def check_package_index(config, package, db):
+    logging.info('checking %s', package)
 
     if config.verify_external_links or config.master_url:
         session = Session()
     else:
         session = None
 
-    simple_pkg_dir = config.output_path / 'simple' / config.package
+    simple_pkg_dir = config.output_path / 'simple' / package
     if config.master_url:
-        html = fetch_master_package_index(config, session)
+        html = fetch_master_package_index(config, session, package)
     else:
         index_file = simple_pkg_dir / 'index.html'
         html = index_file.read_text(encoding='utf-8')
@@ -160,7 +169,8 @@ def check_package_index(config):
     for href in parse_links(html):
         file_url, filehash = href.rsplit('#', 1)
         if file_url.startswith('http'):
-            verify_external_link(file_url, session, config)
+            if config.verify_external_links:
+                verify_external_link(file_url, session, config)
             continue
         filename = file_url.split('/')[-1]
         try:
@@ -169,20 +179,19 @@ def check_package_index(config):
             report_missing(config, 'wheel', simple_pkg_dir / filename)
         else:
             if config.hashes:
-                check_wheel_hash(config, filename, filehash)
+                check_wheel_hash(config, package, filename, filehash)
 
     for filename in all_files:
         report_extra(config, 'file', simple_pkg_dir / filename)
 
-    db = Database(config.dsn)
-    aliases = db.get_package_aliases(config.package)
-    check_project_symlinks(config, aliases)
+    aliases = db.get_package_aliases(package)
+    check_project_symlinks(config, package, aliases)
 
-def fetch_master_package_index(config, session):
+def fetch_master_package_index(config, session, package):
     """
     Fetch the package index from the master server and return its HTML content
     """
-    simple_pkg_index = f"{config.master_url}/simple/{config.package}/index.html"
+    simple_pkg_index = f"{config.master_url}/simple/{package}/index.html"
     response = session.get(simple_pkg_index)
     if response.status_code != 200 or not response.text:
         report_missing(config, 'master package index', simple_pkg_index)
@@ -191,43 +200,38 @@ def fetch_master_package_index(config, session):
 
 def verify_external_link(file_url, session, config):
     """
-    Verify that an external link exists by making a HEAD request to the URL. If
-    verify_external_links is not set, this will log a warning instead.
+    Verify that an external link exists by making a HEAD request to the URL
     """
-    if config.verify_external_links:
-        response = session.head(file_url)
-        if response.status_code != 200:
-            report_missing(config, 'external link', file_url)
-    else:
-        logging.warning(
-            'ignoring external link %s in package index', file_url)
+    response = session.head(file_url)
+    if response.status_code != 200:
+        report_missing(config, 'external link', file_url)
         
-def check_project_symlinks(config, aliases):
+def check_project_symlinks(config, package, aliases):
     """
     Check that all project symlinks exist and are valid. If configured so,
     ensure they point to the correct target.
     """
     project_dir = config.output_path / 'project'
-    canon_project_dir = project_dir / config.package
+    canon_project_dir = project_dir / package
     for alias in aliases:
         alias_path = project_dir / alias
         target = alias_path.resolve()
         if target != canon_project_dir:
             if config.ensure_project_symlinks:
-                logging.warning(
+                logging.info(
                     'creating symlink %s to %s', alias, canon_project_dir)
                 alias_path.unlink()
                 alias_path.symlink_to(canon_project_dir)
             else:
                 report_broken(config, 'project symlink', alias_path)
 
-def check_wheel_hash(config, filename, filehash):
+def check_wheel_hash(config, package, filename, filehash):
     """
     Verify the hash of a wheel file against the expected hash
     """
-    logging.info('checking %s/%s', config.package, filename)
+    logging.info('checking %s/%s', package, filename)
     algorithm, filehash = filehash.rsplit('=', 1)
-    wheel = config.output_path / 'simple' / config.package / filename
+    wheel = config.output_path / 'simple' / package / filename
     try:
         state = {
             'md5': hashlib.md5,
