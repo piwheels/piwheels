@@ -113,6 +113,7 @@ def audit_logs(config):
         else:
             report_extra(config, 'log', log_path)
             if config.delete_extras:
+                logging.warning(f"Deleting extraneous log file {log_path}")
                 log_path.unlink()
 
     # build_ids is now the set of build IDs without a log file
