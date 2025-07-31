@@ -57,8 +57,9 @@ def main(args=None):
         terminal.error_handler.exc_message, 1)
     logging.getLogger().name = 'audit'
     parser = terminal.configure_parser("""\
-The piw-audit-logs script is intended to verify that the log files generated
-by piwheels builds are present, and no extraneous files are present.
+The piw-audit-logs script is intended to check the logs directory for
+extraneous log files, and optionally delete them. It can also check for
+missing log files.
 """)
     parser.add_argument(
         '-d', '--dsn', default=const.DSN,
@@ -73,6 +74,10 @@ by piwheels builds are present, and no extraneous files are present.
         '--extra-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all extraneous "
         "filenames (files which shouldn't exist, but do) will be written")
+    parser.add_argument(
+        '-m', '--missing', metavar='FILE', type=argparse.FileType('w'),
+        help="If specified, the program will check for missing log files (log "
+        "files which should exist, but don't)")
     parser.add_argument(
         '--missing-file', metavar='FILE', type=argparse.FileType('w'),
         help="If specified, the path of a file to which all missing "
@@ -100,15 +105,20 @@ def audit_logs(config):
     build_ids = db.get_all_build_ids()
     logging.warning(f"Found {len(build_ids):,} build IDs in the database")
 
-    # audit extraneous logs
+    # look for extraneous logs
     for log_path in logs_dir.rglob("*.txt.gz"):
         build_id = log_path_to_build_id(config.output_path, log_path)
         if build_id in build_ids:
             build_ids.remove(build_id)
         else:
             report_extra(config, 'log', log_path)
+            if config.delete_extra:
+                log_path.unlink()
 
-    # audit missing logs
-    for build_id in build_ids:
-        log_path = get_log_file_path(build_id, config.output_path)
-        report_missing(config, 'log', log_path)
+    # build_ids is now the set of build IDs without a log file
+
+    if config.missing:
+        # report missing logs
+        for build_id in build_ids:
+            log_path = get_log_file_path(build_id, config.output_path)
+            report_missing(config, 'log', log_path)
