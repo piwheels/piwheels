@@ -103,7 +103,7 @@ def audit_logs(config):
     db = Database(config.dsn)
     
     build_ids = db.get_all_build_ids()
-    logging.warning(f"Found {len(build_ids):,} build IDs in the database")
+    logging.info(f"Found {len(build_ids):,} build IDs in the database")
 
     # look for extraneous logs
     for log_path in logs_dir.rglob("*.txt.gz"):

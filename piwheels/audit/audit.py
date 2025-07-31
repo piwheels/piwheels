@@ -96,7 +96,7 @@ files specified on the command line.
     config.output_path = Path(os.path.expanduser(config.output_path))
     db = Database(config.dsn)
     packages = sorted(db.get_all_packages())
-    logging.warning(f"Found {len(packages):,} packages")
+    logging.info(f"Found {len(packages):,} packages")
     if config.missing:
         audit_missing_packages(config, packages)
     if config.extra:
@@ -109,7 +109,7 @@ def audit_missing_packages(config, packages):
     Audit the given packages to ensure that the simple and project
     indexes exist
     """
-    logging.warning("Auditing missing package directories")
+    logging.info("Auditing missing package directories")
     simple = config.output_path / "simple"
     project = config.output_path / "project"
 
@@ -130,7 +130,7 @@ def audit_extra_packages(config, packages):
     """
     Audit the simple and project directories for extraneous directories
     """
-    logging.warning("Auditing extra packages")
+    logging.info("Auditing extra packages")
     simple_dirs = get_dirs(config.output_path / "simple")
     extra_simple_dirs = simple_dirs - packages
     report_extra_dirs(config, "simple directory", extra_simple_dirs)
@@ -139,7 +139,7 @@ def audit_extra_packages(config, packages):
     report_extra_dirs(config, "project directory", extra_project_dirs)
 
 def audit_broken_symlinks(config):
-    logging.warning("Auditing broken project page symlinks")
+    logging.info("Auditing broken project page symlinks")
     project_dir = config.output_path / 'project'
     symlinks = get_symlinks(project_dir)
     for link in symlinks:
