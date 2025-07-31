@@ -738,6 +738,6 @@ class Database:
             return {
                 row.build_id
                 for row in self._conn.execute(
-                    "SELECT build_id FROM builds ORDER BY build_id"
+                    "SELECT build_id FROM builds"
                 )
             }

@@ -99,31 +99,16 @@ def audit_logs(config):
     
     build_ids = db.get_all_build_ids()
     logging.warning(f"Found {len(build_ids):,} build IDs in the database")
-    logs_found = get_logs(config, logs_dir)
-    logging.warning(f"Found {len(logs_found):,} log files in {logs_dir}")
-    logs_found_set = set(logs_found)
 
-    extra_logs = logs_found_set - build_ids
-    logging.warning(f"Found {len(extra_logs):,} extraneous log files")
-    for log_path in extra_logs:
-        if config.delete_extra:
-            logging.info('Deleting extraneous log file %s', log_path)
-            log_path.unlink()
+    # audit extraneous logs
+    for log_path in logs_dir.rglob("*.txt.gz"):
+        build_id = log_path_to_build_id(config.output_path, log_path)
+        if build_id in build_ids:
+            build_ids.remove(build_id)
         else:
             report_extra(config, 'log', log_path)
 
-    missing_logs = build_ids - logs_found_set
-    logging.warning(f"Found {len(missing_logs):,} missing log files")
-    for build_id in missing_logs:
+    # audit missing logs
+    for build_id in build_ids:
         log_path = get_log_file_path(build_id, config.output_path)
         report_missing(config, 'log', log_path)
-
-def get_logs(config, logs_dir):
-    """
-    Generate a dict mapping log file paths to their corresponding build IDs
-    """
-    log_files = logs_dir.rglob("*.txt.gz")
-    return {
-        log_path_to_build_id(config.output_path, log_path): log_path
-        for log_path in log_files
-    }
