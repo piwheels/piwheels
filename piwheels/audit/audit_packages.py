@@ -104,11 +104,14 @@ packages in the index.
     parser.add_argument(
         '--ensure-project-symlinks', action='store_true',
         help="If specified, the script will ensure that all alias symlinks "
-        "exist.")
+        "exist")
     parser.add_argument(
         '--verify-external-links', action='store_true',
         help="If specified, the script will verify that all external links "
         "exist")
+    parser.add_argument(
+        '--delete-extras', action='store_true',
+        help="If specified, the script will delete all extraneous files")
     parser.add_argument(
         '--master-url', metavar='URL',
         help="If specified, the audit will assume to be running on a secondary " 
@@ -181,8 +184,14 @@ def check_package_index(config, package, db):
             if config.hashes:
                 check_wheel_hash(config, package, filename, filehash)
 
+    # all_files now contains only files that are not in the index
+
     for filename in all_files:
-        report_extra(config, 'file', simple_pkg_dir / filename)
+        if config.delete_extras:
+            logging.warning(f"Deleting extraneous file {filename}")
+            filename.unlink()
+        else:
+            report_extra(config, 'file', simple_pkg_dir / filename)
 
     aliases = db.get_package_aliases(package)
     check_project_symlinks(config, package, aliases)

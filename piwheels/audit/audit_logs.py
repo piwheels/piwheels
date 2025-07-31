@@ -83,7 +83,7 @@ missing log files.
         help="If specified, the path of a file to which all missing "
         "filenames (files which should exist, but don't) will be written")
     parser.add_argument(
-        '--delete-extra', action='store_true',
+        '--delete-extras', action='store_true',
         help="If specified, any extraneous log files will be deleted")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
@@ -95,7 +95,7 @@ missing log files.
 def audit_logs(config):
     """
     Check the logs directory for missing or extraneous log files. If the
-    --delete-extra option is specified, any extraneous log files will be
+    --delete-extras option is specified, any extraneous log files will be
     deleted.
     """
     logs_dir = config.output_path / 'logs'
@@ -112,7 +112,7 @@ def audit_logs(config):
             build_ids.remove(build_id)
         else:
             report_extra(config, 'log', log_path)
-            if config.delete_extra:
+            if config.delete_extras:
                 log_path.unlink()
 
     # build_ids is now the set of build IDs without a log file
