@@ -50,6 +50,7 @@ import simplejson as json
 from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
+from ..build_logs import get_log_file_path
 from .the_oracle import DbClient
 from .version import parse_version
 
@@ -602,19 +603,12 @@ class TheScribe(tasks.PauseableTask):
         """
         self.logger.info('writing log for build %d', build_id)
 
-        levels = []
-        n = build_id
-        for i in range(3):
-            n, m = divmod(n, 10000)
-            levels.append(m)
-        levels = ['{:04d}'.format(level) for level in reversed(levels)]
-
-        log_dir = self.output_path / 'logs' / levels[0] / levels[1]
-        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = get_log_file_path(build_id, self.output_path)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
         # No need for AtomicReplaceFile here. The log we're writing should
         # *never* exist. In fact, it should be an error if it does hence the
         # use of the "x" mode
-        with (log_dir / (levels[2] + '.txt.gz')).open('xb') as f:
+        with (log_file).open('xb') as f:
             with gzip.open(f, 'wt', encoding='utf-8', errors='replace') as arc:
                 arc.write(log)
 
