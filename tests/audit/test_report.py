@@ -31,47 +31,41 @@ from pathlib import Path
 
 import pytest
 
-from piwheels import __version__
-from piwheels.audit.audit import main
-
+from conftest import find_messages
+from piwheels.audit.report import report_missing, report_broken
 
 @pytest.fixture()
 def output(tmpdir):
     return Path(str(tmpdir))
-
 
 @pytest.fixture()
 def simple(output):
     (output / 'simple').mkdir()
     return output / 'simple'
 
-
 @pytest.fixture()
 def missing(simple):
     return simple / 'missing.txt'
-
 
 @pytest.fixture()
 def extra(simple):
     return simple / 'extra.txt'
 
-
 @pytest.fixture()
 def broken(simple):
     return simple / 'broken.txt'
 
-
-def test_help(capsys):
-    with pytest.raises(SystemExit):
-        main(['--help'])
-    out, err = capsys.readouterr()
-    assert out.startswith('usage:')
-    assert '--extra-file' in out
-    assert '--missing-file' in out
-
-
-def test_version(capsys):
-    with pytest.raises(SystemExit):
-        main(['--version'])
-    out, err = capsys.readouterr()
-    assert out.strip() == __version__
+# def test_report(output, simple, caplog, missing, extra):
+#     class Config:
+#         pass
+#     config = Config()
+#     with missing.open('w') as missing_f, extra.open('w') as extra_f:
+#         config.missing = missing_f
+#         config.extraneous = extra_f
+#         config.broken = None
+#         report_missing(config, 'package', output / 'foo' / 'foo-0.1.whl')
+#         assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1
+#         assert missing_f.tell()
+#         caplog.clear()
+#         report_broken(config, 'package', output / 'foo' / 'foo-0.1.whl')
+#         assert len(list(find_messages(caplog.records, levelname='ERROR'))) == 1

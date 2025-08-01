@@ -38,7 +38,7 @@ import logging
 import argparse
 from pathlib import Path
 
-from . import report_missing, report_extra, report_broken
+from .report import report_missing, report_extra, report_broken
 from .. import __version__, terminal, const
 from ..master.db import Database
 

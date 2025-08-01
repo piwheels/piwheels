@@ -42,7 +42,7 @@ from html.parser import HTMLParser
 
 from requests import Session
 
-from . import report_extra, report_missing, report_broken
+from .report import report_extra, report_missing, report_broken
 from .. import __version__, terminal, const
 from ..master.db import Database
 from ..format import canonicalize_name

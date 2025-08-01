@@ -38,7 +38,7 @@ import logging
 import argparse
 from pathlib import Path
 
-from . import report_extra, report_missing
+from .report import report_extra, report_missing
 from .. import __version__, terminal, const
 from ..master.db import Database
 from ..build_logs import get_log_file_path, log_path_to_build_id

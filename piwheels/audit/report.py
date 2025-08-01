@@ -26,52 +26,21 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-
-from pathlib import Path
-
-import pytest
-
-from piwheels import __version__
-from piwheels.audit.audit import main
+import logging
 
 
-@pytest.fixture()
-def output(tmpdir):
-    return Path(str(tmpdir))
+def report(file, prefix, label, path):
+    logging.error('%s %s %s', prefix, label, path)
+    if file:
+        file.write(str(path))
+        file.write('\n')
 
+def report_missing(config, label, path):
+    report(config.missing_file, 'missing', label, path)
 
-@pytest.fixture()
-def simple(output):
-    (output / 'simple').mkdir()
-    return output / 'simple'
+def report_extra(config, label, path):
+    report(config.extra_file, 'extraneous', label, path)
 
+def report_broken(config, label, path):
+    report(config.broken_file, 'corrupted', label, path)
 
-@pytest.fixture()
-def missing(simple):
-    return simple / 'missing.txt'
-
-
-@pytest.fixture()
-def extra(simple):
-    return simple / 'extra.txt'
-
-
-@pytest.fixture()
-def broken(simple):
-    return simple / 'broken.txt'
-
-
-def test_help(capsys):
-    with pytest.raises(SystemExit):
-        main(['--help'])
-    out, err = capsys.readouterr()
-    assert out.startswith('usage:')
-    assert '--extra-file' in out
-    assert '--missing-file' in out
-
-
-def test_version(capsys):
-    with pytest.raises(SystemExit):
-        main(['--version'])
-    out, err = capsys.readouterr()
-    assert out.strip() == __version__
