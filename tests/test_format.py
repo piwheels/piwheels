@@ -28,8 +28,6 @@
 
 import datetime as dt
 
-import pytest
-
 from piwheels.format import *
 
 

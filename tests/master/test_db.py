@@ -27,9 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from unittest import mock
 from datetime import datetime, timedelta, timezone
-from operator import itemgetter
 
 import pytest
 

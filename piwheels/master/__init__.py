@@ -48,7 +48,6 @@ from .. import (
     __version__,
     terminal,
     const,
-    systemd,
     transport,
     protocols,
     info,

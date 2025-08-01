@@ -38,13 +38,13 @@ itself.
 
 import inspect
 import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from itertools import chain, groupby
 from operator import attrgetter
 from collections import namedtuple
 
-from sqlalchemy import MetaData, Table, select, create_engine, func, distinct
-from sqlalchemy.exc import IntegrityError, SAWarning
+from sqlalchemy import MetaData, Table, select, create_engine
+from sqlalchemy.exc import SAWarning
 
 from .. import __version__, protocols
 from ..states import (

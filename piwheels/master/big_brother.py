@@ -39,7 +39,6 @@ from datetime import datetime, timedelta, timezone
 
 from .. import const, protocols, transport, tasks, info, states
 from .the_oracle import DbClient
-from .file_juggler import FsClient
 
 
 UTC = timezone.utc

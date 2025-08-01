@@ -36,7 +36,6 @@ schemas for validating their associated data.
 """
 
 import datetime as dt
-import ipaddress as ip
 from itertools import chain
 from collections import namedtuple
 

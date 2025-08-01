@@ -42,7 +42,6 @@ import zipfile
 import hashlib
 import resource
 import tempfile
-import warnings
 import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta

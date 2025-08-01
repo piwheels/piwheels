@@ -29,7 +29,6 @@
 "Defines :class:`PyPI`, the low level interface to PyPI's event log."
 
 import re
-import socket
 import logging
 import http.client
 import xmlrpc.client
@@ -44,10 +43,8 @@ from pathlib import PosixPath
 import requests
 from urllib3.exceptions import TimeoutError
 from requests.exceptions import RequestException
-from simplejson.errors import JSONDecodeError
 
 from . import __version__
-from .format import canonicalize_name
 
 
 UTC = timezone.utc

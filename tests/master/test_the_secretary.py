@@ -27,7 +27,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os
 from unittest import mock
 from threading import Event
 from datetime import datetime, timedelta, timezone

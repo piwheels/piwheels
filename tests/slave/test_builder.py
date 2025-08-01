@@ -34,7 +34,7 @@ import zipfile
 from hashlib import sha256
 from unittest import mock
 from pathlib import Path
-from threading import Thread, Event
+from threading import Thread
 from datetime import datetime, timedelta
 
 import pytest

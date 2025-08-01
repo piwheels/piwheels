@@ -30,11 +30,8 @@
 from unittest import mock
 
 import pytest
-from queue import Queue
 from datetime import datetime, timezone
 
-from conftest import MockTask
-from piwheels import const, protocols, transport
 from piwheels.master.cloud_gazer import CloudGazer
 
 

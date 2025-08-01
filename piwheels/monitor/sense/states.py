@@ -43,7 +43,7 @@ Implements the classes for tracking slave states.
 
 from datetime import datetime, timedelta, timezone
 
-from colorzero import Color, Hue
+from colorzero import Color
 
 from .. import states
 

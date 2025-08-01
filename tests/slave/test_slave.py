@@ -27,10 +27,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os
 from unittest import mock
 from threading import Thread
-from subprocess import DEVNULL
 from itertools import chain, cycle
 from datetime import datetime, timedelta, timezone
 
@@ -38,8 +36,7 @@ import pytest
 
 from conftest import find_message
 from piwheels import __version__, protocols, transport
-from piwheels.states import BuildState
-from piwheels.slave import PiWheelsSlave, MasterTimeout
+from piwheels.slave import PiWheelsSlave
 
 
 UTC = timezone.utc

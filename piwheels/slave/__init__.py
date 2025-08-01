@@ -51,7 +51,7 @@ import dateutil.parser
 
 from .. import __version__, terminal, transport, protocols, info, platform
 from ..systemd import get_systemd
-from .builder import Builder, Wheel
+from .builder import Builder
 
 
 UTC = timezone.utc

@@ -33,7 +33,6 @@ import pytest
 
 from piwheels import protocols, transport
 from piwheels.master.mr_chase import MrChase
-from piwheels.master.slave_driver import build_armv6l_hack
 
 
 UTC = timezone.utc

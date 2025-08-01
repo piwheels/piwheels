@@ -28,18 +28,14 @@
 
 
 import os
-import io
 import gzip
 import json
-import cbor2 as cbor
 from unittest import mock
 from pathlib import Path
-from time import time, sleep
-from collections import namedtuple, OrderedDict
 from html.parser import HTMLParser
 from threading import Event
 from datetime import datetime, timedelta, timezone
-from importlib.resources import files, as_file
+from importlib.resources import files
 
 import pytest
 

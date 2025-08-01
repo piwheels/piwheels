@@ -39,7 +39,6 @@ or terminate the master itself.
 import sys
 from time import sleep
 from datetime import datetime, timezone
-from collections import deque
 
 from piwheels import terminal, const, protocols, transport, widgets
 from . import states, dialogs, statsbox

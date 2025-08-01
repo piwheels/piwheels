@@ -33,13 +33,10 @@ Contains the functions that implement the :program:`piw-logger` script.
 """
 
 import io
-import re
 import sys
 import gzip
 import simplejson as json
 import logging
-import datetime as dt
-import ipaddress
 from pathlib import PosixPath
 from datetime import timezone
 from fnmatch import fnmatchcase

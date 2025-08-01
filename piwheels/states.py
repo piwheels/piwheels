@@ -72,7 +72,7 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from collections import namedtuple, deque
 
 from .ranges import exclude, intersect

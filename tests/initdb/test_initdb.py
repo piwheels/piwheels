@@ -27,7 +27,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os
 from unittest import mock
 
 import pytest

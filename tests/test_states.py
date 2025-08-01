@@ -27,22 +27,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import warnings
 from unittest import mock
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from piwheels import const, protocols, transport
-from piwheels.master.db import Database
 from piwheels.states import (
     SlaveState,
-    BuildState,
-    FileState,
     TransferState,
-    DownloadState,
     mkdir_override_symlink,
 )
 

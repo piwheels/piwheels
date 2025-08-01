@@ -36,8 +36,6 @@ Contains the functions that implement the :program:`piw-rebuild` script.
 
 import sys
 import logging
-from datetime import timedelta
-from pathlib import Path
 
 from .. import __version__, terminal, const, transport, protocols
 

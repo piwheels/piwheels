@@ -28,10 +28,8 @@
 
 
 import os
-import sys
 import ipaddress as ip
 import datetime as dt
-from unittest import mock
 
 import cbor2
 import pytest

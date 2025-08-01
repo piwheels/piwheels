@@ -33,9 +33,7 @@ the master node.
 """
 
 import sys
-import signal
-from collections import OrderedDict
-from threading import Thread, main_thread
+from threading import Thread
 from datetime import timedelta
 from functools import partial
 from time import sleep

@@ -38,8 +38,6 @@ from datetime import datetime, timezone
 import sys
 import logging
 
-import requests
-
 from .. import __version__, terminal, const, transport, protocols
 from ..format import canonicalize_name
 from ..pypi import pypi_package_description
