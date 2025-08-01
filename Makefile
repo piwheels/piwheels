@@ -17,12 +17,10 @@ PYTHON_APT:=$(wildcard /usr/lib/python3/dist-packages/apt) \
 
 # Calculate the base names of the distribution, the location of all source,
 # documentation, packaging, icon, and executable script files
-NAME:=$(shell $(PYTHON) $(PYFLAGS) setup.py --name)
+NAME:=$(shell awk -F '"' '/^name/ {print $$2; exit}' pyproject.toml)
 WHEEL_NAME:=$(subst -,_,$(NAME))
-VER:=$(shell $(PYTHON) $(PYFLAGS) setup.py --version)
-PY_SOURCES:=$(shell \
-	$(PYTHON) $(PYFLAGS) setup.py egg_info >/dev/null 2>&1 && \
-	cat $(WHEEL_NAME).egg-info/SOURCES.txt | grep -v "\.egg-info"  | grep -v "\.mo$$")
+VER := $(shell $(PYTHON) -c "import piwheels; print(piwheels.__version__)")
+PY_SOURCES := $(shell git ls-files '*.py' | grep -v '\.egg-info' | grep -v '\.mo$$')
 DOC_SOURCES:=docs/conf.py \
 	$(wildcard docs/*.png) \
 	$(wildcard docs/*.svg) \
@@ -34,9 +32,9 @@ DOC_SOURCES:=docs/conf.py \
 SUBDIRS:=
 
 # Calculate the name of all outputs
-DIST_WHEEL=dist/$(WHEEL_NAME)-$(VER)-py3-none-any.whl
-DIST_TAR=dist/$(NAME)-$(VER).tar.gz
-DIST_ZIP=dist/$(NAME)-$(VER).zip
+DIST_WHEEL:=dist/$(WHEEL_NAME)-$(VER)-py3-none-any.whl
+DIST_TAR:=dist/$(NAME)-$(VER).tar.gz
+DIST_ZIP:=dist/$(NAME)-$(VER).zip
 MAN_PAGES=man/piw-master.1 \
 	man/piw-slave.1 \
 	man/piw-monitor.1 \
@@ -47,7 +45,6 @@ MAN_PAGES=man/piw-master.1 \
 	man/piw-remove.1 \
 	man/piw-rebuild.1 \
 	man/piw-logger.1
-
 
 # Default target
 all:
@@ -67,7 +64,7 @@ all:
 	@echo "make upload - Upload the new release to repositories"
 
 install: $(SUBDIRS)
-	$(PYTHON) $(PYFLAGS) setup.py install --root $(DEST_DIR)
+	$(PIP) install --root $(DEST_DIR) .
 
 doc: $(DOC_SOURCES)
 	$(MAKE) -C docs clean
@@ -139,13 +136,13 @@ $(MAN_PAGES): $(DOC_SOURCES)
 	cp build/man/*.[0-9] man/
 
 $(DIST_TAR): $(PY_SOURCES) $(SUBDIRS)
-	$(PYTHON) $(PYFLAGS) setup.py sdist --formats gztar
+	$(PYTHON) $(PYFLAGS) -m build --sdist
 
 $(DIST_ZIP): $(PY_SOURCES) $(SUBDIRS)
-	$(PYTHON) $(PYFLAGS) setup.py sdist --formats zip
+	$(PYTHON) $(PYFLAGS) -m build --sdist --format=zip
 
 $(DIST_WHEEL): $(PY_SOURCES) $(SUBDIRS)
-	$(PYTHON) $(PYFLAGS) setup.py bdist_wheel
+	$(PYTHON) $(PYFLAGS) -m build --wheel
 
 release:
 	$(MAKE) clean
