@@ -33,13 +33,10 @@ Contains the functions that implement the :program:`piw-logger` script.
 """
 
 import io
-import re
 import sys
 import gzip
 import simplejson as json
 import logging
-import datetime as dt
-import ipaddress
 from pathlib import PosixPath
 from datetime import timezone
 from fnmatch import fnmatchcase
@@ -77,11 +74,10 @@ LogType = namedtuple('LogType', ('user_agent', 'path', 'log_type'))
 log_type_patterns = [
     LogType('pip/*', '/simple/', None),
     LogType(None,    '/project/', None),
-    LogType('pip/*', '/simple/*.whl', 'LOGDOWNLOAD'),
+    LogType(None, '/simple/*.whl', 'LOGDOWNLOAD'),
     LogType('pip/*', '/simple/*', 'LOGSEARCH'),
     LogType(None,    '/simple/*', None),
-    LogType(None,    '/project/*/json/', 'LOGJSON'),
-    LogType(None,    '/project/*/json/index.json', 'LOGJSON'),
+    LogType(None,    '/project/*/json/*', 'LOGJSON'),
     LogType(None,    '/project/*', 'LOGPROJECT'),
     LogType(None,    '/', 'LOGPAGE'),
     LogType(None,    '/*.html', 'LOGPAGE'),
@@ -195,11 +191,12 @@ def get_log_type(row):
         A tuple containing the fields of the log entry, as returned by
         :class:`lars.apache.ApacheSource`.
     """
-    if row.status != 200 or row.req_User_Agent is None:
+    user_agent = row.req_User_Agent
+    if row.status != 200 or user_agent is None or row.request.method != 'GET':
         return
     path = row.request.url.path_str
     for p in log_type_patterns:
-        if p.user_agent is None or fnmatchcase(row.req_User_Agent, p.user_agent):
+        if p.user_agent is None or fnmatchcase(user_agent, p.user_agent):
             if fnmatchcase(path, p.path):
                 return p.log_type
 
@@ -221,20 +218,8 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
         :class:`simplejson.JSONDecoder` instance.
     """
     path = PosixPath(row.request.url.path_str)
-    if row.req_User_Agent.startswith('pip/'):
-        try:
-            json_start = row.req_User_Agent.index('{')
-        except ValueError:
-            user_data = {}
-        else:
-            try:
-                user_data = decoder.decode(row.req_User_Agent[json_start:])
-            except ValueError:
-                user_data = {}
-    else:
-        user_data = {}
-    # Convert lars types into standard types (avoids some issues with
-    # some database backends)
+    user_data = get_user_data(row.req_User_Agent, decoder)
+    # Transform the log entry into a list of values to be sent to the oracle.
     if log_type == 'LOGDOWNLOAD':
         return [
             path.name,
@@ -288,3 +273,28 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
             get_access_time(row.time),
             get_user_agent(row.req_User_Agent),
         ]
+
+def get_user_data(user_agent, decoder):
+    """
+    Extracts the user data from the user agent string, if it is an installer
+    like pip or uv and contains JSON data.
+
+    :param user_agent:
+        The user agent string from the log entry, taken from the
+        :class:`lars.apache.ApacheSource`. row's ``req_User_Agent`` field.
+
+    :param decoder:
+        The decoder to use for the serialised data in the log entry. Defaults to
+        :class:`simplejson.JSONDecoder` instance.
+    """
+    if user_agent.startswith('pip/') or user_agent.startswith('uv/'):
+        try:
+            json_start = user_agent.index('{')
+        except ValueError:
+            return {}
+        else:
+            try:
+                return decoder.decode(user_agent[json_start:])
+            except ValueError:
+                return {}
+    return {}
