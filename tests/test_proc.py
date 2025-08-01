@@ -27,15 +27,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import re
 from unittest import mock
 from threading import Event, Thread
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 import pytest
 
 from piwheels import proc
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture(scope='function')
@@ -71,18 +73,18 @@ def test_terminated_exc(stop_event):
 
 
 def test_proc_call_timeout():
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     with pytest.raises(proc.TimeoutExpired):
         proc.call(['sleep', '10'], timeout=0.1)
-    assert datetime.utcnow() - start < timedelta(seconds=10)
+    assert datetime.now(UTC) - start < timedelta(seconds=10)
 
 
 def test_proc_call_stopped(stop_event, stop_after):
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     stop_after(0.1)
     with pytest.raises(proc.ProcessTerminated):
         proc.call(['sleep', '10'], event=stop_event)
-    assert datetime.utcnow() - start < timedelta(seconds=10)
+    assert datetime.now(UTC) - start < timedelta(seconds=10)
 
 
 def test_proc_call_kill():
@@ -98,29 +100,29 @@ def test_proc_call_kill():
 
 
 def test_proc_check_call_okay():
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     assert proc.check_call(['sleep', '0'], timeout=10) == 0
 
 
 def test_proc_check_call_bad():
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     with pytest.raises(proc.CalledProcessError):
         proc.check_call(['sleep', 'foo'])
 
 
 def test_proc_check_output_timeout():
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     with pytest.raises(proc.TimeoutExpired):
         proc.check_output(['sleep', '10'], timeout=0.1)
-    assert datetime.utcnow() - start < timedelta(seconds=10)
+    assert datetime.now(UTC) - start < timedelta(seconds=10)
 
 
 def test_proc_check_output_stopped(stop_event, stop_after):
-    start = datetime.utcnow()
+    start = datetime.now(UTC)
     stop_after(0.1)
     with pytest.raises(proc.ProcessTerminated):
         proc.check_output(['sleep', '10'], event=stop_event)
-    assert datetime.utcnow() - start < timedelta(seconds=10)
+    assert datetime.now(UTC) - start < timedelta(seconds=10)
 
 
 def test_proc_check_output_echo():
@@ -128,7 +130,6 @@ def test_proc_check_output_echo():
 
 
 def test_proc_check_output_bad():
-    start = datetime.utcnow()
     with pytest.raises(proc.CalledProcessError):
         proc.check_output(['sleep', 'foo'])
 

@@ -42,7 +42,6 @@ few minor things like using seconds for timeouts.
 """
 
 import logging
-import ipaddress as ip
 import datetime as dt
 from binascii import hexlify
 

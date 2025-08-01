@@ -27,9 +27,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
+UTC = timezone.utc
 PIPE = subprocess.PIPE
 DEVNULL = subprocess.DEVNULL
 SubprocessError = subprocess.SubprocessError
@@ -60,7 +61,7 @@ def _test_term(args, start, timeout, event):
     # NOTE: This convenience function expects to be called from an exception
     # handler for the TimeoutExpired exception which it will re-raise if a
     # timeout has really occurred
-    if timeout is not None and datetime.utcnow() - start > timeout:
+    if timeout is not None and datetime.now(UTC) - start > timeout:
         raise
     elif event is not None and event.wait(0):
         raise ProcessTerminated(args, event)
@@ -74,7 +75,7 @@ def call(args, *posargs, event=None, timeout=None, **kwargs):
     if timeout is not None:
         timeout = timedelta(seconds=timeout)
     with subprocess.Popen(args, *posargs, **kwargs) as p:
-        start = datetime.utcnow()
+        start = datetime.now(UTC)
         while True:
             try:
                 try:
@@ -120,7 +121,7 @@ def check_output(args, *posargs, event=None, timeout=None, **kwargs):
                 out, err = p.communicate()
             return out, err
 
-        start = datetime.utcnow()
+        start = datetime.now(UTC)
         while True:
             try:
                 try:

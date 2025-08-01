@@ -34,7 +34,6 @@ from unittest import mock
 from datetime import datetime, timezone
 from threading import Thread
 
-import lars
 import pytest
 
 from conftest import find_message

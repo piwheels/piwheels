@@ -33,8 +33,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import MockTask
-from piwheels import const, protocols, transport
+from piwheels import protocols, transport
 from piwheels.states import MasterStats
 from piwheels.master.big_brother import BigBrother
 

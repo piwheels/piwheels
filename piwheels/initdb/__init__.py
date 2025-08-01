@@ -43,7 +43,6 @@ Contains the functions that make up the :program:`piw-initdb` script.
 """
 
 import re
-import io
 import sys
 import logging
 

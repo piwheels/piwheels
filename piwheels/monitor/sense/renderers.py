@@ -51,16 +51,14 @@ Implements the screen rendering classes for the Sense HAT monitor.
 
 import signal
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from itertools import cycle, chain
 from threading import main_thread
 from contextlib import contextmanager
 
-import numpy as np
 from pisense import array, draw_text
-from colorzero import Color, Lightness, ease_out
+from colorzero import Color, Lightness
 
-from piwheels.format import format_size
 from piwheels.transport import NoData
 from .states import SlaveList, MasterState, SlaveState
 from . import controls

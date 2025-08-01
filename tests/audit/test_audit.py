@@ -27,13 +27,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os
-import logging
 import hashlib
 from queue import Queue
 from pathlib import Path
-from unittest import mock
-from threading import Thread
 
 import pytest
 

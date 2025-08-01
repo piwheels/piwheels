@@ -28,19 +28,17 @@
 
 
 import os
-import logging
 from unittest import mock
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from threading import Thread, Event
 from urllib.parse import urlsplit
-from time import sleep
 
 import pytest
 import requests
 from sqlalchemy import create_engine, text
-from voluptuous import Schema, ExactSequence, Extra, Any
-from requests.exceptions import RequestException, HTTPError
+from voluptuous import ExactSequence, Extra, Any
+from requests.exceptions import HTTPError
 
 from piwheels import const, transport, protocols
 from piwheels.states import (
@@ -50,8 +48,6 @@ from piwheels.states import (
 from piwheels.protocols import NoData
 from piwheels.pypi import pypi_package_description
 from piwheels.initdb import get_script, parse_statements
-from piwheels.master.the_oracle import TheOracle
-from piwheels.master.seraph import Seraph
 
 
 UTC = timezone.utc

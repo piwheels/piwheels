@@ -44,7 +44,6 @@ Provides the list walker for the master/slave list.
 """
 
 from datetime import datetime, timedelta, timezone
-from collections import deque
 
 from piwheels.format import format_timedelta
 from .. import states

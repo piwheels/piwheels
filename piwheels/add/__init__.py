@@ -38,8 +38,6 @@ from datetime import datetime, timezone
 import sys
 import logging
 
-import requests
-
 from .. import __version__, terminal, const, transport, protocols
 from ..format import canonicalize_name
 from ..pypi import pypi_package_description
@@ -88,7 +86,7 @@ system. This script must be run on the same node as the piw-master script.
         help="A package aliaseto use; may be specified multiple times")
     parser.add_argument(
         '-r', '--released', metavar='TIMESTAMP',
-        default=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        default=datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S'),
         help="The version's release date (can only be provided for a new "
         "version, cannot be updated); defaults to now")
     parser.add_argument(

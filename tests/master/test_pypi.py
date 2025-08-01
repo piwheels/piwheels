@@ -27,21 +27,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from time import sleep
 from unittest import mock
-from random import randint
 from datetime import datetime, timezone
 from threading import Thread
 from socketserver import ThreadingMixIn
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.client import ProtocolError
 from queue import Queue
 
 import pytest
 import requests
-import http.client
-import xmlrpc.client
 
 from piwheels.pypi import *
 

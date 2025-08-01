@@ -38,8 +38,7 @@ to it.
 """
 
 import inspect
-from textwrap import dedent
-from datetime import datetime, timezone
+from datetime import timezone
 
 from .. import const, protocols, transport, tasks
 from .db import Database, RewritePendingRow

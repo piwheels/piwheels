@@ -34,7 +34,6 @@ Defines the :class:`MrChase` task; see class for more details.
 """
 
 from datetime import datetime, timezone
-from logging import Logger
 from piwheels.format import canonicalize_name
 
 from .. import const, protocols, transport, tasks
