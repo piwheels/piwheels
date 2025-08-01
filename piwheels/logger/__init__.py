@@ -191,11 +191,12 @@ def get_log_type(row):
         A tuple containing the fields of the log entry, as returned by
         :class:`lars.apache.ApacheSource`.
     """
-    if row.status != 200 or row.req_User_Agent is None:
+    user_agent = row.req_User_Agent
+    if row.status != 200 or user_agent is None or row.request.method != 'GET':
         return
     path = row.request.url.path_str
     for p in log_type_patterns:
-        if p.user_agent is None or fnmatchcase(row.req_User_Agent, p.user_agent):
+        if p.user_agent is None or fnmatchcase(user_agent, p.user_agent):
             if fnmatchcase(path, p.path):
                 return p.log_type
 
