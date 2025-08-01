@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.22');
+INSERT INTO configuration(id, version) VALUES (1, '0.23');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -706,6 +706,15 @@ AS $sql$
                             SELECT apt_package
                             FROM preinstalled_apt_packages
                             WHERE abi_tag = f.abi_tag
+                        ) AS d
+                    ),
+                    'pip_dependencies', (
+                        SELECT
+                            COALESCE(json_agg(dependency), '{{}}')
+                        FROM (
+                            SELECT dependency
+                            FROM dependencies
+                            WHERE filename = f.filename AND tool = 'pip'
                         ) AS d
                     )
                 )
