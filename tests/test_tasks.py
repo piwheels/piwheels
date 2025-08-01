@@ -29,12 +29,15 @@
 
 import logging
 from unittest import mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 import pytest
 
 from piwheels import protocols, transport, tasks
+
+
+UTC = timezone.utc
 
 
 class CounterTask(tasks.PauseableTask):
@@ -99,15 +102,15 @@ def test_task_force(master_config):
     task = CounterTask(master_config, delay=timedelta(seconds=1))
     try:
         task.start()
-        start = datetime.utcnow()
+        start = datetime.now(UTC)
         while task.count == 0:
             sleep(0.01)
-        assert datetime.utcnow() - start < timedelta(seconds=1)
-        start = datetime.utcnow()
+        assert datetime.now(UTC) - start < timedelta(seconds=1)
+        start = datetime.now(UTC)
         task.force(task.loop)
         while task.count == 1:
             sleep(0.01)
-        assert datetime.utcnow() - start < timedelta(seconds=1)
+        assert datetime.now(UTC) - start < timedelta(seconds=1)
         task.quit()
         task.join(10)
         assert task.count > 0

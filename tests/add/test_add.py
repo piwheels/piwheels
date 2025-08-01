@@ -240,7 +240,7 @@ def test_add_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name,
                             'foo', '0.1']) as thread:
@@ -257,7 +257,7 @@ def test_add_and_skip_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--skip', 'legal']) as thread:
@@ -274,7 +274,7 @@ def test_add_and_yank_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--yank']) as thread:
@@ -292,7 +292,7 @@ def test_add_version_with_release_date(mock_context, import_queue_name,
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--released', '2020-06-06 00:00:00']) as thread:
@@ -310,7 +310,7 @@ def test_add_version_for_unknown_package(mock_context, import_queue_name,
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name,
                             'foo', '0.1']) as thread:
@@ -329,7 +329,7 @@ def test_skip_known_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--skip', 'legal']) as thread:
@@ -348,7 +348,7 @@ def test_unskip_known_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--unskip']) as thread:
@@ -365,7 +365,7 @@ def test_yank_known_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--yank']) as thread:
@@ -384,7 +384,7 @@ def test_unyank_known_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with mock.patch('piwheels.add.datetime') as dt:
-            dt.utcnow.return_value = datetime(2021, 1, 1)
+            dt.now.return_value = datetime(2021, 1, 1)
             dt.strptime.side_effect = datetime.strptime
             with AddThread(['--import-queue', import_queue_name, 'foo', '0.1',
                             '--unyank']) as thread:

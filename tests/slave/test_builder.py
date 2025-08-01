@@ -35,12 +35,15 @@ from hashlib import sha256
 from unittest import mock
 from pathlib import Path
 from threading import Thread
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from piwheels import transport, proc
 from piwheels.slave import builder
+
+
+UTC = timezone.utc
 
 
 @pytest.fixture()
@@ -265,8 +268,8 @@ def test_builder_build_timeout(tmpdir):
             mock.patch('piwheels.slave.builder.datetime') as time_mock:
         tmpdir_mock().name = str(tmpdir)
         proc_mock.call.side_effect = proc.TimeoutExpired(['pip3'], 300)
-        now = datetime.utcnow()
-        time_mock.utcnow.side_effect = [
+        now = datetime.now(UTC)
+        time_mock.now.side_effect = [
             now, now + timedelta(seconds=100), now + timedelta(seconds=1000),
             now + timedelta(seconds=1001)]
         b = builder.Builder('foo', '0.1')
@@ -288,7 +291,7 @@ def test_builder_build_stop(tmpdir):
             assert b._stopped.wait(2)
             raise proc.ProcessTerminated('pip3', b._stopped)
         proc_mock.call.side_effect = call
-        time_mock.utcnow.return_value = datetime.utcnow()
+        time_mock.now.return_value = datetime.now(UTC)
         b = builder.Builder('foo', '0.1')
         b.start()
         b.stop()

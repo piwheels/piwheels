@@ -44,7 +44,7 @@ import resource
 import tempfile
 import email.parser
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Thread, Event
 from collections import defaultdict
 
@@ -52,6 +52,9 @@ import apt
 
 from .. import proc
 from ..format import canonicalize_name
+
+
+UTC = timezone.utc
 
 
 class BadWheel(Exception):
@@ -551,7 +554,7 @@ class Builder(Thread):
         with tempfile.NamedTemporaryFile('w+', dir=self._wheel_dir.name,
                                          suffix='.log',
                                          encoding='utf-8') as log_file:
-            start = datetime.utcnow()
+            start = datetime.now(UTC)
             try:
                 rc = self.build_wheel(log_file)
             except Exception as exc:
@@ -564,7 +567,7 @@ class Builder(Thread):
                 # Build duration is purely the time to build the wheel; it
                 # does not include time to calculate the dependencies (which
                 # users wouldn't have to do)
-                self._duration = datetime.utcnow() - start
+                self._duration = datetime.now(UTC) - start
             if self._status:
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
