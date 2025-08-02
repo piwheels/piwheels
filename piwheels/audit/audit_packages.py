@@ -142,12 +142,13 @@ packages in the index.
         check_package_index(config, package, db)
 
 def check_package_index(config, package, db):
+    """
+    Audit the given package's simple and project directories according to the
+    configuration provided
+    """
     logging.info('checking %s', package)
 
-    if config.verify_external_links or config.master_url:
-        session = Session()
-    else:
-        session = None
+    session = Session()
 
     simple_pkg_dir = config.output_path / 'simple' / package
     if config.master_url:
@@ -162,17 +163,19 @@ def check_package_index(config, package, db):
         report_missing(config, 'package dir', simple_pkg_dir)
         return
 
-    for f in all_files:
-        if f.is_symlink() and not f.exists():
-            report_broken(config, 'symlink', f)
-
     if not config.master_url:
         try:
             all_files.remove(index_file)
         except KeyError:
             report_missing(config, 'package index', index_file)
             return
+        
+    # check for broken symlinks
+    for f in all_files:
+        if f.is_symlink() and not f.exists():
+            report_broken(config, 'symlink', f)
 
+    # check all files in the index html are present
     for href in parse_links(html):
         file_url, filehash = href.rsplit('#', 1)
         if file_url.startswith('http'):
@@ -180,22 +183,21 @@ def check_package_index(config, package, db):
                 verify_external_link(file_url, session, config)
             continue
         filename = file_url.split('/')[-1]
+        file_path = simple_pkg_dir / filename
         try:
-            all_files.remove(simple_pkg_dir / filename)
+            all_files.remove(file_path)
         except KeyError:
-            report_missing(config, 'wheel', simple_pkg_dir / filename)
+            report_missing(config, 'wheel', file_path)
         else:
+            package_tag = get_package_tag(filename)
+            if package_tag != package:
+                report_broken(config, 'package tag', file_path)
             if config.hashes:
                 check_wheel_hash(config, package, filename, filehash)
 
     # all_files now contains only files that are not in the index
-
-    for filename in all_files:
-        if config.delete_extras:
-            logging.warning(f"Deleting extraneous file {filename}")
-            filename.unlink()
-        else:
-            report_extra(config, 'file', simple_pkg_dir / filename)
+    # so we can report them as extraneous, or delete them
+    handle_extraneous_files(config, all_files, simple_pkg_dir)
 
     aliases = db.get_package_aliases(package)
     check_project_symlinks(config, package, aliases)
@@ -261,6 +263,21 @@ def check_wheel_hash(config, package, filename, filehash):
                 state.update(buf)
         if state.hexdigest().lower() != filehash.lower():
             report_broken(config, 'wheel', wheel)
+
+def handle_extraneous_files(config, extra_files, simple_pkg_dir):
+    """
+    Handle files that are not in the index but exist in the package directory
+    """
+    for filename in extra_files:
+        if config.delete_extras:
+            logging.warning(f"Deleting extraneous file {filename}")
+            filename.unlink()
+        else:
+            report_extra(config, 'file', simple_pkg_dir / filename)
+
+def get_package_tag(filename):
+    package_tag = filename.split("-")[0]
+    return canonicalize_name(package_tag)
 
 
 class LinkExtractor(HTMLParser):
