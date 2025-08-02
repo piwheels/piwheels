@@ -727,3 +727,17 @@ class Database:
                     "FROM load_rewrites_pending()"
                 )
             ]
+
+    def get_all_build_ids(self):
+        """
+        Returns a set of all build IDs in the database. This is used by the
+        :program:`piw-audit-logs` script to check that all build logs are
+        present.
+        """
+        with self._conn.begin():
+            return {
+                row.build_id
+                for row in self._conn.execute(
+                    "SELECT build_id FROM builds"
+                )
+            }

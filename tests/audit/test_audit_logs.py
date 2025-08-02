@@ -26,39 +26,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-
-from pathlib import Path
+from piwheels.audit.audit_logs import main
+from piwheels import __version__
 
 import pytest
-
-from piwheels import __version__
-from piwheels.audit.audit import main
-
-
-@pytest.fixture()
-def output(tmpdir):
-    return Path(str(tmpdir))
-
-
-@pytest.fixture()
-def simple(output):
-    (output / 'simple').mkdir()
-    return output / 'simple'
-
-
-@pytest.fixture()
-def missing(simple):
-    return simple / 'missing.txt'
-
-
-@pytest.fixture()
-def extra(simple):
-    return simple / 'extra.txt'
-
-
-@pytest.fixture()
-def broken(simple):
-    return simple / 'broken.txt'
 
 
 def test_help(capsys):
