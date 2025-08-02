@@ -161,7 +161,11 @@ def check_package_index(config, package, db):
     except OSError:
         report_missing(config, 'package dir', simple_pkg_dir)
         return
-    
+
+    for f in all_files:
+        if f.is_symlink() and not f.exists():
+            report_broken(config, 'symlink', f)
+
     if not config.master_url:
         try:
             all_files.remove(index_file)
