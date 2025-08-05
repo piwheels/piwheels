@@ -56,8 +56,8 @@ get_package_name = lambda path: canonicalize_name(str(path).split('/')[2])
 get_access_ip = lambda rh: str(rh)
 get_access_time = lambda dt: dt.replace(tzinfo=UTC)
 get_arch = lambda ud: ud.get('cpu')
-get_distro_name = lambda ud: ud.get('distro', {}).get('name')
-get_distro_version = lambda ud: ud.get('distro', {}).get('version')
+get_distro_name = lambda ud: ud.get('distro', {}).get('name') if ud.get('distro') else None
+get_distro_version = lambda ud: ud.get('distro', {}).get('version') if ud.get('distro') else None
 get_os_name = lambda ud: ud.get('system', {}).get('name')
 get_os_version = lambda ud: ud.get('system', {}).get('release')
 get_py_name = lambda ud: ud.get('implementation', {'name': 'CPython'}).get('name')
