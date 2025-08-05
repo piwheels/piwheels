@@ -5,7 +5,7 @@
     <div class="content no-sidebar">
       <h2>404 &mdash; file not found</h2>
       <p>No page or file could be found at this location. Please use the
-      navigation bar or the <a href="/packages.htm">package search</a> to find
+      navigation bar or the <a href="/packages.html">package search</a> to find
       what you're looking for.</p>
     </div>
   </section>
