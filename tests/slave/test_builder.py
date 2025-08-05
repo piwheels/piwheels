@@ -397,7 +397,7 @@ def test_package_init(mock_package):
     assert pkg.abi_tag == 'cp34m'
     assert pkg.py_version_tag == 'cp34'
     assert pkg.build_tag is None
-    assert pkg.pip_dependencies == set()
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_noabi(mock_package):
@@ -413,7 +413,7 @@ def test_package_noabi(mock_package):
     assert pkg.abi_tag == 'none'
     assert pkg.py_version_tag == 'cp34'
     assert pkg.build_tag is None
-    assert pkg.pip_dependencies == set()
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_hash_cache(mock_package):
@@ -461,25 +461,25 @@ def test_package_metadata_requires_python(mock_package_requires_python):
 def test_package_metadata_pip_depdendencies_gpiozero_0(mock_package_pip_depdendencies_gpiozero_0):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
-    assert pkg.pip_dependencies == {'rpi-gpio', 'w1thermsensor'}
+    assert set(pkg.pip_dependencies) == {'rpi-gpio', 'w1thermsensor'}
 
 
 def test_package_metadata_pip_depdendencies_gpiozero_2(mock_package_pip_depdendencies_gpiozero_2):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
-    assert pkg.pip_dependencies == {'colorzero', 'importlib-resources', 'importlib-metadata'}
+    assert set(pkg.pip_dependencies) == {'colorzero', 'importlib-resources', 'importlib-metadata'}
 
 
 def test_package_metadata_pip_depdendencies_download(mock_package_pip_depdendencies_download):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
-    assert pkg.pip_dependencies == {'tqdm', 'six'}
+    assert set(pkg.pip_dependencies) == {'tqdm', 'six'}
 
 
 def test_package_metadata_pip_depdendencies_aamm(mock_package_pip_depdendencies_aamm):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
-    assert pkg.pip_dependencies == {
+    assert set(pkg.pip_dependencies) == {
         'allianceauth',
         'audioop-lts',
         'django-eveuniverse',
@@ -492,7 +492,7 @@ def test_package_metadata_pip_depdendencies_aamm(mock_package_pip_depdendencies_
 def test_package_metadata_pip_depdendencies_ontology(mock_package_pip_depdendencies_ontology):
     path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
     pkg = builder.Wheel(path)
-    assert pkg.pip_dependencies == set()
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_bad_metadata(bad_package):
@@ -667,8 +667,12 @@ def test_builder_calc_apt_dependencies(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].apt_dependencies == {
-            'libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'
+        assert len(b.wheels) == 1
+        wheel = b.wheels[0]
+        assert wheel.dependencies == {
+            'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
+            '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
+            'pip': [],
         }
 
 
@@ -691,7 +695,9 @@ def test_builder_dependencies_missing(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].dependencies == {'apt': [], 'pip': []}
+        assert len(b.wheels) == 1
+        wheel = b.wheels[0]
+        assert wheel.dependencies == {'apt': [], 'pip': [], '': []}
 
 
 def test_builder_dependencies_failed(mock_archive, tmpdir):
