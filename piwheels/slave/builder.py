@@ -46,9 +46,9 @@ import email.parser
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from threading import Thread, Event
-from collections import defaultdict
 
 import apt
+from packaging.requirements import Requirement, InvalidRequirement
 
 from .. import proc
 from ..format import canonicalize_name
@@ -69,17 +69,16 @@ class Wheel:
     :param pathlib.Path path:
         The path to the wheel on the local filesystem.
 
-    :param dict dependencies:
-        A dict mapping tool to dependencies that are required to use these
-        particular wheel files. Defaults to a ``None`` (no dependencies).
+    :param set or None apt_dependencies:
+        A set of apt dependencies that are required to use this particular
+        wheel file. Defaults to ``None`` (no dependencies).
     """
-    def __init__(self, path, dependencies=None):
+    def __init__(self, path, apt_dependencies=None):
         self.wheel_file = path
         self._filesize = path.stat().st_size
         self._filehash = None
-        if dependencies is None:
-            dependencies = {}
-        self._dependencies = dependencies
+        if apt_dependencies is None:
+            apt_dependencies = []
         self._parts = list(path.stem.split('-'))
         # XXX This should be on the master
         # Fix up retired tags (noabi->none)
@@ -111,6 +110,11 @@ class Wheel:
                         self.wheel_file, filenames, {
                             info.filename for info in wheel.infolist()
                             if info.filename.endswith('METADATA')}))
+        self._dependencies = {
+            "apt": apt_dependencies,
+            "pip": self.calc_pip_dependencies(),
+            "": [],
+        }
 
     def as_message(self):
         """
@@ -235,6 +239,21 @@ class Wheel:
         return self.metadata['Requires-Python']
 
     @property
+    def apt_dependencies(self):
+        "Return the apt dependencies required by the wheel."
+        return sorted(self._dependencies["apt"])
+
+    @property
+    def pip_dependencies(self):
+        "Return the pip dependencies required by the wheel."
+        return sorted(self._dependencies["pip"])
+
+    @property
+    def orphan_dependencies(self):
+        "Return the orphan dependencies required by the wheel."
+        return sorted(self._dependencies[""])
+
+    @property
     def dependencies(self):
         """
         Return the dependencies required by the wheel as a mapping of
@@ -249,6 +268,30 @@ class Wheel:
         Return the contents of the :file:`METADATA` file inside the wheel.
         """
         return self._metadata
+    
+    def calc_pip_dependencies(self):
+        """
+        Return the pip dependencies required by the wheel, as a set of
+        package names. This is derived from the ``Requires-Dist`` metadata
+        field, and only includes mandatory dependencies (not extras).
+        """
+        deps = set()
+        for key, value in self.metadata.items():
+            if key != 'Requires-Dist':
+                continue
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                req = Requirement(value)
+            except InvalidRequirement:
+                continue  # Skip malformed requirements
+            if req.marker and 'extra' in str(req.marker):
+                continue  # Skip optional extras
+            if len(req.name) > 255:
+                continue  # Skip requirements with too long names
+            deps.add(canonicalize_name(req.name))
+        return sorted(deps)
 
     def transfer(self, queue, slave_id):
         """
@@ -489,14 +532,15 @@ class Builder(Thread):
             env=self.build_environment(), event=self._stopped,
             stdin=proc.DEVNULL, stdout=proc.DEVNULL, stderr=proc.DEVNULL)
 
-    def build_dependencies(self, wheel):
+    def calc_apt_dependencies(self, wheel):
         """
         Calculate the apt dependencies of *wheel* (which is a :class:`Wheel`
         instance representing a built wheel).
         """
         apt_cache = apt.cache.Cache()
         find_re = re.compile(r'^\s*(.*)\s=>\s(/.*)\s\(0x[0-9a-fA-F]+\)$')
-        deps = defaultdict(set)
+        apt_deps = set()
+        orphan_deps = set()
         whl_libs = set()
         dep_libs = set()
         with tempfile.TemporaryDirectory() as tempdir:
@@ -529,6 +573,7 @@ class Builder(Thread):
                         except FileNotFoundError:
                             continue
                         dep_libs.add(lib_path)
+        
         for lib in dep_libs:
             providers = {
                 pkg.name for pkg in apt_cache
@@ -536,16 +581,14 @@ class Builder(Thread):
                 and lib in pkg.installed_files}
             assert len(providers) <= 1
             try:
-                deps['apt'].add(providers.pop())
+                apt_deps.add(providers.pop())
             except KeyError:
-                deps[''].add(lib)
+                orphan_deps.add(lib)
             if self._stopped.wait(0):
                 raise proc.ProcessTerminated(['dpkg', '--search', lib],
                                              self._stopped)
-        wheel._dependencies = {
-            tool: sorted(deps)
-            for tool, deps in deps.items()
-        }
+        wheel._dependencies["apt"] = sorted(apt_deps)
+        wheel._dependencies[""] = sorted(orphan_deps)
 
     def run(self):
         """
@@ -572,7 +615,7 @@ class Builder(Thread):
                 try:
                     for path in Path(self._wheel_dir.name).glob('*.whl'):
                         wheel = Wheel(path)
-                        self.build_dependencies(wheel)
+                        self.calc_apt_dependencies(wheel)
                         self._wheels.append(wheel)
                 except (proc.TimeoutExpired, proc.ProcessTerminated) as exc:
                     self.stop()

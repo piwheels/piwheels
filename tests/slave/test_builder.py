@@ -87,6 +87,192 @@ Classifier: Programming Language :: Python
 
 
 @pytest.fixture()
+def mock_archive_requires_python(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.0
+Name: foo
+Version: 0.1
+Summary: A test package
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+License: BSD
+Platform: any
+Requires-Python: >=3.9
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive_pip_dependencies_gpiozero_0(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.0
+Name: gpiozero
+Version: 0.1.0
+Summary: A simple interface to everyday GPIO components used with Raspberry Pi
+Home-page: https://github.com/RPi-Distro/gpio-zero
+Author: Some fool
+Author-email: foo@foo.com
+License: BSD
+Keywords: raspberrypi,gpio
+Platform: UNKNOWN
+Classifier: Development Status :: 1 - Planning
+Classifier: Intended Audience :: Education
+Classifier: Topic :: Education
+Classifier: Topic :: System :: Hardware
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 3
+Requires-Dist: RPi.GPIO
+Requires-Dist: w1thermsensor
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive_pip_dependencies_gpiozero_2(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.1
+Name: gpiozero
+Version: 2.0.1
+Summary: A simple interface to GPIO devices with Raspberry Pi
+Home-page: https://gpiozero.readthedocs.io/
+Author: Some fool
+Author-email: foo@foo.com
+License: BSD-3-Clause
+Project-URL: Documentation, https://gpiozero.readthedocs.io/
+Project-URL: Source Code, https://github.com/gpiozero/gpiozero
+Project-URL: Issue Tracker, https://github.com/gpiozero/gpiozero/issues
+Keywords: raspberrypi gpio
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Education
+Classifier: Topic :: System :: Hardware
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Requires-Python: >=3.9
+License-File: LICENSE.rst
+Requires-Dist: colorzero
+Requires-Dist: importlib-resources (~=5.0) ; python_version < "3.10"
+Requires-Dist: importlib-metadata (~=4.6) ; python_version < "3.10"
+Provides-Extra: doc
+Requires-Dist: sphinx (>=4.0) ; extra == 'doc'
+Requires-Dist: sphinx-rtd-theme (>=1.0) ; extra == 'doc'
+Provides-Extra: test
+Requires-Dist: pytest ; extra == 'test'
+Requires-Dist: pytest-cov ; extra == 'test'
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive_pip_dependencies_download(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 1.2
+Name: download
+Version: 0.2.2
+Summary: A tiny module to make downloading with python super easy.
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+Requires-Dist: 
+Requires-Dist: tqdm
+Requires-Dist: six
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive_pip_dependencies_aamm(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.4
+Name: aa-market-manager
+Version: 1.0.6
+Summary: AllianceAuth Market Management Tool
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+Requires-Python: >=3.10
+Requires-Dist: allianceauth>=4.6.4,<6
+Requires-Dist: audioop-lts; python_version>='3.13'
+Requires-Dist: django-eveuniverse
+Requires-Dist: django-solo>=2,<3
+Requires-Dist: ortools
+Requires-Dist: py-cord>=2,<3
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
+def mock_archive_pip_dependencies_ontology(request, bad_archive):
+    source = io.BytesIO(bad_archive)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(source, 'r') as src:
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_STORED) as dest:
+            for info in src.infolist():
+                dest.writestr(info, src.read(info))
+            dest.writestr('foo-0.1.dist-info/METADATA', """\
+Metadata-Version: 2.1
+Name: ontology-processing
+Version: 1.0.0
+Summary: Climate Mind ontology processing code.
+Home-page: http://foo.com/
+Author: Some foo
+Author-email: foo@foo.com
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+License-File: LICENSE
+Requires-Dist: Brotliclickcyclerdashdash-core-componentsdash-html-componentsdash-rendererdash-tabledecoratorFlaskFlask-CompressfutureitsdangerousJinja2kiwisolverMarkupSafematplotlibnetworkxnumpyOwlready2pandasPillowplotlypyparsingpython-dateutilpytzretryingscipysixvalidatorsWerkzeug
+
+""")
+    return archive.getvalue()
+
+
+@pytest.fixture()
 def bad_package(request, bad_archive):
     with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
             mock.patch('piwheels.slave.builder.Path.open') as open_mock:
@@ -108,6 +294,78 @@ def mock_package(request, mock_archive):
         h = sha256()
         h.update(mock_archive)
         yield len(mock_archive), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_requires_python(request, mock_archive_requires_python):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_requires_python), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_requires_python)
+        h = sha256()
+        h.update(mock_archive_requires_python)
+        yield len(mock_archive_requires_python), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_gpiozero_0(request, mock_archive_pip_dependencies_gpiozero_0):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_gpiozero_0), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_gpiozero_0)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_gpiozero_0)
+        yield len(mock_archive_pip_dependencies_gpiozero_0), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_gpiozero_2(request, mock_archive_pip_dependencies_gpiozero_2):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_gpiozero_2), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_gpiozero_2)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_gpiozero_2)
+        yield len(mock_archive_pip_dependencies_gpiozero_2), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_download(request, mock_archive_pip_dependencies_download):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_download), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_download)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_download)
+        yield len(mock_archive_pip_dependencies_download), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_aamm(request, mock_archive_pip_dependencies_aamm):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_aamm), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_aamm)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_aamm)
+        yield len(mock_archive_pip_dependencies_aamm), h.hexdigest().lower()
+
+
+@pytest.fixture()
+def mock_package_pip_depdendencies_ontology(request, mock_archive_pip_dependencies_ontology):
+    with mock.patch('piwheels.slave.builder.Path.stat') as stat_mock, \
+            mock.patch('piwheels.slave.builder.Path.open') as open_mock:
+        stat_mock.return_value = os.stat_result(
+            (0o644, 1, 1, 1, 1000, 1000, len(mock_archive_pip_dependencies_ontology), 0, 0, 0))
+        open_mock.side_effect = lambda mode: io.BytesIO(mock_archive_pip_dependencies_ontology)
+        h = sha256()
+        h.update(mock_archive_pip_dependencies_ontology)
+        yield len(mock_archive_pip_dependencies_ontology), h.hexdigest().lower()
 
 
 @pytest.fixture()
@@ -139,6 +397,7 @@ def test_package_init(mock_package):
     assert pkg.abi_tag == 'cp34m'
     assert pkg.py_version_tag == 'cp34'
     assert pkg.build_tag is None
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_noabi(mock_package):
@@ -154,6 +413,7 @@ def test_package_noabi(mock_package):
     assert pkg.abi_tag == 'none'
     assert pkg.py_version_tag == 'cp34'
     assert pkg.build_tag is None
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_hash_cache(mock_package):
@@ -190,6 +450,49 @@ def test_package_metadata_canon(mock_package):
     assert pkg.metadata['Metadata-Version'] == '2.0'
     assert pkg.metadata['Name'] == 'foo'
     assert pkg.metadata['Version'] == '0.1'
+
+
+def test_package_metadata_requires_python(mock_package_requires_python):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert pkg.requires_python == '>=3.9'
+
+
+def test_package_metadata_pip_depdendencies_gpiozero_0(mock_package_pip_depdendencies_gpiozero_0):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert set(pkg.pip_dependencies) == {'rpi-gpio', 'w1thermsensor'}
+
+
+def test_package_metadata_pip_depdendencies_gpiozero_2(mock_package_pip_depdendencies_gpiozero_2):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert set(pkg.pip_dependencies) == {'colorzero', 'importlib-resources', 'importlib-metadata'}
+
+
+def test_package_metadata_pip_depdendencies_download(mock_package_pip_depdendencies_download):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert set(pkg.pip_dependencies) == {'tqdm', 'six'}
+
+
+def test_package_metadata_pip_depdendencies_aamm(mock_package_pip_depdendencies_aamm):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert set(pkg.pip_dependencies) == {
+        'allianceauth',
+        'audioop-lts',
+        'django-eveuniverse',
+        'django-solo',
+        'ortools',
+        'py-cord'
+    }
+
+
+def test_package_metadata_pip_depdendencies_ontology(mock_package_pip_depdendencies_ontology):
+    path = Path('/tmp/abc123/foo-0.1-cp34-cp34m-linux_armv7l.whl')
+    pkg = builder.Wheel(path)
+    assert set(pkg.pip_dependencies) == set()
 
 
 def test_package_bad_metadata(bad_package):
@@ -244,7 +547,7 @@ def test_builder_as_message():
 def test_builder_build_success(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.proc') as proc_mock, \
-            mock.patch('piwheels.slave.builder.Builder.build_dependencies') as dep_mock:
+            mock.patch('piwheels.slave.builder.Builder.calc_apt_dependencies') as dep_mock:
         tmpdir_mock().name = str(tmpdir)
         def call(*args, **kwargs):
             with tmpdir.join('foo-0.1-cp34-cp34m-linux_armv7l.whl').open('wb') as f:
@@ -316,7 +619,7 @@ def test_builder_build_close(tmpdir):
         assert tmpdir_mock().cleanup.call_args == mock.call()
 
 
-def test_builder_build_dependencies(mock_archive, tmpdir):
+def test_builder_calc_apt_dependencies(mock_archive, tmpdir):
     with mock.patch('tempfile.TemporaryDirectory') as tmpdir_mock, \
             mock.patch('piwheels.slave.builder.proc') as proc_mock, \
             mock.patch('piwheels.slave.builder.Path.resolve', lambda self: self), \
@@ -364,9 +667,12 @@ def test_builder_build_dependencies(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].dependencies == {
+        assert len(b.wheels) == 1
+        wheel = b.wheels[0]
+        assert wheel.dependencies == {
             'apt': ['libc6', 'libgcc1', 'libgfortran3', 'libopenblas-base'],
             '': ['/usr/lib/arm-linux-gnueabihf/libquadmath.so.0'],
+            'pip': [],
         }
 
 
@@ -389,7 +695,9 @@ def test_builder_dependencies_missing(mock_archive, tmpdir):
         b.join(1)
         assert not b.is_alive()
         assert b.status
-        assert b.wheels[0].dependencies == {}
+        assert len(b.wheels) == 1
+        wheel = b.wheels[0]
+        assert wheel.dependencies == {'apt': [], 'pip': [], '': []}
 
 
 def test_builder_dependencies_failed(mock_archive, tmpdir):
