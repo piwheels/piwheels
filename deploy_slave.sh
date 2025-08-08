@@ -31,7 +31,6 @@ if [ $VERSION_ID -eq 11 ]; then
     LIBLGPIO=
 fi
 
-apt -y install ntp
 apt update
 apt -y upgrade
 apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
