@@ -282,7 +282,7 @@ footer nav a:hover div {
 
 footer #github div      { content: url('github.svg'); }
 footer #readthedocs div { content: url('readthedocs.svg'); }
-footer #twitter div     { content: url('twitter.svg'); }
+footer #mastodon div    { content: url('mastodon.svg'); }
 
 footer #mythic {
   grid-area: mythic;
