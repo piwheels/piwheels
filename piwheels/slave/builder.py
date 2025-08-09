@@ -55,6 +55,7 @@ from ..format import canonicalize_name
 
 
 UTC = timezone.utc
+DEFAULT_LOCATION = "/simple"  # TODO
 
 
 class BadWheel(Exception):
@@ -132,6 +133,7 @@ class Wheel:
             self.platform_tag,
             self.requires_python,
             self.dependencies,
+            DEFAULT_LOCATION,
         )
 
     @property
