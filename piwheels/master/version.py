@@ -2,11 +2,15 @@ import packaging.version
 
 from .vendor.version import LegacyVersion
 
+# horrid hack to make LegacyVersion sortable with Version
+class SortableLegacyVersion(LegacyVersion, packaging.version._BaseVersion):
+    pass
+
 def _parse_version(v):                            
     try:                                         
         return packaging.version.Version(v)      
     except packaging.version.InvalidVersion:     
-        return LegacyVersion(v)
+        return SortableLegacyVersion(v)
 
 def parse_version(s):
     v = _parse_version(s)
