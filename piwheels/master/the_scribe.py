@@ -476,6 +476,7 @@ class TheScribe(tasks.PauseableTask):
             'cp37m': ('Buster',   'Python 3.7'),
             'cp39':  ('Bullseye', 'Python 3.9'),
             'cp311': ('Bookworm', 'Python 3.11'),
+            'cp313': ('Trixie',   'Python 3.13'),
         }
         abi_order = list(known_abis) + list(
             abi
