@@ -60,6 +60,7 @@ $ rm -rf testpip/</pre>
         <tr><td>Buster</td><td>Python 3.7</td><td class="skip" title="Inactive (end of life)"></td></tr>
         <tr><td>Bullseye</td><td>Python 3.9</td><td class="success" title="Active"></td></tr>
         <tr><td>Bookworm</td><td>Python 3.11</td><td class="success" title="Active"></td></tr>
+        <tr><td>Trixie</td><td>Python 3.13</td><td class="skip" title="Inactive (coming soon)"></td></tr>
       </table>
 
       <p>See each package's <a href="/packages.html">project page</a> for
