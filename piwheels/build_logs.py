@@ -15,6 +15,13 @@ def get_log_file_path(build_id: int, output_path: Path) -> Path:
 
     return log_dir / (levels[2] + ".txt.gz")
 
+def get_log_url(build_id: int) -> str:
+    """
+    Return the URL for the log file for a given build ID, relative to the
+    root of the web server
+    """
+    return str(get_log_file_path(output_path=Path("/"), build_id=build_id))
+
 def log_path_to_build_id(output_path: Path, log_path: Path) -> int:
     """
     Get the build ID from a log file path

@@ -22,14 +22,14 @@ services:
     container_name: piwheels-initdb
     build:
       context: .
-      dockerfile: docker/Dockerfile.initdb
+      target: bookworm-piwheels-user
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/piwheels
     command: piw-initdb -d postgresql://postgres:postgres@db:5432/piwheels -y
-    restart: "no"
+    restart: no
     volumes:
       - .:/app
 
@@ -37,7 +37,7 @@ services:
     container_name: piwheels-master
     build:
       context: .
-      dockerfile: docker/Dockerfile.master
+      target: piwheels-master
     depends_on:
       db:
         condition: service_healthy
@@ -45,7 +45,8 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://piwheels:piwheels@db:5432/piwheels
-    command: sh -c "chown -R piwheels:piwheels /home/piwheels/www && su piwheels -c 'PYTHONWARNINGS=ignore piw-master -v -o /home/piwheels/www -d postgresql://piwheels:piwheels@db:5432/piwheels'"
+      PYTHONWARNINGS: ignore 
+    command: sh -c "chown -R piwheels:piwheels /home/piwheels/www && su piwheels -c 'piw-master -v -o /home/piwheels/www -d postgresql://piwheels:piwheels@db:5432/piwheels'"
     user: root
     volumes:
       - www_data:/home/piwheels/www
@@ -55,18 +56,18 @@ services:
     container_name: piwheels-web
     build:
       context: .
-      dockerfile: docker/Dockerfile.web
+      target: piwheels-web
     volumes:
       - www_data:/var/www/html
       - .:/app
     ports:
-      - "8080:80"
+      - 8080:80
 
   test-bookworm:
     container_name: piwheels-test-bookworm
     build:
       context: .
-      dockerfile: docker/Dockerfile.test-bookworm
+      target: test-bookworm
     environment:
       PIWHEELS_TESTDB: piwtest
       PIWHEELS_HOST: db:5432
@@ -88,7 +89,7 @@ services:
     container_name: piwheels-test-bullseye
     build:
       context: .
-      dockerfile: docker/Dockerfile.test-bullseye
+      target: test-bullseye
     environment:
       PIWHEELS_TESTDB: piwtest
       PIWHEELS_HOST: db:5432
@@ -110,12 +111,12 @@ services:
     container_name: piwheels-docs
     build:
       context: .
-      dockerfile: docker/Dockerfile.docs
+      target: piwheels-docs
     volumes:
       - .:/app
     command: sh -c "make -C docs html && python3 -m http.server 80 -d build/html"
     ports:
-      - "8081:80"
+      - 8081:80
 
 volumes:
   db_data:

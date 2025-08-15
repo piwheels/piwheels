@@ -93,10 +93,7 @@ pip3 install ${package}</pre>
                         'skip':    'Skipped: ' + release.skip,
                         'error':   'Unexpected error',
                       }[abi_data.status if abi_data else 'error']}"><a tal:condition="abi_data is not None and abi_data.build_id is not None"
-                      href="/logs/${'/'.join(
-                        '{:012d}'.format(abi_data.build_id)[i:i + 4]
-                        for i in range(0, 12, 4)
-                        )}.txt">&nbsp;</a></td>
+                      href="${get_log_url(abi_data.build_id)}">&nbsp;</a></td>
                 </span>
                 <td></td>
               </tr>

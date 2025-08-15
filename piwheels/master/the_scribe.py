@@ -50,7 +50,7 @@ import simplejson as json
 from .. import const, protocols, tasks, transport
 from ..format import format_size
 from ..states import mkdir_override_symlink, MasterStats
-from ..build_logs import get_log_file_path
+from ..build_logs import get_log_file_path, get_log_url
 from .the_oracle import DbClient
 from .version import parse_version
 
@@ -505,7 +505,10 @@ class TheScribe(tasks.PauseableTask):
                     pip_dependencies=pip_dependencies,
                     format_size=format_size,
                     known_abis=known_abis,
-                    all_abis=all_abis))
+                    all_abis=all_abis,
+                    get_log_url=get_log_url,
+                )
+            )
 
         project_aliases = self.db.get_package_aliases(package)
         if project_aliases:
