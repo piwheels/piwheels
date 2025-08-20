@@ -4,6 +4,7 @@
   <div metal:fill-slot="head">
     <meta name="description" content="Search the piwheels repository for
       known PyPI packages" />
+    <meta property="og:url" content="https://www.piwheels.org/packages.html" />
   </div>
 
   <div metal:fill-slot="scripts">
