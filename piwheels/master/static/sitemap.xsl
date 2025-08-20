@@ -25,7 +25,6 @@
         </nav>
       </header>
 
-
       <article>
         <section>
           <div class="content">
@@ -45,7 +44,7 @@
         <nav>
           <a id="github" href="https://github.com/piwheels"><div></div>GitHub</a>
           <a id="readthedocs" href="https://piwheels.readthedocs.io/"><div></div>Docs</a>
-          <a id="twitter" href="https://twitter.com/piwheels"><div></div>Twitter</a>
+          <a id="mastodon" href="https://mastodon.social/@piwheels"><div></div>Mastodon</a>
         </nav>
         <p class="notices">piwheels is a community project by
           <a href="https://github.com/bennuttall">Ben Nuttall</a>
