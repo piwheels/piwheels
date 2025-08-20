@@ -4,6 +4,7 @@
   <div metal:fill-slot="head" tal:omit-tag="1">
     <meta name="description" content="A description of the piwheels JSON API
       for those wishing to query the repository of wheels" />
+    <meta property="og:url" content="https://www.piwheels.org/json.html" />
   </div>
 
   <section metal:fill-slot="content">

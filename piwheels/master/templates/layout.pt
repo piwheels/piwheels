@@ -10,13 +10,15 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-    <!-- TWITTER CARD -->
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://www.piwheels.org/piwheels-logo-large.png" />
+    <meta property="og:title" content="piwheels - ${title}" />
+    <meta property="og:description" content="${description}" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:site" content="@piwheels" />
     <meta name="twitter:title" content="piwheels - ${title}" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="https://www.piwheels.org/piwheels-logo-large.png" />
-    <!-- END TWITTER CARD -->
     <meta metal:define-slot="head" />
   </head>
 
