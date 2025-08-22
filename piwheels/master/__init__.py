@@ -250,7 +250,7 @@ write access to the output directory.
         signal.signal(signal.SIGTERM, sig_term)
         try:
             systemd.ready()
-            self.main_loop(systemd)
+            self.main_loop(systemd, config)
         except TaskQuit:
             pass
         except SystemExit:
@@ -277,7 +277,7 @@ write access to the output directory.
             self.logger.info('closed all queues')
             ctx.close()
 
-    def main_loop(self, systemd):
+    def main_loop(self, systemd, config):
         """
         This is the main loop of the :program:`piw-master` script. It receives
         messages from the internal status queue and forwards them onto the
@@ -288,10 +288,25 @@ write access to the output directory.
         poller = transport.Poller()
         poller.register(self.control_queue, transport.POLLIN)
         poller.register(self.int_status_queue, transport.POLLIN)
+        fs_force_sleep = False
         try:
             while True:
                 systemd.watchdog_ping()
                 socks = poller.poll(5)
+
+                # XXX: Hacky check. This should really be somewhere more
+                # sensible (big brother?)
+                fs = os.statvfs(config.output_path)
+                fs_free_gb = fs.f_bavail * fs.f_bsize / (1024**3)
+                if not fs_force_sleep and fs_free_gb <= 1:
+                    self.logger.warning(
+                        'Forcing sleep due to lack of disk space (%.1f GB)',
+                        fs_free_gb)
+                    self.logger.warning(
+                        'Wake-up must be performed from monitor (or restart)')
+                    fs_force_sleep = True
+                    self.do_sleep(None)
+
                 if self.int_status_queue in socks:
                     self.broadcast_status()
                 if self.control_queue in socks:
