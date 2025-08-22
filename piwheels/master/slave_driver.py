@@ -531,6 +531,8 @@ class SlaveDriver(tasks.PausingTask):
                                  slave.build.next_file)
                 return 'SEND', slave.build.next_file
         else:
+            self.fs.expect(slave.slave_id,
+                           slave.build.files[slave.build.next_file])
             self.logger.info('slave %d (%s): re-send %s',
                              slave.slave_id, slave.label,
                              slave.build.next_file)
