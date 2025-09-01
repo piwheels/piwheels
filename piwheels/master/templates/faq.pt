@@ -4,6 +4,7 @@
   <div metal:fill-slot="head" tal:omit-tag="1">
     <meta name="description" content="Frequently asked questions (FAQs) about
       the piwheels repository" />
+    <meta property="og:url" content="https://www.piwheels.org/faq.html" />
   </div>
 
   <div metal:fill-slot="scripts" tal:omit-tag="1">

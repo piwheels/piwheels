@@ -5,6 +5,7 @@
     <meta name="description" content="A repository of Python wheels compiled
       specifically for the Raspberry Pi OS, derived from the packages at the
       Python Package Index (PyPI)" />
+    <meta property="og:url" content="https://www.piwheels.org/" />
   </div>
 
   <div metal:fill-slot="scripts" tal:omit-tag="1">
