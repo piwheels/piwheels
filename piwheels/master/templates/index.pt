@@ -8,10 +8,6 @@
     <meta property="og:url" content="https://www.piwheels.org/" />
   </div>
 
-  <div metal:fill-slot="scripts" tal:omit-tag="1">
-    <script src="/blogposts.js"></script>
-  </div>
-
   <section metal:fill-slot="content">
     <div class="content">
       <h2>Python Wheels for the Raspberry Pi</h2>
@@ -77,8 +73,12 @@ $ rm -rf testpip/</pre>
         <dl><dt>Downloads (last 30 days)</dt><dd>${'{:,}'.format(stats.downloads_last_month)}</dd></dl>
       </div>
 
-      <h3>Latest blog posts</h3>
-      <ul id="latest-blog-posts"><li>loading...</li></ul>
+      <div tal:condition="posts">
+        <h3>Latest blog posts</h3>
+        <ul id="latest-blog-posts">
+          <li tal:repeat="post posts"><a href="https://blog.piwheels.org/${post.link}">${post.title}</a> (${post.published.strftime("%d %b %Y")})</li>
+        </ul>
+      </div>
     </div>
   </section>
 

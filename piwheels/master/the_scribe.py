@@ -46,6 +46,7 @@ from importlib.resources import files, as_file
 
 from chameleon import PageTemplateLoader
 import simplejson as json
+import requests
 
 from .. import const, protocols, tasks, transport
 from ..format import format_size
@@ -235,6 +236,7 @@ class TheScribe(tasks.PauseableTask):
                 title='Home',
                 description='Python package repository providing wheels for Raspberry Pi',
                 stats=statistics,
+                posts=self.get_latest_blog_posts(10),
             ))
 
     def write_search_index(self, search_index):
@@ -686,6 +688,31 @@ class TheScribe(tasks.PauseableTask):
                 self.logger.info('File deleted: %s', file)
             except FileNotFoundError:
                 self.logger.error('File not found: %s', file)
+
+    def get_latest_blog_posts(self, limit):
+        """
+        Fetch the latest posts from the blog's JSON endpoint.
+
+        :param int limit:
+            The maximum number of blog posts to retrieve
+
+        :return: A list of blog post metadata.
+        :rtype: list[dict]
+        """
+        blog_url = "https://blog.piwheels.org"
+        blog_json_url = f"{blog_url}/posts.json"
+        response = requests.get(blog_json_url)
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            self.logger.error('Failed to fetch blog posts: %s', exc)
+            return []
+        data = response.json()
+        posts = data["posts"][:limit]
+        for post in posts:
+            post["link"] = f"{blog_url}/{post['link']}"
+            post["published"] = datetime.fromisoformat(post["published"])
+        return posts
 
 
 # https://docs.python.org/3/library/itertools.html
