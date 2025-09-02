@@ -51,8 +51,19 @@ def format_size(size, suffixes=('B', 'KB', 'MB', 'GB', 'TB', 'PB'), zero='0 B',
                                suffix=suffixes[index])
 
 
-def format_timedelta(delta):
-    return str(timedelta(seconds=int(delta.total_seconds())))
+def format_timedelta(delta: timedelta) -> str:
+    total_seconds = int(delta.total_seconds())
+    days, rem = divmod(total_seconds, 86_400)
+    hours, rem = divmod(rem, 3_600)
+    minutes, seconds = divmod(rem, 60)
+
+    if days >= 365 * 2:
+        years = days // 365
+        return f"{years:,} years"
+    elif days >= 2:
+        return f"{days:,} days"
+    else:
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
 # From pip/_vendor/packaging/utils.py

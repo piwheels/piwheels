@@ -75,7 +75,7 @@ class MasterStatsBox(wdg.WidgetWrap):
             minimum=0, format=lambda min, max: ' ' + format_size(max))
         self.builds_bar = wdg.RatioBar()
         self.queue_bar = wdg.RatioBar()
-        self.downloads_bar = wdg.GraphBar(format=' {max}')
+        self.downloads_bar = wdg.GraphBar(format=' {max:,}')
         self.builds_size_label = wdg.Text('-')
         self.builds_time_label = wdg.Text('-')
         self.files_count_label = wdg.Text('-')
@@ -153,8 +153,8 @@ class MasterStatsBox(wdg.WidgetWrap):
             self.disk_bar.update(invert(state.stats, 'disk_free', 'disk_size'))
             self.swap_bar.update(invert(state.stats, 'swap_free', 'swap_size'))
             self.memory_bar.update(invert(state.stats, 'mem_free', 'mem_size'))
-            self.queue_bar.update(filter_pending_builds(state.stats[-1].builds_pending))
-            self.builds_bar.update(state.stats[-1].builds_last_hour)
+            self.queue_bar.update(filter_stats(state.stats[-1].builds_pending))
+            self.builds_bar.update(filter_stats(state.stats[-1].builds_last_hour))
             self.downloads_bar.update(extract(state.stats, 'downloads_last_hour'))
             self.load_bar.update(extract(state.stats, 'load_average'))
             self.temperature_bar.update(extract(state.stats, 'cpu_temp'))
@@ -163,15 +163,14 @@ class MasterStatsBox(wdg.WidgetWrap):
             self.files_count_label.set_text('{:,}'.format(latest.files_count))
 
 
-def filter_pending_builds(builds_pending):
+def filter_stats(stats: dict[str, int]) -> dict[str, int]:
     """
-    Filter the *builds_pending* dictionary to only include ABIs
-    with a positive count.
+    Filter the *stats* dict to only include ABIs with a positive count.
     """
     return {
-        abi_tag: n
-        for abi_tag, n in builds_pending.items()
-        if n > 0
+        key: value
+        for key, value in stats.items()
+        if value > 0
     }
 
 

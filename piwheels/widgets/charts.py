@@ -72,7 +72,7 @@ class RatioBar(ur.Widget):
         (maxcol,) = size
         if not self._total:
             return ur.SolidCanvas('╌', maxcol, 1)
-        total_label = str(self._total)
+        total_label = f"{self._total:,}"
 
         bar_len = maxcol - sum(
             len(s) for s in (self.left, self.right, total_label))
