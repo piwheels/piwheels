@@ -8,3 +8,4 @@
 <span tal:repeat="package packages" tal:omit-tag="True"><a href="${package}">${package}</a></span>
 </body>
 </html>
+<!--${now.isoformat()}-->

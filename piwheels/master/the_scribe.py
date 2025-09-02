@@ -296,7 +296,9 @@ class TheScribe(tasks.PauseableTask):
         with AtomicReplaceFile(self.output_path / 'simple' / 'index.html',
                                encoding='utf-8') as index:
             index.file.write(self.templates['simple_index'](
-                packages=self.package_cache))
+                packages=self.package_cache,
+                now=datetime.now(UTC),
+            ))
 
     def write_pages(self, package, *, both=False, exclude=None):
         """
@@ -393,7 +395,9 @@ class TheScribe(tasks.PauseableTask):
             index.file.write(
                 self.templates['simple_package'](
                     package=package,
-                    files=files))
+                    files=files,
+                    now=datetime.now(UTC),
+                ))
         if package not in self.package_cache:
             self.package_cache.add(package)
             self.write_simple_index()
