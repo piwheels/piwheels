@@ -91,3 +91,27 @@ RUN pip3 install . lars sqlalchemy==1.4 --no-deps
     
 USER piwheels
 WORKDIR /app
+
+# Trixie test image
+
+FROM debian:trixie AS test-trixie
+
+RUN apt update && \
+    apt install -y passwd python3 python3-pip python3-setuptools python3-wheel python3-packaging \
+    python3-configargparse python3-zmq python3-voluptuous python3-cbor2 python3-dateutil \
+    python3-pytest python3-pytest-cov python3-apt python3-requests python3-psycopg2 \
+    python3-chameleon python3-simplejson python3-geoip python3-bs4
+
+COPY setup.cfg setup.py /app/
+COPY piwheels/ /app/piwheels/
+WORKDIR /app
+
+RUN addgroup --system piwheels && \
+    adduser --system --ingroup piwheels --shell /bin/bash --home /home/piwheels piwheels && \
+    mkdir -p /home/piwheels && \
+    chown piwheels:piwheels /home/piwheels
+
+RUN pip3 install . lars sqlalchemy==1.4 --break-system-packages --no-deps
+    
+USER piwheels
+WORKDIR /app

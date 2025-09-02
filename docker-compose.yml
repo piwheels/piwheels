@@ -107,6 +107,28 @@ services:
       - .:/app
     command: pytest-3 -vv
 
+  test-trixie:
+    container_name: piwheels-test-trixie
+    build:
+      context: .
+      target: test-trixie
+    environment:
+      PIWHEELS_TESTDB: piwtest
+      PIWHEELS_HOST: db:5432
+      PIWHEELS_USER: piwheels
+      PIWHEELS_PASS: piwheels
+      PIWHEELS_SUPERUSER: piwsuper
+      PIWHEELS_SUPERPASS: foobar
+      SQLALCHEMY_SILENCE_UBER_WARNING: 1
+      PYTHONWARNINGS: ignore
+      COVERAGE_FILE: /tmp/.coverage
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: pytest-3 -vv
+
   docs:
     container_name: piwheels-docs
     build:
