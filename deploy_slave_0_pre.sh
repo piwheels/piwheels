@@ -1,13 +1,32 @@
 #!/bin/bash
 
-set -eu
-
 date -s "$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep -i '^  Date:' | cut -d' ' -f4-)"
 
 apt update
-apt install chrony -y
+
+while true; do
+    if apt install chrony -y; then
+        break
+    else
+        echo "⚠️ Install failed, fixing and retrying..."
+        apt -y install --fix-missing
+        apt -y install --fix-broken
+    fi
+done
+
 systemctl enable --now chrony
-apt install vim byobu -y
+
+
+while true; do
+    if apt install vim byobu -y; then
+        break
+    else
+        echo "⚠️ Install failed, fixing and retrying..."
+        apt -y install --fix-missing
+        apt -y install --fix-broken
+    fi
+done
+
 byobu-enable
 
-echo "Now start byobu and run bash deploy_slave_0_upgrade.sh"
+echo "✅ Completed step 2 - now start byobu and run bash deploy_slave_0_upgrade.sh"

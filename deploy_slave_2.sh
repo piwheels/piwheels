@@ -57,4 +57,4 @@ while true; do
     fi
 done
 
-echo "✅ Completed step 2"
+echo "✅ Completed step 2 - now run bash deploy_slave_1.sh"

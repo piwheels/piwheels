@@ -41,3 +41,5 @@ while true; do
         apt -y install --fix-broken
     fi
 done
+
+echo "✅ Completed step 0 - Now run bash deploy_slave_1.sh"
