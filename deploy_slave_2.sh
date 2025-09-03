@@ -28,10 +28,6 @@ else if [ $VERSION_ID -eq 13 ]; then
 fi
 
 apt update
-
-apt install -y chrony
-systemctl enable --now chrony
-
 apt -y upgrade
 apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
