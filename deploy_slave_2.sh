@@ -2,7 +2,7 @@
 
 set -eu
 
-DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive
 
 source /etc/os-release
 
@@ -19,9 +19,9 @@ POSTGRES_SERVER_DEV=
 if [ $VERSION_ID -eq 11 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-13
     LIBLGPIO=
-else if [ $VERSION_ID -eq 12 ]; then
+elif [ $VERSION_ID -eq 12 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-15
-else if [ $VERSION_ID -eq 13 ]; then
+elif [ $VERSION_ID -eq 13 ]; then
     POSTGRES_SERVER_DEV=postgresql-server-dev-17
     LIBADIOS=libadios2-common-c-dev
     ATLAS_BLAS=libopenblas-dev

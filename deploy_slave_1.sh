@@ -15,6 +15,8 @@ sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_co
 rm -f /boot/kernel8.img
 rm -f /etc/pip.conf
 
+byobu-enable
+
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
