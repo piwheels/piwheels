@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -eu
-
 export DEBIAN_FRONTEND=noninteractive
 
 source /etc/os-release
@@ -27,9 +25,7 @@ elif [ $VERSION_ID -eq 13 ]; then
     ATLAS_BLAS=libopenblas-dev
 fi
 
-apt update
-apt -y upgrade
-apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
+APT_PACKAGES="vim wget curl ssh-import-id tree byobu htop pkg-config cmake time pandoc \
     gfortran ipython3 git qt5-qmake python3-dev python3-pip python3-apt \
     zlib1g-dev libpq-dev libffi-dev libxml2-dev libhdf5-dev libldap2-dev \
     libjpeg-dev libbluetooth-dev libusb-dev libhidapi-dev libfreetype6-dev \
@@ -48,7 +44,15 @@ apt -y install vim wget curl ssh-import-id tree byobu htop pkg-config cmake time
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV \
     $QMAKE $FPRINT libgphoto2-dev $LIBLGPIO libsqlite3-dev libsqlcipher-dev \
-    ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev
+    ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev"
 
-apt purge python3-cryptography python3-yaml -y
-
+while true; do
+    if apt -y install $APT_PACKAGES; then
+        echo "✅ Packages installed successfully"
+        break
+    else
+        echo "⚠️ Upgrade failed, fixing and retrying..."
+        apt -y install --fix-missing
+        apt -y install --fix-broken
+    fi
+done

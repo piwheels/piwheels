@@ -7,7 +7,9 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
+echo "Setting hostname"
 echo $1 > /etc/hostname
+
 echo "[slave]" > /etc/piwheels.conf
 echo "master=$2" >> /etc/piwheels.conf
 
@@ -15,13 +17,13 @@ sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_co
 rm -f /boot/kernel8.img
 rm -f /etc/pip.conf
 
-byobu-enable
-
+echo "Creating piwheels user"
 getent passwd piwheels && userdel -fr piwheels
 getent group piwheels || groupadd piwheels
 getent passwd piwheels || useradd -g piwheels -m -s /bin/bash piwheels
-passwd -d piwheels
+passwd -d piwheels > /dev/null
 
+echo "Creating swap file"
 fallocate -x -l 1G /swapfile
 chmod 0600 /swapfile
 mkswap /swapfile
