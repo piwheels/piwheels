@@ -56,3 +56,5 @@ while true; do
         apt -y install --fix-broken
     fi
 done
+
+echo "✅ Completed step 2"
