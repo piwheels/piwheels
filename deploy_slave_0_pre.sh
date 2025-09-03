@@ -29,4 +29,4 @@ done
 
 byobu-enable
 
-echo "✅ Completed step 2 - now start byobu and run bash deploy_slave_0_upgrade.sh"
+echo "✅ Completed prestep 0 - now start byobu and run bash deploy_slave_0_upgrade.sh"
