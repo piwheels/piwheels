@@ -6,25 +6,19 @@ source /etc/os-release
 
 curl -sSf 'https://sh.rustup.rs' | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
 
-if [ $VERSION_ID -eq 11 ]; then
-    pip3 install setuptools --upgrade
-    pip3 install pip --upgrade
+if [ $VERSION_ID -gt 11 ]; then
+    break_system_packages="--break-system-packages"
 else
-    pip3 install setuptools --upgrade --break-system-packages
-    pip3 install pip --upgrade --break-system-packages
+    break_system_packages=""
 fi
 
 hash -r
 
 PYTHON_PACKAGES="pypandoc versioneer kervi scikit-build cython numpy scipy setuptools_rust conan cbor2"
 
-if [ $VERSION_ID -eq 11 ]; then
-    pip3 install $PYTHON_PACKAGES \
-        --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary
-else
-    pip3 install $PYTHON_PACKAGES \
-        --upgrade --extra-index-url https://www.piwheels.org/simple --prefer-binary --break-system-packages
-fi
+for pkg in $PYTHON_PACKAGES; do
+    pip3 install $pkg --no --extra-index-url https://www.piwheels.org/simple --prefer-binary --exists-action i $break_system_packages
+done
 
 if [ -d piwheels ]; then
     cd piwheels
@@ -38,8 +32,4 @@ fi
 cp piwheels-slave.service /etc/systemd/system/
 systemctl enable piwheels-slave.service
 
-if [ $VERSION_ID -eq 11 ]; then
-    pip3 install .[slave]
-else
-    pip3 install .[slave] --break-system-packages
-fi
+pip3 install .[slave] $break_system_packages
