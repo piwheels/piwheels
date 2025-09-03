@@ -57,4 +57,15 @@ while true; do
     fi
 done
 
-echo "✅ Completed step 2 - now run bash deploy_slave_1.sh"
+while true; do
+    if apt -y autoremove; then
+        echo "✅ Packages removed successfully"
+        break
+    else
+        echo "⚠️ Autoremove failed, fixing and retrying..."
+        apt -y install --fix-missing
+        apt -y install --fix-broken
+    fi
+done
+
+echo "✅ Completed step 2 - now run bash deploy_slave_3.sh to finish"
