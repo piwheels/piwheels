@@ -46,6 +46,7 @@ from .report import report_extra, report_missing, report_broken
 from .. import __version__, terminal, const
 from ..master.db import Database
 from ..format import canonicalize_name
+from ..states import create_wheel_metadata_file
 
 
 def main(args=None):
@@ -112,6 +113,9 @@ packages in the index.
     parser.add_argument(
         '--delete-extras', action='store_true',
         help="If specified, the script will delete all extraneous files")
+    parser.add_argument(
+        '--create-missing-metadata', action='store_true',
+        help="If specified, the script will create missing .whl.metadata files")
     parser.add_argument(
         '--master-url', metavar='URL',
         help="If specified, the audit will assume to be running on a secondary " 
@@ -194,6 +198,11 @@ def check_package_index(config, package, db):
                 report_broken(config, 'package tag', file_path)
             if config.hashes:
                 check_wheel_hash(config, package, filename, filehash)
+            metadata_file = check_wheel_metadata_file(config, package, filename)
+            try:
+                all_files.remove(metadata_file)
+            except KeyError:
+                pass
 
     # all_files now contains only files that are not in the index
     # so we can report them as extraneous, or delete them
@@ -279,6 +288,16 @@ def get_package_tag(filename):
     package_tag = filename.split("-")[0]
     return canonicalize_name(package_tag)
 
+def check_wheel_metadata_file(config, package, filename):
+    pkg_dir = config.output_path / 'simple' / package
+    wheel_file = pkg_dir / filename
+    whl_metadata_file = wheel_file.with_suffix('.whl.metadata')
+    if not whl_metadata_file.exists():
+        if config.create_missing_metadata:
+            create_wheel_metadata_file(wheel_file)
+        else:
+            report_missing(config, 'wheel metadata file', wheel_file)
+    return whl_metadata_file
 
 class LinkExtractor(HTMLParser):
     def __init__(self):
