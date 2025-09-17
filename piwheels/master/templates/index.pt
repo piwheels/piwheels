@@ -76,7 +76,7 @@ $ rm -rf testpip/</pre>
       <div tal:condition="posts">
         <h3>Latest blog posts</h3>
         <ul id="latest-blog-posts">
-          <li tal:repeat="post posts"><a href="https://blog.piwheels.org/${post.link}">${post.title}</a> (${post.published.strftime("%d %b %Y")})</li>
+          <li tal:repeat="post posts"><a href="${post.link}">${post.title}</a> (${post.published.strftime("%d %b %Y")})</li>
         </ul>
       </div>
     </div>
