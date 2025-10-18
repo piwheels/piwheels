@@ -64,10 +64,10 @@ def test_format_templates():
 
 
 def test_format_timedelta():
-    assert format_timedelta(dt.timedelta(0)) == '0:00:00'
-    assert format_timedelta(dt.timedelta(seconds=5)) == '0:00:05'
-    assert format_timedelta(dt.timedelta(minutes=1)) == '0:01:00'
-    assert format_timedelta(dt.timedelta(hours=1, microseconds=1)) == '1:00:00'
+    assert format_timedelta(dt.timedelta(0)) == '00:00:00'
+    assert format_timedelta(dt.timedelta(seconds=5)) == '00:00:05'
+    assert format_timedelta(dt.timedelta(minutes=1)) == '00:01:00'
+    assert format_timedelta(dt.timedelta(hours=1, microseconds=1)) == '01:00:00'
 
 
 def test_canonicalize_name():

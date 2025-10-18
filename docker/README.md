@@ -61,6 +61,12 @@ And on Debian Bullseye (Python 3.9) with:
 docker compose build test-bullseye && docker compose run --rm test-bullseye
 ```
 
+And on Debian Trixie (Python 3.13) with:
+ 
+```console
+docker compose build test-trixie && docker compose run --rm test-trixie
+```
+
 ## Shell into a container
 
 Shell into e.g. the master:
