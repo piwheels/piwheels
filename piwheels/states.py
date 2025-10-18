@@ -74,6 +74,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 from collections import namedtuple, deque
+from zipfile import ZipFile
 
 from .ranges import exclude, intersect
 
@@ -813,23 +814,49 @@ class TransferState:
         # the case of an actual armv6 build being uploaded, it will (rightly)
         # clobber any symlink currently in place
         tmp_file.rename(final_name)
+        whl_metadata_file = create_wheel_metadata_file(final_name)
         if self._file_state.platform_tag == 'linux_armv7l':
-            # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name;
-            # the slave_driver task expects us to have done this
-            arm6_name = final_name.with_name(
-                final_name.name[:-16] + 'linux_armv6l.whl')
-            try:
-                arm6_name.symlink_to(final_name.name)
-            except FileExistsError:
-                # If the symlink already exists, or if a file with the same
-                # name already exists, ignore the error. In particular, if an
-                # actual file exists (a specific armv6 build) we must NOT
-                # overwrite it
-                pass
+            self.create_armv6_symlink(final_name)
+            self.create_armv6_symlink(whl_metadata_file)
         self._file_state.verified()
+
+    def create_armv6_symlink(self, armv7_path):
+        # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name;
+        # the slave_driver task expects us to have done this
+        arm6_name = armv7_path.with_name(
+            armv7_path.name[:-16] + 'linux_armv6l.whl')
+        try:
+            arm6_name.symlink_to(armv7_path.name)
+        except FileExistsError:
+            # If the symlink already exists, or if a file with the same
+            # name already exists, ignore the error. In particular, if an
+            # actual file exists (e.g. a specific armv6 build) we must NOT
+            # overwrite it
+            pass
 
     def rollback(self):
         Path(self._file.name).unlink()
+
+
+def create_wheel_metadata_file(wheel_file: Path) -> Path:
+    """
+    Extract the METADATA file from a wheel, and create a corresponding
+    .whl.metadata file. Return the path to the new metadata file.
+    """
+    whl_metadata_file = wheel_file.with_suffix('.whl.metadata')
+
+    with ZipFile(wheel_file, "r") as zf:
+        # Find the METADATA file inside *.dist-info/
+        metadata_file = next(
+            (name for name in zf.namelist() if name.endswith('.dist-info/METADATA')),
+            None
+        )
+        if metadata_file is None:
+            raise FileNotFoundError('No METADATA file found in wheel')
+
+    metadata_bytes = zf.read(metadata_file)
+    whl_metadata_file.write_bytes(metadata_bytes)
+    return whl_metadata_file
 
 
 class MasterStats(namedtuple('MasterStats', (
