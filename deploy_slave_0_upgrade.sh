@@ -42,4 +42,4 @@ while true; do
     fi
 done
 
-echo "✅ Completed step 0 - Now run bash deploy_slave_1.sh"
+echo "✅ Completed step 0 - Now run bash deploy_slave.sh HOSTNAME MASTER_IP"

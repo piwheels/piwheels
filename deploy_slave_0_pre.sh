@@ -29,4 +29,4 @@ done
 
 byobu-enable
 
-echo "✅ Completed prestep 0 - now start byobu and run bash deploy_slave_0_upgrade.sh"
+echo "✅ Completed prestep 0 - now start byobu and run bash deploy_slave_0_upgrade.sh (if upgrading) or bash deploy_slave.sh HOSTNAME MASTER_IP"
