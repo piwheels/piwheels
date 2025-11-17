@@ -40,8 +40,6 @@ import argparse
 from pathlib import Path
 from html.parser import HTMLParser
 
-from requests import Session
-
 from .report import report_extra, report_missing, report_broken
 from .. import __version__, terminal, const
 from ..master.db import Database
@@ -62,12 +60,11 @@ def main(args=None):
     parser = terminal.configure_parser("""\
 The piw-audit-packages script is intended to verify that the index generated
 for a package's "simple" index are valid, i.e. that the files in the index file
-all exist and optionally that the hashes recorded in the sub-indexes match the
-files on disk; and that files on external servers can be verified. Note that the
-script is intended to be run offline; i.e. the master should preferably be shut
-down during operation of this script. If the master is active, deletions may
-cause false negatives. Can be used to audit a number of given packages, or all
-packages in the index.
+all exist; optionally that the hashes recorded in the sub-indexes match the
+files on disk. Note that the script is intended to be run offline; i.e. the
+master should preferably be shut down during operation of this script. If the
+master is active, deletions may cause false negatives. Can be used to audit a
+number of given packages, or all packages in the index.
 """)
     parser.add_argument(
         'packages',
@@ -106,31 +103,18 @@ packages in the index.
         help="If specified, the script will ensure that all alias symlinks "
         "exist")
     parser.add_argument(
-        '--verify-external-links', action='store_true',
-        help="If specified, the script will verify that all external links "
-        "exist")
-    parser.add_argument(
         '--delete-extras', action='store_true',
         help="If specified, the script will delete all extraneous files")
     parser.add_argument(
-        '--master-url', metavar='URL',
-        help="If specified, the audit will assume to be running on a secondary " 
-        "archive server, rather than the master, and will attempt to verify "
-        "the state of the files on the archive server, as specified in the "
-        "simple index for the package on the master.")
+        '--archive-dir',
+        help="The location of the archive server's mount point")
     config = parser.parse_args(args)
     terminal.configure_logging(config.log_level, config.log_file)
 
-    if config.verify_external_links and config.master_url:
-        logging.error(
-            'Cannot run with both --verify-external-links and --master-url')
-        sys.exit(1)
-    
-    if config.master_url:
-        config.master_url = config.master_url.removesuffix('/')
-
     logging.info("PiWheels Audit package version %s", __version__)
     config.output_path = Path(os.path.expanduser(config.output_path))
+    if config.archive_dir:
+        config.archive_dir = Path(os.path.expanduser(config.archive_dir))
     config.packages = [canonicalize_name(pkg) for pkg in config.packages]
     db = Database(config.dsn)
     if not config.packages:
@@ -148,14 +132,11 @@ def check_package_index(config, package, db):
     """
     logging.info('checking %s', package)
 
-    session = Session()
-
     simple_pkg_dir = config.output_path / 'simple' / package
-    if config.master_url:
-        html = fetch_master_package_index(config, session, package)
-    else:
-        index_file = simple_pkg_dir / 'index.html'
-        html = index_file.read_text(encoding='utf-8')
+    if config.archive_dir:
+        archive_simple_pkg_dir = config.archive_dir / 'simple' / package
+    index_file = simple_pkg_dir / 'index.html'
+    html = index_file.read_text(encoding='utf-8')
 
     try:
         all_files = set(simple_pkg_dir.iterdir())
@@ -163,12 +144,19 @@ def check_package_index(config, package, db):
         report_missing(config, 'package dir', simple_pkg_dir)
         return
 
-    if not config.master_url:
-        try:
-            all_files.remove(index_file)
-        except KeyError:
-            report_missing(config, 'package index', index_file)
-            return
+    try:
+        if config.archive_dir:
+            all_files.update(archive_simple_pkg_dir.iterdir())
+    except OSError:
+        logging.warning("could not access archive dir %s",
+            archive_simple_pkg_dir)
+        pass
+
+    try:
+        all_files.remove(index_file)
+    except KeyError:
+        report_missing(config, 'package index', index_file)
+        return
         
     # check for broken symlinks
     for f in all_files:
@@ -178,12 +166,16 @@ def check_package_index(config, package, db):
     # check all files in the index html are present
     for href in parse_links(html):
         file_url, filehash = href.rsplit('#', 1)
-        if file_url.startswith('http'):
-            if config.verify_external_links:
-                verify_external_link(file_url, session, config)
-            continue
         filename = file_url.split('/')[-1]
-        file_path = simple_pkg_dir / filename
+        if file_url.startswith('http'):
+            if config.archive_dir:
+                file_path = archive_simple_pkg_dir / filename
+            else:
+                logging.warning("cannot check external file %s without "
+                    "--archive-dir", file_url)
+                continue
+        else:
+            file_path = simple_pkg_dir / filename
         try:
             all_files.remove(file_path)
         except KeyError:
@@ -193,7 +185,7 @@ def check_package_index(config, package, db):
             if package_tag != package:
                 report_broken(config, 'package tag', file_path)
             if config.hashes:
-                check_wheel_hash(config, package, filename, filehash)
+                check_wheel_hash(config, file_path, filehash)
 
     # all_files now contains only files that are not in the index
     # so we can report them as extraneous, or delete them
@@ -201,25 +193,6 @@ def check_package_index(config, package, db):
 
     aliases = db.get_package_aliases(package)
     check_project_symlinks(config, package, aliases)
-
-def fetch_master_package_index(config, session, package):
-    """
-    Fetch the package index from the master server and return its HTML content
-    """
-    simple_pkg_index = f"{config.master_url}/simple/{package}/index.html"
-    response = session.get(simple_pkg_index)
-    if response.status_code != 200 or not response.text:
-        report_missing(config, 'master package index', simple_pkg_index)
-        sys.exit(1)
-    return response.text
-
-def verify_external_link(file_url, session, config):
-    """
-    Verify that an external link exists by making a HEAD request to the URL
-    """
-    response = session.head(file_url)
-    if response.status_code != 200:
-        report_missing(config, 'external link', file_url)
         
 def check_project_symlinks(config, package, aliases):
     """
@@ -240,29 +213,28 @@ def check_project_symlinks(config, package, aliases):
             else:
                 report_broken(config, 'project symlink', alias_path)
 
-def check_wheel_hash(config, package, filename, filehash):
+def check_wheel_hash(config, file_path, filehash):
     """
     Verify the hash of a wheel file against the expected hash
     """
-    logging.info('checking %s/%s', package, filename)
+    logging.info('checking %s', file_path)
     algorithm, filehash = filehash.rsplit('=', 1)
-    wheel = config.output_path / 'simple' / package / filename
     try:
         state = {
             'md5': hashlib.md5,
             'sha256': hashlib.sha256,
         }[algorithm]()
     except KeyError:
-        report_broken(config, 'wheel hash algo', wheel)
+        report_broken(config, 'wheel hash algo', file_path)
     else:
-        with wheel.open('rb') as f:
+        with file_path.open('rb') as f:
             while True:
                 buf = f.read(4096)
                 if not buf:
                     break
                 state.update(buf)
         if state.hexdigest().lower() != filehash.lower():
-            report_broken(config, 'wheel', wheel)
+            report_broken(config, 'wheel', file_path)
 
 def handle_extraneous_files(config, extra_files, simple_pkg_dir):
     """
