@@ -29,6 +29,17 @@ extra-index-url=https://www.piwheels.org/simple</pre>
         <p>Note that pip version 9 or above is required.</p>
       </div>
 
+      <h5 id="uv">How do I configure uv to use piwheels?</h5>
+      <div>
+        <p>Similarly, uv has a configuration file at <code>~/.config/uv/uv.toml</code>. You will
+        need to add the following line to it:</p>
+
+        <pre>[global]
+extra-index-url = ["https://www.piwheels.org/simple"]</pre>
+
+        <p>Once that's there, uv should use piwheels.</p>
+      </div>
+
       <h5>How do I install a package from piwheels without changing my pip
         configuration?</h5>
       <div>

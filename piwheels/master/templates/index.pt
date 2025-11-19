@@ -44,6 +44,9 @@ $ source testpip/bin/activate
 (testpip) $ deactivate
 $ rm -rf testpip/</pre>
 
+    <p>Similarly, uv can be configured to use piwheels. See the relevant
+    <a href="/faq.html#uv">FAQ</a> for details.</p>
+
       <h2 id="support">Support</h2>
 
       <p>Wheels provided support all Raspberry Pi models (as of October 2023). Our wheels are only
