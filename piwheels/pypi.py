@@ -39,6 +39,7 @@ from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit, urlunsplit
 from pathlib import PosixPath
+from json import JSONDecodeError
 
 import requests
 from urllib3.exceptions import TimeoutError
@@ -398,9 +399,13 @@ def pypi_package_description(package, pypi_url='https://pypi.org/pypi'):
             return None
         else:
             raise
-    data = resp.json()
     try:
+        data = resp.json()
         description = data['info']['summary']
+    except JSONDecodeError:
+        logger.error('Failed to decode JSON when getting description for %s',
+                     package)
+        return None
     except KeyError as exc:
         logger.error('%s missing when getting description for %s',
                      exc, package)
