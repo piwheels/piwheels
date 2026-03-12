@@ -11,7 +11,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build container images
-        run: docker compose build db test-bullseye test-bookworm
+        run: docker compose build db test-bullseye test-bookworm test-trixie
 
       - name: Run tests on Debian Bullseye (Python 3.9)
         run: docker compose run --rm test-bullseye
