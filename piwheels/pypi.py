@@ -42,7 +42,7 @@ from pathlib import PosixPath
 
 import requests
 from urllib3.exceptions import TimeoutError
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, JSONDecodeError
 
 from . import __version__
 
@@ -398,9 +398,13 @@ def pypi_package_description(package, pypi_url='https://pypi.org/pypi'):
             return None
         else:
             raise
-    data = resp.json()
     try:
+        data = resp.json()
         description = data['info']['summary']
+    except JSONDecodeError:
+        logger.error('Failed to decode JSON when getting description for %s',
+                     package)
+        return None
     except KeyError as exc:
         logger.error('%s missing when getting description for %s',
                      exc, package)
