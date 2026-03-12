@@ -39,10 +39,11 @@ from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit, urlunsplit
 from pathlib import PosixPath
+from json import JSONDecodeError
 
 import requests
 from urllib3.exceptions import TimeoutError
-from requests.exceptions import RequestException, JSONDecodeError
+from requests.exceptions import RequestException
 
 from . import __version__
 
