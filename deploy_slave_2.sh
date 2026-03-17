@@ -44,7 +44,8 @@ APT_PACKAGES="vim wget curl ssh-import-id tree byobu htop pkg-config cmake time 
     coinor-libipopt-dev libsrtp2-dev default-libmysqlclient-dev golang \
     libgeos-dev $LIBGLES $LIBXLST $SOUNDFONT $POSTGRES_SERVER_DEV \
     $QMAKE $FPRINT libgphoto2-dev $LIBLGPIO libsqlite3-dev libsqlcipher-dev \
-    ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev libyaml-dev"
+    ninja-build libgirepository1.0-dev libfmt-dev libopenblas-dev libyaml-dev \
+    libheif-dev"
 
 while true; do
     if apt -y install $APT_PACKAGES; then
