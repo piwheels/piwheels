@@ -2,6 +2,8 @@
 
 set -eu
 
+source /etc/os-release
+
 sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 rm -f /boot/kernel8.img
 rm -f /etc/pip.conf
@@ -18,5 +20,11 @@ chmod 0600 /swapfile
 mkswap /swapfile
 echo "/swapfile none swap x-systemd.makefs,nofail 0 0" >> /etc/fstab
 systemctl daemon-reload
+
+if [ $VERSION_ID -ge 13 ]; then
+    echo "Removing tmpfs /tmp/ mount"
+    systemctl mask tmp.mount
+    sed -i -e 's/-$/0/' /etc/tmpfiles.d/tmp.conf
+fi
 
 echo "✅ Completed step 1"
