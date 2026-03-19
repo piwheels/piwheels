@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source /etc/os-release
+
 export DEBIAN_FRONTEND=noninteractive
 
 apt update
@@ -42,4 +44,9 @@ while true; do
     fi
 done
 
+echo "Removing tmpfs /tmp/ mount"
+systemctl mask tmp.mount
+sed -i -e 's/-$/0/' /etc/tmpfiles.d/tmp.conf
+
 echo "✅ Completed step 0 - Now run bash deploy_slave.sh"
+reboot
