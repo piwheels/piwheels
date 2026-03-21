@@ -24,7 +24,9 @@ systemctl daemon-reload
 if [ $VERSION_ID -ge 13 ]; then
     echo "Removing tmpfs /tmp/ mount"
     systemctl mask tmp.mount
-    sed -i -e 's/-$/0/' /etc/tmpfiles.d/tmp.conf
+    if [ -f /etc/tmpfiles.d/tmp.conf ]; then
+        sed -i -e 's/-$/0/' /etc/tmpfiles.d/tmp.conf
+    fi
 fi
 
 echo "✅ Completed step 1"
