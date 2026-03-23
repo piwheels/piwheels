@@ -814,10 +814,14 @@ class TransferState:
         # the case of an actual armv6 build being uploaded, it will (rightly)
         # clobber any symlink currently in place
         tmp_file.rename(final_name)
-        whl_metadata_file = create_wheel_metadata_file(final_name)
+        try:
+            whl_metadata_file = create_wheel_metadata_file(final_name)
+        except Exception:
+            whl_metadata_file = None
         if self._file_state.platform_tag == 'linux_armv7l':
             self.create_armv6_symlink(final_name)
-            self.create_armv6_symlink(whl_metadata_file)
+            if whl_metadata_file is not None:
+                self.create_armv6_symlink(whl_metadata_file)
         self._file_state.verified()
 
     def create_armv6_symlink(self, armv7_path):
@@ -853,8 +857,7 @@ def create_wheel_metadata_file(wheel_file: Path) -> Path:
         )
         if metadata_file is None:
             raise FileNotFoundError('No METADATA file found in wheel')
-
-    metadata_bytes = zf.read(metadata_file)
+        metadata_bytes = zf.read(metadata_file)
     whl_metadata_file.write_bytes(metadata_bytes)
     return whl_metadata_file
 
