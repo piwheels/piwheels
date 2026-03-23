@@ -934,6 +934,8 @@ def test_slave_says_sent_failed(
     slave_queue.send_msg('SENT')
     fs_queue.expect('VERIFY', [1, bs.package])
     fs_queue.send('ERROR', '')
+    fs_queue.expect('EXPECT', [1, fs1.as_message()])
+    fs_queue.send('OK', None)
     task.poll(0)
     fs_queue.check()
     assert slave_queue.recv_msg() == ('SEND', fs1.filename)
