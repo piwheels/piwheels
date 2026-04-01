@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.23');
+INSERT INTO configuration(id, version) VALUES (1, '0.24');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -638,9 +638,11 @@ AS $sql$
                 ELSE COALESCE(f.abi_tag, b.abi_tag, ba.abi_tag)
             END AS calc_abi_tag,
             CASE
+                -- Check for actual successful files first, so that imported
+                -- wheels on skipped versions/packages show as success not skip
+                WHEN b.status AND f.build_id IS NOT NULL THEN 'success'
                 WHEN p.skip <> '' THEN 'skip'
                 WHEN v.skip <> '' THEN 'skip'
-                WHEN b.status AND f.build_id IS NOT NULL THEN 'success'
                 WHEN NOT b.status THEN 'fail'
                 WHEN b.build_id IS NULL THEN 'pending'
                 ELSE 'error'
