@@ -34,4 +34,15 @@ systemctl enable piwheels-slave.service
 
 pip3 install .[slave] $BREAK_SYSTEM_PACKAGES
 
+echo "Saving clean shell config baselines"
+mkdir -p /home/piwheels/.shell-baselines
+useradd -m -s /bin/bash _shellbaseline 2>/dev/null
+for f in .bashrc .bash_profile .profile; do
+    if [ -f /home/_shellbaseline/$f ]; then
+        cp /home/_shellbaseline/$f /home/piwheels/.shell-baselines/$f
+    fi
+done
+userdel -r _shellbaseline 2>/dev/null || true
+chown -R piwheels:piwheels /home/piwheels/.shell-baselines
+
 echo "✅ Completed step 3"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Clean piwheels slave cargo/pip cache if disk usage is high
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cleanup-slave.sh
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
