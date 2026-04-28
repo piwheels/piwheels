@@ -848,6 +848,7 @@ def create_wheel_metadata_file(wheel_file: Path) -> Path:
     .whl.metadata file. Return the path to the new metadata file.
     """
     whl_metadata_file = wheel_file.with_suffix('.whl.metadata')
+    logging.info('Creating wheel metadata file %s', whl_metadata_file)
 
     with ZipFile(wheel_file, "r") as zf:
         # Find the METADATA file inside *.dist-info/
