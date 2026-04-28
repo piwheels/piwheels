@@ -828,7 +828,7 @@ class TransferState:
         # NOTE: dirty hack to symlink the armv7 wheel to the armv6 name;
         # the slave_driver task expects us to have done this
         arm6_name = armv7_path.with_name(
-            armv7_path.name[:-16] + 'linux_armv6l.whl')
+            armv7_path.name.replace('linux_armv7l', 'linux_armv6l'))
         try:
             arm6_name.symlink_to(armv7_path.name)
         except FileExistsError:
