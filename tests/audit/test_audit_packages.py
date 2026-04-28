@@ -295,8 +295,7 @@ def test_check_wheel_metadata_file_present(tmpdir):
     metadata = wheel.with_suffix('.whl.metadata')
     metadata.touch()
     config = mock.Mock()
-    config.output_path = Path(str(tmpdir))
-    result = check_wheel_metadata_file(config, 'foo', 'foo-0.1-py3-none-any.whl')
+    result = check_wheel_metadata_file(config, wheel)
     assert result == metadata
     config.missing_file.write.assert_not_called()
 
@@ -307,11 +306,10 @@ def test_check_wheel_metadata_file_missing_reports(tmpdir, caplog):
     wheel = pkg_dir / 'foo-0.1-py3-none-any.whl'
     wheel.touch()
     config = mock.Mock()
-    config.output_path = Path(str(tmpdir))
     config.create_missing_metadata = False
     config.missing_file = None
     with caplog.at_level(logging.ERROR):
-        result = check_wheel_metadata_file(config, 'foo', 'foo-0.1-py3-none-any.whl')
+        result = check_wheel_metadata_file(config, wheel)
     assert result == wheel.with_suffix('.whl.metadata')
     assert not result.exists()
     assert 'missing' in caplog.text
@@ -323,9 +321,8 @@ def test_check_wheel_metadata_file_missing_creates(tmpdir, wheel_bytes):
     wheel = pkg_dir / 'foo-0.1-py3-none-any.whl'
     wheel.write_bytes(wheel_bytes)
     config = mock.Mock()
-    config.output_path = Path(str(tmpdir))
     config.create_missing_metadata = True
-    result = check_wheel_metadata_file(config, 'foo', 'foo-0.1-py3-none-any.whl')
+    result = check_wheel_metadata_file(config, wheel)
     assert result == wheel.with_suffix('.whl.metadata')
     assert result.exists()
     assert result.read_bytes() == WHEEL_METADATA_CONTENT

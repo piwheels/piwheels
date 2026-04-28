@@ -191,7 +191,7 @@ def check_package_index(config, package, db):
             if config.hashes:
                 check_wheel_hash(config, file_path, filehash)
 
-            metadata_file = check_wheel_metadata_file(config, package, filename)
+            metadata_file = check_wheel_metadata_file(config, file_path)
             try:
                 all_files.remove(metadata_file)
             except KeyError:
@@ -262,15 +262,13 @@ def get_package_tag(filename):
     return canonicalize_name(package_tag)
 
 
-def check_wheel_metadata_file(config, package, filename):
-    pkg_dir = config.output_path / 'simple' / package
-    wheel_file = pkg_dir / filename
-    whl_metadata_file = wheel_file.with_suffix('.whl.metadata')
+def check_wheel_metadata_file(config, file_path):
+    whl_metadata_file = file_path.with_suffix('.whl.metadata')
     if not whl_metadata_file.exists():
         if config.create_missing_metadata:
-            create_wheel_metadata_file(wheel_file)
+            create_wheel_metadata_file(file_path)
         else:
-            report_missing(config, 'wheel metadata file', wheel_file)
+            report_missing(config, 'wheel metadata file', file_path)
     return whl_metadata_file
 
 
