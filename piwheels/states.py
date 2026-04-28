@@ -74,7 +74,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 from collections import namedtuple, deque
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 
 from .ranges import exclude, intersect
 
@@ -816,7 +816,8 @@ class TransferState:
         tmp_file.rename(final_name)
         try:
             whl_metadata_file = create_wheel_metadata_file(final_name)
-        except Exception:
+        except BadZipFile:
+            logging.error('wheel is not a valid zip: %s', final_name.name)
             whl_metadata_file = None
         if self._file_state.platform_tag == 'linux_armv7l':
             self.create_armv6_symlink(final_name)

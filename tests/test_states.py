@@ -40,6 +40,7 @@ from piwheels import const, protocols, transport
 from piwheels.states import (
     SlaveState,
     TransferState,
+    FileState,
     mkdir_override_symlink,
     create_wheel_metadata_file,
 )
@@ -494,3 +495,28 @@ def test_transfer_commit_armv6_creates_metadata_symlink(tmpdir, wheel_file_state
     arm6_metadata = metadata_path.with_name('foo-0.1-cp34-cp34m-linux_armv6l.whl.metadata')
     assert arm6_metadata.is_symlink()
     assert arm6_metadata.resolve() == metadata_path
+
+
+def _make_file_state(content):
+    from hashlib import sha256
+    h = sha256()
+    h.update(content)
+    return FileState(
+        'foo-0.1-py3-none-any.whl', len(content),
+        h.hexdigest().lower(), 'foo', '0.1', 'py3', 'none', 'any', None, {})
+
+
+def test_transfer_commit_bad_zip_logs_error(tmpdir, caplog):
+    content = b'\x00' * 256
+    tmpdir.mkdir('simple')
+    TransferState.output_path = Path(str(tmpdir))
+    trans_state = TransferState(1, _make_file_state(content))
+    trans_state._file.seek(0)
+    trans_state._file.write(content)
+    trans_state._file.flush()
+    with caplog.at_level('ERROR'):
+        trans_state.commit('foo')
+    final_path = TransferState.output_path / 'simple' / 'foo' / 'foo-0.1-py3-none-any.whl'
+    assert final_path.exists()
+    assert not final_path.with_suffix('.whl.metadata').exists()
+    assert 'not a valid zip' in caplog.text
