@@ -56,6 +56,7 @@ def log_sample():
 80.229.34.140 - - [18/Mar/2019:14:26:05 +0000] "GET /simple/pip/ HTTP/1.1" 200 7973 "-" "pip/18.0 {\"cpu\":\"armv6l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"18.0\"},\"openssl_version\":\"OpenSSL 1.1.0f  25 May 2017\",\"python\":\"2.7.13\",\"setuptools_version\":\"40.0.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.52+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:06 +0000] "GET /simple/lxml/ HTTP/1.1" 200 8015 "-" "pip/19.0.3 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.6.8\"},\"installer\":{\"name\":\"pip\",\"version\":\"19.0.3\"},\"openssl_version\":\"OpenSSL 1.1.0j  20 Nov 2018\",\"python\":\"3.6.8\",\"setuptools_version\":\"40.8.0\",\"system\":{\"name\":\"Linux\",\"release\":\"4.9.93-linuxkit-aufs\"}}"
 2a00:1098:0:82:1000:3b:1:1 - - [18/Mar/2019:14:26:06 +0000] "GET /simple/cffi/ HTTP/1.1" 200 10390 "-" "pip/9.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"stretch\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.24\"},\"name\":\"Raspbian GNU/Linux\",\"version\":\"9\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"2.7.13\"},\"installer\":{\"name\":\"pip\",\"version\":\"9.0.1\"},\"openssl_version\":\"OpenSSL 1.1.0f  25 May 2017\",\"python\":\"2.7.13\",\"system\":{\"name\":\"Linux\",\"release\":\"4.14.79-v7+\"}}"
+2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:25 +0000] "GET /simple/foo/foo-0.1-cp34-none-any.whl.metadata HTTP/1.1" 200 512 "-" "pip/23.0.1 {\"cpu\":\"armv7l\",\"distro\":{\"id\":\"bookworm\",\"libc\":{\"lib\":\"glibc\",\"version\":\"2.36\"},\"name\":\"Debian GNU/Linux\",\"version\":\"12\"},\"implementation\":{\"name\":\"CPython\",\"version\":\"3.11.2\"},\"installer\":{\"name\":\"pip\",\"version\":\"23.0.1\"},\"openssl_version\":\"OpenSSL 3.0.2 15 Mar 2022\",\"python\":\"3.11.2\",\"setuptools_version\":\"66.1.1\",\"system\":{\"name\":\"Linux\",\"release\":\"6.1.21-v8+\"}}"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:26 +0000] "GET /simple/foo/foo-0.1-cp34-none-any.whl HTTP/1.1" 200 42641 "-" "pip/19.0.3 no JSON UA"
 2a00:1098:0:80:1000:3b:1:1 - - [18/Mar/2019:14:26:28 +0000] "GET /simple/foo/foo-0.2-cp34-none-any.whl HTTP/1.1" 200 42641 "-" "pip/evil {invalid JSON}"
 2a00:1098:0:80:1000:3b:1:1 - - [15/Jun/2020:21:20:16 +0000] "GET /project/gpiozero/json/ HTTP/1.1" 200 2509872 "-" "Wget/1.20.3 (linux-gnu)"
@@ -140,6 +141,13 @@ def log_sample():
             datetime(2019, 3, 18, 14, 26, 6, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
             'CPython', '2.7.13', 'pip', '9.0.1', None,
+        ]),
+        ('LOGMETADATA', [
+            'foo-0.1-cp34-none-any.whl',
+            '2a00:1098:0:80:1000:3b:1:1',
+            datetime(2019, 3, 18, 14, 26, 25, tzinfo=UTC),
+            'armv7l', 'Debian GNU/Linux', '12', 'Linux', '6.1.21-v8+',
+            'CPython', '3.11.2', 'pip', '23.0.1', '66.1.1',
         ]),
         ('LOGDOWNLOAD', [
             'foo-0.1-cp34-none-any.whl',

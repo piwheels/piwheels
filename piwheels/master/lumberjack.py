@@ -37,7 +37,8 @@ from datetime import timedelta
 
 from .. import protocols, transport, tasks
 from ..states import (
-    DownloadState, SearchState, ProjectState, JSONState, PageState)
+    DownloadState, DownloadMetadataState, SearchState, ProjectState,
+    JSONState, PageState)
 from .the_oracle import DbClient
 
 
@@ -62,11 +63,12 @@ class Lumberjack(tasks.PauseableTask):
         self.register(log_queue, self.handle_log)
         self.db = DbClient(config, self.logger)
         self.access_handlers = {
-            'LOGDOWNLOAD': (DownloadState, self.db.log_download, 'downloads'),
-            'LOGSEARCH':   (SearchState,   self.db.log_search,   'searches'),
-            'LOGPROJECT':  (ProjectState,  self.db.log_project,  'project hits'),
-            'LOGJSON':     (JSONState,     self.db.log_json,     'JSON hits'),
-            'LOGPAGE':     (PageState,     self.db.log_page,     'page hits'),
+            'LOGDOWNLOAD':          (DownloadState,         self.db.log_download,          'downloads'),
+            'LOGMETADATA':          (DownloadMetadataState, self.db.log_metadata_download, 'metadata downloads'),
+            'LOGSEARCH':            (SearchState,           self.db.log_search,            'searches'),
+            'LOGPROJECT':           (ProjectState,          self.db.log_project,           'project hits'),
+            'LOGJSON':              (JSONState,             self.db.log_json,              'JSON hits'),
+            'LOGPAGE':              (PageState,             self.db.log_page,              'page hits'),
         }
         self.counters = {msg: 0 for msg in self.access_handlers}
         self.every(timedelta(minutes=1), self.log_counters)

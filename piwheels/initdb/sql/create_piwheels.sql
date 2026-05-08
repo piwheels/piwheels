@@ -255,8 +255,8 @@ CREATE TABLE metadata_downloads (
     setuptools_version  VARCHAR(100) DEFAULT NULL
 );
 
-CREATE INDEX metadata_files_downloads ON metadata_downloads(filename);
-CREATE INDEX metadata_accessed_at_downloads ON metadata_downloads(accessed_at DESC);
+CREATE INDEX metadata_downloads_files ON metadata_downloads(filename);
+CREATE INDEX metadata_downloads_accessed_at ON metadata_downloads(accessed_at DESC);
 GRANT SELECT ON metadata_downloads TO {username};
 
 -- searches

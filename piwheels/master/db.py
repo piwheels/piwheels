@@ -48,7 +48,8 @@ from sqlalchemy.exc import SAWarning
 
 from .. import __version__, protocols
 from ..states import (
-    BuildState, DownloadState, SearchState, ProjectState, JSONState, PageState)
+    BuildState, DownloadState, DownloadMetadataState, SearchState,
+    ProjectState, JSONState, PageState)
 
 
 UTC = timezone.utc
@@ -354,6 +355,33 @@ class Database:
                 "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
                 (
                     sanitize(download.filename),
+                    download.host,
+                    download.timestamp.astimezone(UTC).replace(tzinfo=None),
+                    sanitize(download.arch),
+                    sanitize(download.distro_name),
+                    sanitize(download.distro_version),
+                    sanitize(download.os_name),
+                    sanitize(download.os_version),
+                    sanitize(download.py_name),
+                    sanitize(download.py_version),
+                    sanitize(download.installer_name),
+                    sanitize(download.installer_version),
+                    sanitize(download.setuptools_version),
+                ))
+
+    @rpc('LOGMETADATA',
+         lambda args: args[1].as_message(),
+         lambda data: (DownloadMetadataState.from_message(data),))
+    def log_metadata_download(self, download):
+        """
+        Log a metadata file fetch in the database, including data derived from
+        JSON in pip's user-agent.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (log_metadata_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+                (
+                    sanitize(download.filename.removesuffix('.metadata')),
                     download.host,
                     download.timestamp.astimezone(UTC).replace(tzinfo=None),
                     sanitize(download.arch),

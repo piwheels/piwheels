@@ -350,6 +350,7 @@ mr_chase = Protocol(recv={
 
 lumberjack = Protocol(recv={
     'LOGDOWNLOAD': _download_state,
+    'LOGMETADATA': _download_state,
     'LOGSEARCH': _search_state,
     'LOGPROJECT': _project_state,
     'LOGJSON': _json_state,
@@ -390,6 +391,7 @@ the_oracle = Protocol(recv={
     'YANKVER':     ExactSequence([str, str]),  # package, version
     'UNYANKVER':   ExactSequence([str, str]),  # package, version
     'LOGDOWNLOAD': _download_state,
+    'LOGMETADATA': _download_state,
     'LOGSEARCH':   _search_state,
     'LOGPROJECT':  _project_state,
     'LOGJSON':     _json_state,
