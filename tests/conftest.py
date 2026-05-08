@@ -44,8 +44,8 @@ from requests.exceptions import HTTPError
 
 from piwheels import const, transport, protocols
 from piwheels.states import (
-    BuildState, FileState, DownloadState, SearchState, ProjectState, JSONState,
-    PageState
+    BuildState, FileState, DownloadState, DownloadMetadataState, SearchState,
+    ProjectState, JSONState, PageState
 )
 from piwheels.protocols import NoData
 from piwheels.pypi import pypi_package_description
@@ -212,6 +212,15 @@ def project_data(request, build_state_hacked):
 def download_state(request, file_state):
     return DownloadState(
         file_state.filename, '123.4.5.6',
+        datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
+        'Raspbian', '9', 'Linux', '', 'CPython', '3.5',
+        'pip', None, None)
+
+
+@pytest.fixture()
+def download_metadata_state(request):
+    return DownloadMetadataState(
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl', '123.4.5.6',
         datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
         'Raspbian', '9', 'Linux', '', 'CPython', '3.5',
         'pip', None, None)

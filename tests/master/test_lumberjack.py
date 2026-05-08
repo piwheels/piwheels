@@ -70,6 +70,15 @@ def test_log_valid_download(db_queue, log_queue, stats_queue, download_state,
     db_queue.check()
 
 
+def test_log_valid_metadata_download(db_queue, log_queue, stats_queue,
+                                     download_metadata_state, task):
+    log_queue.send_msg('LOGMETADATA', list(download_metadata_state))
+    db_queue.expect('LOGMETADATA', download_metadata_state)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+
+
 def test_log_valid_search(db_queue, log_queue, stats_queue, search_state,
                           task):
     log_queue.send_msg('LOGSEARCH', list(search_state))
