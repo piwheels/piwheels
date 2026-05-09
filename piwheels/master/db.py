@@ -381,7 +381,7 @@ class Database:
             self._conn.execute(
                 "VALUES (log_metadata_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
                 (
-                    sanitize(download.filename.removesuffix('.metadata')),
+                    sanitize(download.filename),
                     download.host,
                     download.timestamp.astimezone(UTC).replace(tzinfo=None),
                     sanitize(download.arch),
