@@ -996,6 +996,36 @@ class DownloadState(namedtuple('DownloadState', (
         return cls(*value)
 
 
+class DownloadMetadataState(namedtuple('DownloadMetadataState', (
+    'filename',
+    'host',
+    'timestamp',
+    'arch',
+    'distro_name',
+    'distro_version',
+    'os_name',
+    'os_version',
+    'py_name',
+    'py_version',
+    'installer_name',
+    'installer_version',
+    'setuptools_version',
+))):
+    """
+    Represents the state of the log entry for a metadata file fetch, i.e. a
+    request for a ``.whl.metadata`` file (PEP 658). The :attr:`filename` field
+    holds the wheel filename with ``.metadata`` stripped.
+    """
+    __slots__ = ()
+
+    def as_message(self):
+        return list(self)
+
+    @classmethod
+    def from_message(cls, value):
+        return cls(*value)
+
+
 class SearchState(namedtuple('SearchState', (
     'package',
     'host',

@@ -220,6 +220,16 @@ def test_log_download(db_intf, db, with_files, download_state):
         "SELECT filename FROM downloads").first() == (download_state.filename,)
 
 
+def test_log_metadata_download(db_intf, db, download_metadata_state):
+    assert db.execute(
+        "SELECT COUNT(*) FROM metadata_downloads").first() == (0,)
+    db_intf.log_metadata_download(download_metadata_state)
+    assert db.execute(
+        "SELECT COUNT(*) FROM metadata_downloads").first() == (1,)
+    assert db.execute(
+        "SELECT filename FROM metadata_downloads").first() == (download_metadata_state.filename,)
+
+
 def test_log_search(db_intf, db, with_files, search_state):
     assert db.execute(
         "SELECT COUNT(*) FROM searches").first() == (0,)

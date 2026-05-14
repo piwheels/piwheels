@@ -70,6 +70,15 @@ def test_log_valid_download(db_queue, log_queue, stats_queue, download_state,
     db_queue.check()
 
 
+def test_log_valid_metadata_download(db_queue, log_queue, stats_queue,
+                                     download_metadata_state, task):
+    log_queue.send_msg('LOGMETADATA', list(download_metadata_state))
+    db_queue.expect('LOGMETADATA', download_metadata_state)
+    db_queue.send('OK', None)
+    task.poll(0)
+    db_queue.check()
+
+
 def test_log_valid_search(db_queue, log_queue, stats_queue, search_state,
                           task):
     log_queue.send_msg('LOGSEARCH', list(search_state))
@@ -113,22 +122,43 @@ def test_log_invalid(db_queue, log_queue, stats_queue, task):
 
 
 def test_log_summary(db_queue, log_queue, stats_queue, download_state,
-                     project_state, task):
+                     download_metadata_state, search_state, project_state,
+                     json_state, page_state, task):
     log_queue.send_msg('LOGDOWNLOAD', list(download_state))
+    log_queue.send_msg('LOGMETADATA', list(download_metadata_state))
+    log_queue.send_msg('LOGSEARCH', list(search_state))
     log_queue.send_msg('LOGPROJECT', list(project_state))
+    log_queue.send_msg('LOGJSON', list(json_state))
+    log_queue.send_msg('LOGPAGE', list(page_state))
     db_queue.expect('LOGDOWNLOAD', download_state)
+    db_queue.send('OK', None)
+    db_queue.expect('LOGMETADATA', download_metadata_state)
+    db_queue.send('OK', None)
+    db_queue.expect('LOGSEARCH', search_state)
     db_queue.send('OK', None)
     db_queue.expect('LOGPROJECT', project_state)
     db_queue.send('OK', None)
+    db_queue.expect('LOGJSON', json_state)
+    db_queue.send('OK', None)
+    db_queue.expect('LOGPAGE', page_state)
+    db_queue.send('OK', None)
     task.poll(0)
     assert stats_queue.recv_msg() == ('LOGDOWNLOAD', 0)
+    task.poll(0)
+    task.poll(0)
+    task.poll(0)
+    task.poll(0)
     task.poll(0)
     db_queue.check()
     task.log_counters()
     # Index [-2] is python<3.8 for call.args
     assert set(call[-2] for call in task.logger.info.call_args_list) == {
         ('logged %d %s in the last minute', 1, 'downloads'),
+        ('logged %d %s in the last minute', 1, 'metadata downloads'),
+        ('logged %d %s in the last minute', 1, 'searches'),
         ('logged %d %s in the last minute', 1, 'project hits'),
+        ('logged %d %s in the last minute', 1, 'JSON hits'),
+        ('logged %d %s in the last minute', 1, 'page hits'),
     }
     for msg, count in task.counters.items():
         assert count == 0
