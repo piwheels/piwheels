@@ -1,0 +1,4 @@
+apt_packages_extra:
+  - libadios2-common-c-dev
+  - postgresql-server-dev-17
+  - liblgpio-dev

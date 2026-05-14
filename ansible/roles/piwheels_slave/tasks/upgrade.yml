@@ -1,0 +1,82 @@
+---
+- name: Update apt cache before upgrade
+  apt:
+    update_cache: yes
+
+- name: Full upgrade on Bookworm before dist-upgrade
+  apt:
+    upgrade: full
+  register: pre_upgrade
+  until: pre_upgrade is success
+  retries: 5
+  delay: 15
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Autoremove before dist-upgrade
+  apt:
+    autoremove: yes
+    purge: yes
+  register: pre_autoremove
+  until: pre_autoremove is success
+  retries: 3
+  delay: 10
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Point sources.list at Trixie
+  replace:
+    path: /etc/apt/sources.list
+    regexp: 'bookworm'
+    replace: 'trixie'
+
+- name: Point raspi.list at Trixie
+  replace:
+    path: /etc/apt/sources.list.d/raspi.list
+    regexp: 'bookworm'
+    replace: 'trixie'
+
+- name: Update apt cache for Trixie
+  apt:
+    update_cache: yes
+
+- name: Dist-upgrade to Trixie
+  apt:
+    upgrade: full
+  register: trixie_upgrade
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  # Allow failures so the rescue block can handle libssl3 conflicts
+  ignore_errors: true
+
+- name: Force-install libssl3 to break dependency cycle (if needed)
+  apt:
+    name:
+      - libssl3
+      - libssl-dev
+    state: present
+    dpkg_options: force-overwrite
+  when: trixie_upgrade is failed
+  ignore_errors: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Retry dist-upgrade after libssl3 fix
+  apt:
+    upgrade: full
+  when: trixie_upgrade is failed
+  register: trixie_upgrade_retry
+  until: trixie_upgrade_retry is success
+  retries: 3
+  delay: 15
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Mask tmp.mount
+  systemd:
+    name: tmp.mount
+    masked: yes
+
+- name: Reboot after Trixie upgrade
+  reboot:
+    reboot_timeout: 300

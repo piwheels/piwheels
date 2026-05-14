@@ -1,0 +1,115 @@
+---
+- name: Copy piwheels configuration
+  copy:
+    src: piwheels.conf
+    dest: /etc/piwheels.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copy check-disk-space script
+  copy:
+    src: check-disk-space.sh
+    dest: /usr/local/bin/check-disk-space.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy cleanup-slave script
+  copy:
+    src: cleanup-slave.sh
+    dest: /usr/local/bin/cleanup-slave.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy systemd unit files
+  copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - piwheels-slave-check-disk-space.service
+    - piwheels-slave-check-disk-space.timer
+    - piwheels-slave-cleanup.service
+    - piwheels-slave-cleanup.timer
+
+- name: Clone or update piwheels repository
+  git:
+    repo: https://github.com/piwheels/piwheels
+    dest: /root/piwheels
+    version: HEAD
+
+- name: Copy piwheels-slave service file from repository
+  copy:
+    src: /root/piwheels/piwheels-slave.service
+    dest: /etc/systemd/system/piwheels-slave.service
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install piwheels slave package
+  shell: >
+    pip3 install .[slave]
+    {{ '--break-system-packages' if ansible_distribution_major_version | int > 11 else '' }}
+  args:
+    chdir: /root/piwheels
+
+- name: Create shell-baselines directory
+  file:
+    path: /home/piwheels/.shell-baselines
+    state: directory
+    owner: piwheels
+    group: piwheels
+    mode: '0755'
+
+- name: Create temporary user for shell baseline capture
+  user:
+    name: _shellbaseline
+    create_home: yes
+    shell: /bin/bash
+    state: present
+
+- name: Copy shell config baselines from fresh user
+  copy:
+    src: "/home/_shellbaseline/{{ item }}"
+    dest: "/home/piwheels/.shell-baselines/{{ item }}"
+    remote_src: yes
+    owner: piwheels
+    group: piwheels
+  loop:
+    - .bashrc
+    - .bash_profile
+    - .profile
+  ignore_errors: true
+
+- name: Remove temporary baseline user
+  user:
+    name: _shellbaseline
+    state: absent
+    remove: yes
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Enable piwheels-slave service
+  systemd:
+    name: piwheels-slave
+    enabled: yes
+
+- name: Enable and start disk monitoring timers
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop:
+    - piwheels-slave-check-disk-space.timer
+    - piwheels-slave-cleanup.timer
+
+- name: Reboot to complete deployment
+  reboot:
+    reboot_timeout: 300

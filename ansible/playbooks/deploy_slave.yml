@@ -1,0 +1,10 @@
+---
+- name: Deploy piwheels build slave
+  hosts: "{{ target | default('piwheels_slaves') }}"
+  become: yes
+  # Deploy one at a time to avoid simultaneous reboots
+  serial: 1
+  gather_facts: yes
+
+  roles:
+    - piwheels_slave

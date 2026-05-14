@@ -1,0 +1,88 @@
+---
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update /etc/hostname
+  copy:
+    content: "{{ inventory_hostname }}\n"
+    dest: /etc/hostname
+
+- name: Disable SSH password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '#?PasswordAuthentication.*'
+    line: 'PasswordAuthentication no'
+  notify: restart sshd
+
+- name: Remove 64-bit kernel image
+  file:
+    path: /boot/kernel8.img
+    state: absent
+
+- name: Remove system pip.conf
+  file:
+    path: /etc/pip.conf
+    state: absent
+
+- name: Create piwheels group
+  group:
+    name: piwheels
+    state: present
+
+- name: Create piwheels user
+  user:
+    name: piwheels
+    group: piwheels
+    home: /home/piwheels
+    shell: /bin/bash
+    state: present
+
+- name: Remove piwheels user password
+  shell: passwd -d piwheels
+
+- name: Create swap file
+  command: fallocate -x -l 1G /swapfile
+  args:
+    creates: /swapfile
+  register: swapfile_created
+
+- name: Set swap file permissions
+  file:
+    path: /swapfile
+    mode: '0600'
+
+- name: Format swap file
+  command: mkswap /swapfile
+  when: swapfile_created.changed
+
+- name: Add swap entry to fstab
+  lineinfile:
+    path: /etc/fstab
+    line: "/swapfile none swap x-systemd.makefs,nofail 0 0"
+    state: present
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Mask tmp.mount (Trixie)
+  systemd:
+    name: tmp.mount
+    masked: yes
+  when: ansible_distribution_major_version | int >= 13
+
+- name: Check if tmpfiles.d/tmp.conf exists
+  stat:
+    path: /etc/tmpfiles.d/tmp.conf
+  register: tmpfiles_tmp
+  when: ansible_distribution_major_version | int >= 13
+
+- name: Fix tmpfiles.d/tmp.conf size field (Trixie)
+  replace:
+    path: /etc/tmpfiles.d/tmp.conf
+    regexp: '-$'
+    replace: '0'
+  when:
+    - ansible_distribution_major_version | int >= 13
+    - tmpfiles_tmp.stat.exists

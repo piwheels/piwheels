@@ -1,0 +1,44 @@
+---
+- name: Sync system clock from HTTP Date header
+  shell: date -s "$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep -i '^ Date:' | cut -d' ' -f4-)"
+  ignore_errors: true
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Fix any broken packages
+  apt:
+    state: fixed
+  ignore_errors: true
+
+- name: Install chrony
+  apt:
+    name: chrony
+    state: present
+  register: chrony_install
+  until: chrony_install is success
+  retries: 5
+  delay: 15
+
+- name: Enable and start chrony
+  systemd:
+    name: chrony
+    enabled: yes
+    state: started
+
+- name: Install vim and byobu
+  apt:
+    name:
+      - vim
+      - byobu
+    state: present
+  register: vim_byobu_install
+  until: vim_byobu_install is success
+  retries: 5
+  delay: 15
+
+- name: Enable byobu for root
+  command: byobu-enable
+  args:
+    creates: /root/.byobu

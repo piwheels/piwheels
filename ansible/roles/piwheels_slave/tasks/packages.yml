@@ -1,0 +1,31 @@
+---
+- name: Load version-specific package vars
+  include_vars: "debian_{{ ansible_distribution_major_version }}.yml"
+
+- name: Fix broken packages before install
+  apt:
+    state: fixed
+  ignore_errors: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install apt packages
+  apt:
+    name: "{{ apt_packages_common + apt_packages_extra }}"
+    state: present
+  register: apt_install
+  until: apt_install is success
+  retries: 5
+  delay: 30
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Autoremove unneeded packages
+  apt:
+    autoremove: yes
+  register: apt_autoremove
+  until: apt_autoremove is success
+  retries: 3
+  delay: 10
+  environment:
+    DEBIAN_FRONTEND: noninteractive

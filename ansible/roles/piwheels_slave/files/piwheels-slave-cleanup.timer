@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily cleanup of piwheels slave cargo/pip cache
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

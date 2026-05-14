@@ -1,0 +1,14 @@
+[Unit]
+Description=Shutdown if disk space is critically low
+DefaultDependencies=no
+After=local-fs.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check-disk-space.sh
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

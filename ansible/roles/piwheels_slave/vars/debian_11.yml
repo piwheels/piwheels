@@ -1,0 +1,4 @@
+apt_packages_extra:
+  - libatlas-base-dev
+  - libadios-dev
+  - postgresql-server-dev-13

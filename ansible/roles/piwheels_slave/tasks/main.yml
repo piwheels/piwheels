@@ -1,0 +1,25 @@
+---
+- name: Pre-setup (time sync, chrony, byobu)
+  import_tasks: pre.yml
+  tags: [pre]
+
+- name: Upgrade to Trixie
+  include_tasks: upgrade.yml
+  when: upgrade_to_trixie | default(false)
+  tags: [upgrade]
+
+- name: System configuration
+  import_tasks: system.yml
+  tags: [system]
+
+- name: Install apt packages
+  import_tasks: packages.yml
+  tags: [packages]
+
+- name: Install Rust and Python packages
+  import_tasks: rust_python.yml
+  tags: [rust, python]
+
+- name: Deploy piwheels service
+  import_tasks: service.yml
+  tags: [service]

@@ -1,0 +1,23 @@
+---
+- name: Check if rustup is already installed for piwheels user
+  stat:
+    path: /home/piwheels/.cargo/bin/rustup
+  register: rustup_stat
+
+- name: Install Rust for piwheels user
+  shell: curl -sSf https://sh.rustup.rs | runuser -- - piwheels -s -- -y --profile minimal --default-host arm-unknown-linux-gnueabihf
+  when: not rustup_stat.stat.exists
+
+- name: Set pip extra args for this Debian version
+  set_fact:
+    pip_extra_args: >-
+      --extra-index-url https://www.piwheels.org/simple
+      --prefer-binary
+      --ignore-installed
+      {{ '--break-system-packages' if ansible_distribution_major_version | int > 11 else '' }}
+
+- name: Install Python packages
+  shell: pip3 install {{ item }} {{ pip_extra_args }}
+  loop: "{{ python_packages }}"
+  loop_control:
+    label: "{{ item }}"
