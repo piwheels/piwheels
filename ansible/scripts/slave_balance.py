@@ -30,6 +30,7 @@ BALANCE_CONFIG = ANSIBLE_DIR / 'inventory' / 'balance.yml'
 
 SLAVE_PREFIX = 'pw-slave'
 ABI_GROUPS = ['cp39', 'cp311', 'cp313']
+PROTECTED = {'piwheels'}  # master — never cancel or manage
 DEFAULT_MODEL = 4
 DEFAULT_DISK = 30  # GB
 
@@ -113,6 +114,8 @@ def provision_slave(name, model, disk, ssh_key_path):
 
 def cancel_slave(name):
     """Delete a Pi via hostedpi CLI."""
+    if name in PROTECTED:
+        raise RuntimeError(f'Refusing to cancel protected instance: {name}')
     hostedpi('cancel', name, '--yes')
 
 
