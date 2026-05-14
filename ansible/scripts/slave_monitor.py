@@ -24,7 +24,7 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 ANSIBLE_DIR = SCRIPT_DIR.parent
 INVENTORY = ANSIBLE_DIR / 'inventory' / 'hosts.yml'
 DEPLOY_PLAYBOOK = ANSIBLE_DIR / 'playbooks' / 'deploy_slave.yml'
-STATE_FILE = Path('/var/lib/piwheels/slave-monitor.json')
+STATE_FILE = Path('/home/piwheels/slave-monitor-state.json')
 
 RESTART_COOLDOWN = timedelta(minutes=15)
 MAX_CHECK_WORKERS = 10

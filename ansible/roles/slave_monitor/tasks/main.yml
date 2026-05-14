@@ -31,12 +31,12 @@
     - slave_monitor.py
     - slave_balance.py
 
-- name: Create state directory
+- name: Create piwheels home directory
   file:
-    path: /var/lib/piwheels
+    path: /home/piwheels
     state: directory
-    owner: root
-    group: root
+    owner: piwheels
+    group: piwheels
     mode: '0755'
 
 - name: Install systemd unit files
