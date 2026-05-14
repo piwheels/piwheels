@@ -186,7 +186,7 @@ def main():
             print(f'\nProvisioning {delta} {abi} slave(s):')
             for _ in range(delta):
                 num = next_slave_number(inv, abi)
-                name = f'{SLAVE_PREFIX}-{abi}-{num}'
+                name = f'{SLAVE_PREFIX}-{abi}-{num:02d}'
                 print(f'  Creating {name}...')
                 ssh_hostname, ssh_port = provision_slave(name, args.model, args.disk, args.ssh_key)
                 group['hosts'][name] = {
