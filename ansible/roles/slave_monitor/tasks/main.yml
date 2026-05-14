@@ -20,12 +20,12 @@
 - name: Clone or update piwheels repository
   git:
     repo: https://github.com/piwheels/piwheels
-    dest: /opt/piwheels/piwheels
+    dest: /home/piwheels/piwheels
     version: HEAD
 
 - name: Make monitor scripts executable
   file:
-    path: "/opt/piwheels/piwheels/ansible/scripts/{{ item }}"
+    path: "/home/piwheels/piwheels/ansible/scripts/{{ item }}"
     mode: '0755'
   loop:
     - slave_monitor.py
