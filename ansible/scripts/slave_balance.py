@@ -25,10 +25,19 @@ ANSIBLE_DIR = SCRIPT_DIR.parent
 INVENTORY = ANSIBLE_DIR / 'inventory' / 'hosts.yml'
 DEPLOY_PLAYBOOK = ANSIBLE_DIR / 'playbooks' / 'deploy_slave.yml'
 
+BALANCE_CONFIG = ANSIBLE_DIR / 'inventory' / 'balance.yml'
+
 SLAVE_PREFIX = 'pw-slave'
 ABI_GROUPS = ['cp39', 'cp311', 'cp313']
 DEFAULT_MODEL = 4
 DEFAULT_DISK = 30  # GB
+
+
+def load_balance_config():
+    if not BALANCE_CONFIG.exists():
+        return {}
+    with open(BALANCE_CONFIG) as f:
+        return yaml.safe_load(f) or {}
 
 
 def load_inventory():
@@ -125,9 +134,14 @@ def main():
                         help='Show plan without making changes')
     args = parser.parse_args()
 
-    desired = {abi: getattr(args, abi) for abi in ABI_GROUPS if getattr(args, abi) is not None}
+    config = load_balance_config()
+    desired = {
+        abi: getattr(args, abi) if getattr(args, abi) is not None else config.get(abi)
+        for abi in ABI_GROUPS
+        if getattr(args, abi) is not None or abi in config
+    }
     if not desired:
-        parser.error('Specify at least one ABI count, e.g. --cp311 3')
+        parser.error('Specify at least one ABI count, or add targets to inventory/balance.yml')
 
     inv = load_inventory()
     counts = current_counts(inv)

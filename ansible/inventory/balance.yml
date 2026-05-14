@@ -1,0 +1,7 @@
+# Desired number of build slaves per ABI.
+# Used by slave_balance.py as default target counts.
+# CLI arguments (--cp39, --cp311, --cp313) override these values.
+
+cp39: 2
+cp311: 0
+cp313: 0

@@ -1,11 +1,17 @@
 ---
-- name: Install Python dependencies for monitor scripts
-  pip:
+- name: Install apt dependencies for monitor scripts
+  apt:
     name:
-      - pyyaml
-      - hostedpi
+      - ansible
+      - python3-yaml
+    state: present
+
+- name: Install hostedpi CLI
+  pip:
+    name: hostedpi
     state: present
     executable: pip3
+    extra_args: "{{ '--break-system-packages' if ansible_distribution_major_version | int > 11 else '' }}"
 
 - name: Clone or update piwheels repository
   git:
