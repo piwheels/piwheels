@@ -1,0 +1,48 @@
+---
+- name: Install Python dependencies for monitor scripts
+  pip:
+    name:
+      - pyyaml
+      - hostedpi
+    state: present
+    executable: pip3
+
+- name: Clone or update piwheels repository
+  git:
+    repo: https://github.com/piwheels/piwheels
+    dest: /opt/piwheels/piwheels
+    version: HEAD
+
+- name: Make monitor scripts executable
+  file:
+    path: "/opt/piwheels/piwheels/ansible/scripts/{{ item }}"
+    mode: '0755'
+  loop:
+    - slave_monitor.py
+    - slave_balance.py
+
+- name: Create state directory
+  file:
+    path: /var/lib/piwheels
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install systemd unit files
+  copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - piwheels-slave-monitor.service
+    - piwheels-slave-monitor.timer
+  notify: reload systemd
+
+- name: Enable and start monitor timer
+  systemd:
+    name: piwheels-slave-monitor.timer
+    enabled: yes
+    state: started

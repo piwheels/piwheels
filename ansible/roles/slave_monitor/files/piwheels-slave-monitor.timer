@@ -1,0 +1,10 @@
+[Unit]
+Description=Run piwheels slave health monitor every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=piwheels-slave-monitor.service
+
+[Install]
+WantedBy=timers.target

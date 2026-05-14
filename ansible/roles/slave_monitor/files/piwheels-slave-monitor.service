@@ -1,0 +1,10 @@
+[Unit]
+Description=Piwheels slave health monitor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/piwheels/piwheels/ansible/scripts/slave_monitor.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=piwheels-slave-monitor
