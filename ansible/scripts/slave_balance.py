@@ -16,6 +16,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -97,10 +98,17 @@ def provision_slave(name, model, disk, ssh_key_path):
     if ssh_key_path and Path(ssh_key_path).exists():
         cmd += ['--ssh-key-path', str(ssh_key_path)]
     hostedpi(*cmd)
-    # Hostname is always predictable; port requires an API call
     ssh_hostname = f'ssh.{name}.hostedpi.com'
-    ssh_port = int(hostedpi('info', 'ssh-port', name))
-    return ssh_hostname, ssh_port
+    # Retry ssh-port — the server may not be immediately visible after provisioning
+    for attempt in range(5):
+        try:
+            ssh_port = int(hostedpi('info', 'ssh-port', name))
+            return ssh_hostname, ssh_port
+        except (RuntimeError, ValueError):
+            if attempt == 4:
+                raise
+            time.sleep(10)
+    raise RuntimeError(f'Could not get SSH port for {name}')
 
 
 def cancel_slave(name):
