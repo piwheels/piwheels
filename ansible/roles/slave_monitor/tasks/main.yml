@@ -6,12 +6,16 @@
       - python3-yaml
     state: present
 
-- name: Install hostedpi CLI
+- name: Create hostedpi venv
+  command: python3 -m venv /home/piwheels/.venvs/hostedpi
+  args:
+    creates: /home/piwheels/.venvs/hostedpi/bin/python
+
+- name: Install hostedpi into venv
   pip:
     name: hostedpi
     state: present
-    executable: pip3
-    extra_args: "{{ '--break-system-packages' if ansible_distribution_major_version | int > 11 else '' }}"
+    virtualenv: /home/piwheels/.venvs/hostedpi
 
 - name: Clone or update piwheels repository
   git:
