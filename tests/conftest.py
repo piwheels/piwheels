@@ -28,11 +28,13 @@
 
 
 import os
+from io import BytesIO
 from unittest import mock
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from threading import Thread, Event
 from urllib.parse import urlsplit
+from zipfile import ZipFile
 
 import pytest
 import requests
@@ -81,9 +83,30 @@ def find_messages(records, **kwargs):
             yield record
 
 
+WHEEL_METADATA_CONTENT = b'Metadata-Version: 2.1\nName: foo\nVersion: 0.1\n'
+
+
 @pytest.fixture()
 def file_content(request):
     return b'\x01\x02\x03\x04\x05\x06\x07\x08' * 15432  # 123456 bytes
+
+
+@pytest.fixture()
+def wheel_bytes():
+    buf = BytesIO()
+    with ZipFile(buf, 'w') as zf:
+        zf.writestr('foo-0.1.dist-info/METADATA', WHEEL_METADATA_CONTENT)
+    return buf.getvalue()
+
+
+@pytest.fixture()
+def wheel_file_state(wheel_bytes):
+    h = sha256()
+    h.update(wheel_bytes)
+    return FileState(
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl', len(wheel_bytes),
+        h.hexdigest().lower(), 'foo', '0.1', 'cp34', 'cp34m', 'linux_armv7l',
+        '>=3', {'apt': ['libc6'], 'pip': ['bar']})
 
 
 @pytest.fixture()

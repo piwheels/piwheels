@@ -28,14 +28,16 @@
 
 
 import hashlib
+import logging
 from queue import Queue
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-from conftest import find_messages
+from conftest import find_messages, WHEEL_METADATA_CONTENT
 from piwheels import __version__
-from piwheels.audit.audit_packages import main
+from piwheels.audit.audit_packages import main, check_wheel_metadata_file
 
 
 @pytest.fixture()
@@ -283,3 +285,44 @@ def test_version(capsys):
 #     assert missing.read_text() == ''
 #     assert extra.read_text() == ''
 #     assert broken.read_text() == ''
+
+
+def test_check_wheel_metadata_file_present(tmpdir):
+    pkg_dir = Path(str(tmpdir)) / 'simple' / 'foo'
+    pkg_dir.mkdir(parents=True)
+    wheel = pkg_dir / 'foo-0.1-py3-none-any.whl'
+    wheel.touch()
+    metadata = wheel.with_suffix('.whl.metadata')
+    metadata.touch()
+    config = mock.Mock()
+    result = check_wheel_metadata_file(config, wheel)
+    assert result == metadata
+    config.missing_file.write.assert_not_called()
+
+
+def test_check_wheel_metadata_file_missing_reports(tmpdir, caplog):
+    pkg_dir = Path(str(tmpdir)) / 'simple' / 'foo'
+    pkg_dir.mkdir(parents=True)
+    wheel = pkg_dir / 'foo-0.1-py3-none-any.whl'
+    wheel.touch()
+    config = mock.Mock()
+    config.create_missing_metadata = False
+    config.missing_file = None
+    with caplog.at_level(logging.ERROR):
+        result = check_wheel_metadata_file(config, wheel)
+    assert result == wheel.with_suffix('.whl.metadata')
+    assert not result.exists()
+    assert 'missing' in caplog.text
+
+
+def test_check_wheel_metadata_file_missing_creates(tmpdir, wheel_bytes):
+    pkg_dir = Path(str(tmpdir)) / 'simple' / 'foo'
+    pkg_dir.mkdir(parents=True)
+    wheel = pkg_dir / 'foo-0.1-py3-none-any.whl'
+    wheel.write_bytes(wheel_bytes)
+    config = mock.Mock()
+    config.create_missing_metadata = True
+    result = check_wheel_metadata_file(config, wheel)
+    assert result == wheel.with_suffix('.whl.metadata')
+    assert result.exists()
+    assert result.read_bytes() == WHEEL_METADATA_CONTENT

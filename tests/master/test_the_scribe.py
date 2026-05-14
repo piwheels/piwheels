@@ -1183,6 +1183,39 @@ def test_delete_version_missing_file(db_queue, task, scribe_queue, master_config
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
+def test_delete_package_also_deletes_metadata(db_queue, task, scribe_queue, master_config):
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('DELPKG', 'foo')
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    db_queue.expect('PKGFILES', 'foo')
+    db_queue.send('OK', {
+        'foo-0.1-cp34-cp34m-linux_armv6l.whl': 'deadbeef',
+        'foo-0.1-cp34-cp34m-linux_armv7l.whl': 'deadbeef',
+    })
+    root = Path(master_config.output_path)
+    index = root / 'simple' / 'foo'
+    index.mkdir(parents=True)
+    project = root / 'project' / 'foo'
+    project.mkdir(parents=True)
+    project_json = project / 'json'
+    project_json.mkdir(parents=True)
+    (index / 'foo-0.1-cp34-cp34m-linux_armv6l.whl').touch()
+    (index / 'foo-0.1-cp34-cp34m-linux_armv6l.whl.metadata').touch()
+    (index / 'foo-0.1-cp34-cp34m-linux_armv7l.whl').touch()
+    (index / 'foo-0.1-cp34-cp34m-linux_armv7l.whl.metadata').touch()
+    (project / 'index.html').touch()
+    (project_json / 'index.json').touch()
+    task.poll(0)
+    db_queue.check()
+    assert not index.exists()
+    assert not project_json.exists()
+    assert not project.exists()
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
 def test_delete_package_null(db_queue, task, scribe_queue, master_config):
     # this should never happen, but just in case...
     db_queue.expect('ALLPKGS')

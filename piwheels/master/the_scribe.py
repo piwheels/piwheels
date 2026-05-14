@@ -666,6 +666,10 @@ class TheScribe(tasks.PauseableTask):
             except FileNotFoundError:
                 self.logger.error('file not found: %s', file_path)
 
+            if file_path.suffix == '.whl':
+                metadata_file = file_path.with_suffix('.whl.metadata')
+                metadata_file.unlink(missing_ok=True)
+
         for dir_path in (pkg_dir, proj_json_dir, proj_dir):
             try:
                 dir_path.rmdir()
