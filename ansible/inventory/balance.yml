@@ -3,5 +3,5 @@
 # CLI arguments (--cp39, --cp311, --cp313) override these values.
 
 cp39: 5
-cp311: 6
-cp313: 10
+cp311: 5
+cp313: 5
