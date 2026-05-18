@@ -19,6 +19,16 @@ Configure hostedpi with Mythic Beasts credentials, then add the SSH key to all s
 hostedpi ssh keys add ~/.ssh/id_rsa.pub --filter pw-slave
 ```
 
+## Location
+
+The piwheels repository is cloned to `/home/piwheels/piwheels` on the master. All ansible commands should be run from `/home/piwheels/piwheels/ansible/`:
+
+```bash
+cd /home/piwheels/piwheels/ansible
+```
+
+`ansible.cfg` uses relative paths for the inventory and roles, so this working directory is required.
+
 ## Setup
 
 Generate the local inventory from the current hostedpi state:
@@ -27,7 +37,7 @@ Generate the local inventory from the current hostedpi state:
 scripts/update-hosts.sh
 ```
 
-This writes `inventory/hosts.yml` (gitignored) with the SSH hostname and port for every provisioned Pi, including the master. Re-run it whenever slaves are provisioned or cancelled.
+This writes `inventory/hosts.yml` (gitignored) with the SSH hostname and port for every provisioned Pi, including the master. The script can be run from any directory. Re-run it whenever slaves are provisioned or cancelled.
 
 ## Deploying slaves
 

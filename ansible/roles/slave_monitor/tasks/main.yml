@@ -12,6 +12,14 @@
     state: present
     extra_args: --break-system-packages
 
+- name: Create piwheels home directory
+  file:
+    path: /home/piwheels
+    state: directory
+    owner: piwheels
+    group: piwheels
+    mode: '0755'
+
 - name: Clone or update piwheels repository
   git:
     repo: https://github.com/piwheels/piwheels
@@ -25,14 +33,6 @@
   loop:
     - slave_monitor.py
     - slave_balance.py
-
-- name: Create piwheels home directory
-  file:
-    path: /home/piwheels
-    state: directory
-    owner: piwheels
-    group: piwheels
-    mode: '0755'
 
 - name: Install systemd unit files
   copy:
