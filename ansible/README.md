@@ -8,7 +8,7 @@ Install ansible via apt and hostedpi via pip (piwheels master runs Bookworm):
 
 ```bash
 apt install ansible
-pip3 install hostedpi --break-system-packages
+pip3 install 'hostedpi[cli]' --break-system-packages
 ```
 
 hostedpi's dependencies (`pydantic-settings` etc.) are not available as apt packages so pip is required. Ansible's apt package is sufficient.
