@@ -4,9 +4,20 @@ Ansible configuration for deploying and managing piwheels build slaves.
 
 ## Prerequisites
 
-- [hostedpi](https://github.com/piwheels/hostedpi) CLI configured with Mythic Beasts credentials
-- Ansible installed in the hostedpi virtualenv: `pipx inject hostedpi ansible`
-- SSH key at `~/.ssh/id_rsa` added to hostedpi: `hostedpi ssh keys add ~/.ssh/id_rsa.pub --filter pw-slave`
+Install ansible via apt and hostedpi via pip (piwheels master runs Bookworm):
+
+```bash
+apt install ansible
+pip3 install hostedpi --break-system-packages
+```
+
+hostedpi's dependencies (`pydantic-settings` etc.) are not available as apt packages so pip is required. Ansible's apt package is sufficient.
+
+Configure hostedpi with Mythic Beasts credentials, then add the SSH key to all slaves:
+
+```bash
+hostedpi ssh keys add ~/.ssh/id_rsa.pub --filter pw-slave
+```
 
 ## Setup
 
