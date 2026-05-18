@@ -6,16 +6,11 @@
       - python3-yaml
     state: present
 
-- name: Create hostedpi venv
-  command: python3 -m venv /home/piwheels/.venvs/hostedpi
-  args:
-    creates: /home/piwheels/.venvs/hostedpi/bin/python
-
-- name: Install hostedpi into venv
+- name: Install hostedpi
   pip:
-    name: hostedpi
+    name: hostedpi[cli]
     state: present
-    virtualenv: /home/piwheels/.venvs/hostedpi
+    extra_args: --break-system-packages
 
 - name: Clone or update piwheels repository
   git:

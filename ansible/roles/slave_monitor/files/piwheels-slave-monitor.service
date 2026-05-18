@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/home/piwheels/.venvs/hostedpi/bin/python /home/piwheels/piwheels/ansible/scripts/slave_monitor.py
+ExecStart=/usr/bin/python3 /home/piwheels/piwheels/ansible/scripts/slave_monitor.py
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=piwheels-slave-monitor
