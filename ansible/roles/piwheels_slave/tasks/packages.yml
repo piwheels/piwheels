@@ -5,6 +5,7 @@
 - name: Fix broken packages before install
   apt:
     state: fixed
+    force_apt_get: yes
   ignore_errors: true
   environment:
     DEBIAN_FRONTEND: noninteractive
@@ -13,6 +14,8 @@
   apt:
     name: "{{ apt_packages_common + apt_packages_extra }}"
     state: present
+    update_cache: yes
+    force_apt_get: yes
   register: apt_install
   until: apt_install is success
   retries: 5
@@ -23,6 +26,7 @@
 - name: Autoremove unneeded packages
   apt:
     autoremove: yes
+    force_apt_get: yes
   register: apt_autoremove
   until: apt_autoremove is success
   retries: 3

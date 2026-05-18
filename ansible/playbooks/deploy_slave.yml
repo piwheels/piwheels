@@ -2,8 +2,8 @@
 - name: Deploy piwheels build slave
   hosts: "{{ target | default('piwheels_slaves') }}"
   become: yes
-  # Deploy one at a time to avoid simultaneous reboots
-  serial: 1
+  # Deploy one at a time by default; override with -e play_serial=0 for parallel
+  serial: "{{ play_serial | default(1) }}"
   gather_facts: yes
 
   roles:

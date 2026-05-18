@@ -2,10 +2,12 @@
 - name: Update apt cache before upgrade
   apt:
     update_cache: yes
+    force_apt_get: yes
 
 - name: Full upgrade on Bookworm before dist-upgrade
   apt:
     upgrade: full
+    force_apt_get: yes
   register: pre_upgrade
   until: pre_upgrade is success
   retries: 5
@@ -17,6 +19,7 @@
   apt:
     autoremove: yes
     purge: yes
+    force_apt_get: yes
   register: pre_autoremove
   until: pre_autoremove is success
   retries: 3
@@ -30,19 +33,20 @@
     regexp: 'bookworm'
     replace: 'trixie'
 
-- name: Point raspi.list at Trixie
-  replace:
-    path: /etc/apt/sources.list.d/raspi.list
-    regexp: 'bookworm'
-    replace: 'trixie'
+- name: Write raspi.list for Trixie with trusted flag (SHA1 key workaround)
+  copy:
+    content: "deb [trusted=yes] http://archive.raspberrypi.org/debian/ trixie main\n"
+    dest: /etc/apt/sources.list.d/raspi.list
 
 - name: Update apt cache for Trixie
   apt:
     update_cache: yes
+    force_apt_get: yes
 
 - name: Dist-upgrade to Trixie
   apt:
     upgrade: full
+    force_apt_get: yes
   register: trixie_upgrade
   environment:
     DEBIAN_FRONTEND: noninteractive
@@ -56,6 +60,7 @@
       - libssl-dev
     state: present
     dpkg_options: force-overwrite
+    force_apt_get: yes
   when: trixie_upgrade is failed
   ignore_errors: true
   environment:
@@ -64,6 +69,7 @@
 - name: Retry dist-upgrade after libssl3 fix
   apt:
     upgrade: full
+    force_apt_get: yes
   when: trixie_upgrade is failed
   register: trixie_upgrade_retry
   until: trixie_upgrade_retry is success
@@ -80,3 +86,6 @@
 - name: Reboot after Trixie upgrade
   reboot:
     reboot_timeout: 300
+
+- name: Re-gather facts after Trixie upgrade
+  setup:
