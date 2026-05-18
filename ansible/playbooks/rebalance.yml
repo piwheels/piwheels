@@ -1,0 +1,10 @@
+---
+- name: Rebalance piwheels build slaves
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Run slave balance script
+      command: python3 scripts/slave_balance.py
+      args:
+        chdir: "{{ playbook_dir }}/.."

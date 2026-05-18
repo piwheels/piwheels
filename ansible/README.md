@@ -68,32 +68,25 @@ ansible-playbook playbooks/deploy_slave.yml -e "target=cp313 play_serial=0 upgra
 
 ## Rebalancing slaves
 
-The desired balance is recorded in `inventory/balance.yml`. To change it, edit that file and then provision/cancel Pis via hostedpi accordingly:
+The desired balance is recorded in `inventory/balance.yml`. To apply it, update that file and run:
 
-1. **Cancel unwanted slaves:**
-   ```bash
-   hostedpi cancel -y pw-slave-cp311-10
-   ```
+```bash
+ansible-playbook playbooks/rebalance.yml
+```
 
-2. **Provision new slaves** (use `rpi-bookworm-armhf` for cp311/cp313, `rpi-bullseye-armhf` for cp39):
-   ```bash
-   hostedpi create pw-slave-cp39-05 --model 4 --disk 50 --os-image rpi-bullseye-armhf --ssh-key-path ~/.ssh/id_rsa.pub
-   ```
+This runs `scripts/slave_balance.py`, which provisions or cancels Pis via hostedpi, updates `inventory/hosts.yml`, deploys new slaves, and copies master SSH keys — all automatically.
 
-3. **Regenerate the inventory:**
-   ```bash
-   scripts/update-hosts.sh
-   ```
+To preview changes without applying them:
 
-4. **Deploy new slaves:**
-   ```bash
-   ansible-playbook playbooks/deploy_slave.yml -e "target=pw-slave-cp39-05 play_serial=0"
-   ```
+```bash
+python3 scripts/slave_balance.py --dry-run
+```
 
-5. **Copy master SSH keys to new slaves:**
-   ```bash
-   hostedpi ssh keys copy piwheels pw-slave-cp39-05
-   ```
+To override the balance from `balance.yml` on the command line:
+
+```bash
+python3 scripts/slave_balance.py --cp311 8 --cp313 8 --cp39 4
+```
 
 The account quota is 22 Pis total including the master, so the maximum number of slaves is 21.
 

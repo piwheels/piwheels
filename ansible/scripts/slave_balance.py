@@ -8,8 +8,8 @@ Usage:
 Auth is read from environment variables (HOSTEDPI_ID and HOSTEDPI_SECRET).
 
 New slaves are provisioned via hostedpi, added to the Ansible inventory, and
-deployed with the deploy_slave playbook. Removed slaves are deleted from the
-inventory first, then cancelled via the hostedpi CLI.
+deployed with the deploy_slave playbook. Removed slaves are cancelled via the
+hostedpi CLI and removed from the inventory.
 """
 
 import argparse
@@ -25,14 +25,19 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 ANSIBLE_DIR = SCRIPT_DIR.parent
 INVENTORY = ANSIBLE_DIR / 'inventory' / 'hosts.yml'
 DEPLOY_PLAYBOOK = ANSIBLE_DIR / 'playbooks' / 'deploy_slave.yml'
-
 BALANCE_CONFIG = ANSIBLE_DIR / 'inventory' / 'balance.yml'
 
 SLAVE_PREFIX = 'pw-slave'
 ABI_GROUPS = ['cp39', 'cp311', 'cp313']
 PROTECTED = {'piwheels'}  # master — never cancel or manage
 DEFAULT_MODEL = 4
-DEFAULT_DISK = 30  # GB
+DEFAULT_DISK = 50  # GB
+
+OS_IMAGES = {
+    'cp39':  'rpi-bullseye-armhf',
+    'cp311': 'rpi-bookworm-armhf',
+    'cp313': 'rpi-bookworm-armhf',  # upgraded to Trixie during deploy
+}
 
 
 def load_balance_config():
@@ -93,14 +98,17 @@ def hostedpi(*args):
     return result.stdout.strip()
 
 
-def provision_slave(name, model, disk, ssh_key_path):
+def provision_slave(name, abi, model, disk, ssh_key_path):
     """Create a Pi via hostedpi CLI and return (ssh_hostname, ssh_port)."""
-    cmd = ['create', name, '--model', str(model), '--disk', str(disk), '--wait']
+    cmd = ['create', name,
+           '--model', str(model),
+           '--disk', str(disk),
+           '--os-image', OS_IMAGES[abi],
+           '--wait']
     if ssh_key_path and Path(ssh_key_path).exists():
         cmd += ['--ssh-key-path', str(ssh_key_path)]
     hostedpi(*cmd)
     ssh_hostname = f'ssh.{name}.hostedpi.com'
-    # Retry ssh-port — the server may not be immediately visible after provisioning
     for attempt in range(5):
         try:
             ssh_port = int(hostedpi('info', 'ssh-port', name))
@@ -116,16 +124,22 @@ def cancel_slave(name):
     """Delete a Pi via hostedpi CLI."""
     if name in PROTECTED:
         raise RuntimeError(f'Refusing to cancel protected instance: {name}')
-    hostedpi('cancel', name, '--yes')
+    hostedpi('cancel', '--yes', name)
 
 
-def deploy_slaves(hostnames):
-    result = subprocess.run(
-        ['ansible-playbook', str(DEPLOY_PLAYBOOK),
-         '-i', str(INVENTORY),
-         '--limit', ','.join(hostnames)],
-        cwd=ANSIBLE_DIR,
-    )
+def copy_master_ssh_keys(name):
+    """Copy SSH keys from the piwheels master to a slave."""
+    hostedpi('ssh', 'keys', 'copy', 'piwheels', name)
+
+
+def deploy_slaves(hostnames, upgrade_to_trixie=False):
+    cmd = ['ansible-playbook', str(DEPLOY_PLAYBOOK),
+           '-i', str(INVENTORY),
+           '-e', f'play_serial=0',
+           '--limit', ','.join(hostnames)]
+    if upgrade_to_trixie:
+        cmd += ['-e', 'upgrade_to_trixie=true']
+    result = subprocess.run(cmd, cwd=ANSIBLE_DIR)
     return result.returncode == 0
 
 
@@ -174,10 +188,8 @@ def main():
         print('Dry run — no changes made.')
         return
 
-    if not os.environ.get('HOSTEDPI_ID') or not os.environ.get('HOSTEDPI_SECRET'):
-        sys.exit('Error: HOSTEDPI_ID and HOSTEDPI_SECRET environment variables must be set')
-
-    new_slaves = []
+    # Provision new slaves first, grouped by ABI for deployment
+    new_slaves_by_abi = {abi: [] for abi in ABI_GROUPS}
 
     for abi, delta in changes.items():
         group = get_group(inv, abi)
@@ -188,20 +200,19 @@ def main():
                 num = next_slave_number(inv, abi)
                 name = f'{SLAVE_PREFIX}-{abi}-{num:02d}'
                 print(f'  Creating {name}...')
-                ssh_hostname, ssh_port = provision_slave(name, args.model, args.disk, args.ssh_key)
+                ssh_hostname, ssh_port = provision_slave(
+                    name, abi, args.model, args.disk, args.ssh_key)
                 group['hosts'][name] = {
                     'ansible_host': ssh_hostname,
                     'ansible_port': ssh_port,
                 }
-                new_slaves.append(name)
-                # Save after each Pi so partial progress is not lost on failure
+                new_slaves_by_abi[abi].append(name)
                 save_inventory(inv)
                 print(f'  {name}: ready ({ssh_hostname}:{ssh_port})')
 
         elif delta < 0:
             count_to_remove = -delta
             print(f'\nRemoving {count_to_remove} {abi} slave(s):')
-            # Remove highest-numbered slaves first
             to_remove = slaves_by_number(inv, abi)[-count_to_remove:]
             for name in to_remove:
                 print(f'  Removing {name} from inventory...')
@@ -214,15 +225,25 @@ def main():
                 except RuntimeError as e:
                     print(f'  Warning: {e}')
 
-    if new_slaves:
-        print(f'\nDeploying to {len(new_slaves)} new slave(s): {", ".join(new_slaves)}')
-        if not deploy_slaves(new_slaves):
+    # Deploy new slaves, passing upgrade_to_trixie for cp313
+    for abi, hostnames in new_slaves_by_abi.items():
+        if not hostnames:
+            continue
+        print(f'\nDeploying {len(hostnames)} new {abi} slave(s): {", ".join(hostnames)}')
+        if not deploy_slaves(hostnames, upgrade_to_trixie=(abi == 'cp313')):
             sys.exit(
                 'Ansible deploy failed. Inventory has been updated — '
                 're-run the deploy playbook manually:\n'
-                f'  ansible-playbook ansible/playbooks/deploy_slave.yml '
-                f'--limit {",".join(new_slaves)}'
+                f'  ansible-playbook playbooks/deploy_slave.yml '
+                f'--limit {",".join(hostnames)}'
             )
+        print(f'  Copying master SSH keys...')
+        for name in hostnames:
+            try:
+                copy_master_ssh_keys(name)
+                print(f'  {name}: keys copied')
+            except RuntimeError as e:
+                print(f'  Warning: {e}')
 
     print('\nDone.')
 
