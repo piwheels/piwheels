@@ -2,6 +2,6 @@
 # Used by slave_balance.py as default target counts.
 # CLI arguments (--cp39, --cp311, --cp313) override these values.
 
-cp39: 2
-cp311: 2
-cp313: 18
+cp39: 5
+cp311: 6
+cp313: 10
