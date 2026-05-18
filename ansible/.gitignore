@@ -1,5 +1,5 @@
 .ansible_facts/
 *.retry
 
-# Master connection details (contains secret IP — generate with scripts/update-master-vars.sh)
-inventory/host_vars/piwheels-master.yml
+# Generated from hostedpi — run scripts/update-hosts.sh to regenerate
+inventory/hosts.yml
