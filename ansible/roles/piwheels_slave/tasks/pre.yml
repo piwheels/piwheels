@@ -9,6 +9,27 @@
     dest: /etc/apt/sources.list.d/raspi.list
   when: ansible_distribution_major_version == '13'
 
+# Trixie's apt verifies repo signatures with Sequoia (sqv), whose default policy
+# rejects the Raspberry Pi archive key from 2026-02-01 because its self-signature
+# uses SHA1 ("second pre-image resistance"). python-apt (used by the apt module)
+# treats this as a hard fetch failure even with [trusted=yes], so relax the
+# policy to accept SHA1. Created unconditionally so it is already in place once
+# a fresh Bookworm host is dist-upgraded to Trixie.
+- name: Ensure sequoia crypto-policy directory exists (SHA1 key workaround)
+  file:
+    path: /etc/crypto-policies/back-ends
+    state: directory
+    mode: '0755'
+
+- name: Relax Sequoia crypto policy to accept SHA1-signed repo key (SHA1 key workaround)
+  copy:
+    content: |
+      [hash_algorithms.sha1]
+      collision_resistance = "always"
+      second_preimage_resistance = "always"
+    dest: /etc/crypto-policies/back-ends/sequoia.config
+    mode: '0644'
+
 - name: Update apt cache
   apt:
     update_cache: yes
