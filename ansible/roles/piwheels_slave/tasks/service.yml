@@ -1,7 +1,16 @@
 ---
-- name: Copy piwheels configuration
-  copy:
-    src: piwheels.conf
+- name: Look up piwheels master IPv6 address from hostedpi
+  command: hostedpi info ip-address {{ piwheels_master_name }}
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+  register: piwheels_master_ip_lookup
+  failed_when: piwheels_master_ip_lookup.stdout | trim | length == 0
+
+- name: Render piwheels configuration
+  template:
+    src: piwheels.conf.j2
     dest: /etc/piwheels.conf
     owner: root
     group: root

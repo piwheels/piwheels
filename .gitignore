@@ -8,6 +8,9 @@
 # Miscellaneous
 tags
 
+# Slave config — contains the master IP (secret); generated at deploy time
+/piwheels.conf
+
 # Packages
 *.egg
 *.egg-info

@@ -1,6 +1,10 @@
 upgrade_to_trixie: false
 ansible_python_interpreter: /usr/bin/python3
 
+# Name of the master Pi in the hostedpi account; its IPv6 address is looked up
+# at deploy time so the master IP is never stored in version control.
+piwheels_master_name: piwheels
+
 python_packages:
   - pypandoc
   - versioneer
