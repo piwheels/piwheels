@@ -87,6 +87,10 @@ def slaves_by_number(inv, abi):
     return sorted(hosts, key=lambda n: slave_number(n, abi))
 
 
+class QuotaReached(RuntimeError):
+    """Raised when hostedpi cannot create a Pi due to insufficient credit."""
+
+
 def hostedpi(*args):
     """Run a hostedpi CLI command, return stdout. Raises on non-zero exit."""
     result = subprocess.run(
@@ -99,7 +103,12 @@ def hostedpi(*args):
 
 
 def provision_slave(name, abi, model, disk, ssh_key_path):
-    """Create a Pi via hostedpi CLI and return (ssh_hostname, ssh_port)."""
+    """Create a Pi via hostedpi CLI and return (ssh_hostname, ssh_port).
+
+    Raises QuotaReached if the account is out of on-demand credit. hostedpi
+    create exits 0 even in that case, reporting the error in its output, so we
+    inspect the output rather than relying on the exit code.
+    """
     cmd = ['create', name,
            '--model', str(model),
            '--disk', str(disk),
@@ -107,7 +116,9 @@ def provision_slave(name, abi, model, disk, ssh_key_path):
            '--wait']
     if ssh_key_path and Path(ssh_key_path).exists():
         cmd += ['--ssh-key-path', str(ssh_key_path)]
-    hostedpi(*cmd)
+    out = hostedpi(*cmd)
+    if 'Insufficient on-demand service credit' in out:
+        raise QuotaReached(name)
     ssh_hostname = f'ssh.{name}.hostedpi.com'
     for attempt in range(5):
         try:
@@ -200,8 +211,13 @@ def main():
                 num = next_slave_number(inv, abi)
                 name = f'{SLAVE_PREFIX}-{abi}-{num:02d}'
                 print(f'  Creating {name}...')
-                ssh_hostname, ssh_port = provision_slave(
-                    name, abi, args.model, args.disk, args.ssh_key)
+                try:
+                    ssh_hostname, ssh_port = provision_slave(
+                        name, abi, args.model, args.disk, args.ssh_key)
+                except QuotaReached:
+                    print(f'  Insufficient on-demand credit — cannot create {name}; '
+                          f'stopping provisioning of {abi}')
+                    break
                 group['hosts'][name] = {
                     'ansible_host': ssh_hostname,
                     'ansible_port': ssh_port,
