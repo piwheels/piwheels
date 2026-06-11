@@ -3,3 +3,6 @@
 
 # Generated from hostedpi — run scripts/update-hosts.sh to regenerate
 inventory/hosts.yml
+
+# Operator-set desired slave counts — configured on demand, not version controlled
+inventory/balance.yml
