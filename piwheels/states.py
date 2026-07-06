@@ -47,9 +47,6 @@ artifacts (:class:`FileState`) and various loggers.
 .. autoclass:: DownloadState
     :members:
 
-.. autoclass:: SearchState
-    :members:
-
 .. autoclass:: ProjectState
     :members:
 
@@ -1015,85 +1012,6 @@ class DownloadMetadataState(namedtuple('DownloadMetadataState', (
     Represents the state of the log entry for a metadata file fetch, i.e. a
     request for a ``.whl.metadata`` file (PEP 658). The :attr:`filename` field
     holds the wheel filename with ``.metadata`` stripped.
-    """
-    __slots__ = ()
-
-    def as_message(self):
-        return list(self)
-
-    @classmethod
-    def from_message(cls, value):
-        return cls(*value)
-
-
-class SearchState(namedtuple('SearchState', (
-    'package',
-    'host',
-    'timestamp',
-    'arch',
-    'distro_name',
-    'distro_version',
-    'os_name',
-    'os_version',
-    'py_name',
-    'py_version',
-    'installer_name',
-    'installer_version',
-    'setuptools_version',
-))):
-    """
-    Represents the state of the log entry for an instance of a package search,
-    including the :attr:`package` name, user's :attr:`host` IP, access
-    :attr:`timestamp` and information about the operating system and installer.
-
-    :param str package:
-        The name of the package searched for.
-
-    :param str host:
-        The hostname or IP address of the user.
-
-    :param datetime.datetime timestamp:
-        The timestamp at which the search occurred.
-
-    :type arch: str or None
-    :param arch:
-        The architecture of the user's computer system (usually armv6 or armv7).
-
-    :type distro_name: str or None
-    :param distro_name:
-        The user's operating system distribution name (e.g. Raspbian).
-
-    :type distro_version: str or None
-    :param distro_version:
-        The version of the user's operating system distribution.
-
-    :type os_name: str or None
-    :param os_name:
-        The name of the user's operating system (e.g. Linux).
-
-    :type os_version: str or None
-    :param os_version:
-        The version of the user's operating system (e.g. Linux kernel version).
-
-    :type py_name: str or None
-    :param py_name:
-        The Python implementation used (e.g. CPython).
-
-    :type py_version: str or None
-    :param py_version:
-        The Python version used (e.g. 3.7.3).
-
-    :type installer_name: str or None
-    :param installer_name:
-        The name of the tool used (e.g. pip).
-
-    :type installer_version: str or None
-    :param installer_version:
-        The version of the tool (e.g. pip) used.
-
-    :type setuptools_version: str or None
-    :param setuptools_version:
-        The version of setuptools used.
     """
     __slots__ = ()
 

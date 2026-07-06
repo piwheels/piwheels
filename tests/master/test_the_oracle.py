@@ -292,16 +292,6 @@ def test_log_download(db, with_files, download_state, db_client):
             "SELECT filename FROM downloads").scalar() == download_state.filename
 
 
-def test_log_search(db, with_files, search_state, db_client):
-    with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 0
-    db_client.log_search(search_state)
-    with db.begin():
-        assert db.execute("SELECT COUNT(*) FROM searches").scalar() == 1
-        assert db.execute(
-            "SELECT package FROM searches").scalar() == search_state.package
-
-
 def test_log_project_page_hit(db, with_files, project_state, db_client):
     with db.begin():
         assert db.execute("SELECT COUNT(*) FROM project_page_hits").scalar() == 0

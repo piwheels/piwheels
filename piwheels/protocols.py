@@ -204,23 +204,6 @@ _download_state = ExactSequence([
 ])
 
 
-_search_state = ExactSequence([
-    str,              # package
-    str,              # host
-    dt.datetime,      # timestamp
-    Any(str, None),   # arch
-    Any(str, None),   # distro_name
-    Any(str, None),   # distro_version
-    Any(str, None),   # os_name
-    Any(str, None),   # os_version
-    Any(str, None),   # py_name
-    Any(str, None),   # py_version
-    Any(str, None),   # installer_name
-    Any(str, None),   # installer_version
-    Any(str, None),   # setuptools_version
-])
-
-
 _project_state = ExactSequence([
     str,              # package
     str,              # host
@@ -352,7 +335,6 @@ mr_chase = Protocol(recv={
 lumberjack = Protocol(recv={
     'LOGDOWNLOAD': _download_state,
     'LOGMETADATA': _download_state,
-    'LOGSEARCH': _search_state,
     'LOGPROJECT': _project_state,
     'LOGJSON': _json_state,
     'LOGPAGE': _page_state,
@@ -393,7 +375,6 @@ the_oracle = Protocol(recv={
     'UNYANKVER':   ExactSequence([str, str]),  # package, version
     'LOGDOWNLOAD': _download_state,
     'LOGMETADATA': _download_state,
-    'LOGSEARCH':   _search_state,
     'LOGPROJECT':  _project_state,
     'LOGJSON':     _json_state,
     'LOGPAGE':     _page_state,
