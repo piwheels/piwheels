@@ -710,10 +710,10 @@ class TheScribe(tasks.PauseableTask):
         """
         blog_url = "https://blog.piwheels.org"
         blog_json_url = f"{blog_url}/posts.json"
-        response = requests.get(blog_json_url)
         try:
+            response = requests.get(blog_json_url, timeout=10)
             response.raise_for_status()
-        except requests.HTTPError as exc:
+        except requests.RequestException as exc:
             self.logger.error('Failed to fetch blog posts: %s', exc)
             return []
         data = response.json()
