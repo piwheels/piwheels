@@ -1,6 +1,9 @@
 .ansible_facts/
 *.retry
 
+# Persisted health/recovery state for scripts/slave_monitor.py
+.state/
+
 # Generated from hostedpi — run scripts/update-hosts.sh to regenerate
 inventory/hosts.yml
 

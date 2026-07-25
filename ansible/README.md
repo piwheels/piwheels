@@ -4,14 +4,13 @@ Ansible configuration for deploying and managing piwheels build slaves.
 
 ## Prerequisites
 
-Install ansible via apt and hostedpi via pip (piwheels master runs Bookworm):
+Install ansible and hostedpi via pip:
 
 ```bash
-apt install ansible
-pip3 install 'hostedpi[cli]' --break-system-packages
+pip3 install ansible 'hostedpi[cli]' --break-system-packages
 ```
 
-hostedpi's dependencies (`pydantic-settings` etc.) are not available as apt packages so pip is required. Ansible's apt package is sufficient.
+hostedpi's dependencies (`pydantic-settings` etc.) are not available as apt packages so pip is required. `apt install ansible` also works if preferred.
 
 Configure hostedpi with Mythic Beasts credentials, then add the SSH key to all slaves:
 
@@ -21,13 +20,18 @@ hostedpi ssh keys add ~/.ssh/id_rsa.pub --filter pw-slave
 
 ## Location
 
-The piwheels repository is cloned to `/home/piwheels/piwheels` on the master. All ansible commands should be run from `/home/piwheels/piwheels/ansible/`:
+Ansible management runs from this checkout (not from the master — nothing is installed on the
+`piwheels` master Pi other than the build slave software it already runs). All ansible commands
+should be run from this directory:
 
 ```bash
-cd /home/piwheels/piwheels/ansible
+cd ansible
 ```
 
 `ansible.cfg` uses relative paths for the inventory and roles, so this working directory is required.
+Hosts are reached directly over SSH via their hostedpi proxy hostnames, so this can run from any
+machine with `ansible`, `hostedpi` and network access — it doesn't need to run on the master or on
+any of the slaves themselves.
 
 ## Setup
 
@@ -90,6 +94,24 @@ python3 scripts/slave_balance.py --cp311 8 --cp313 8 --cp39 4
 
 The account quota is 22 Pis total including the master, so the maximum number of slaves is 21.
 
+## Monitoring and recovery
+
+`scripts/slave_monitor.py` checks the health of every slave in the inventory and recovers unhealthy
+or unreachable ones (service restart → redeploy → reboot → cancel-and-reprovision, escalating across
+runs). It's designed to run frequently and unattended:
+
+```bash
+python3 scripts/slave_monitor.py
+```
+
+Recovery state (cooldowns, escalation history) is persisted to `.state/slave-monitor-state.json`
+(gitignored) so it survives across runs. Use `--dry-run` to check health without taking action.
+
+Nothing runs this automatically from within the repo — it's driven by a cron job on the operator
+host, which also needs `HOSTEDPI_ID`/`HOSTEDPI_SECRET` in its environment for the `hostedpi` CLI
+calls the recovery tiers make. There's no equivalent automatic driver for `slave_balance.py`; rebalancing to a new
+target count is a deliberate operator action (see above).
+
 ## ABIs and OS images
 
 | Group | Python | Debian     | OS image              |
@@ -102,6 +124,6 @@ The account quota is 22 Pis total including the master, so the maximum number of
 
 ## Notes
 
-- Do not run any hostedpi commands against the `piwheels` master Pi (other than retrieving info or copying SSH keys).
-- `inventory/hosts.yml` is gitignored — it is generated locally from hostedpi and will differ per machine.
+- Do not run any hostedpi commands against the `piwheels` master Pi (other than retrieving info or copying SSH keys). Nothing in this directory connects to or deploys onto the master.
+- `inventory/hosts.yml` and `inventory/balance.yml` are gitignored — they're generated/configured locally and will differ per machine.
 - Fact caching is enabled (1 hour TTL in `.ansible_facts/`). Clear it with `rm -rf .ansible_facts/` if hosts have changed significantly.

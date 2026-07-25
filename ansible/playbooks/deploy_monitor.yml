@@ -1,7 +1,0 @@
----
-- name: Deploy piwheels slave monitor to master
-  hosts: piwheels_master
-  become: yes
-
-  roles:
-    - slave_monitor
