@@ -247,6 +247,15 @@ class GraphBar(ur.Widget):
     _sizing = frozenset([ur.FLOW])
     ignore_focus = True
 
+    # Upper bound on the number of history bins computed by update(). Without
+    # this, a single bogus or out-of-sync timestamp in *stats* (e.g. a slave
+    # reporting a clock far in the past or future) can make
+    # ceil((timestamps[-1] - timestamps[0]) / delta) enormous, causing update()
+    # to iterate for a very long time and freeze the UI. Rendering only ever
+    # uses the most recent portion of the history (bounded by the terminal
+    # width), so bins beyond this cap would never be displayed anyway.
+    max_bins = 1000
+
     def __init__(self, minimum=None, maximum=None, format=' {min}-{max}',
                  delta=timedelta(minutes=1), chars=' ▁▂▃▄▅▆▇█', bar_align='<'):
         super().__init__()
@@ -279,7 +288,10 @@ class GraphBar(ur.Widget):
             finish = len(timestamps) - 1
             value = readings[finish]
             history = []
-            for i in range(ceil((timestamps[-1] - timestamps[0]) / self.delta)):
+            bins = min(
+                ceil((timestamps[-1] - timestamps[0]) / self.delta),
+                self.max_bins)
+            for i in range(bins):
                 start = bisect_left(timestamps, timestamps[-1] - i * self.delta)
                 values = sorted(readings[start:finish])
                 if values:
