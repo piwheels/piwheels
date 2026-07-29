@@ -129,7 +129,15 @@ class MrChase(tasks.PauseableTask):
             'REBUILD': self.do_rebuild,
             'SENT':    self.do_sent,
         }[msg]
-        msg, data = handler(state)
+        try:
+            msg, data = handler(state)
+        except Exception:
+            # A bad manual request (e.g. from piw-add/piw-remove) shouldn't be
+            # able to take down the entire master; log it and report a clean
+            # error to the client instead of letting the exception propagate
+            # into Task.run(), which would shut down the whole process.
+            self.logger.exception('error handling %s message', msg)
+            msg, data = 'ERROR', 'INTERNAL'
 
         if msg in ('DONE', 'ERROR'):
             self.states.pop(address, None)
@@ -219,6 +227,12 @@ class MrChase(tasks.PauseableTask):
         """
         display_name, description, skip, unskip, aliases = state
         package = canonicalize_name(display_name)
+        if len(package) > 200:
+            # Matches cloud_gazer's own guard (piwheels/master/cloud_gazer.py):
+            # the packages table is VARCHAR(200), so longer names can't be
+            # inserted.
+            self.logger.error('package name too long: %s', package)
+            return 'ERROR', 'BADPKG'
         aliases = set(aliases) | {package, display_name}
         # Ensure display_name sorts last, so it is treated as display name
         aliases = sorted(aliases, key=lambda s: s == display_name)
@@ -252,6 +266,13 @@ class MrChase(tasks.PauseableTask):
             yank, unyank, aliases
         ) = state
         package = canonicalize_name(display_name)
+        if len(version) > 200:
+            # Matches cloud_gazer's own guard (piwheels/master/cloud_gazer.py):
+            # the versions table is VARCHAR(200), so longer strings can't be
+            # inserted. PyPI itself enforces no length limit on versions, so
+            # this does happen with real packages.
+            self.logger.error('version too long: %s %s', package, version)
+            return 'ERROR', 'BADVER'
         aliases = set(aliases) | {package, display_name}
         # Ensure display_name sorts last, so it is treated as display name
         aliases = sorted(aliases, key=lambda s: s == display_name)

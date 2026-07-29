@@ -207,6 +207,22 @@ def test_skip_known_package(mock_json_server, mock_context, import_queue_name,
                     'piw-remove instead') in str(exc.value)
 
 
+def test_add_package_name_too_long(mock_json_server, mock_context,
+                                    import_queue_name, import_queue):
+    name = 'a' * 201
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        mock_json_server[name] = 'DESCRIPTION'
+        with AddThread(['--import-queue', import_queue_name, name]) as thread:
+            assert import_queue.recv_msg() == ('ADDPKG',
+                [name, 'DESCRIPTION', '', False, []]
+            )
+            import_queue.send_msg('ERROR', 'BADPKG')
+            with pytest.raises(RuntimeError) as exc:
+                thread.join(10)
+            assert 'Package name too long' in str(exc.value)
+
+
 def test_unskip_known_package(mock_json_server, mock_context,
                               import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
@@ -251,6 +267,43 @@ def test_add_version(mock_context, import_queue_name, import_queue):
                 import_queue.send_msg('DONE', 'NEWVER')
                 thread.join(10)
                 assert thread.exitcode == 0
+
+
+def test_add_version_too_long(mock_context, import_queue_name, import_queue):
+    version = '3' + '.14159' * 40
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with mock.patch('piwheels.add.datetime') as dt:
+            dt.now.return_value = datetime(2021, 1, 1)
+            dt.strptime.side_effect = datetime.strptime
+            with AddThread(['--import-queue', import_queue_name,
+                            'foo', version]) as thread:
+                assert import_queue.recv_msg() == ('ADDVER', [
+                    'foo', version, '', False,
+                    datetime(2021, 1, 1, tzinfo=UTC), False, False, []
+                ])
+                import_queue.send_msg('ERROR', 'BADVER')
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'Version string too long' in str(exc.value)
+
+
+def test_add_internal_error(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with mock.patch('piwheels.add.datetime') as dt:
+            dt.now.return_value = datetime(2021, 1, 1)
+            dt.strptime.side_effect = datetime.strptime
+            with AddThread(['--import-queue', import_queue_name,
+                            'foo', '0.1']) as thread:
+                assert import_queue.recv_msg() == ('ADDVER', [
+                    'foo', '0.1', '', False,
+                    datetime(2021, 1, 1, tzinfo=UTC), False, False, []
+                ])
+                import_queue.send_msg('ERROR', 'INTERNAL')
+                with pytest.raises(RuntimeError) as exc:
+                    thread.join(10)
+                assert 'internal error' in str(exc.value)
 
 
 def test_add_and_skip_version(mock_context, import_queue_name, import_queue):

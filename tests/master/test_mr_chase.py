@@ -431,6 +431,38 @@ def test_add_version_no_package(db_queue, task, import_queue):
     db_queue.check()
 
 
+def test_add_package_name_too_long(db_queue, task, import_queue):
+    name = 'a' * 201
+    import_queue.send_msg('ADDPKG', [name, 'silly name', '', False, []])
+    task.poll(0)
+    assert import_queue.recv_msg() == ('ERROR', 'BADPKG')
+    assert len(task.states) == 0
+    db_queue.check()
+
+
+def test_add_version_too_long(db_queue, task, import_queue):
+    released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
+    version = '3' + '.14159' * 40
+    import_queue.send_msg(
+        'ADDVER', ['Foo', version, '', False, released, False, False, []])
+    task.poll(0)
+    assert import_queue.recv_msg() == ('ERROR', 'BADVER')
+    assert len(task.states) == 0
+    db_queue.check()
+
+
+def test_handle_import_unexpected_error(db_queue, task, import_queue):
+    import_queue.send_msg('ADDPKG', ['Foo', 'foos things', '', False, []])
+    db_queue.expect('NEWPKG', ['foo', '', 'foos things'])
+    db_queue.send('ERROR', 'unexpected failure')
+    task.logger = mock.Mock()
+    task.poll(0)
+    assert import_queue.recv_msg() == ('ERROR', 'INTERNAL')
+    assert len(task.states) == 0
+    assert task.logger.exception.call_count == 1
+    db_queue.check()
+
+
 def test_unskip_version(db_queue, web_queue, task, import_queue):
     now = datetime.now(tz=UTC)
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)

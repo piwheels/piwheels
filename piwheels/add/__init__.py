@@ -170,6 +170,16 @@ def do_add(config):
                 raise RuntimeError(
                     'Cannot yank a known version with piw-add - use '
                     'piw-remove instead')
+            elif data == 'BADPKG':
+                raise RuntimeError(
+                    'Package name too long (max 200 characters)')
+            elif data == 'BADVER':
+                raise RuntimeError(
+                    'Version string too long (max 200 characters)')
+            elif data == 'INTERNAL':
+                raise RuntimeError(
+                    'An internal error occurred on the master; check its '
+                    'logs')
             else:
                 assert False, 'invalid data from master'
 
