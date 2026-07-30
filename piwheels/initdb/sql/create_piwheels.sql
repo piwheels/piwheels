@@ -1483,6 +1483,55 @@ $sql$;
 REVOKE ALL ON FUNCTION mark_file_deleted(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION mark_file_deleted(TEXT) TO {username};
 
+-- mark_version_files_deleted(package, version)
+-------------------------------------------------------------------------------
+-- Marks every file belonging to the specified *version* of *package* as
+-- deleted (see "mark_file_deleted" above), in one call.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION mark_version_files_deleted(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND b.version = ver
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_version_files_deleted(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_version_files_deleted(TEXT, TEXT) TO {username};
+
+-- mark_package_files_deleted(package)
+-------------------------------------------------------------------------------
+-- Marks every file belonging to every version of the specified *package* as
+-- deleted (see "mark_file_deleted" above), in one call.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION mark_package_files_deleted(pkg TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_package_files_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_package_files_deleted(TEXT) TO {username};
+
 -- test_package(package)
 -------------------------------------------------------------------------------
 -- Tests *package* exists as a row in the *packages* table, regardless of

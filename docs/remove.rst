@@ -17,7 +17,8 @@ Synopsis
 .. code-block:: text
 
     piw-remove [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-y]
-               [-s REASON] [--import-queue ADDR]
+               [-b | --soft-delete] [-s REASON] [--yank]
+               [--import-queue ADDR]
                package [version]
 
 Description
@@ -62,10 +63,32 @@ Description
 
     Run non-interactively; never prompt during operation
 
+.. option:: -b, --builds
+
+    Remove builds and files for this package / version, but don't delete
+    from the database (the version will be requeued for building unless
+    :option:`-s` is also given). Mutually exclusive with
+    :option:`--soft-delete`.
+
+.. option:: --soft-delete
+
+    Mark files for this package / version as deleted, and rewrite the
+    affected page(s), without removing any database rows or physically
+    deleting the files. Use this *after* removing a file from disk (e.g. to
+    reclaim space for old, never-downloaded files) to keep the site's pages
+    and the build queue consistent. Unlike :option:`-b`, this carries no
+    risk of the version being re-queued for building, since the underlying
+    build record is preserved. Mutually exclusive with :option:`-b`;
+    combine with :option:`-s` to also prevent future build attempts.
+
 .. option:: -s REASON, --skip REASON
 
     Leave the version in place, but marked with a reason to prevent future
     build attempts
+
+.. option:: --yank
+
+    Mark a version as yanked (see :pep:`592`)
 
 .. option:: --import-queue ADDR
 

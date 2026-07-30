@@ -331,9 +331,10 @@ mr_chase = Protocol(recv={
     # package, version, skip reason, unskip, released, yank, unyank, aliases
     'ADDVER': ExactSequence([str, str, str, bool, dt.datetime, bool, bool, [str]]),
     'IMPORT': _build_state,
-    'REMPKG': ExactSequence([str, bool, str]),  # package, builds, skip reason
-    # package, version, builds, skip reason, yank
-    'REMVER': ExactSequence([str, str, bool, str, bool]),
+    # package, builds, soft delete, skip reason
+    'REMPKG': ExactSequence([str, bool, bool, str]),
+    # package, version, builds, soft delete, skip reason, yank
+    'REMVER': ExactSequence([str, str, bool, bool, str, bool]),
     'REBUILD': Any(
         ExactSequence(['HOME']),
         ExactSequence(['SEARCH']),
@@ -398,6 +399,8 @@ the_oracle = Protocol(recv={
     'LOGPAGE':     _page_state,
     'LOGBUILD':    _build_state,
     'DELBUILD':    ExactSequence([str, str]),  # package, version
+    'MARKVERDEL':  ExactSequence([str, str]),  # package, version
+    'MARKPKGDEL':  str,                        # package
     'PKGFILES':    str,                        # package
     'PROJDATA':    str,                        # package
     'VERFILES':    ExactSequence([str, str]),  # package, version

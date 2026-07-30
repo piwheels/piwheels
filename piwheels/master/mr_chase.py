@@ -291,11 +291,25 @@ class MrChase(tasks.PauseableTask):
         Handler for the remover's "REMPKG" message, indicating a request to
         remove or alter a whole package.
         """
-        package, builds, skip = state
+        package, builds, soft_delete, skip = state
         package = canonicalize_name(package)
         if not self.db.test_package(package):
             self.logger.error('unknown package %s', package)
             return 'ERROR', 'NOPKG'
+        if soft_delete:
+            self.logger.info('marking files deleted for package %s', package)
+            self.db.mark_package_files_deleted(package)
+            msg = 'DELPKGSOFT'
+            if skip:
+                self.logger.info('marking package %s as skipped', package)
+                self.db.skip_package(package, skip)
+            # Unlike a hard delete/skip, soft-deleting doesn't remove the
+            # package or its builds, so there's nothing for cloud_gazer to
+            # be told about; just rewrite this package's pages so they stop
+            # listing the now-deleted files
+            self.web_queue.send_msg('BOTH', package)
+            self.web_queue.recv_msg()
+            return 'DONE', msg
         if skip or builds:
             if skip:
                 self.logger.info('marking package %s as skipped', package)
@@ -322,12 +336,30 @@ class MrChase(tasks.PauseableTask):
         Handler for the remover's "REMVER" message, indicating a request to
         remove or alter a specific package version.
         """
-        package, version, builds, skip, yank = state
+        package, version, builds, soft_delete, skip, yank = state
         package = canonicalize_name(package)
         if not self.db.test_package_version(package, version):
             self.logger.error('unknown package version %s %s',
                               package, version)
             return 'ERROR', 'NOVER'
+        if soft_delete:
+            self.logger.info('marking files deleted for %s %s',
+                             package, version)
+            self.db.mark_version_files_deleted(package, version)
+            msg = 'DELVERSOFT'
+            if skip:
+                self.logger.info('marking %s %s as skipped', package, version)
+                self.db.skip_package_version(package, version, skip)
+            if yank:
+                self.logger.info('yanking %s %s', package, version)
+                self.db.yank_version(package, version)
+            # Unlike a hard delete/skip, soft-deleting doesn't remove the
+            # version or its builds, so there's nothing for cloud_gazer to
+            # be told about; just rewrite this package's pages so they stop
+            # listing the now-deleted files
+            self.web_queue.send_msg('BOTH', package)
+            self.web_queue.recv_msg()
+            return 'DONE', msg
         if skip or builds or yank:
             if skip:
                 self.logger.info('marking %s %s as skipped', package, version)

@@ -92,6 +92,7 @@ pip3 install ${package}</pre>
                         'fail':    'Build failed',
                         'success': 'Build succeeded',
                         'skip':    'Skipped: ' + release.skip,
+                        'deleted': 'Build succeeded; file since deleted',
                         'error':   'Unexpected error',
                       }[abi_data.status if abi_data else 'error']}"><a tal:condition="abi_data is not None and abi_data.build_id is not None"
                       href="${get_log_url(abi_data.build_id)}">&nbsp;</a></td>
@@ -132,6 +133,7 @@ pip3 install ${package}</pre>
           <tr><td class="fail"></td><td>Build failed</td></tr>
           <tr><td class="skip"></td><td>Build skipped</td></tr>
           <tr><td class="pending"></td><td>Build pending</td></tr>
+          <tr><td class="deleted"></td><td>Build succeeded; file since deleted</td></tr>
         </table>
       </div>
     </section>

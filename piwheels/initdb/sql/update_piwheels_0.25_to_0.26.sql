@@ -18,6 +18,43 @@ $sql$;
 REVOKE ALL ON FUNCTION mark_file_deleted(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION mark_file_deleted(TEXT) TO {username};
 
+CREATE FUNCTION mark_version_files_deleted(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND b.version = ver
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_version_files_deleted(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_version_files_deleted(TEXT, TEXT) TO {username};
+
+CREATE FUNCTION mark_package_files_deleted(pkg TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_package_files_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_package_files_deleted(TEXT) TO {username};
+
 DROP FUNCTION get_project_data(TEXT);
 
 CREATE FUNCTION get_project_data(pkg TEXT)

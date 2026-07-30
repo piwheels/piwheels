@@ -474,7 +474,7 @@ def test_yank_version(db_queue, web_queue, task, import_queue):
     released = datetime(2000, 1, 1, 12, 34, tzinfo=UTC)
     with mock.patch('piwheels.master.mr_chase.datetime') as dt:
         dt.now.side_effect = [now, now + timedelta(seconds=1)]
-        import_queue.send_msg('REMVER', ['Foo', '0.1', False, '', True])
+        import_queue.send_msg('REMVER', ['Foo', '0.1', False, False, '', True])
         db_queue.expect('VEREXISTS', ['foo', '0.1'])
         db_queue.send('OK', True)
         db_queue.expect('YANKVER', ['foo', '0.1'])
@@ -516,7 +516,7 @@ def test_unyank_version(db_queue, web_queue, task, import_queue):
 def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
                         build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMPKG', [bsh.package, False, ''])
+    import_queue.send_msg('REMPKG', [bsh.package, False, False, ''])
     db_queue.expect('PKGEXISTS', bsh.package)
     db_queue.send('OK', True)
     web_queue.expect('DELPKG', bsh.package)
@@ -536,7 +536,7 @@ def test_remove_package(db_queue, web_queue, skip_queue, task, import_queue,
 def test_remove_version(db_queue, web_queue, skip_queue, task, import_queue,
                         build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, '', False])
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, False, '', False])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     web_queue.expect('DELVER', [bsh.package, bsh.version])
@@ -558,7 +558,7 @@ def test_remove_package_builds(db_queue, web_queue, skip_queue, task,
     package = project_data['name']
     assert len(project_data['releases']) == 1
     version = list(project_data['releases'])[0]
-    import_queue.send_msg('REMPKG', [package, True, ''])
+    import_queue.send_msg('REMPKG', [package, True, False, ''])
     db_queue.expect('PKGEXISTS', package)
     db_queue.send('OK', True)
     db_queue.expect('PROJDATA', package)
@@ -580,7 +580,7 @@ def test_remove_package_builds(db_queue, web_queue, skip_queue, task,
 def test_remove_version_builds(db_queue, web_queue, skip_queue, task,
                                import_queue, build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMVER', [bsh.package, bsh.version, True, '', False])
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, True, False, '', False])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     web_queue.expect('DELVER', [bsh.package, bsh.version])
@@ -597,6 +597,81 @@ def test_remove_version_builds(db_queue, web_queue, skip_queue, task,
     skip_queue.check()
 
 
+def test_remove_package_soft_delete(db_queue, web_queue, task, import_queue,
+                                    build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMPKG', [bsh.package, False, True, ''])
+    db_queue.expect('PKGEXISTS', bsh.package)
+    db_queue.send('OK', True)
+    db_queue.expect('MARKPKGDEL', bsh.package)
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', 'DELPKGSOFT')
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+
+
+def test_remove_package_soft_delete_and_skip(db_queue, web_queue, task,
+                                             import_queue, build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMPKG', [bsh.package, False, True, 'unused'])
+    db_queue.expect('PKGEXISTS', bsh.package)
+    db_queue.send('OK', True)
+    db_queue.expect('MARKPKGDEL', bsh.package)
+    db_queue.send('OK', None)
+    db_queue.expect('SKIPPKG', [bsh.package, 'unused'])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', 'DELPKGSOFT')
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+
+
+def test_remove_version_soft_delete(db_queue, web_queue, task, import_queue,
+                                    build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, True, '', False])
+    db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
+    db_queue.send('OK', True)
+    db_queue.expect('MARKVERDEL', [bsh.package, bsh.version])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', 'DELVERSOFT')
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+
+
+def test_remove_version_soft_delete_and_skip_and_yank(
+        db_queue, web_queue, task, import_queue, build_state_hacked):
+    bsh = build_state_hacked
+    import_queue.send_msg(
+        'REMVER', [bsh.package, bsh.version, False, True, 'unused', True])
+    db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
+    db_queue.send('OK', True)
+    db_queue.expect('MARKVERDEL', [bsh.package, bsh.version])
+    db_queue.send('OK', None)
+    db_queue.expect('SKIPVER', [bsh.package, bsh.version, 'unused'])
+    db_queue.send('OK', None)
+    db_queue.expect('YANKVER', [bsh.package, bsh.version])
+    db_queue.send('OK', None)
+    web_queue.expect('BOTH', bsh.package)
+    web_queue.send('DONE')
+    task.poll(0)
+    assert import_queue.recv_msg() == ('DONE', 'DELVERSOFT')
+    assert len(task.states) == 0
+    db_queue.check()
+    web_queue.check()
+
+
 def test_skip_package_wrong(db_queue, task, import_queue):
     import_queue.send_msg('ADDPKG', ['Foo', 'foos things', 'broken', False, []])
     db_queue.expect('NEWPKG', ['foo', 'broken', 'foos things'])
@@ -610,7 +685,7 @@ def test_skip_package_wrong(db_queue, task, import_queue):
 def test_skip_package(db_queue, web_queue, skip_queue, task, import_queue,
                       build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMPKG', [bsh.package, False, 'silly package'])
+    import_queue.send_msg('REMPKG', [bsh.package, False, False, 'silly package'])
     db_queue.expect('PKGEXISTS', bsh.package)
     db_queue.send('OK', True)
     db_queue.expect('SKIPPKG', [bsh.package, 'silly package'])
@@ -665,7 +740,7 @@ def test_skip_version_wrong(db_queue, task, import_queue):
 def test_skip_version(db_queue, web_queue, skip_queue, task, import_queue,
                       build_state_hacked):
     bsh = build_state_hacked
-    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, 'broken version', False])
+    import_queue.send_msg('REMVER', [bsh.package, bsh.version, False, False, 'broken version', False])
     db_queue.expect('VEREXISTS', [bsh.package, bsh.version])
     db_queue.send('OK', True)
     db_queue.expect('SKIPVER', [bsh.package, bsh.version, 'broken version'])
@@ -687,7 +762,7 @@ def test_remove_unknown_pkg(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMPKG', [bs.package, False, ''])
+    import_queue.send_msg('REMPKG', [bs.package, False, False, ''])
     db_queue.expect('PKGEXISTS', bs.package)
     db_queue.send('OK', False)
     task.poll(0)
@@ -701,7 +776,7 @@ def test_remove_unknown_version(db_queue, task, import_queue, build_state):
     build_state._slave_id = 0
     bs = build_state
 
-    import_queue.send_msg('REMVER', [bs.package, bs.version, False, '', False])
+    import_queue.send_msg('REMVER', [bs.package, bs.version, False, False, '', False])
     db_queue.expect('VEREXISTS', [bs.package, bs.version])
     db_queue.send('OK', False)
     task.poll(0)
