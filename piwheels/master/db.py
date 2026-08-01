@@ -506,6 +506,7 @@ class Database:
                             file.platform_tag,
                             file.requires_python,
                             file.location,
+                            None,
                         )
                         for file in build.files.values()],
                         [(
