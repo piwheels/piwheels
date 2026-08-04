@@ -466,4 +466,11 @@ footer #mythic {
   width: 1.5rem;
 }
 
+#pipdeps li.hidden { display: none; }
+#pipdeps + p.more {
+  cursor: pointer;
+  color: #1779ba;
+}
+#pipdeps + p.more:hover { text-decoration: underline; }
+
 #timestamp { text-align: right; color: #99999b; }
