@@ -134,6 +134,17 @@ def test_remove_missing_package(mock_context, import_queue_name, import_queue):
             assert 'Package foo does not exist' in str(exc.value)
 
 
+def test_remove_internal_error(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            import_queue.send_msg('ERROR', 'INTERNAL')
+            with pytest.raises(RuntimeError) as exc:
+                thread.join(10)
+            assert 'internal error' in str(exc.value)
+
+
 def test_skip_package(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True

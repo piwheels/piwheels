@@ -126,6 +126,10 @@ def do_remove(config):
             elif data == 'NOVER':
                 raise RuntimeError('Version {} {} does not exist'.format(
                     config.package, config.version))
+            elif data == 'INTERNAL':
+                raise RuntimeError(
+                    'An internal error occurred on the master; check its '
+                    'logs')
             else:
                 assert False, 'invalid data from master'
 
