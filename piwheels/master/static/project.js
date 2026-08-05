@@ -21,6 +21,27 @@
     tableBody.lastElementChild.remove();
   }
 
+  function collapseDependencies(list) {
+    if (list.nextElementSibling && list.nextElementSibling.classList.contains('more'))
+      list.nextElementSibling.remove();
+
+    const items = Array.from(list.children);
+
+    if (items.length <= 5) return;
+
+    for (let i = 5; i < items.length; ++i)
+      items[i].classList.add('hidden');
+
+    const more = document.createElement('p');
+    more.classList.add('more');
+    more.textContent = `Show all ${items.length} dependencies`;
+    more.addEventListener('click', function() {
+      for (const item of items) item.classList.remove('hidden');
+      more.remove();
+    });
+    list.after(more);
+  }
+
   function numberWithCommas(n) {
     return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
@@ -124,6 +145,7 @@
         pipDepsList.appendChild(depItem);
       }
     }
+    collapseDependencies(pipDepsList);
 
     install.scrollIntoView({behavior: "smooth"});
   }
@@ -144,6 +166,10 @@
   }
 
   window.addEventListener('load', function(ev) {
+    /* Collapse the dependencies list if it's too long
+     */
+    collapseDependencies(document.querySelector('#pipdeps'));
+
     /* Load the download counters asynchronously in the background
      */
     const package = document.getElementById('package').dataset.package;
