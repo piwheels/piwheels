@@ -506,6 +506,7 @@ class Database:
                             file.platform_tag,
                             file.requires_python,
                             file.location,
+                            None,
                         )
                         for file in build.files.values()],
                         [(
@@ -718,6 +719,31 @@ class Database:
         with self._conn.begin():
             self._conn.execute(
                 "VALUES (delete_build(%s, %s))", (package, version))
+
+    @rpc('MARKVERDEL')
+    def mark_version_files_deleted(self, package, version):
+        """
+        Marks all files belonging to the specified package version as
+        deleted (sets their ``deleted_at`` column) without removing the
+        underlying builds/files rows; used when a file has been removed from
+        disk (e.g. to reclaim space) but the build/file metadata, and the
+        build-queue's record of the attempt, should be retained.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (mark_version_files_deleted(%s, %s))",
+                (package, version))
+
+    @rpc('MARKPKGDEL')
+    def mark_package_files_deleted(self, package):
+        """
+        Marks all files belonging to every version of the specified package
+        as deleted (sets their ``deleted_at`` column) without removing the
+        underlying builds/files rows.
+        """
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (mark_package_files_deleted(%s))", (package,))
 
     @rpc('SAVERWP')
     def save_rewrites_pending(self, queue):

@@ -30,6 +30,7 @@
 from unittest import mock
 from threading import Thread
 
+import configargparse
 import pytest
 
 from conftest import find_message
@@ -107,7 +108,7 @@ def test_remove_package(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, False, ''])
             import_queue.send_msg('DONE', 'DELPKG')
             thread.join(10)
             assert thread.exitcode == 0
@@ -117,17 +118,46 @@ def test_remove_package_builds(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, '--builds', 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMPKG', ['foo', True, ''])
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', True, False, ''])
             import_queue.send_msg('DONE', 'DELPKGBLD')
             thread.join(10)
             assert thread.exitcode == 0
+
+
+def test_remove_package_soft_delete(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, '--soft-delete', 'foo']) as thread:
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, True, ''])
+            import_queue.send_msg('DONE', 'DELPKGSOFT')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_package_soft_delete_and_skip(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread([
+                '--import-queue', import_queue_name, '--soft-delete',
+                '--skip', 'unused', 'foo']) as thread:
+            assert import_queue.recv_msg() == (
+                'REMPKG', ['foo', False, True, 'unused'])
+            import_queue.send_msg('DONE', 'DELPKGSOFT')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_package_builds_and_soft_delete_mutually_exclusive():
+    with pytest.raises(configargparse.ArgumentError) as exc:
+        main(['--builds', '--soft-delete', 'foo'])
+    assert 'not allowed' in str(exc.value)
 
 
 def test_remove_missing_package(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, False, ''])
             import_queue.send_msg('ERROR', 'NOPKG')
             with pytest.raises(RuntimeError) as exc:
                 thread.join(10)
@@ -149,7 +179,7 @@ def test_skip_package(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, '--skip', 'broken', 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, 'broken'])
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, False, 'broken'])
             import_queue.send_msg('DONE', 'SKIPPKG')
             thread.join(10)
             assert thread.exitcode == 0
@@ -159,7 +189,7 @@ def test_remove_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
-            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, False, '', False])
             import_queue.send_msg('DONE', 'DELVER')
             thread.join(10)
             assert thread.exitcode == 0
@@ -169,8 +199,18 @@ def test_remove_version_builds(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, '--builds', 'foo', '0.1']) as thread:
-            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', True, '', False])
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', True, False, '', False])
             import_queue.send_msg('DONE', 'DELVERBLD')
+            thread.join(10)
+            assert thread.exitcode == 0
+
+
+def test_remove_version_soft_delete(mock_context, import_queue_name, import_queue):
+    with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
+        prompt_mock.return_value = True
+        with RemoveThread(['--import-queue', import_queue_name, '--soft-delete', 'foo', '0.1']) as thread:
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, True, '', False])
+            import_queue.send_msg('DONE', 'DELVERSOFT')
             thread.join(10)
             assert thread.exitcode == 0
 
@@ -179,7 +219,7 @@ def test_remove_missing_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1']) as thread:
-            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, False, '', False])
             import_queue.send_msg('ERROR', 'NOVER')
             with pytest.raises(RuntimeError) as exc:
                 thread.join(10)
@@ -190,7 +230,7 @@ def test_remove_and_skip(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--skip', 'legal']) as thread:
-            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, 'legal', False])
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, False, 'legal', False])
             import_queue.send_msg('DONE', 'SKIPVER')
             thread.join(10)
             assert thread.exitcode == 0
@@ -200,7 +240,7 @@ def test_yank_version(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yank']) as thread:
-            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', True])
+            assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, False, '', True])
             import_queue.send_msg('DONE', 'YANKVER')
             thread.join(10)
             assert thread.exitcode == 0
@@ -208,7 +248,7 @@ def test_yank_version(mock_context, import_queue_name, import_queue):
 
 def test_failure(mock_context, import_queue_name, import_queue):
     with RemoveThread(['--import-queue', import_queue_name, 'foo', '0.1', '--yes']) as thread:
-        assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, '', False])
+        assert import_queue.recv_msg() == ('REMVER', ['foo', '0.1', False, False, '', False])
         import_queue.send_msg('ERROR', 'NOPKG')
         with pytest.raises(RuntimeError) as exc:
             thread.join(10)

@@ -20,7 +20,7 @@ CREATE TABLE configuration (
     CONSTRAINT config_pk PRIMARY KEY (id)
 );
 
-INSERT INTO configuration(id, version) VALUES (1, '0.25');
+INSERT INTO configuration(id, version) VALUES (1, '0.26');
 GRANT SELECT ON configuration TO {username};
 
 -- packages
@@ -158,6 +158,13 @@ GRANT SELECT ON builds TO {username};
 -- effectively these are redundant but are split out as the information is
 -- required for things like the build-queue, and indexing of (some of) them is
 -- needed for performance.
+--
+-- The "deleted_at" column is NULL for files that still exist on disk. It is
+-- set to the timestamp at which the underlying file was removed (e.g. to
+-- reclaim space for old, never-downloaded files) while the row itself is
+-- kept, preserving build/file metadata and (crucially) still satisfying the
+-- "builds_pending" view's coverage checks so the version isn't re-queued for
+-- building just because its file was cleaned up.
 -------------------------------------------------------------------------------
 
 CREATE TABLE files (
@@ -172,6 +179,7 @@ CREATE TABLE files (
     platform_tag        VARCHAR(100) NOT NULL,
     requires_python     VARCHAR(200) NULL,
     location            VARCHAR(100) NOT NULL DEFAULT '/simple',
+    deleted_at          TIMESTAMP DEFAULT NULL,
 
     CONSTRAINT files_pk PRIMARY KEY (filename),
     CONSTRAINT files_builds_fk FOREIGN KEY (build_id)
@@ -666,9 +674,15 @@ AS $sql$
             CASE
                 -- Check for actual successful files first, so that imported
                 -- wheels on skipped versions/packages show as success not skip
-                WHEN b.status AND f.build_id IS NOT NULL THEN 'success'
+                WHEN b.status AND f.build_id IS NOT NULL
+                    AND f.deleted_at IS NULL THEN 'success'
                 WHEN p.skip <> '' THEN 'skip'
                 WHEN v.skip <> '' THEN 'skip'
+                -- Build succeeded and produced a file, but the file has since
+                -- been removed from disk (e.g. cleaned up for never having
+                -- been downloaded); the build itself still "counts" so the
+                -- version isn't re-queued
+                WHEN b.status AND f.build_id IS NOT NULL THEN 'deleted'
                 WHEN NOT b.status THEN 'fail'
                 WHEN b.build_id IS NULL THEN 'pending'
                 ELSE 'error'
@@ -750,6 +764,7 @@ AS $sql$
         FROM files f
         JOIN builds b USING (build_id)
         WHERE b.package = pkg
+        AND f.deleted_at IS NULL
         GROUP BY b.version
     )
     VALUES (
@@ -1441,6 +1456,82 @@ $sql$;
 REVOKE ALL ON FUNCTION delete_build(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION delete_build(TEXT, TEXT) TO {username};
 
+-- mark_file_deleted(filename)
+-------------------------------------------------------------------------------
+-- Marks the specified row in "files" as deleted, by setting "deleted_at" to
+-- the current time. This does not remove the row (or any of its
+-- "dependencies" rows); it is used when the underlying file has been removed
+-- from disk (e.g. as part of a disk-space clean up of old, never-downloaded
+-- files) but the build/file metadata should be retained, and the version
+-- should not be re-queued for building on the strength of this file's
+-- absence alone.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION mark_file_deleted(fn TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    WHERE filename = fn
+    AND deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_file_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_file_deleted(TEXT) TO {username};
+
+-- mark_version_files_deleted(package, version)
+-------------------------------------------------------------------------------
+-- Marks every file belonging to the specified *version* of *package* as
+-- deleted (see "mark_file_deleted" above), in one call.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION mark_version_files_deleted(pkg TEXT, ver TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND b.version = ver
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_version_files_deleted(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_version_files_deleted(TEXT, TEXT) TO {username};
+
+-- mark_package_files_deleted(package)
+-------------------------------------------------------------------------------
+-- Marks every file belonging to every version of the specified *package* as
+-- deleted (see "mark_file_deleted" above), in one call.
+-------------------------------------------------------------------------------
+
+CREATE FUNCTION mark_package_files_deleted(pkg TEXT)
+    RETURNS VOID
+    LANGUAGE SQL
+    CALLED ON NULL INPUT
+    SECURITY DEFINER
+    SET search_path = public, pg_temp
+AS $sql$
+    UPDATE files f
+    SET deleted_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+    FROM builds b
+    WHERE b.build_id = f.build_id
+    AND b.package = pkg
+    AND f.deleted_at IS NULL;
+$sql$;
+
+REVOKE ALL ON FUNCTION mark_package_files_deleted(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION mark_package_files_deleted(TEXT) TO {username};
+
 -- test_package(package)
 -------------------------------------------------------------------------------
 -- Tests *package* exists as a row in the *packages* table, regardless of
@@ -1614,14 +1705,17 @@ AS $sql$
             COUNT(*) AS files_count,
             COUNT(DISTINCT package_tag) AS packages_built
         FROM files
+        WHERE deleted_at IS NULL
     ),
     file_stats AS (
         -- Exclude armv6l packages as they're just hard-links to armv7l
         -- packages and thus don't really count towards space used ... in most
-        -- cases anyway
+        -- cases anyway. Also exclude deleted files, as they no longer occupy
+        -- any space.
         SELECT COALESCE(SUM(filesize), 0) AS builds_size
         FROM files
         WHERE platform_tag <> 'linux_armv6l'
+        AND deleted_at IS NULL
     ),
     download_stats AS (
         SELECT

@@ -355,10 +355,12 @@ footer #mythic {
 .fail { background-image: url('fail.svg'); }
 .success { background-image: url('success.svg'); }
 .pending { background-image: url('pending.svg'); }
+.deleted { background-image: url('deleted.svg'); }
 .skip,
 .fail,
 .success,
-.pending {
+.pending,
+.deleted {
   min-width: 20px;
   background-repeat: no-repeat;
   background-position: center;
@@ -367,7 +369,8 @@ footer #mythic {
 .skip a,
 .fail a,
 .success a,
-.pending a {
+.pending a,
+.deleted a {
   width: 100%;
   height: 100%;
   display: block;

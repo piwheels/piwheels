@@ -508,6 +508,37 @@ def test_write_pkg_project_no_files(db_queue, task, scribe_queue, master_config,
     assert scribe_queue.recv_msg() == ('DONE', None)
 
 
+def test_write_pkg_project_deleted_file(db_queue, task, scribe_queue, master_config, project_data):
+    # A build that succeeded but whose file has since been soft-deleted must
+    # render as 'deleted', not blow up on an unrecognised status (see
+    # project.pt's status->tooltip mapping)
+    for release in project_data['releases'].values():
+        for abi_data in release['abis'].values():
+            abi_data['status'] = 'deleted'
+    db_queue.expect('ALLPKGS')
+    db_queue.send('OK', {'foo'})
+    task.once()
+    scribe_queue.send_msg('PROJECT', 'foo')
+    db_queue.expect('PROJDATA', 'foo')
+    db_queue.send('OK', project_data)
+    db_queue.expect('GETPKGNAMES', 'foo')
+    db_queue.send('OK', [])
+    task.poll(0)
+    db_queue.check()
+    root = Path(master_config.output_path)
+    project_page = root / 'project' / 'foo' / 'index.html'
+    assert project_page.exists() and project_page.is_file()
+    proj_bs = make_bs(project_page)
+    # The legend in the sidebar also has a (title-less) '.deleted' cell, so
+    # only count cells that carry the abi status tooltip
+    deleted_cells = [
+        td for td in proj_bs.find_all('td', class_='deleted') if td.get('title')
+    ]
+    assert len(deleted_cells) == 1
+    assert 'file since deleted' in deleted_cells[0].get('title')
+    assert scribe_queue.recv_msg() == ('DONE', None)
+
+
 def test_write_pkg_project_no_deps(db_queue, task, scribe_queue, master_config, project_data):
     project_data['description'] = 'Some description'
     for release in project_data['releases'].values():

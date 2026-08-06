@@ -62,10 +62,21 @@ system. This script must be run on the same node as the piw-master script.
     parser.add_argument(
         '-y', '--yes', action='store_true',
         help="Run non-interactively; never prompt during operation")
-    parser.add_argument(
+    delete_group = parser.add_mutually_exclusive_group()
+    delete_group.add_argument(
         '-b', '--builds', action='store_true',
         help="Remove builds and files for this package / version, but don't "
         "delete from the database (requeue unless --skip also given)")
+    delete_group.add_argument(
+        '--soft-delete', action='store_true',
+        help="Mark files for this package / version as deleted, and rewrite "
+        "the affected page(s), without removing any database rows. Use "
+        "this after removing a file from disk to keep the site's pages and "
+        "build queue consistent, without the requeue risk that --builds "
+        "carries (combine with --skip to also prevent future build "
+        "attempts). Does NOT delete the file from disk itself - run "
+        "piw-audit-packages --delete-extras (with --archive-dir if the "
+        "file is on the archive server) to do that")
     parser.add_argument(
         '-s', '--skip', action='store', default='', metavar='REASON',
         help="Mark the package / version as skipped to prevent future build "
@@ -110,12 +121,12 @@ def do_remove(config):
     try:
         if config.version is None:
             queue.send_msg('REMPKG', [
-                config.package, config.builds, config.skip
+                config.package, config.builds, config.soft_delete, config.skip
             ])
         else:
             queue.send_msg('REMVER', [
-                config.package, config.version, config.builds, config.skip,
-                config.yank
+                config.package, config.version, config.builds,
+                config.soft_delete, config.skip, config.yank
             ])
         msg, data = queue.recv_msg()
 
@@ -142,6 +153,10 @@ def do_remove(config):
                 logging.info('Removed builds for package successfully')
             elif data == 'DELVERBLD':
                 logging.info('Removed builds for version successfully')
+            elif data == 'DELPKGSOFT':
+                logging.info('Marked files deleted for package successfully')
+            elif data == 'DELVERSOFT':
+                logging.info('Marked files deleted for version successfully')
             elif data == 'SKIPPKG':
                 logging.info('Skipped package successfully')
             elif data == 'SKIPVER':
