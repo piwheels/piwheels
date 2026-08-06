@@ -40,6 +40,8 @@ to it.
 import inspect
 from datetime import timezone
 
+from sqlalchemy.exc import OperationalError
+
 from .. import const, protocols, transport, tasks
 from .db import Database, RewritePendingRow
 
@@ -102,7 +104,16 @@ class TheOracle(tasks.NonStopTask):
             addr, msg, data = b'', '', str(exc)
         try:
             handler, data_to_args = self.handlers[msg]
-            result = handler(*data_to_args(data))
+            try:
+                result = handler(*data_to_args(data))
+            except OperationalError:
+                # The database connection has probably dropped (e.g. the
+                # server closed it unexpectedly); reconnect and retry the
+                # request once before giving up
+                self.logger.warning(
+                    'database connection lost; reconnecting')
+                self.db.reconnect()
+                result = handler(*data_to_args(data))
         except Exception as exc:
             self.logger.error('Error handling db request: %s', msg)
             msg, data = 'ERROR', str(exc)
