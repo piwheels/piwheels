@@ -70,11 +70,13 @@ system. This script must be run on the same node as the piw-master script.
     delete_group.add_argument(
         '--soft-delete', action='store_true',
         help="Mark files for this package / version as deleted, and rewrite "
-        "the affected page(s), without removing any database rows or "
-        "physically deleting the files; use this after removing a file "
-        "from disk to keep the site's pages and build queue consistent, "
-        "without the requeue risk that --builds carries (combine with "
-        "--skip to also prevent future build attempts)")
+        "the affected page(s), without removing any database rows. Use "
+        "this after removing a file from disk to keep the site's pages and "
+        "build queue consistent, without the requeue risk that --builds "
+        "carries (combine with --skip to also prevent future build "
+        "attempts). Does NOT delete the file from disk itself - run "
+        "piw-audit-packages --delete-extras (with --archive-dir if the "
+        "file is on the archive server) to do that")
     parser.add_argument(
         '-s', '--skip', action='store', default='', metavar='REASON',
         help="Mark the package / version as skipped to prevent future build "

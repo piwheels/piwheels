@@ -73,13 +73,21 @@ Description
 .. option:: --soft-delete
 
     Mark files for this package / version as deleted, and rewrite the
-    affected page(s), without removing any database rows or physically
-    deleting the files. Use this *after* removing a file from disk (e.g. to
-    reclaim space for old, never-downloaded files) to keep the site's pages
-    and the build queue consistent. Unlike :option:`-b`, this carries no
-    risk of the version being re-queued for building, since the underlying
-    build record is preserved. Mutually exclusive with :option:`-b`;
-    combine with :option:`-s` to also prevent future build attempts.
+    affected page(s), without removing any database rows. Use this *after*
+    removing a file from disk (e.g. to reclaim space for old,
+    never-downloaded files) to keep the site's pages and the build queue
+    consistent. Unlike :option:`-b`, this carries no risk of the version
+    being re-queued for building, since the underlying build record is
+    preserved. Mutually exclusive with :option:`-b`; combine with
+    :option:`-s` to also prevent future build attempts.
+
+    .. note::
+
+        This option does **not** remove the file from disk itself; it only
+        updates the database and website to reflect a file that has already
+        been removed. Run ``piw-audit-packages --delete-extras`` (passing
+        ``--archive-dir`` if the file lives on the archive server) to
+        actually delete files that are no longer referenced by the index.
 
 .. option:: -s REASON, --skip REASON
 
