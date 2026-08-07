@@ -39,6 +39,8 @@ PYPI_XMLRPC = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 PYPI_SIMPLE = '{PYPI_ROOT}simple'.format(PYPI_ROOT=PYPI_ROOT)
 PYPI_JSON = '{PYPI_ROOT}pypi'.format(PYPI_ROOT=PYPI_ROOT)
 OUTPUT_PATH = '/var/www'
+MASTER_LOCATION = '/simple'
+ARCHIVE_LOCATION = 'https://archive1.piwheels.org/simple'
 STATUS_QUEUE = 'ipc:///tmp/piw-status'
 CONTROL_QUEUE = 'ipc:///tmp/piw-control'
 BUILDS_QUEUE = 'inproc://builds'

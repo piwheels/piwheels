@@ -32,6 +32,7 @@ digraph piwheels {
         TheScribe;
         FileJuggler;
         Lumberjack;
+        TheArchivist;
         fs [label="www\nfilesystem", shape=folder];
         httpd;
 
@@ -40,6 +41,8 @@ digraph piwheels {
         FileJuggler->fs [dir=both];
         fs->httpd;
         httpd->Lumberjack;
+        TheArchivist->fs [dir=both];
+        TheArchivist->TheScribe [dir=both];
     }
 
     subgraph cluster_master {
@@ -137,6 +140,7 @@ digraph piwheels {
     SlaveDriver->FileJuggler [dir=both];
     SlaveDriver->Seraph [dir=both];
     TheArchitect->SlaveDriver;
+    TheArchivist->db [dir=back];
     MrChase->FileJuggler [dir=both];
     MrChase->Seraph [dir=both];
     MrChase->BigBrother;
