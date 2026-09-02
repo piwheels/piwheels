@@ -188,7 +188,7 @@ $ virtualenv -p /usr/bin/python3 testpip</pre>
       <h5>Which Raspberry Pi models are supported by packages provided by
         piwheels?</h5>
       <div>
-        <p>All current Raspberry Pi models (as of October 2023) are supported:</p>
+        <p>All current Raspberry Pi models (as of August 2026) are supported:</p>
 
         <ul>
           <li>Raspberry Pi 5</li>
@@ -231,8 +231,9 @@ $ virtualenv -p /usr/bin/python3 testpip</pre>
           <li>Jessie - Python 3.4 (end-of-life)</li>
           <li>Stretch - Python 3.5 (end-of-life)</li>
           <li>Buster - Python 3.7 (end-of-life)</li>
-          <li>Bullseye - Python 3.9</li>
+          <li>Bullseye - Python 3.9 (end-of-life)</li>
           <li>Bookworm - Python 3.11</li>
+          <li>Trixie - Python 3.13</li>
         </ul>
       </div>
 
@@ -428,7 +429,7 @@ pip3 wheel <em>&lt;package&gt;</em></pre>
 
         <p>To download the wheels using your PC, you will need to provide
         additional flags to specify the spec of the Pi. For example, Armv7
-        wheels (for a Pi 2/3/4) for Bookworm (cp11):</p>
+        wheels (for a Pi 2/3/4) for Trixie (cp313):</p>
 
         <pre>mkdir wheels
 cd wheels
@@ -436,7 +437,7 @@ python3 -m pip download \
     --extra-index-url https://www.piwheels.org/simple \
     --implementation cp \
     --platform linux_armv7l \
-    --abi cp39 \
+    --abi cp313 \
     --only-binary=:all: \
     <em>&lt;package&gt;</em></pre>
 

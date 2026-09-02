@@ -86,7 +86,7 @@ autodoc_mock_imports = [
 # -- Intersphinx options -----------------------------------------------------
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.9', None),
+    'python': ('https://docs.python.org/3.11', None),
     'lars': ('https://lars.readthedocs.io/en/latest', None),
     'simplejson': ('https://simplejson.readthedocs.io/en/latest', None),
 }
