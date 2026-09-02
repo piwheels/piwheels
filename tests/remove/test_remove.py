@@ -168,7 +168,7 @@ def test_remove_internal_error(mock_context, import_queue_name, import_queue):
     with mock.patch('piwheels.terminal.yes_no_prompt') as prompt_mock:
         prompt_mock.return_value = True
         with RemoveThread(['--import-queue', import_queue_name, 'foo']) as thread:
-            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, ''])
+            assert import_queue.recv_msg() == ('REMPKG', ['foo', False, False, ''])
             import_queue.send_msg('ERROR', 'INTERNAL')
             with pytest.raises(RuntimeError) as exc:
                 thread.join(10)
