@@ -48,7 +48,7 @@ from sqlalchemy.exc import SAWarning
 
 from .. import __version__, protocols
 from ..states import (
-    BuildState, DownloadState, DownloadMetadataState, SearchState,
+    BuildState, DownloadState, DownloadMetadataState,
     ProjectState, JSONState, PageState)
 
 
@@ -394,33 +394,6 @@ class Database:
                     sanitize(download.installer_name),
                     sanitize(download.installer_version),
                     sanitize(download.setuptools_version),
-                ))
-
-    @rpc('LOGSEARCH',
-         lambda args: args[1].as_message(),
-         lambda data: (SearchState.from_message(data),))
-    def log_search(self, search):
-        """
-        Log a search in the database, including data derived from JSON in
-        pip's user-agent.
-        """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
-                (
-                    sanitize(search.package),
-                    search.host,
-                    search.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(search.arch),
-                    sanitize(search.distro_name),
-                    sanitize(search.distro_version),
-                    sanitize(search.os_name),
-                    sanitize(search.os_version),
-                    sanitize(search.py_name),
-                    sanitize(search.py_version),
-                    sanitize(search.installer_name),
-                    sanitize(search.installer_version),
-                    sanitize(search.setuptools_version),
                 ))
 
     @rpc('LOGPROJECT',

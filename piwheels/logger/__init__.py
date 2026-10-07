@@ -76,7 +76,6 @@ log_type_patterns = [
     LogType(None,    '/project/', None),
     LogType(None, '/simple/*.whl.metadata', 'LOGMETADATA'),
     LogType(None, '/simple/*.whl', 'LOGDOWNLOAD'),
-    LogType('pip/*', '/simple/*', 'LOGSEARCH'),
     LogType(None,    '/simple/*', None),
     LogType(None,    '/project/*/json/*', 'LOGJSON'),
     LogType(None,    '/project/*', 'LOGPROJECT'),
@@ -240,22 +239,6 @@ def log_transform(row, log_type, decoder=json.JSONDecoder()):
     elif log_type == 'LOGMETADATA':
         return [
             path.with_suffix('').name,
-            get_access_ip(row.remote_host),
-            get_access_time(row.time),
-            get_arch(user_data),
-            get_distro_name(user_data),
-            get_distro_version(user_data),
-            get_os_name(user_data),
-            get_os_version(user_data),
-            get_py_name(user_data),
-            get_py_version(user_data),
-            get_installer_name(user_data),
-            get_installer_version(user_data),
-            get_setuptools_version(user_data),
-        ]
-    elif log_type == 'LOGSEARCH':
-        return [
-            get_package_name(path),
             get_access_ip(row.remote_host),
             get_access_time(row.time),
             get_arch(user_data),

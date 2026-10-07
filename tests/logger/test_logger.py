@@ -72,20 +72,8 @@ def log_sample():
 2a00:1098:0:82:1000:3b:1:1 - - [11/Oct/2019:06:27:56 +0100] "GET /logs/0000/0001/0001.txt HTTP/1.1" 200 16384 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 """
     entries = [
-        ('LOGSEARCH', [
-            'markupsafe',
-            '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '3.5.3', 'pip', '9.0.1', None,
-        ]),
-        ('LOGSEARCH', [
-            'certifi',
-            '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0',
-        ]),
+        # The package index page hits (e.g. /simple/markupsafe/) produce no
+        # entries
         ('LOGDOWNLOAD', [
             'MarkupSafe-1.1.1-cp35-cp35m-linux_armv7l.whl',
             '2a00:1098:0:80:1000:3b:1:1',
@@ -93,54 +81,12 @@ def log_sample():
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
             'CPython', '3.5.3', 'pip', '9.0.1', None,
         ]),
-        ('LOGSEARCH', [
-            'asn1crypto',
-            '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '2.7.13', 'pip', '9.0.1', None,
-        ]),
-        ('LOGSEARCH', [
-            'backports-abc',
-            '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 24, 57, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '2.7.13', 'pip', '19.0.3', '40.8.0',
-        ]),
-        ('LOGSEARCH', [
-            'pip',
-            '2a00:1098:0:82:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 24, 58, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.98-v7+',
-            'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1',
-        ]),
         ('LOGDOWNLOAD', [
             'PyYAML-3.13-cp35-cp35m-linux_armv7l.whl',
             '2a00:1098:0:80:1000:3b:1:1',
             datetime(2019, 3, 18, 14, 26, 4, tzinfo=UTC),
             'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.19.27-v7+',
             'CPython', '3.5.3', 'pip', '19.0.3', '33.1.1',
-        ]),
-        ('LOGSEARCH', [
-            'pip',
-            '80.229.34.140',
-            datetime(2019, 3, 18, 14, 26, 5, tzinfo=UTC),
-            'armv6l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.52+',
-            'CPython', '2.7.13', 'pip', '18.0', '40.0.0',
-        ]),
-        ('LOGSEARCH', [
-            'lxml',
-            '2a00:1098:0:80:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 26, 6, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.9.93-linuxkit-aufs',
-            'CPython', '3.6.8', 'pip', '19.0.3', '40.8.0',
-        ]),
-        ('LOGSEARCH', [
-            'cffi',
-            '2a00:1098:0:82:1000:3b:1:1',
-            datetime(2019, 3, 18, 14, 26, 6, tzinfo=UTC),
-            'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-            'CPython', '2.7.13', 'pip', '9.0.1', None,
         ]),
         ('LOGMETADATA', [
             'foo-0.1-cp34-none-any.whl',
@@ -284,7 +230,7 @@ def test_drop_entries(logger_queue_name, logger_queue, log_sample, tmpdir):
         main_thread.start()
         with io.open(fifo, 'w') as f:
             for _ in range(10000):
-                f.write(log[0])
+                f.write(log[2])
                 if logging.warning.called:
                     if logging.warning.call_args == mock.call('dropping log entry'):
                         break

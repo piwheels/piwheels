@@ -44,7 +44,7 @@ from requests.exceptions import HTTPError
 
 from piwheels import const, transport, protocols
 from piwheels.states import (
-    BuildState, FileState, DownloadState, DownloadMetadataState, SearchState,
+    BuildState, FileState, DownloadState, DownloadMetadataState,
     ProjectState, JSONState, PageState
 )
 from piwheels.protocols import NoData
@@ -224,17 +224,6 @@ def download_metadata_state(request):
         datetime(2018, 1, 1, 0, 0, 0, tzinfo=UTC), 'armv7l',
         'Raspbian', '9', 'Linux', '', 'CPython', '3.5',
         'pip', None, None)
-
-
-@pytest.fixture()
-def search_state(request):
-    return SearchState(
-        'markupsafe',
-        '2a00:1098:0:80:1000:3b:1:1',
-        datetime(2019, 3, 18, 14, 24, 56, tzinfo=UTC),
-        'armv7l', 'Raspbian GNU/Linux', '9', 'Linux', '4.14.79-v7+',
-        'CPython', '3.5.3', 'pip', '9.0.1', None,
-    )
 
 
 @pytest.fixture()
