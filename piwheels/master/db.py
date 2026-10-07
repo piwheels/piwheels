@@ -133,12 +133,19 @@ class Database:
     engines = {}
 
     def __init__(self, dsn):
+        self._dsn = dsn
+        self._conn = self._connect()
+        self._reflect()
+
+    def _connect(self):
         try:
-            engine = Database.engines[dsn]
+            engine = Database.engines[self._dsn]
         except KeyError:
-            engine = create_engine(dsn)
-            Database.engines[dsn] = engine
-        self._conn = engine.connect()
+            engine = create_engine(self._dsn)
+            Database.engines[self._dsn] = engine
+        return engine.connect()
+
+    def _reflect(self):
         try:
             self._meta = MetaData(bind=self._conn)
             with warnings.catch_warnings():
@@ -169,6 +176,19 @@ class Database:
         except:
             self._conn.close()
             raise
+
+    def reconnect(self):
+        """
+        Re-establishes the database connection after it has been lost (e.g.
+        the server closed it unexpectedly).
+        """
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+        self._conn = self._connect()
+        self._reflect()
 
     def close(self):
         if self._conn is not None:
