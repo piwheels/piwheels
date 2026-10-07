@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from piwheels import const
 from piwheels.master.db import Database, RewritePendingRow
 
 
@@ -411,3 +412,73 @@ def test_store_rewrites_pending(db_intf, db, with_package):
     assert db.execute(
         "SELECT COUNT(*) FROM rewrites_pending").first() == (1,)
     assert db_intf.load_rewrites_pending() == state
+
+
+def test_get_archive_candidates(db_intf, with_files):
+    # with_files puts 2 files on a single build with no downloads, still at
+    # the default location ('/simple'); both are candidates for archiving
+    # under any positive threshold
+    assert set(db_intf.get_archive_candidates(10)) == {
+        ('foo', s.filename) for s in with_files
+    }
+    # A threshold of 0 downloads means "fewer than 0", which is impossible
+    assert db_intf.get_archive_candidates(0) == []
+
+
+def test_get_archive_candidates_excludes_other_locations(
+        db_intf, db, with_files):
+    with db.begin():
+        db.execute(
+            "UPDATE files SET location = %s WHERE filename = %s",
+            const.ARCHIVE_LOCATION, with_files[0].filename)
+    assert db_intf.get_archive_candidates(10) == [
+        ('foo', with_files[1].filename)
+    ]
+
+
+def test_get_archive_candidates_excludes_deleted(db_intf, db, with_files):
+    with db.begin():
+        db.execute(
+            "UPDATE files SET deleted_at = CURRENT_TIMESTAMP "
+            "WHERE filename = %s", with_files[0].filename)
+    assert db_intf.get_archive_candidates(10) == [
+        ('foo', with_files[1].filename)
+    ]
+
+
+def test_get_unarchive_candidates(db_intf, db, with_files):
+    with db.begin():
+        db.execute(
+            "UPDATE files SET location = %s", const.ARCHIVE_LOCATION)
+        for filename in (s.filename for s in with_files):
+            db.execute(
+                "INSERT INTO downloads "
+                "(filename, accessed_by, accessed_at) "
+                "VALUES (%s, '123.4.5.6', CURRENT_TIMESTAMP)", filename)
+    # Both files share a build, so both share the combined download count
+    # (2 downloads, one per file)
+    assert set(db_intf.get_unarchive_candidates(1)) == {
+        ('foo', s.filename) for s in with_files
+    }
+    assert db_intf.get_unarchive_candidates(2) == []
+
+
+def test_get_unarchive_candidates_excludes_master_location(
+        db_intf, db, with_files):
+    with db.begin():
+        db.execute(
+            "INSERT INTO downloads "
+            "(filename, accessed_by, accessed_at) "
+            "VALUES (%s, '123.4.5.6', CURRENT_TIMESTAMP)",
+            with_files[0].filename)
+    # Files are still at the default '/simple' location, so they're not
+    # unarchive candidates regardless of download count
+    assert db_intf.get_unarchive_candidates(0) == []
+
+
+def test_set_files_location(db_intf, db, with_files):
+    filenames = [s.filename for s in with_files]
+    db_intf.set_files_location(filenames, const.ARCHIVE_LOCATION)
+    assert set(db.execute(
+        "SELECT location FROM files WHERE package_tag = 'foo'"
+    )) == {(const.ARCHIVE_LOCATION,)}

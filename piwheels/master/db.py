@@ -46,7 +46,7 @@ from collections import namedtuple
 from sqlalchemy import MetaData, Table, select, create_engine
 from sqlalchemy.exc import SAWarning
 
-from .. import __version__, protocols
+from .. import __version__, const, protocols
 from ..states import (
     BuildState, DownloadState, DownloadMetadataState, SearchState,
     ProjectState, JSONState, PageState)
@@ -744,6 +744,60 @@ class Database:
         with self._conn.begin():
             self._conn.execute(
                 "VALUES (mark_package_files_deleted(%s))", (package,))
+
+    # NOTE: The following three methods are not exposed on TheOracle; the
+    # archive queries scan the entire files/downloads tables so, like
+    # TheArchitect's get_build_queue, they're only ever run by TheArchivist
+    # task over its own direct database connection, not via the shared
+    # TheOracle worker pool
+    def get_archive_candidates(self, threshold):
+        """
+        Returns a list of (package, filename) tuples for files currently on
+        the master whose builds received fewer than *threshold* downloads in
+        the last month; these are candidates for moving to the archive
+        server.
+        """
+        with self._conn.begin():
+            return [
+                (row.package, row.filename)
+                for row in self._conn.execute(
+                    "SELECT package, filename "
+                    "FROM get_archive_candidates(%s, %s)",
+                    (const.MASTER_LOCATION, threshold))
+            ]
+
+    def get_unarchive_candidates(self, threshold):
+        """
+        Returns a list of (package, filename) tuples for files currently on
+        the archive server whose builds received more than *threshold*
+        downloads in the last month; these are candidates for moving back to
+        the master.
+        """
+        with self._conn.begin():
+            return [
+                (row.package, row.filename)
+                for row in self._conn.execute(
+                    "SELECT package, filename "
+                    "FROM get_unarchive_candidates(%s, %s)",
+                    (const.ARCHIVE_LOCATION, threshold))
+            ]
+
+    def set_files_location(self, filenames, location):
+        """
+        Updates the "location" of every file named in *filenames* to
+        *location*; used once files have been physically copied between the
+        master and the archive server.
+        """
+        # NOTE: the outer list below (as with save_rewrites_pending above)
+        # works around SQLAlchemy's execute() treating a bare multi-element
+        # tuple of parameters as several single-parameter executions; wrapping
+        # it in a one-element list makes it unambiguous that this is a single
+        # execution with two parameters (the second of which, filenames,
+        # happens to be an array itself)
+        with self._conn.begin():
+            self._conn.execute(
+                "VALUES (set_files_location(%s, %s))",
+                [(filenames, location)])
 
     @rpc('SAVERWP')
     def save_rewrites_pending(self, queue):

@@ -17,7 +17,9 @@ Synopsis
 .. code-block:: text
 
     piw-master [-h] [--version] [-c FILE] [-q] [-v] [-l FILE] [-d DSN]
-                    [-o PATH] [--dev-mode] [--debug TASK] [--pypi-xmlrpc URL]
+                    [-o PATH] [--archive-dir PATH] [--archive-threshold N]
+                    [--unarchive-threshold N] [--archive-interval HOURS]
+                    [--dev-mode] [--debug TASK] [--pypi-xmlrpc URL]
                     [--pypi-simple URL] [--pypi-json URL] [--status-queue ADDR]
                     [--control-queue ADDR] [--import-queue ADDR]
                     [--log-queue ADDR] [--slave-queue ADDR] [--file-queue ADDR]
@@ -68,6 +70,25 @@ Description
 
     The path under which the website should be written; must be writable by the
     current user
+
+.. option:: --archive-dir PATH
+
+    The location of the archive server's mount point. If not given, the
+    automatic archiving task is disabled; see :doc:`archive`
+
+.. option:: --archive-threshold N
+
+    Files whose builds received fewer than this many downloads in the last
+    month are moved to the archive (default: ``10``)
+
+.. option:: --unarchive-threshold N
+
+    Archived files whose builds received more than this many downloads in
+    the last month are moved back to the master (default: ``25``)
+
+.. option:: --archive-interval HOURS
+
+    The number of hours between automatic archive runs (default: ``24``)
 
 .. option:: --dev-mode
 

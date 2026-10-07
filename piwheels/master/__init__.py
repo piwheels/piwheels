@@ -55,6 +55,7 @@ from .. import (
 from ..systemd import get_systemd
 from ..tasks import TaskQuit
 from .big_brother import BigBrother
+from .the_archivist import TheArchivist
 from .the_architect import TheArchitect
 from .the_oracle import TheOracle
 from .seraph import Seraph
@@ -110,6 +111,24 @@ write access to the output directory.
             '-o', '--output-path', metavar='PATH', default=const.OUTPUT_PATH,
             help="The path under which the website should be written; must be "
             "writable by the current user")
+        parser.add_argument(
+            '--archive-dir', metavar='PATH', default=None,
+            help="The location of the archive server's mount point; if not "
+            "given, the automatic archiving task is disabled")
+        parser.add_argument(
+            '--archive-threshold', metavar='N', type=int, default=10,
+            help="Files whose builds received fewer than this many downloads "
+            "in the last month are moved to the archive (default: "
+            "%(default)s)")
+        parser.add_argument(
+            '--unarchive-threshold', metavar='N', type=int, default=25,
+            help="Archived files whose builds received more than this many "
+            "downloads in the last month are moved back to the master "
+            "(default: %(default)s)")
+        parser.add_argument(
+            '--archive-interval', metavar='HOURS', type=float, default=24,
+            help="The number of hours between automatic archive runs "
+            "(default: %(default)s)")
         parser.add_argument(
             '--dev-mode', action='store_true',
             help="Run the master in development mode, which reduces some "
@@ -178,6 +197,8 @@ write access to the output directory.
         parser = self.configure_parser()
         config = parser.parse_args(args)
         config.output_path = os.path.expanduser(config.output_path)
+        if config.archive_dir is not None:
+            config.archive_dir = os.path.expanduser(config.archive_dir)
         if config.debug or config.dev_mode:
             config.log_level = logging.DEBUG
         terminal.configure_logging(config.log_level, config.log_file,
@@ -217,24 +238,26 @@ write access to the output directory.
         # would simply declare their sockets and which bound/connected to
         # which addresses at which point the master could calculate the order
         # below. Oh well ...
-        self.tasks = [
-            task(config)
-            for task in (
-                Seraph,
-                TheOracle,
-                TheOracle,
-                TheOracle,
-                Lumberjack,
-                TheScribe,
-                TheSecretary,
-                BigBrother,
-                FileJuggler,
-                SlaveDriver,
-                MrChase,
-                TheArchitect,
-                CloudGazer,
-            )
+        task_classes = [
+            Seraph,
+            TheOracle,
+            TheOracle,
+            TheOracle,
+            Lumberjack,
+            TheScribe,
+            TheSecretary,
+            BigBrother,
+            FileJuggler,
+            SlaveDriver,
+            MrChase,
+            TheArchitect,
+            CloudGazer,
         ]
+        if config.archive_dir is not None:
+            # Needs TheScribe (web_queue) already running, hence appended
+            # after it above
+            task_classes.append(TheArchivist)
+        self.tasks = [task(config) for task in task_classes]
         self.logger.info('starting tasks')
         for task in self.tasks:
             if isinstance(task, SlaveDriver):

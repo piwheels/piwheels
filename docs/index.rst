@@ -36,6 +36,7 @@ Table of Contents
     rebuild
     add
     remove
+    archive
     logger
     development
     modules
