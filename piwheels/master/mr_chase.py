@@ -346,7 +346,13 @@ class MrChase(tasks.PauseableTask):
             # FKs will take care of removing builds here
             self.db.delete_package(package)
             msg = 'DELPKG'
-        self.web_queue.send_msg('DELPKG', package)
+        if msg == 'SKIPPKG':
+            # Skipping only prevents future builds; the package and its
+            # existing files remain, so re-render its pages rather than
+            # deleting them
+            self.web_queue.send_msg('BOTH', package)
+        else:
+            self.web_queue.send_msg('DELPKG', package)
         self.skip_queue.send_msg('DELPKG', package)
         self.web_queue.recv_msg()
         self.skip_queue.recv_msg()
@@ -401,7 +407,12 @@ class MrChase(tasks.PauseableTask):
             self.db.delete_version(package, version)
             msg = 'DELVER'
         if msg in ('SKIPVER', 'DELVER', 'DELVERBLD'):
-            self.web_queue.send_msg('DELVER', [package, version])
+            if msg == 'SKIPVER':
+                # As with packages, skipping a version keeps its files;
+                # re-render the pages instead of deleting them
+                self.web_queue.send_msg('BOTH', package)
+            else:
+                self.web_queue.send_msg('DELVER', [package, version])
             self.skip_queue.send_msg('DELVER', [package, version])
             self.web_queue.recv_msg()
             self.skip_queue.recv_msg()
